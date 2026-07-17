@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #eef0f4;
+  --foreground: #1a1a1a;
+  --sidebar: #00413d;
+  --sidebar-active: #1c5752;
+  --sidebar-muted: #ffffff59;
+  --sidebar-text: #ffffff;
+  --sidebar-inactive: #ffffff59;
+  --badge: #f57850;
+  --surface: #ffffff;
+  --border: #e4e6eb;
+  --muted: #8b909a;
+  --muted-strong: #6b7280;
+  --id-pill: #eef0f4;
+  --danger: #ef4444;
+  --design-width: 1461px;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-active: var(--sidebar-active);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-inactive: var(--sidebar-inactive);
+  --color-badge: var(--badge);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-strong: var(--muted-strong);
+  --color-id-pill: var(--id-pill);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-plus-jakarta-sans);
+  --spacing-sidebar: 13.75rem;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-plus-jakarta-sans), system-ui, sans-serif;
+}
