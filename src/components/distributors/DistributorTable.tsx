@@ -1,5 +1,3 @@
-"use client";
-
 import { useState } from "react";
 
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/icons";

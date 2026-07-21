@@ -2,12 +2,11 @@
 node_modules
 package-lock.json
 
-# Next.js
-.next
-out
+# Build
+dist
 build
+out
 
 # Misc
 coverage
 *.tsbuildinfo
-next-env.d.ts

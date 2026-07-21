@@ -1,12 +1,8 @@
-import type { Metadata } from "next";
-
 import { DistributorsView } from "@/components/distributors/DistributorsView";
 import { DISTRIBUTORS } from "@/constants/distributors";
-
-export const metadata: Metadata = {
-  title: "Distributors",
-};
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function DistributorsPage() {
+  useDocumentTitle("Distributors");
   return <DistributorsView distributors={DISTRIBUTORS} />;
 }

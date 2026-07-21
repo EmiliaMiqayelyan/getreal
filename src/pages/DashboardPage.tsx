@@ -1,11 +1,7 @@
-import type { Metadata } from "next";
-
 import { Header } from "@/components/layout/AdminHeader";
-
-export const metadata: Metadata = {
-  title: "Dashboard",
-};
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function DashboardPage() {
+  useDocumentTitle("Dashboard");
   return <Header title="Dashboard" />;
 }

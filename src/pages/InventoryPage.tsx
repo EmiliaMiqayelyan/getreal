@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
-
 import { Header } from "@/components/layout/AdminHeader";
-
-export const metadata: Metadata = { title: "Inventory" };
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function InventoryPage() {
+  useDocumentTitle("Inventory");
   return <Header title="Inventory" />;
 }

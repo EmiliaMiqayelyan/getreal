@@ -1,20 +1,21 @@
 # GetReal Admin Panel
 
-Next.js admin panel foundation. UI will be implemented from Figma designs.
+React admin panel for GetReal Food. UI implemented from Figma designs.
 
 ## Stack
 
-- Next.js (App Router)
-- React + TypeScript
-- Tailwind CSS
+- React 19 + TypeScript
+- Vite
+- React Router
+- Tailwind CSS v4
 - ESLint + Prettier
 
 ## Scripts
 
 ```bash
-npm run dev          # Start development server
-npm run build        # Production build
-npm run start        # Start production server
+npm run dev          # Start development server (port 3000)
+npm run build        # Typecheck + production build
+npm run preview      # Preview production build
 npm run lint         # ESLint
 npm run format       # Prettier write
 npm run typecheck    # TypeScript check
@@ -24,13 +25,12 @@ npm run typecheck    # TypeScript check
 
 ```
 src/
-  app/              # App Router (layouts, routes)
-  components/       # UI, layout, shared components
-  constants/        # App constants
+  pages/            # Route screens (lazy-loaded)
+  components/       # UI, layout, feature views
+  constants/        # Routes, nav, mock data
   hooks/            # Custom React hooks
-  lib/              # Fonts, env, integrations
-  services/         # API / data access
-  styles/           # Shared styles
+  lib/              # Env and integrations
+  services/         # API / data access (ready for wiring)
   types/            # TypeScript types
   utils/            # Helpers
 ```

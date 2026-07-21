@@ -1,8 +1,4 @@
-"use client";
-
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, useLocation } from "react-router";
 
 import {
   BoxIcon,
@@ -34,7 +30,7 @@ function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
 
   return (
     <Link
-      href={item.href}
+      to={item.href}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
         active
@@ -50,18 +46,17 @@ function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 export function Sidebar() {
-  const pathname = usePathname();
+  const { pathname } = useLocation();
 
   return (
     <aside className="flex h-dvh w-sidebar shrink-0 flex-col bg-sidebar">
       <div className="px-5 pt-6 pb-8">
-        <Link href="/dashboard" className="block w-[148px]">
-          <Image
+        <Link to="/dashboard" className="block w-[148px]">
+          <img
             src="/logo.png"
             alt={APP_NAME}
             width={138}
             height={61}
-            priority
             className="h-auto w-full"
           />
         </Link>

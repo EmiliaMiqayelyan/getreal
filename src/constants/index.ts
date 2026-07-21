@@ -2,6 +2,7 @@ export const APP_NAME = "GetReal Food" as const;
 
 export const ROUTES = {
   home: "/",
+  login: "/login",
   dashboard: "/dashboard",
   inventory: "/inventory",
   productsForSale: "/products-for-sale",

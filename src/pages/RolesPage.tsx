@@ -1,9 +1,7 @@
-import type { Metadata } from "next";
-
 import { Header } from "@/components/layout/AdminHeader";
-
-export const metadata: Metadata = { title: "Roles" };
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function RolesPage() {
+  useDocumentTitle("Roles");
   return <Header title="Roles" />;
 }

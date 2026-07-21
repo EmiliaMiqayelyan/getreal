@@ -1,12 +1,8 @@
-import type { Metadata } from "next";
-
 import { CustomersView } from "@/components/customers/CustomersView";
 import { CUSTOMERS } from "@/constants/customers";
-
-export const metadata: Metadata = {
-  title: "Customers",
-};
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 export default function CustomersPage() {
+  useDocumentTitle("Customers");
   return <CustomersView customers={CUSTOMERS} />;
 }

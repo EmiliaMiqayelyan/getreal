@@ -1,5 +1,3 @@
-"use client";
-
 import { useId, useRef, useState, type FormEvent } from "react";
 
 import { FileIcon, PlusIcon, UploadIcon } from "@/components/icons";

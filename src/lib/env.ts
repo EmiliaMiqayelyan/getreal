@@ -3,10 +3,11 @@
  * Add validation (e.g. Zod) when runtime config grows.
  */
 
-function getEnv(key: string, fallback?: string): string {
-  const value = process.env[key] ?? fallback;
+function getEnv(key: keyof ImportMetaEnv, fallback?: string): string {
+  const value = import.meta.env[key] ?? fallback;
 
-  if (value === undefined) {
+  if (value === undefined || value === "") {
+    if (fallback !== undefined) return fallback;
     throw new Error(`Missing environment variable: ${key}`);
   }
 
@@ -14,8 +15,9 @@ function getEnv(key: string, fallback?: string): string {
 }
 
 export const env = {
-  appUrl: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "",
-  nodeEnv: process.env.NODE_ENV ?? "development",
+  appUrl: import.meta.env.VITE_APP_URL ?? "http://localhost:3000",
+  apiUrl: import.meta.env.VITE_API_URL ?? "",
+  appName: import.meta.env.VITE_APP_NAME ?? "GetReal Admin",
+  mode: import.meta.env.MODE,
   get: getEnv,
 } as const;
