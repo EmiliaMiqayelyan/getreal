@@ -1,12 +1,12 @@
 export type DistributorProduct = {
   id: string;
   name: string;
+  product: string;
   source: string;
   price: number;
+  qty: number;
   unit: string;
   category: string;
-  lastUpdate: string;
-  updatedByAvatar?: boolean;
 };
 
 export type Distributor = {

@@ -4,9 +4,15 @@ import { Navigate, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
-import { APP_NAME, ROUTES } from "@/constants";
+import { APP_NAME } from "@/constants";
+import { getRoleHome } from "@/constants/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { DEMO_CREDENTIALS, isAuthenticated, login } from "@/lib/auth";
+import {
+  DEMO_ACCOUNTS,
+  getHomeRoute,
+  isAuthenticated,
+  login,
+} from "@/lib/auth";
 
 export default function LoginPage() {
   useDocumentTitle("Login");
@@ -21,19 +27,20 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   if (isAuthenticated()) {
-    return <Navigate to={ROUTES.dashboard} replace />;
+    return <Navigate to={getHomeRoute()} replace />;
   }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    if (!login(username, password)) {
+    const role = login(username, password);
+    if (!role) {
       setError("Invalid username or password.");
       return;
     }
 
-    navigate(ROUTES.dashboard, { replace: true });
+    navigate(getRoleHome(role), { replace: true });
   }
 
   return (
@@ -75,8 +82,8 @@ export default function LoginPage() {
             <img
               src="/logo.png"
               alt={APP_NAME}
-              width={138}
-              height={61}
+              width={125}
+              height={45}
               className="mx-auto h-auto w-[138px]"
             />
           </div>
@@ -130,16 +137,28 @@ export default function LoginPage() {
               </Button>
             </form>
 
-            <p className="text-muted mt-6 text-center text-xs leading-relaxed">
-              Demo login:{" "}
-              <span className="text-muted-strong font-medium">
-                {DEMO_CREDENTIALS.username}
-              </span>{" "}
-              /{" "}
-              <span className="text-muted-strong font-medium">
-                {DEMO_CREDENTIALS.password}
-              </span>
-            </p>
+            <div className="text-muted mt-6 space-y-1.5 text-center text-xs leading-relaxed">
+              <p>
+                Super Admin:{" "}
+                <span className="text-muted-strong font-medium">
+                  {DEMO_ACCOUNTS.superadmin.username}
+                </span>{" "}
+                /{" "}
+                <span className="text-muted-strong font-medium">
+                  {DEMO_ACCOUNTS.superadmin.password}
+                </span>
+              </p>
+              <p>
+                Warehouse:{" "}
+                <span className="text-muted-strong font-medium">
+                  {DEMO_ACCOUNTS.warehouse.username}
+                </span>{" "}
+                /{" "}
+                <span className="text-muted-strong font-medium">
+                  {DEMO_ACCOUNTS.warehouse.password}
+                </span>
+              </p>
+            </div>
           </div>
         </div>
       </div>

@@ -4,9 +4,9 @@
   --font-plus-jakarta-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
     system-ui, sans-serif;
   --background: #eef0f4;
-  --foreground: #1a1a1a;
-  --sidebar: #00413d;
-  --sidebar-active: #1c5752;
+  --foreground: #2e2e2e;
+  --sidebar: #242424;
+  --sidebar-active: #28402b;
   --sidebar-muted: #ffffff59;
   --sidebar-text: #ffffff;
   --sidebar-inactive: #ffffff59;
@@ -58,5 +58,6 @@ body {
 }
 
 #root {
+  height: 100dvh;
   min-height: 100dvh;
 }

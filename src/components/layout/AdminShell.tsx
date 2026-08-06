@@ -6,9 +6,9 @@ type AdminShellProps = {
 
 export function AdminShell({ children }: AdminShellProps) {
   return (
-    <div className="flex min-h-dvh bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       <Sidebar />
-      <div className="flex min-h-dvh min-w-0 flex-1 flex-col bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {children}
       </div>
     </div>

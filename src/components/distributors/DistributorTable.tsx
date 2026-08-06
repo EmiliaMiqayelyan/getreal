@@ -23,11 +23,11 @@ const COLUMNS = [
 ] as const;
 
 const PRODUCT_COLUMNS = [
-  "PRODUCT",
+  "PRODUCT NAME",
   "SOURCE",
   "PRICE",
-  "CATEGORY",
-  "LAST UPDATE",
+  "QTY",
+  "UNIT",
 ] as const;
 
 export function DistributorTable({ distributors }: DistributorTableProps) {
@@ -195,7 +195,10 @@ function DistributorRow({
                       className="border-b border-[#E4E6EB]/70 last:border-b-0"
                     >
                       <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
-                        {product.name}
+                        <div>{product.name}</div>
+                        <div className="mt-0.5 text-xs font-normal text-muted">
+                          {product.product}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-sm text-muted-strong">
                         {product.source}
@@ -203,19 +206,11 @@ function DistributorRow({
                       <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
                         {formatPricePerUnit(product.price, product.unit)}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <Tag>{product.category}</Tag>
+                      <td className="px-3 py-2.5 text-sm text-muted-strong">
+                        {product.qty}
                       </td>
-                      <td className="px-3 py-2.5">
-                        <span className="inline-flex items-center gap-2 text-sm text-muted-strong">
-                          {product.lastUpdate}
-                          {product.updatedByAvatar ? (
-                            <span
-                              className="size-5 shrink-0 rounded-full bg-[#c5cad3]"
-                              aria-hidden
-                            />
-                          ) : null}
-                        </span>
+                      <td className="px-3 py-2.5 text-sm text-muted-strong">
+                        {product.unit}
                       </td>
                     </tr>
                   ))}

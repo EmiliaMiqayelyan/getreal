@@ -7,6 +7,8 @@ export const ROUTES = {
   inventory: "/inventory",
   productsForSale: "/products-for-sale",
   productOrders: "/product-orders",
+  distributorDeliveries: "/distributor-deliveries",
+  packingCoolers: "/packing-coolers",
   distributors: "/distributors",
   customerOrders: "/customer-orders",
   customers: "/customers",

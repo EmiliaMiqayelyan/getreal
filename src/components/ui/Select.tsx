@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
-import { ChevronDownIcon } from "@/components/icons";
 import { cn } from "@/utils/cn";
 
 export type SelectOption = {
@@ -15,8 +15,10 @@ type SelectProps = {
   options: SelectOption[];
   placeholder?: string;
   className?: string;
+  buttonClassName?: string;
   "aria-label"?: string;
   disabled?: boolean;
+  size?: "sm" | "md";
 };
 
 export function Select({
@@ -25,7 +27,9 @@ export function Select({
   options,
   placeholder,
   className,
+  buttonClassName,
   disabled = false,
+  size = "sm",
   "aria-label": ariaLabel,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
@@ -61,22 +65,27 @@ export function Select({
       <button
         type="button"
         disabled={disabled}
-        aria-label={ariaLabel}
+        aria-label={ariaLabel ?? displayLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listId}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "flex h-10 w-full items-center justify-between rounded-lg border border-[#E4E6EB] bg-white py-2 pr-3 pl-3.5 text-left text-sm outline-none transition-colors",
-          "focus:border-sidebar/40 disabled:cursor-not-allowed disabled:opacity-50",
-          open && "border-sidebar/40",
-          selected ? "text-foreground" : "text-muted",
+          "relative flex w-full items-center justify-between rounded-[8px] border border-[#E6E6E3] bg-white text-left outline-none transition-colors",
+          "focus:border-[#C8C8C6] disabled:cursor-not-allowed disabled:opacity-50",
+          open && "border-[#C8C8C6]",
+          size === "sm"
+            ? "h-[34px] py-0 pr-8 pl-3 text-[13px]"
+            : "h-10 py-2 pr-9 pl-3.5 text-sm",
+          selected || displayLabel ? "text-[#2E2E2E]" : "text-[#8A8A8A]",
+          buttonClassName,
         )}
       >
         <span className="truncate">{displayLabel || "\u00A0"}</span>
-        <ChevronDownIcon
+        <ChevronDown
+          size={13}
           className={cn(
-            "ml-2 shrink-0 text-muted transition-transform",
+            "pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#8A8A8A] transition-transform",
             open && "rotate-180",
           )}
         />
@@ -86,8 +95,8 @@ export function Select({
         <ul
           id={listId}
           role="listbox"
-          aria-label={ariaLabel}
-          className="absolute top-[calc(100%+4px)] right-0 left-0 z-50 max-h-60 overflow-auto rounded-lg border border-border bg-surface py-1 font-sans shadow-lg"
+          aria-label={ariaLabel ?? displayLabel}
+          className="absolute top-[calc(100%+6px)] right-0 left-0 z-50 max-h-60 overflow-auto rounded-[8px] border border-[#E6E6E3] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
         >
           {options.map((option) => {
             const isSelected = option.value === value;
@@ -105,11 +114,11 @@ export function Select({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full px-3.5 py-2 text-left text-sm transition-colors",
+                    "flex w-full px-3 py-2 text-left text-[13px] transition-colors",
                     "disabled:cursor-not-allowed disabled:opacity-40",
                     isSelected
-                      ? "bg-[#1C5752] font-medium text-white"
-                      : "text-foreground hover:bg-[#1C5752] hover:text-white",
+                      ? "bg-[#28402B] font-medium text-white"
+                      : "text-[#2E2E2E] hover:bg-[#F5F5F3]",
                   )}
                 >
                   {option.label || "\u00A0"}
