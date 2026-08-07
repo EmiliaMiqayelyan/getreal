@@ -128,7 +128,7 @@ function AreaChartCard({
 
   return (
     <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-[#2E2E2E]">{title}</h2>
         <ChartToggle value={mode} onChange={onModeChange} />
       </div>
@@ -211,9 +211,9 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h1 className="min-w-0 text-[18px] font-semibold tracking-tight text-[#2E2E2E] md:text-[22px]">
             Dashboard Report
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -243,7 +243,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {[
             {

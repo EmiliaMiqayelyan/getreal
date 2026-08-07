@@ -45,8 +45,8 @@ export function Header({ title, toolbar }: HeaderProps) {
 
   return (
     <div className="shrink-0">
-      <header className="flex h-[72px] items-center justify-between bg-white px-8">
-        <h1 className="text-foreground text-[22px] font-semibold tracking-tight">
+      <header className="flex h-[72px] items-center justify-between bg-white px-4 md:px-8">
+        <h1 className="text-foreground text-[18px] font-semibold tracking-tight md:text-[22px]">
           {title}
         </h1>
 
@@ -108,7 +108,7 @@ export function Header({ title, toolbar }: HeaderProps) {
       </header>
 
       {toolbar ? (
-        <div className="border-t border-[#E4E6EB] bg-background px-8 py-4">
+        <div className="border-t border-[#E4E6EB] bg-background px-4 py-4 md:px-8">
           {toolbar}
         </div>
       ) : null}

@@ -12,6 +12,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
@@ -662,7 +663,7 @@ function StockItemsView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Stock Items
@@ -671,7 +672,7 @@ function StockItemsView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <h2 className="mb-4 text-[20px] font-semibold text-[#2E2E2E]">Protein</h2>
         <div className="space-y-5">
           {draft.sections.map((section) => (
@@ -680,13 +681,13 @@ function StockItemsView({
                 <h3 className="text-[15px] font-semibold text-[#2E2E2E]">
                   {section.title}
                 </h3>
-                <div className="flex items-center gap-16 pr-4 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                <div className="hidden items-center gap-16 pr-4 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase sm:flex">
                   <span>In Stock</span>
                   <span>Date Receiving By</span>
                 </div>
               </div>
 
-              <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+              <ScrollTable minWidth={980} className="rounded-[10px]">
                 <div
                   className={cn(
                     STOCK_GRID,
@@ -767,13 +768,13 @@ function StockItemsView({
                     </button>
                   </div>
                 ))}
-              </div>
+              </ScrollTable>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-7 py-4">
+      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 md:px-7 py-4">
         <button
           type="button"
           onClick={onClose}
@@ -1057,7 +1058,7 @@ export default function InventoryPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Inventory
@@ -1066,7 +1067,7 @@ export default function InventoryPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-[160px]">
+          <div className="relative w-full sm:w-[220px]">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -1122,34 +1123,35 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {orders.length ? (
           <div className="mb-5 space-y-2">
             {orders.map((order) => (
-              <button
-                key={order.id}
-                type="button"
-                onClick={() => setStoringId(order.id)}
-                className="grid w-full grid-cols-[140px_1.6fr_0.8fr_1.2fr_40px] items-center rounded-[10px] px-4 py-4 text-left text-white"
-                style={{ background: GREEN }}
-              >
-                <span className="inline-flex w-fit items-center rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-medium">
-                  Order Received
-                </span>
-                <span className="border-l border-white/20 pl-5 text-[14px] font-semibold">
-                  {order.supplier}
-                </span>
-                <span className="text-[13px] font-semibold">
-                  {order.itemsCount}
-                </span>
-                <span className="text-[13px] font-semibold">
-                  {order.receivedAt}
-                </span>
-                <ChevronRight
-                  size={16}
-                  className="justify-self-end text-white/80"
-                />
-              </button>
+              <div key={order.id} className="overflow-x-auto">
+                <button
+                  type="button"
+                  onClick={() => setStoringId(order.id)}
+                  className="grid w-full min-w-[640px] grid-cols-[140px_1.6fr_0.8fr_1.2fr_40px] items-center rounded-[10px] px-4 py-4 text-left text-white"
+                  style={{ background: GREEN }}
+                >
+                  <span className="inline-flex w-fit items-center rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-medium">
+                    Order Received
+                  </span>
+                  <span className="border-l border-white/20 pl-5 text-[14px] font-semibold">
+                    {order.supplier}
+                  </span>
+                  <span className="text-[13px] font-semibold">
+                    {order.itemsCount}
+                  </span>
+                  <span className="text-[13px] font-semibold">
+                    {order.receivedAt}
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className="justify-self-end text-white/80"
+                  />
+                </button>
+              </div>
             ))}
           </div>
         ) : null}
@@ -1166,13 +1168,13 @@ export default function InventoryPage() {
                   <h3 className="text-[15px] font-semibold text-[#2E2E2E]">
                     {section.title}
                   </h3>
-                  <div className="flex items-center gap-16 pr-[108px] text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                  <div className="hidden items-center gap-16 pr-[108px] text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase sm:flex">
                     <span>In Stock</span>
                     <span>Date Receiving By</span>
                   </div>
                 </div>
 
-                <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+                <ScrollTable minWidth={980} className="rounded-[10px]">
                   <div
                     className={cn(
                       GRID,
@@ -1230,68 +1232,72 @@ export default function InventoryPage() {
                         </button>
 
                         {open ? (
-                          product.lots.length ? (
-                            product.lots.map((lot, lotIndex) => (
-                              <div
-                                key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
-                                className={cn(
-                                  GRID,
-                                  "group bg-white px-3 py-3 text-[12px] text-[#2E2E2E]",
-                                  lotIndex < product.lots.length - 1
-                                    ? "border-b border-[#F3F3F1]"
-                                    : "",
-                                )}
-                              >
-                                <div />
-                                <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                                  {lot.orderId}
-                                </span>
-                                <div>{lot.distributor}</div>
-                                <div>{lot.source}</div>
-                                <div>{lot.deliveryDate}</div>
-                                <div>{lot.purchased}</div>
-                                <div className="font-semibold">{lot.qty}</div>
-                                <div>{lot.unit}</div>
-                                <div className="flex items-center gap-1">
-                                  <span className="min-w-0 truncate">
-                                    {lot.location}
-                                  </span>
-                                  <button
-                                    type="button"
-                                    aria-label="Edit location"
-                                    onClick={() =>
-                                      openEditLocation(
-                                        section.title,
-                                        product,
-                                        lotIndex,
-                                      )
-                                    }
-                                    className="shrink-0 rounded-md p-1 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#2E2E2E]"
+                          <div className="overflow-x-auto">
+                            <div className="min-w-[980px]">
+                              {product.lots.length ? (
+                                product.lots.map((lot, lotIndex) => (
+                                  <div
+                                    key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
+                                    className={cn(
+                                      GRID,
+                                      "group bg-white px-3 py-3 text-[12px] text-[#2E2E2E]",
+                                      lotIndex < product.lots.length - 1
+                                        ? "border-b border-[#F3F3F1]"
+                                        : "",
+                                    )}
                                   >
-                                    <ArrowUpDown size={14} />
-                                  </button>
+                                    <div />
+                                    <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                                      {lot.orderId}
+                                    </span>
+                                    <div>{lot.distributor}</div>
+                                    <div>{lot.source}</div>
+                                    <div>{lot.deliveryDate}</div>
+                                    <div>{lot.purchased}</div>
+                                    <div className="font-semibold">{lot.qty}</div>
+                                    <div>{lot.unit}</div>
+                                    <div className="flex items-center gap-1">
+                                      <span className="min-w-0 truncate">
+                                        {lot.location}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        aria-label="Edit location"
+                                        onClick={() =>
+                                          openEditLocation(
+                                            section.title,
+                                            product,
+                                            lotIndex,
+                                          )
+                                        }
+                                        className="shrink-0 rounded-md p-1 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#2E2E2E]"
+                                      >
+                                        <ArrowUpDown size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div
+                                  className={cn(
+                                    GRID,
+                                    "bg-white px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                  )}
+                                >
+                                  <div />
+                                  <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 text-center text-[11px]">
+                                    -
+                                  </span>
+                                  <div className="col-span-7">Inventory Empty</div>
                                 </div>
-                              </div>
-                            ))
-                          ) : (
-                            <div
-                              className={cn(
-                                GRID,
-                                "bg-white px-3 py-3 text-[12px] text-[#8A8A8A]",
                               )}
-                            >
-                              <div />
-                              <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 text-center text-[11px]">
-                                -
-                              </span>
-                              <div className="col-span-7">Inventory Empty</div>
                             </div>
-                          )
+                          </div>
                         ) : null}
                       </div>
                     );
                   })}
-                </div>
+                </ScrollTable>
               </div>
             ))}
           </div>

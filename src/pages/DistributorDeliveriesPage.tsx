@@ -12,6 +12,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
@@ -303,7 +304,7 @@ function CheckOrderView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
@@ -320,14 +321,14 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="space-y-5">
           {categories.map(([category, items]) => (
             <section key={category}>
               <h2 className="mb-3 text-[16px] font-semibold text-[#2E2E2E]">
                 {category}
               </h2>
-              <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+              <ScrollTable minWidth={900} className="rounded-[10px]">
                 <div
                   className={cn(
                     "grid gap-3 border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
@@ -497,13 +498,13 @@ function CheckOrderView({
                     </div>
                   );
                 })}
-              </div>
+              </ScrollTable>
             </section>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-7 py-4">
+      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 md:px-7 py-4">
         <button
           type="button"
           onClick={onClose}
@@ -630,20 +631,25 @@ export default function DistributorDeliveriesPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-7 pt-5">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-            <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
-              Distributor Receiving
-            </h1>
+        <div className="px-4 md:px-7 pt-5">
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+                Distributor Receiving
+              </h1>
+              <div className="flex flex-col items-end gap-1 lg:hidden">
+                <UserMenu showAvatar className="items-center" />
+              </div>
+            </div>
 
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-6 sm:gap-8">
               {(["Orders", "Received"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "border-b-2 pb-4 text-[14px]",
+                    "border-b-2 pb-3 text-[14px] lg:pb-4",
                     activeTab === tab
                       ? "border-[#F57850] font-medium text-[#2E2E2E]"
                       : "border-transparent text-[#8A8A8A]",
@@ -654,7 +660,7 @@ export default function DistributorDeliveriesPage() {
               ))}
             </div>
 
-            <div className="flex flex-col items-end gap-1">
+            <div className="hidden flex-col items-end gap-1 lg:flex">
               <UserMenu showAvatar className="items-center" />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jun 22, 2026
@@ -663,9 +669,9 @@ export default function DistributorDeliveriesPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-7 py-3">
+        <div className="border-t border-[#ECECEA] px-4 md:px-7 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-[160px]">
+            <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
                 className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -763,12 +769,12 @@ export default function DistributorDeliveriesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <h2 className="mb-3 text-[20px] font-semibold text-[#2E2E2E]">
           Receiving Log
         </h2>
 
-        <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+        <ScrollTable minWidth={900} className="rounded-[10px]">
           <div
             className={cn(
               ROW_GRID,
@@ -856,56 +862,60 @@ export default function DistributorDeliveriesPage() {
 
                 {open ? (
                   <div className="border-t border-[#ECECEA] bg-[#FAFAF8]">
-                    {order.items.map((item) => {
-                      const result = results?.[item.id];
-                      const rejected = result?.status === "rejected";
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[900px]">
+                        {order.items.map((item) => {
+                          const result = results?.[item.id];
+                          const rejected = result?.status === "rejected";
 
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            ROW_GRID,
-                            "border-b border-[#F3F3F1] px-4 py-2.5 text-[12px] last:border-b-0",
-                          )}
-                        >
-                          <div />
-                          <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
-                            {result?.itemId ?? item.itemCode}
-                          </span>
-                          <div
-                            className={cn(
-                              "font-medium",
-                              rejected ? "text-[#E25B5B]" : "text-[#2E2E2E]",
-                            )}
-                          >
-                            {item.name}
-                          </div>
-                          <div className="text-[#6B6B6B]">{item.source}</div>
-                          <div />
-                          <div>
-                            {rejected && result?.reason ? (
-                              <span className="font-medium text-[#E25B5B]">
-                                Rejected · {result.reason}
+                          return (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                ROW_GRID,
+                                "border-b border-[#F3F3F1] px-4 py-2.5 text-[12px] last:border-b-0",
+                              )}
+                            >
+                              <div />
+                              <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
+                                {result?.itemId ?? item.itemCode}
                               </span>
-                            ) : (
-                              <span className="text-[#2E2E2E]">
-                                {item.priceLabel}
-                              </span>
-                            )}
-                          </div>
-                          <div>
-                            {rejected ? (
-                              <button
-                                type="button"
-                                className="text-[12px] font-medium text-[#3B82F6]"
+                              <div
+                                className={cn(
+                                  "font-medium",
+                                  rejected ? "text-[#E25B5B]" : "text-[#2E2E2E]",
+                                )}
                               >
-                                Image
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })}
+                                {item.name}
+                              </div>
+                              <div className="text-[#6B6B6B]">{item.source}</div>
+                              <div />
+                              <div>
+                                {rejected && result?.reason ? (
+                                  <span className="font-medium text-[#E25B5B]">
+                                    Rejected · {result.reason}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#2E2E2E]">
+                                    {item.priceLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                {rejected ? (
+                                  <button
+                                    type="button"
+                                    className="text-[12px] font-medium text-[#3B82F6]"
+                                  >
+                                    Image
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -917,7 +927,7 @@ export default function DistributorDeliveriesPage() {
               No deliveries match your filters.
             </div>
           ) : null}
-        </div>
+        </ScrollTable>
       </div>
     </div>
   );

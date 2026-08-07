@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router";
-import { LogOut } from "lucide-react";
+import { LogOut, X } from "lucide-react";
 
 import {
   BoxIcon,
@@ -27,12 +27,21 @@ const ICONS = {
   roles: RolesIcon,
 } as const;
 
-function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
+function SidebarItem({
+  item,
+  active,
+  onNavigate,
+}: {
+  item: NavItem;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
   const Icon = ICONS[item.icon];
 
   return (
     <Link
       to={item.href}
+      onClick={onNavigate}
       className={cn(
         "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
         active
@@ -47,7 +56,12 @@ function SidebarItem({ item, active }: { item: NavItem; active: boolean }) {
   );
 }
 
-export function Sidebar() {
+type SidebarProps = {
+  open?: boolean;
+  onClose?: () => void;
+};
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const role = getRole();
@@ -55,14 +69,21 @@ export function Sidebar() {
   const home = getRoleHome(role);
 
   function handleLogout() {
+    onClose?.();
     logout();
     navigate(ROUTES.login, { replace: true });
   }
 
   return (
-    <aside className="flex h-full w-sidebar shrink-0 flex-col self-stretch bg-sidebar">
-      <div className="px-5 pt-6 pb-8">
-        <Link to={home} className="block w-[148px]">
+    <aside
+      className={cn(
+        "flex h-full w-sidebar shrink-0 flex-col self-stretch bg-sidebar",
+        "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out lg:static lg:translate-x-0",
+        open ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+      )}
+    >
+      <div className="flex items-start justify-between px-5 pt-6 pb-8">
+        <Link to={home} onClick={onClose} className="block w-[148px]">
           <img
             src="/logo.png"
             alt={APP_NAME}
@@ -71,6 +92,14 @@ export function Sidebar() {
             className="h-auto w-full"
           />
         </Link>
+        <button
+          type="button"
+          aria-label="Close menu"
+          onClick={onClose}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-white/50 transition-colors hover:bg-white/10 hover:text-white lg:hidden"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-6">
@@ -84,6 +113,7 @@ export function Sidebar() {
                 <li key={item.href}>
                   <SidebarItem
                     item={item}
+                    onNavigate={onClose}
                     active={
                       pathname === item.href ||
                       pathname.startsWith(`${item.href}/`)

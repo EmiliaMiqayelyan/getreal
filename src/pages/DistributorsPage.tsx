@@ -11,6 +11,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { DISTRIBUTORS } from "@/constants/distributors";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -834,7 +835,7 @@ export default function DistributorsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Distributors
@@ -843,7 +844,7 @@ export default function DistributorsPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-[220px]">
+          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -859,6 +860,7 @@ export default function DistributorsPage() {
           <Select
             value={productFilter}
             onChange={setProductFilter}
+            className="w-full sm:w-[150px]"
             aria-label="All Products"
             options={[
               { value: "", label: "All Products" },
@@ -872,6 +874,7 @@ export default function DistributorsPage() {
           <Select
             value={categoryFilter}
             onChange={setCategoryFilter}
+            className="w-full sm:w-[150px]"
             aria-label="All Categories"
             options={[
               { value: "", label: "All Categories" },
@@ -885,7 +888,7 @@ export default function DistributorsPage() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white"
+            className="inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
             style={{ background: ORANGE }}
           >
             <Plus size={14} />
@@ -894,123 +897,221 @@ export default function DistributorsPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
-        <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
-          <div
-            className={cn(
-              GRID,
-              "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
-            )}
-          >
-            <div />
-            <div>ID</div>
-            <div>Distributor</div>
-            <div>Contact</div>
-            <div>Phone</div>
-            <div>Categories</div>
-            <div>Location</div>
-            <div>Delivery</div>
-            <div>Items</div>
-            <div>Docs</div>
-          </div>
-
-          {filtered.map((row, index) => {
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        {/* Mobile cards */}
+        <div className="space-y-2 md:hidden">
+          {filtered.map((row) => {
             const open = expandedId === row.id;
-            const isLast = index === filtered.length - 1;
-
             return (
               <div
                 key={row.id}
-                className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
+                className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white"
               >
-                <div className={cn(GRID, "px-4 py-3.5")}>
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse" : "Expand"}
-                    onClick={() =>
-                      setExpandedId((current) =>
-                        current === row.id ? null : row.id,
-                      )
-                    }
-                    className="flex justify-center"
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={cn(
-                        "text-[#B0B0B0] transition-transform",
-                        open && "rotate-90 text-[#F57850]",
-                      )}
-                    />
-                  </button>
-
-                  <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                    {row.id}
-                  </span>
-
-                  <div>
-                    <div className="text-[13px] font-semibold text-[#2E2E2E]">
-                      {row.name}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
-                      {row.paymentTerms}
-                    </div>
-                  </div>
-
-                  <div className="text-[13px] text-[#2E2E2E]">{row.contact}</div>
-                  <div className="text-[13px] text-[#2E2E2E]">{row.phone}</div>
-                  <div className="flex flex-wrap gap-1">
-                    {row.categories.map((category) => (
-                      <span
-                        key={category}
-                        className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 text-[11px] font-medium text-[#2E2E2E]"
-                      >
-                        {category}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setExpandedId((current) =>
+                      current === row.id ? null : row.id,
+                    )
+                  }
+                  className="flex w-full items-start gap-3 p-3.5 text-left"
+                >
+                  <ChevronRight
+                    size={14}
+                    className={cn(
+                      "mt-1 shrink-0 text-[#B0B0B0] transition-transform",
+                      open && "rotate-90 text-[#F57850]",
+                    )}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                        {row.id}
                       </span>
-                    ))}
-                  </div>
-                  <div className="text-[13px] text-[#2E2E2E]">{row.location}</div>
-                  <div className="text-[13px] text-[#2E2E2E]">{row.delivery}</div>
-                  <div className="text-[13px] text-[#2E2E2E]">{row.items}</div>
-                  <div className="text-[13px] text-[#8A8A8A]">
-                    {row.docs ?? "—"}
-                  </div>
-                </div>
-
-                {open ? (
-                  <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-6 py-4">
-                    <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-                      <div className="grid grid-cols-[1.6fr_1.2fr_90px_70px_90px] gap-3 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
-                        <div>Product Name</div>
-                        <div>Source</div>
-                        <div>Price</div>
-                        <div>Qty</div>
-                        <div>Unit</div>
-                      </div>
-                      {row.products.map((product) => (
-                        <div
-                          key={product.id}
-                          className="grid grid-cols-[1.6fr_1.2fr_90px_70px_90px] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
+                      <span className="text-[14px] font-semibold text-[#2E2E2E]">
+                        {row.name}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 whitespace-nowrap text-[12px] text-[#6B6B6B]">
+                      {row.phone}
+                    </div>
+                    <div className="mt-0.5 truncate text-[12px] text-[#8A8A8A]">
+                      {row.location} · {row.items} items
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {row.categories.slice(0, 3).map((category) => (
+                        <span
+                          key={category}
+                          className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 text-[11px] font-medium text-[#2E2E2E]"
                         >
-                          <div>
-                            <div className="font-semibold">{product.name}</div>
-                            <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
-                              {product.product}
-                            </div>
-                          </div>
-                          <div>{product.source}</div>
-                          <div className="font-semibold">
-                            {currency(product.price)}
-                          </div>
-                          <div>{product.qty}</div>
-                          <div>{product.unit}</div>
-                        </div>
+                          {category}
+                        </span>
                       ))}
                     </div>
+                  </div>
+                </button>
+
+                {open ? (
+                  <div className="space-y-2 border-t border-[#F0F0EE] bg-[#FAFAF8] px-3 py-3">
+                    {row.products.map((product) => (
+                      <div
+                        key={product.id}
+                        className="rounded-[10px] border border-[#ECECEA] bg-white p-3"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                              {product.name}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                              {product.product} · {product.source}
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right text-[13px] font-semibold text-[#2E2E2E]">
+                            {currency(product.price)}
+                          </div>
+                        </div>
+                        <div className="mt-2 text-[12px] text-[#6B6B6B]">
+                          Qty {product.qty} · {product.unit}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : null}
               </div>
             );
           })}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <ScrollTable minWidth={1100}>
+            <div
+              className={cn(
+                GRID,
+                "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+              )}
+            >
+              <div />
+              <div>ID</div>
+              <div>Distributor</div>
+              <div>Contact</div>
+              <div>Phone</div>
+              <div>Categories</div>
+              <div>Location</div>
+              <div>Delivery</div>
+              <div>Items</div>
+              <div>Docs</div>
+            </div>
+
+            {filtered.map((row, index) => {
+              const open = expandedId === row.id;
+              const isLast = index === filtered.length - 1;
+
+              return (
+                <div
+                  key={row.id}
+                  className={cn(
+                    !isLast || open ? "border-b border-[#F0F0EE]" : "",
+                  )}
+                >
+                  <div className={cn(GRID, "px-4 py-3.5")}>
+                    <button
+                      type="button"
+                      aria-label={open ? "Collapse" : "Expand"}
+                      onClick={() =>
+                        setExpandedId((current) =>
+                          current === row.id ? null : row.id,
+                        )
+                      }
+                      className="flex justify-center"
+                    >
+                      <ChevronRight
+                        size={14}
+                        className={cn(
+                          "text-[#B0B0B0] transition-transform",
+                          open && "rotate-90 text-[#F57850]",
+                        )}
+                      />
+                    </button>
+
+                    <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                      {row.id}
+                    </span>
+
+                    <div>
+                      <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                        {row.name}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                        {row.paymentTerms}
+                      </div>
+                    </div>
+
+                    <div className="text-[13px] text-[#2E2E2E]">
+                      {row.contact}
+                    </div>
+                    <div className="whitespace-nowrap text-[13px] text-[#2E2E2E]">
+                      {row.phone}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {row.categories.map((category) => (
+                        <span
+                          key={category}
+                          className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 text-[11px] font-medium text-[#2E2E2E]"
+                        >
+                          {category}
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-[13px] text-[#2E2E2E]">
+                      {row.location}
+                    </div>
+                    <div className="text-[13px] text-[#2E2E2E]">
+                      {row.delivery}
+                    </div>
+                    <div className="text-[13px] text-[#2E2E2E]">{row.items}</div>
+                    <div className="text-[13px] text-[#8A8A8A]">
+                      {row.docs ?? "—"}
+                    </div>
+                  </div>
+
+                  {open ? (
+                    <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-6 py-4">
+                      <ScrollTable minWidth={560} className="rounded-[10px]">
+                        <div className="grid grid-cols-[1.6fr_1.2fr_90px_70px_90px] gap-3 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                          <div>Product Name</div>
+                          <div>Source</div>
+                          <div>Price</div>
+                          <div>Qty</div>
+                          <div>Unit</div>
+                        </div>
+                        {row.products.map((product) => (
+                          <div
+                            key={product.id}
+                            className="grid grid-cols-[1.6fr_1.2fr_90px_70px_90px] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
+                          >
+                            <div>
+                              <div className="font-semibold">{product.name}</div>
+                              <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                                {product.product}
+                              </div>
+                            </div>
+                            <div>{product.source}</div>
+                            <div className="font-semibold">
+                              {currency(product.price)}
+                            </div>
+                            <div>{product.qty}</div>
+                            <div>{product.unit}</div>
+                          </div>
+                        ))}
+                      </ScrollTable>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </ScrollTable>
         </div>
       </div>
 

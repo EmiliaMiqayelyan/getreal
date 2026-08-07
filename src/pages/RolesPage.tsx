@@ -3,6 +3,7 @@ import { Check, ChevronRight, Copy, Plus, Search, X } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import {
   ADMIN_ROLE_PERMISSIONS,
@@ -288,7 +289,7 @@ export default function RolesPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Roles
@@ -297,7 +298,7 @@ export default function RolesPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-[220px]">
+          <div className="relative w-full sm:w-[220px]">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -331,8 +332,8 @@ export default function RolesPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
-        <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+        <ScrollTable minWidth={860}>
           <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
             <div />
             <div>ID</div>
@@ -396,31 +397,33 @@ export default function RolesPage() {
                 </div>
 
                 {open ? (
-                  <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-6 py-5">
-                    <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-4">
-                      {PERMISSION_GROUPS.map((group) => (
-                        <div key={group.label}>
-                          <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                            {group.label}
-                          </h3>
-                          <div className="space-y-2.5">
-                            {group.keys.map((key, permissionIndex) => (
-                              <PermissionCheckbox
-                                key={key}
-                                checked={permissions[key]}
-                                label={group.labels[permissionIndex]}
-                                onChange={() =>
-                                  patchPermission(
-                                    user,
-                                    key,
-                                    !permissions[key],
-                                  )
-                                }
-                              />
-                            ))}
+                  <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-4 py-5 md:px-6">
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[520px] grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+                        {PERMISSION_GROUPS.map((group) => (
+                          <div key={group.label}>
+                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                              {group.label}
+                            </h3>
+                            <div className="space-y-2.5">
+                              {group.keys.map((key, permissionIndex) => (
+                                <PermissionCheckbox
+                                  key={key}
+                                  checked={permissions[key]}
+                                  label={group.labels[permissionIndex]}
+                                  onChange={() =>
+                                    patchPermission(
+                                      user,
+                                      key,
+                                      !permissions[key],
+                                    )
+                                  }
+                                />
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
 
                     <div className="mt-5 flex justify-end">
@@ -437,7 +440,7 @@ export default function RolesPage() {
               </div>
             );
           })}
-        </div>
+        </ScrollTable>
       </div>
 
       {modalOpen ? (

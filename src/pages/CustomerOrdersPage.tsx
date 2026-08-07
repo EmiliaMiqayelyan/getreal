@@ -519,7 +519,7 @@ function StepNode({
 
   return (
     <div
-      className="relative flex flex-col items-center"
+      className="relative flex min-w-0 flex-col items-center px-0.5"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
@@ -530,7 +530,7 @@ function StepNode({
           onStatusClick();
         }}
         className={cn(
-          "z-[1] flex size-[18px] items-center justify-center rounded-full",
+          "z-[1] flex size-[18px] shrink-0 items-center justify-center rounded-full",
           step.done
             ? step.final
               ? "bg-[#242424]"
@@ -543,21 +543,46 @@ function StepNode({
         ) : null}
       </button>
 
-      <div className="mt-1.5 min-h-[16px] text-center text-[11px] font-medium text-[#2E2E2E]">
+      <div className="mt-1.5 min-h-[16px] w-full truncate text-center text-[10px] font-medium text-[#2E2E2E] sm:text-[11px]">
         {step.done && step.shortLabel ? step.shortLabel : null}
       </div>
-      <div className="mt-0.5 min-h-[14px] text-center text-[10px] text-[#9A948C]">
+      <div className="mt-0.5 min-h-[14px] w-full truncate text-center text-[9px] leading-tight text-[#9A948C] sm:text-[10px]">
         {step.done && step.at ? step.at : null}
       </div>
 
       {hover && step.done ? (
-        <div className="absolute top-9 z-30">
+        <div className="absolute top-9 z-30 hidden sm:block">
           <HoverCard step={step} order={order} />
         </div>
       ) : null}
     </div>
   );
 }
+
+function OrderTimelineTrack({
+  order,
+  onStatusClick,
+}: {
+  order: CustomerOrderRow;
+  onStatusClick: (stepKey: TimelineStepKey) => void;
+}) {
+  return (
+    <div className="relative min-w-[520px] lg:min-w-0">
+      <div className="absolute top-[8px] right-[8%] left-[8%] border-t border-dashed border-[#D9D4CD]" />
+      <div className="relative grid grid-cols-6">
+        {order.steps.map((step) => (
+          <StepNode
+            key={step.key}
+            step={step}
+            order={order}
+            onStatusClick={() => onStatusClick(step.key)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 
 function OrderDetailPanel({
   order,
@@ -801,13 +826,18 @@ export default function CustomerOrdersPage() {
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-7 pt-5">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-            <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
-              Customer Orders
-            </h1>
+        <div className="px-4 pt-5 md:px-7">
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-[18px] font-semibold tracking-tight text-[#2E2E2E] md:text-[22px]">
+                Customer Orders
+              </h1>
+              <div className="flex flex-col items-end gap-1 lg:hidden">
+                <UserMenu showAvatar className="items-center" />
+              </div>
+            </div>
 
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-6 sm:gap-8">
               {(["Orders", "Completed"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -818,7 +848,7 @@ export default function CustomerOrdersPage() {
                     setStatusMenu(null);
                   }}
                   className={cn(
-                    "border-b-2 pb-4 text-[14px]",
+                    "border-b-2 pb-3 text-[14px] lg:pb-4",
                     activeTab === tab
                       ? "border-[#F57850] font-medium text-[#2E2E2E]"
                       : "border-transparent text-[#8A8A8A]",
@@ -829,7 +859,7 @@ export default function CustomerOrdersPage() {
               ))}
             </div>
 
-            <div className="flex flex-col items-end gap-1">
+            <div className="hidden flex-col items-end gap-1 lg:flex">
               <UserMenu showAvatar className="items-center" />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jul 16, 2026
@@ -838,9 +868,9 @@ export default function CustomerOrdersPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-7 py-3">
+        <div className="border-t border-[#ECECEA] px-4 py-3 md:px-7">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-[160px]">
+            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search
                 size={13}
                 className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -907,7 +937,7 @@ export default function CustomerOrdersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {activeTab === "Orders" ? (
           <>
             <div className="mb-5 flex items-center justify-between gap-3">
@@ -1023,7 +1053,7 @@ export default function CustomerOrdersPage() {
             </div>
 
             <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-              <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="hidden grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase lg:grid">
                 <div>Order ID</div>
                 {STEPS_META.map((step) => (
                   <div key={step.key} className="text-center">
@@ -1035,9 +1065,9 @@ export default function CustomerOrdersPage() {
               {filteredActive.map((order) => (
                 <div
                   key={order.id}
-                  className="relative border-b border-[#F3F3F1] px-5 py-4 last:border-b-0"
+                  className="relative border-b border-[#F3F3F1] px-4 py-4 last:border-b-0 sm:px-5"
                 >
-                  <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2">
+                  <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedOrderId(order.id)}
@@ -1047,7 +1077,7 @@ export default function CustomerOrdersPage() {
                         {order.customerName}
                         <ChevronRight size={13} className="text-[#A9A9A9]" />
                       </div>
-                      <div className="mt-1.5 flex items-center gap-2">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
                         <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
                           {order.id}
                         </span>
@@ -1057,34 +1087,27 @@ export default function CustomerOrdersPage() {
                       </div>
                     </button>
 
-                    <div className="relative col-span-6">
-                      <div className="absolute top-[8px] right-[8%] left-[8%] border-t border-dashed border-[#D9D4CD]" />
-                      <div className="relative grid grid-cols-6">
-                        {order.steps.map((step) => (
-                          <StepNode
-                            key={step.key}
-                            step={step}
-                            order={order}
-                            onStatusClick={() =>
-                              setStatusMenu(
-                                statusMenu?.orderId === order.id &&
-                                  statusMenu.stepKey === step.key
-                                  ? null
-                                  : { orderId: order.id, stepKey: step.key },
-                              )
-                            }
-                          />
-                        ))}
-                      </div>
+                    <div className="-mx-1 overflow-x-auto pb-1 lg:mx-0 lg:overflow-visible lg:pb-0">
+                      <OrderTimelineTrack
+                        order={order}
+                        onStatusClick={(stepKey) =>
+                          setStatusMenu(
+                            statusMenu?.orderId === order.id &&
+                              statusMenu.stepKey === stepKey
+                              ? null
+                              : { orderId: order.id, stepKey },
+                          )
+                        }
+                      />
                     </div>
                   </div>
 
                   {statusMenu?.orderId === order.id ? (
-                    <div className="absolute top-14 left-[260px] z-20 rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+                    <div className="absolute top-auto right-4 bottom-3 left-4 z-20 rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl sm:top-14 sm:right-auto sm:bottom-auto sm:left-[260px] sm:w-auto">
                       <div className="mb-2 text-[12px] font-semibold text-[#2E2E2E]">
                         Change Status
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#2E2E2E]"
@@ -1123,6 +1146,8 @@ export default function CustomerOrdersPage() {
                         · {dayOrders.length} orders
                       </span>
                     </div>
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[860px]">
                     <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                       <div>Order ID</div>
                       <div>Customer</div>
@@ -1154,6 +1179,8 @@ export default function CustomerOrdersPage() {
                         </div>
                       </div>
                     ))}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </section>

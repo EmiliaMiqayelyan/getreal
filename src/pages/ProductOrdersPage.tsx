@@ -14,6 +14,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
@@ -596,7 +597,7 @@ function ExpandableOrderTable({
   onToggle: (id: string) => void;
 }) {
   return (
-    <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+    <ScrollTable minWidth={900} className="rounded-[10px]">
       <div className="grid grid-cols-[110px_1.4fr_1.1fr_1.1fr_1fr_100px] items-center gap-3 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
         <div>Delivery ID</div>
         <div>Distributor</div>
@@ -644,35 +645,39 @@ function ExpandableOrderTable({
 
             {open ? (
               <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2">
-                {order.items.map((item) => (
-                  <div
-                    key={`${order.id}-${item.sku}`}
-                    className="grid grid-cols-[110px_1.4fr_1.1fr_1.1fr_1fr_100px] items-center gap-3 py-2.5 text-[13px] text-[#46413C]"
-                  >
-                    <div className="pl-6">
-                      <span className="rounded-[6px] bg-white px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
-                        {item.sku}
-                      </span>
-                    </div>
-                    <div className="font-medium text-[#2E2E2E]">
-                      {item.itemName}
-                    </div>
-                    <div className="text-[#8A8A8A]">{item.source}</div>
-                    <div>
-                      {currencyExact(item.price)} / {item.unit}
-                    </div>
-                    <div>
-                      {item.quantity} {item.unit}
-                    </div>
-                    <div />
+                <div className="overflow-x-auto">
+                  <div className="min-w-[900px]">
+                    {order.items.map((item) => (
+                      <div
+                        key={`${order.id}-${item.sku}`}
+                        className="grid grid-cols-[110px_1.4fr_1.1fr_1.1fr_1fr_100px] items-center gap-3 py-2.5 text-[13px] text-[#46413C]"
+                      >
+                        <div className="pl-6">
+                          <span className="rounded-[6px] bg-white px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                            {item.sku}
+                          </span>
+                        </div>
+                        <div className="font-medium text-[#2E2E2E]">
+                          {item.itemName}
+                        </div>
+                        <div className="text-[#8A8A8A]">{item.source}</div>
+                        <div>
+                          {currencyExact(item.price)} / {item.unit}
+                        </div>
+                        <div>
+                          {item.quantity} {item.unit}
+                        </div>
+                        <div />
+                      </div>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
             ) : null}
           </div>
         );
       })}
-    </div>
+    </ScrollTable>
   );
 }
 
@@ -1056,20 +1061,25 @@ export default function ProductOrdersPage() {
       {view === "list" ? (
         <>
           <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-            <div className="px-7 pt-5">
-              <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-                <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
-                  Distributor Orders
-                </h1>
+            <div className="px-4 md:px-7 pt-5">
+              <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
+                <div className="flex items-start justify-between gap-3">
+                  <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+                    Distributor Orders
+                  </h1>
+                  <div className="flex justify-end lg:hidden">
+                    <UserMenu showAvatar className="items-center" />
+                  </div>
+                </div>
 
-                <div className="flex items-center gap-8">
+                <div className="flex items-center gap-6 sm:gap-8">
                   {(["Orders", "Delivered"] as const).map((tab) => (
                     <button
                       key={tab}
                       type="button"
                       onClick={() => setActiveTab(tab)}
                       className={cn(
-                        "border-b-2 pb-4 text-[14px]",
+                        "border-b-2 pb-3 text-[14px] lg:pb-4",
                         activeTab === tab
                           ? "border-[#F57850] font-medium text-[#2E2E2E]"
                           : "border-transparent text-[#8A8A8A]",
@@ -1080,15 +1090,15 @@ export default function ProductOrdersPage() {
                   ))}
                 </div>
 
-                <div className="flex justify-end">
+                <div className="hidden justify-end lg:flex">
                   <UserMenu showAvatar className="items-center" />
                 </div>
               </div>
             </div>
 
-            <div className="border-t border-[#ECECEA] px-7 py-3">
+            <div className="border-t border-[#ECECEA] px-4 md:px-7 py-3">
               <div className="flex flex-wrap items-center gap-2">
-                <div className="relative w-[160px]">
+                <div className="relative w-full sm:w-[220px]">
                   <Search
                     size={13}
                     className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -1166,7 +1176,7 @@ export default function ProductOrdersPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto px-7 py-5">
+          <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
             {activeTab === "Orders" ? (
               <>
                 <div className="mb-5 flex items-center justify-between gap-3">
@@ -1314,7 +1324,7 @@ export default function ProductOrdersPage() {
                     </button>
                   </div>
 
-                  <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+                  <ScrollTable minWidth={860} className="rounded-[10px]">
                     <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                       <div>Item Name</div>
                       <div>Cust. Order Total</div>
@@ -1334,7 +1344,7 @@ export default function ProductOrdersPage() {
                         <div>{row.dateReceivingBy}</div>
                       </div>
                     ))}
-                  </div>
+                  </ScrollTable>
                 </section>
               </>
             ) : (
@@ -1374,7 +1384,7 @@ export default function ProductOrdersPage() {
 
       {view === "orderList" || view === "review" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-          <div className="shrink-0 border-b border-[#ECECEA] bg-white px-8 py-5">
+          <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-8 py-5">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-[28px] font-semibold tracking-tight text-[#2E2E2E]">
@@ -1392,7 +1402,7 @@ export default function ProductOrdersPage() {
           </div>
 
           {view === "orderList" ? (
-            <div className="flex-1 overflow-auto px-8 py-5">
+            <div className="flex-1 overflow-auto px-4 md:px-8 py-5">
               {(["Meat", "Fruits", "Grains"] as const).map((section) => (
                 <section key={section} className="mb-7">
                   <div className="mb-3 flex items-center justify-between">
@@ -1410,7 +1420,7 @@ export default function ProductOrdersPage() {
                     ) : null}
                   </div>
 
-                  <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
+                  <ScrollTable minWidth={980} className="rounded-[12px]">
                     <div className="grid grid-cols-[1.3fr_1.5fr_0.85fr_0.85fr_0.85fr_0.7fr_0.9fr] gap-3 border-b border-[#F0F0EE] px-4 py-3 text-[10px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
                       <div>Item Name</div>
                       <div>Distributor / Source</div>
@@ -1547,12 +1557,12 @@ export default function ProductOrdersPage() {
                         </div>
                       );
                     })}
-                  </div>
+                  </ScrollTable>
                 </section>
               ))}
             </div>
           ) : (
-            <div className="flex-1 overflow-auto px-8 py-5">
+            <div className="flex-1 overflow-auto px-4 md:px-8 py-5">
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="space-y-4">
                   {reviewGroups.map((group) => {
@@ -1679,7 +1689,7 @@ export default function ProductOrdersPage() {
             </div>
           )}
 
-          <div className="shrink-0 border-t border-[#ECECEA] bg-white px-8 py-4">
+          <div className="shrink-0 border-t border-[#ECECEA] bg-white px-4 md:px-8 py-4">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -1725,7 +1735,7 @@ export default function ProductOrdersPage() {
 
       {view === "manualCreate" || view === "manualReview" ? (
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-          <div className="shrink-0 border-b border-[#ECECEA] bg-white px-8 py-5">
+          <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-8 py-5">
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-[28px] font-semibold tracking-tight text-[#2E2E2E]">
@@ -1747,7 +1757,7 @@ export default function ProductOrdersPage() {
           </div>
 
           {view === "manualCreate" ? (
-            <div className="flex-1 overflow-auto px-8 py-5">
+            <div className="flex-1 overflow-auto px-4 md:px-8 py-5">
               <div className="mx-auto max-w-[980px] space-y-4">
                 <div className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
                   <label className="mb-2 block text-[12px] font-medium text-[#2E2E2E]">
@@ -1796,7 +1806,7 @@ export default function ProductOrdersPage() {
                             <h4 className="mb-2 text-[15px] font-semibold text-[#2E2E2E]">
                               {source}
                             </h4>
-                            <div className="overflow-hidden rounded-[10px] border border-[#ECECEA]">
+                            <ScrollTable minWidth={640} className="rounded-[10px]">
                               <div className="grid grid-cols-[90px_1.6fr_0.8fr_1fr_0.9fr] gap-3 border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
                                 <div>SKU</div>
                                 <div>Item</div>
@@ -1829,7 +1839,7 @@ export default function ProductOrdersPage() {
                                   />
                                 </div>
                               ))}
-                            </div>
+                            </ScrollTable>
                           </div>
                         ))}
                         {!manualLines.length ? (
@@ -1890,7 +1900,7 @@ export default function ProductOrdersPage() {
               </div>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto px-8 py-5">
+            <div className="flex-1 overflow-auto px-4 md:px-8 py-5">
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
                   <h3 className="mb-4 text-[24px] font-semibold tracking-tight text-[#2E2E2E]">
@@ -1960,7 +1970,7 @@ export default function ProductOrdersPage() {
             </div>
           )}
 
-          <div className="shrink-0 border-t border-[#ECECEA] bg-white px-8 py-4">
+          <div className="shrink-0 border-t border-[#ECECEA] bg-white px-4 md:px-8 py-4">
             <div className="flex items-center justify-between">
               <button
                 type="button"
@@ -2411,7 +2421,7 @@ export default function ProductOrdersPage() {
       ) : null}
 
       {toastVisible ? (
-        <div className="fixed right-8 bottom-8 z-50 rounded-[10px] bg-[#13BF2E] px-7 py-4 text-[14px] font-medium text-white shadow-lg">
+        <div className="fixed right-8 bottom-8 z-50 rounded-[10px] bg-[#13BF2E] px-4 md:px-7 py-4 text-[14px] font-medium text-white shadow-lg">
           <span className="mr-2 inline-flex size-4 items-center justify-center rounded-full bg-white/20">
             <Check size={11} />
           </span>

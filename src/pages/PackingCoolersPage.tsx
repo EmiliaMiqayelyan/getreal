@@ -11,6 +11,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
@@ -421,7 +422,7 @@ function PackingDetail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
@@ -441,14 +442,14 @@ function PackingDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="space-y-5">
           {groups.map(([title, items]) => (
             <section key={title}>
               <h2 className="mb-3 text-[16px] font-semibold text-[#2E2E2E]">
                 {title}
               </h2>
-              <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+              <ScrollTable minWidth={980} className="rounded-[10px]">
                 <div
                   className={cn(
                     "grid gap-2 border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
@@ -561,13 +562,13 @@ function PackingDetail({
                     </div>
                   </div>
                 ))}
-              </div>
+              </ScrollTable>
             </section>
           ))}
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-7 py-4">
+      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 md:px-7 py-4">
         <button
           type="button"
           onClick={onClose}
@@ -691,20 +692,25 @@ export default function PackingCoolersPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-7 pt-5">
-          <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-4">
-            <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
-              Cooler Packing
-            </h1>
+        <div className="px-4 md:px-7 pt-5">
+          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+                Cooler Packing
+              </h1>
+              <div className="flex flex-col items-end gap-1 lg:hidden">
+                <UserMenu showAvatar className="items-center" />
+              </div>
+            </div>
 
-            <div className="flex items-center gap-8">
+            <div className="flex items-center gap-6 sm:gap-8">
               {(["Manager", "Packer"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setMode(tab)}
                   className={cn(
-                    "border-b-2 pb-4 text-[14px]",
+                    "border-b-2 pb-3 text-[14px] lg:pb-4",
                     mode === tab
                       ? "border-[#F57850] font-medium text-[#2E2E2E]"
                       : "border-transparent text-[#8A8A8A]",
@@ -715,7 +721,7 @@ export default function PackingCoolersPage() {
               ))}
             </div>
 
-            <div className="flex flex-col items-end gap-1">
+            <div className="hidden flex-col items-end gap-1 lg:flex">
               <UserMenu showAvatar className="items-center" />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jun 22, 2026
@@ -724,9 +730,9 @@ export default function PackingCoolersPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-7 py-3">
+        <div className="border-t border-[#ECECEA] px-4 md:px-7 py-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-[160px]">
+            <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
                 className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -806,9 +812,9 @@ export default function PackingCoolersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {mode === "Manager" ? (
-          <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+          <ScrollTable minWidth={860} className="rounded-[10px]">
             <div
               className={cn(
                 MANAGER_GRID,
@@ -882,9 +888,9 @@ export default function PackingCoolersPage() {
                 </div>
               </div>
             ))}
-          </div>
+          </ScrollTable>
         ) : (
-          <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+          <ScrollTable minWidth={780} className="rounded-[10px]">
             <div
               className={cn(
                 PACKER_GRID,
@@ -1004,7 +1010,7 @@ export default function PackingCoolersPage() {
                 </div>
               );
             })}
-          </div>
+          </ScrollTable>
         )}
 
         {!filtered.length ? (

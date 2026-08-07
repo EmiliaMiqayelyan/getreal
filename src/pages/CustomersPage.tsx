@@ -3,6 +3,7 @@ import { ChevronRight, Flag, Search, X } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -125,7 +126,8 @@ function OrderDetailDrawer({
             <h3 className="mb-3 text-[13px] font-semibold text-[#2E2E2E]">
               Requested Items
             </h3>
-            <div className="overflow-hidden rounded-[10px] border border-[#ECECEA]">
+              <div className="overflow-x-auto">
+              <div className="min-w-[320px] overflow-hidden rounded-[10px] border border-[#ECECEA]">
               <div className="grid grid-cols-[1.6fr_50px_80px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 <div>Item</div>
                 <div>Qty</div>
@@ -150,6 +152,7 @@ function OrderDetailDrawer({
                 <span>{currency(order.orderPrice)}</span>
               </div>
             </div>
+              </div>
           </section>
 
           <section className="mt-6">
@@ -243,6 +246,108 @@ function OrderDetailDrawer({
   );
 }
 
+function CustomerOrdersPanel({
+  customer,
+  onViewOrder,
+}: {
+  customer: AdminCustomer;
+  onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
+}) {
+  return (
+    <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-3 py-3 sm:px-6 sm:py-4">
+      {/* Mobile: stacked order cards */}
+      <div className="space-y-2 md:hidden">
+        {customer.orders.map((order) => (
+          <div
+            key={order.id}
+            className="rounded-[10px] border border-[#ECECEA] bg-white p-3"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                  {order.id}
+                </div>
+                <div className="mt-1 text-[12px] text-[#8A8A8A]">
+                  Ordered {formatShortDate(order.orderDate)} · Delivery{" "}
+                  {formatShortDate(order.deliveryDate)}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                  {currency(order.orderPrice)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onViewOrder(customer, order)}
+                  className="mt-1 text-[13px] font-medium text-[#3B82F6]"
+                >
+                  View
+                </button>
+              </div>
+            </div>
+            <div className="mt-2">
+              <span
+                className={cn(
+                  "inline-flex rounded-[6px] px-2 py-0.5 text-[11px] font-medium",
+                  statusStyles(order.status),
+                )}
+              >
+                {order.status}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table */}
+      <div className="hidden md:block">
+        <ScrollTable minWidth={640} className="rounded-[10px]">
+          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] gap-3 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+            <div>Order ID</div>
+            <div>Order Date</div>
+            <div>Delivery</div>
+            <div>Status</div>
+            <div>Total</div>
+            <div />
+          </div>
+          {customer.orders.map((order) => (
+            <div
+              key={order.id}
+              className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
+            >
+              <div className="font-medium">{order.id}</div>
+              <div>{formatShortDate(order.orderDate)}</div>
+              <div>{formatShortDate(order.deliveryDate)}</div>
+              <div>
+                <span
+                  className={cn(
+                    "inline-flex rounded-[6px] px-2 py-0.5 text-[11px] font-medium",
+                    statusStyles(order.status),
+                  )}
+                >
+                  {order.status}
+                </span>
+              </div>
+              <div className="font-semibold">
+                {currency(order.orderPrice)}
+              </div>
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => onViewOrder(customer, order)}
+                  className="text-[13px] font-medium text-[#3B82F6]"
+                >
+                  View
+                </button>
+              </div>
+            </div>
+          ))}
+        </ScrollTable>
+      </div>
+    </div>
+  );
+}
+
 function CustomerTable({
   customers,
   expandedId,
@@ -254,139 +359,182 @@ function CustomerTable({
   onToggle: (id: string) => void;
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
-  return (
-    <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
-      <div
-        className={cn(
-          GRID,
-          "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
-        )}
-      >
-        <div />
-        <div>ID</div>
-        <div>Customer</div>
-        <div>Email</div>
-        <div>Phone</div>
-        <div>Address</div>
-        <div>Orders</div>
-        <div>Total</div>
-        <div>Last Order</div>
-        <div>Delivery Day</div>
+  if (!customers.length) {
+    return (
+      <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
+        No customers found
       </div>
+    );
+  }
 
-      {customers.map((customer, index) => {
-        const open = expandedId === customer.id;
-        const isLast = index === customers.length - 1;
-
-        return (
-          <div
-            key={customer.id}
-            className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
-          >
-            <div className={cn(GRID, "px-4 py-3.5")}>
+  return (
+    <>
+      {/* Mobile cards */}
+      <div className="space-y-2 md:hidden">
+        {customers.map((customer) => {
+          const open = expandedId === customer.id;
+          return (
+            <div
+              key={customer.id}
+              className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white"
+            >
               <button
                 type="button"
-                aria-label={open ? "Collapse" : "Expand"}
                 onClick={() => onToggle(customer.id)}
-                className="flex justify-center"
+                className="flex w-full items-start gap-3 p-3.5 text-left"
               >
                 <ChevronRight
                   size={14}
                   className={cn(
-                    "text-[#B0B0B0] transition-transform",
+                    "mt-1 shrink-0 text-[#B0B0B0] transition-transform",
                     open && "rotate-90 text-[#F57850]",
                   )}
                 />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                      {customer.id}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#2E2E2E]">
+                      {customer.firstName} {customer.lastName}
+                      {customer.flagged ? (
+                        <Flag
+                          size={12}
+                          className="text-[#2E2E2E]"
+                          strokeWidth={1.75}
+                        />
+                      ) : null}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 text-[12px] whitespace-nowrap text-[#6B6B6B]">
+                    {customer.phone}
+                  </div>
+                  <div className="mt-0.5 truncate text-[12px] text-[#8A8A8A]">
+                    {customer.shortLocation} · {customer.orderQuantity} orders
+                  </div>
+                </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-[14px] font-semibold text-[#2E2E2E]">
+                    {currency(customer.lifetimeTotal)}
+                  </div>
+                  <div className="mt-0.5 text-[11px] font-medium text-[#1C5752]">
+                    {dayAbbrev(customer.deliveryDay)}
+                  </div>
+                </div>
               </button>
+              {open ? (
+                <CustomerOrdersPanel
+                  customer={customer}
+                  onViewOrder={onViewOrder}
+                />
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
 
-              <button
-                type="button"
-                onClick={() => onToggle(customer.id)}
-                className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <ScrollTable minWidth={1100}>
+          <div
+            className={cn(
+              GRID,
+              "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+            )}
+          >
+            <div />
+            <div>ID</div>
+            <div>Customer</div>
+            <div>Email</div>
+            <div>Phone</div>
+            <div>Address</div>
+            <div>Orders</div>
+            <div>Total</div>
+            <div>Last Order</div>
+            <div>Delivery Day</div>
+          </div>
+
+          {customers.map((customer, index) => {
+            const open = expandedId === customer.id;
+            const isLast = index === customers.length - 1;
+
+            return (
+              <div
+                key={customer.id}
+                className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
               >
-                {customer.id}
-              </button>
+                <div className={cn(GRID, "px-4 py-3.5")}>
+                  <button
+                    type="button"
+                    aria-label={open ? "Collapse" : "Expand"}
+                    onClick={() => onToggle(customer.id)}
+                    className="flex justify-center"
+                  >
+                    <ChevronRight
+                      size={14}
+                      className={cn(
+                        "text-[#B0B0B0] transition-transform",
+                        open && "rotate-90 text-[#F57850]",
+                      )}
+                    />
+                  </button>
 
-              <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#2E2E2E]">
-                <span>
-                  {customer.firstName} {customer.lastName}
-                </span>
-                {customer.flagged ? (
-                  <Flag size={12} className="text-[#2E2E2E]" strokeWidth={1.75} />
+                  <button
+                    type="button"
+                    onClick={() => onToggle(customer.id)}
+                    className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
+                  >
+                    {customer.id}
+                  </button>
+
+                  <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#2E2E2E]">
+                    <span>
+                      {customer.firstName} {customer.lastName}
+                    </span>
+                    {customer.flagged ? (
+                      <Flag
+                        size={12}
+                        className="text-[#2E2E2E]"
+                        strokeWidth={1.75}
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="truncate text-[13px] text-[#2E2E2E]">
+                    {customer.email}
+                  </div>
+                  <div className="whitespace-nowrap text-[13px] text-[#2E2E2E]">
+                    {customer.phone}
+                  </div>
+                  <div className="truncate text-[13px] text-[#2E2E2E]">
+                    {customer.shortLocation}
+                  </div>
+                  <div className="text-[13px] text-[#2E2E2E]">
+                    {customer.orderQuantity}
+                  </div>
+                  <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                    {currency(customer.lifetimeTotal)}
+                  </div>
+                  <div className="text-[13px] text-[#2E2E2E]">
+                    {formatShortDate(customer.lastOrderedDate)}
+                  </div>
+                  <div className="text-[13px] font-medium text-[#1C5752]">
+                    {dayAbbrev(customer.deliveryDay)}
+                  </div>
+                </div>
+
+                {open ? (
+                  <CustomerOrdersPanel
+                    customer={customer}
+                    onViewOrder={onViewOrder}
+                  />
                 ) : null}
               </div>
-
-              <div className="truncate text-[13px] text-[#2E2E2E]">
-                {customer.email}
-              </div>
-              <div className="text-[13px] text-[#2E2E2E]">{customer.phone}</div>
-              <div className="truncate text-[13px] text-[#2E2E2E]">
-                {customer.shortLocation}
-              </div>
-              <div className="text-[13px] text-[#2E2E2E]">
-                {customer.orderQuantity}
-              </div>
-              <div className="text-[13px] font-semibold text-[#2E2E2E]">
-                {currency(customer.lifetimeTotal)}
-              </div>
-              <div className="text-[13px] text-[#2E2E2E]">
-                {formatShortDate(customer.lastOrderedDate)}
-              </div>
-              <div className="text-[13px] font-medium text-[#1C5752]">
-                {dayAbbrev(customer.deliveryDay)}
-              </div>
-            </div>
-
-            {open ? (
-              <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-6 py-4">
-                <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-                  <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] gap-3 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
-                    <div>Order ID</div>
-                    <div>Order Date</div>
-                    <div>Delivery</div>
-                    <div>Status</div>
-                    <div>Total</div>
-                    <div />
-                  </div>
-                  {customer.orders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
-                    >
-                      <div className="font-medium">{order.id}</div>
-                      <div>{formatShortDate(order.orderDate)}</div>
-                      <div>{formatShortDate(order.deliveryDate)}</div>
-                      <div>
-                        <span
-                          className={cn(
-                            "inline-flex rounded-[6px] px-2 py-0.5 text-[11px] font-medium",
-                            statusStyles(order.status),
-                          )}
-                        >
-                          {order.status}
-                        </span>
-                      </div>
-                      <div className="font-semibold">
-                        {currency(order.orderPrice)}
-                      </div>
-                      <div className="text-right">
-                        <button
-                          type="button"
-                          onClick={() => onViewOrder(customer, order)}
-                          className="text-[13px] font-medium text-[#3B82F6]"
-                        >
-                          View
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-          </div>
-        );
-      })}
-    </div>
+            );
+          })}
+        </ScrollTable>
+      </div>
+    </>
   );
 }
 
@@ -439,7 +587,7 @@ export default function CustomersPage() {
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Customers
@@ -448,7 +596,7 @@ export default function CustomersPage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-[220px]">
+          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -456,7 +604,7 @@ export default function CustomersPage() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, supplier name"
+              placeholder="Search ID, name, phone"
               className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
             />
           </div>
@@ -464,6 +612,7 @@ export default function CustomersPage() {
           <Select
             value={zipFilter}
             onChange={setZipFilter}
+            className="w-full sm:w-[150px]"
             aria-label="By Zip Code"
             options={[
               { value: "", label: "By Zip Code" },
@@ -474,6 +623,7 @@ export default function CustomersPage() {
           <Select
             value={orderCountFilter}
             onChange={setOrderCountFilter}
+            className="w-full sm:w-[170px]"
             aria-label="All Order Counts"
             options={[
               { value: "", label: "All Order Counts" },
@@ -485,7 +635,7 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <section className="mb-6">
           <h2 className="mb-3 text-[15px] font-semibold text-[#2E2E2E]">
             Active ({active.length})

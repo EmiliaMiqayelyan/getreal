@@ -174,48 +174,50 @@ function DistributorRow({
       {expanded ? (
         <tr className="border-b border-[#E4E6EB] last:border-b-0">
           <td colSpan={COLUMNS.length + 1} className="bg-[#EEF0F4] p-0">
-            <div className="border-t border-[#E4E6EB] px-10 py-3">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-[#E4E6EB]">
-                    {PRODUCT_COLUMNS.map((column) => (
-                      <th
-                        key={column}
-                        className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
-                      >
-                        {column}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {distributor.products.map((product) => (
-                    <tr
-                      key={product.id}
-                      className="border-b border-[#E4E6EB]/70 last:border-b-0"
-                    >
-                      <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
-                        <div>{product.name}</div>
-                        <div className="mt-0.5 text-xs font-normal text-muted">
-                          {product.product}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2.5 text-sm text-muted-strong">
-                        {product.source}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
-                        {formatPricePerUnit(product.price, product.unit)}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm text-muted-strong">
-                        {product.qty}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm text-muted-strong">
-                        {product.unit}
-                      </td>
+            <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-[#E4E6EB]">
+                      {PRODUCT_COLUMNS.map((column) => (
+                        <th
+                          key={column}
+                          className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                        >
+                          {column}
+                        </th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {distributor.products.map((product) => (
+                      <tr
+                        key={product.id}
+                        className="border-b border-[#E4E6EB]/70 last:border-b-0"
+                      >
+                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                          <div>{product.name}</div>
+                          <div className="mt-0.5 text-xs font-normal text-muted">
+                            {product.product}
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                          {product.source}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                          {formatPricePerUnit(product.price, product.unit)}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                          {product.qty}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                          {product.unit}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </td>
         </tr>

@@ -9,6 +9,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { ADMIN_ITEMS } from "@/data/admin";
 import { DISTRIBUTORS } from "@/constants/distributors";
@@ -786,7 +787,7 @@ export default function ProductsForSalePage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
           <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
             Products For Sale
@@ -795,7 +796,7 @@ export default function ProductsForSalePage() {
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-[240px]">
+          <div className="relative w-full sm:w-[220px]">
             <Search
               size={13}
               className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
@@ -863,7 +864,7 @@ export default function ProductsForSalePage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-7 py-5">
+      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="space-y-6">
           {CATEGORY_GROUPS.map(({ title, categories }) => {
             const groupItems = filteredItems.filter((item) =>
@@ -892,173 +893,179 @@ export default function ProductsForSalePage() {
                           {subcategory}
                         </div>
 
-                        <div
-                          className={cn(
-                            ROW_GRID,
-                            "border-b border-[#F0F0EE] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
-                          )}
-                        >
-                          <div />
-                          <div>ID</div>
-                          <div>Live</div>
-                          <div>Item Name</div>
-                          <div>Unit</div>
-                          <div>Unit Cost</div>
-                        </div>
+                        <ScrollTable minWidth={720} bare className="rounded-none border-0">
+                          <div
+                            className={cn(
+                              ROW_GRID,
+                              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                            )}
+                          >
+                            <div />
+                            <div>ID</div>
+                            <div>Live</div>
+                            <div>Item Name</div>
+                            <div>Unit</div>
+                            <div>Unit Cost</div>
+                          </div>
 
-                        {subItems.map((item, index) => {
-                          const open = expanded.has(item.id);
-                          const isLast = index === subItems.length - 1;
+                          {subItems.map((item, index) => {
+                            const open = expanded.has(item.id);
+                            const isLast = index === subItems.length - 1;
 
-                          return (
-                            <div
-                              key={item.id}
-                              className={cn(
-                                !isLast || open
-                                  ? "border-b border-[#F3F3F1]"
-                                  : "",
-                              )}
-                            >
-                              <div className={cn(ROW_GRID, "px-3 py-3")}>
-                                <button
-                                  type="button"
-                                  onClick={() => toggleRow(item.id)}
-                                  className="flex justify-center text-[#8A8A8A]"
-                                  aria-label={`${open ? "Collapse" : "Expand"} ${item.name}`}
-                                >
-                                  <ChevronRight
-                                    size={14}
-                                    className={cn(
-                                      "transition-transform",
-                                      open && "rotate-90 text-[#F57850]",
-                                    )}
-                                  />
-                                </button>
-                                <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                                  {item.id}
-                                </span>
-                                <div>
+                            return (
+                              <div
+                                key={item.id}
+                                className={cn(
+                                  !isLast || open
+                                    ? "border-b border-[#F3F3F1]"
+                                    : "",
+                                )}
+                              >
+                                <div className={cn(ROW_GRID, "px-3 py-3")}>
                                   <button
                                     type="button"
-                                    aria-label={`Toggle ${item.name} live state`}
-                                    onClick={() =>
-                                      setItems((current) =>
-                                        current.map((entry) =>
-                                          entry.id === item.id
-                                            ? { ...entry, live: !entry.live }
-                                            : entry,
-                                        ),
-                                      )
-                                    }
-                                    className={cn(
-                                      "relative inline-flex h-5 w-9 rounded-full transition",
-                                      item.live ? "bg-[#F57850]" : "bg-[#D1D1CF]",
-                                    )}
+                                    onClick={() => toggleRow(item.id)}
+                                    className="flex justify-center text-[#8A8A8A]"
+                                    aria-label={`${open ? "Collapse" : "Expand"} ${item.name}`}
                                   >
-                                    <span
+                                    <ChevronRight
+                                      size={14}
                                       className={cn(
-                                        "inline-block size-4 translate-y-0.5 rounded-full bg-white transition",
-                                        item.live
-                                          ? "translate-x-4"
-                                          : "translate-x-0.5",
+                                        "transition-transform",
+                                        open && "rotate-90 text-[#F57850]",
                                       )}
                                     />
                                   </button>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => openEditModal(item)}
-                                  className="truncate text-left text-[13px] font-semibold text-[#2E2E2E] hover:text-[#F57850]"
-                                >
-                                  {item.name}
-                                </button>
-                                <div className="text-[13px] text-[#2E2E2E]">
-                                  {item.unit}
-                                </div>
-                                <div className="text-[13px] font-semibold text-[#2E2E2E]">
-                                  {currency(item.sellingPrice, 0)}
-                                </div>
-                              </div>
-
-                              {open ? (
-                                <div className="border-t border-[#ECECEA] bg-[#F5F5F3]">
-                                  <div
-                                    className={cn(
-                                      SUPPLIER_GRID,
-                                      "border-b border-[#ECECEA] bg-[#EEEDEB] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
-                                    )}
-                                  >
-                                    <div />
-                                    <div />
-                                    <div>Distributor</div>
-                                    <div>Source</div>
-                                    <div>Qty / Last Delivered</div>
-                                    <div>Item Unit</div>
-                                    <div>Purchase Price</div>
-                                    <div>Margin</div>
-                                    <div>Unit Cost</div>
+                                  <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                                    {item.id}
+                                  </span>
+                                  <div>
+                                    <button
+                                      type="button"
+                                      aria-label={`Toggle ${item.name} live state`}
+                                      onClick={() =>
+                                        setItems((current) =>
+                                          current.map((entry) =>
+                                            entry.id === item.id
+                                              ? { ...entry, live: !entry.live }
+                                              : entry,
+                                          ),
+                                        )
+                                      }
+                                      className={cn(
+                                        "relative inline-flex h-5 w-9 rounded-full transition",
+                                        item.live ? "bg-[#F57850]" : "bg-[#D1D1CF]",
+                                      )}
+                                    >
+                                      <span
+                                        className={cn(
+                                          "inline-block size-4 translate-y-0.5 rounded-full bg-white transition",
+                                          item.live
+                                            ? "translate-x-4"
+                                            : "translate-x-0.5",
+                                        )}
+                                      />
+                                    </button>
                                   </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditModal(item)}
+                                    className="truncate text-left text-[13px] font-semibold text-[#2E2E2E] hover:text-[#F57850]"
+                                  >
+                                    {item.name}
+                                  </button>
+                                  <div className="text-[13px] text-[#2E2E2E]">
+                                    {item.unit}
+                                  </div>
+                                  <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                                    {currency(item.sellingPrice, 0)}
+                                  </div>
+                                </div>
 
-                                  {item.suppliers.length ? (
-                                    item.suppliers.map((supplier, supplierIndex) => {
-                                      const margin = marginPercent(
-                                        item.sellingPrice,
-                                        supplier.purchasePrice,
-                                      );
-                                      const markup =
-                                        item.sellingPrice - supplier.purchasePrice;
-
-                                      return (
+                                {open ? (
+                                  <div className="border-t border-[#ECECEA] bg-[#F5F5F3]">
+                                    <div className="overflow-x-auto">
+                                      <div className="min-w-[920px]">
                                         <div
-                                          key={`${item.id}-${supplier.supplierName}-${supplierIndex}`}
                                           className={cn(
                                             SUPPLIER_GRID,
-                                            "px-3 py-3 text-[12px] text-[#2E2E2E]",
-                                            supplierIndex <
-                                              item.suppliers.length - 1
-                                              ? "border-b border-[#ECECEA]"
-                                              : "",
+                                            "border-b border-[#ECECEA] bg-[#EEEDEB] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
                                           )}
                                         >
                                           <div />
                                           <div />
-                                          <div className="font-medium">
-                                            {supplier.supplierName}
-                                          </div>
-                                          <div>{supplier.source}</div>
-                                          <div>
-                                            <div>{supplier.quantity}</div>
-                                            <div className="text-[11px] text-[#8A8A8A]">
-                                              {formatDate(supplier.lastDelivered)}
-                                            </div>
-                                          </div>
-                                          <div>{supplier.itemUnit}</div>
-                                          <div>
-                                            {currency(supplier.purchasePrice)}
-                                          </div>
-                                          <div>{margin.toFixed(1)}%</div>
-                                          <div>
-                                            <span className="text-[#F57850]">
-                                              +{currency(markup)}
-                                            </span>
-                                            <span className="text-[#8A8A8A]">
-                                              {" "}
-                                              / {currency(item.sellingPrice)}
-                                            </span>
-                                          </div>
+                                          <div>Distributor</div>
+                                          <div>Source</div>
+                                          <div>Qty / Last Delivered</div>
+                                          <div>Item Unit</div>
+                                          <div>Purchase Price</div>
+                                          <div>Margin</div>
+                                          <div>Unit Cost</div>
                                         </div>
-                                      );
-                                    })
-                                  ) : (
-                                    <div className="px-4 py-4 text-[13px] text-[#8A8A8A]">
-                                      No supplier pricing has been attached yet.
+
+                                        {item.suppliers.length ? (
+                                          item.suppliers.map((supplier, supplierIndex) => {
+                                            const margin = marginPercent(
+                                              item.sellingPrice,
+                                              supplier.purchasePrice,
+                                            );
+                                            const markup =
+                                              item.sellingPrice - supplier.purchasePrice;
+
+                                            return (
+                                              <div
+                                                key={`${item.id}-${supplier.supplierName}-${supplierIndex}`}
+                                                className={cn(
+                                                  SUPPLIER_GRID,
+                                                  "px-3 py-3 text-[12px] text-[#2E2E2E]",
+                                                  supplierIndex <
+                                                    item.suppliers.length - 1
+                                                    ? "border-b border-[#ECECEA]"
+                                                    : "",
+                                                )}
+                                              >
+                                                <div />
+                                                <div />
+                                                <div className="font-medium">
+                                                  {supplier.supplierName}
+                                                </div>
+                                                <div>{supplier.source}</div>
+                                                <div>
+                                                  <div>{supplier.quantity}</div>
+                                                  <div className="text-[11px] text-[#8A8A8A]">
+                                                    {formatDate(supplier.lastDelivered)}
+                                                  </div>
+                                                </div>
+                                                <div>{supplier.itemUnit}</div>
+                                                <div>
+                                                  {currency(supplier.purchasePrice)}
+                                                </div>
+                                                <div>{margin.toFixed(1)}%</div>
+                                                <div>
+                                                  <span className="text-[#F57850]">
+                                                    +{currency(markup)}
+                                                  </span>
+                                                  <span className="text-[#8A8A8A]">
+                                                    {" "}
+                                                    / {currency(item.sellingPrice)}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })
+                                        ) : (
+                                          <div className="px-4 py-4 text-[13px] text-[#8A8A8A]">
+                                            No supplier pricing has been attached yet.
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
-                                  )}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </ScrollTable>
                       </div>
                     );
                   })}

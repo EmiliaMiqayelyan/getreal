@@ -77,7 +77,12 @@ export function UserMenu({
           {showAvatar ? (
             <div className="size-9 rounded-full bg-[#D1D5DB]" aria-hidden />
           ) : null}
-          <div className={cn("leading-tight", !showAvatar && "text-right")}>
+          <div
+            className={cn(
+              "hidden leading-tight sm:block",
+              !showAvatar && "text-right",
+            )}
+          >
             <div className="text-[13px] font-semibold text-[#2E2E2E]">
               James Miller
             </div>

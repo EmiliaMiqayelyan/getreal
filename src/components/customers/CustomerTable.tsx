@@ -150,55 +150,57 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
       {expanded ? (
         <tr className="border-b border-[#E4E6EB] last:border-b-0">
           <td colSpan={COLUMNS.length + 1} className="bg-[#EEF0F4] p-0">
-            <div className="border-t border-[#E4E6EB] px-10 py-3">
-              <table className="w-full border-collapse text-left">
-                <thead>
-                  <tr className="border-b border-[#E4E6EB]">
-                    {ORDER_COLUMNS.map((column) => (
-                      <th
-                        key={column}
-                        className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+            <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse text-left">
+                  <thead>
+                    <tr className="border-b border-[#E4E6EB]">
+                      {ORDER_COLUMNS.map((column) => (
+                        <th
+                          key={column}
+                          className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                        >
+                          {column}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customer.orderHistory.map((order) => (
+                      <tr
+                        key={order.id}
+                        className="border-b border-[#E4E6EB]/70 last:border-b-0"
                       >
-                        {column}
-                      </th>
+                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                          {order.id}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                          {order.date}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm text-foreground">
+                          {order.items}
+                        </td>
+                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                          {formatCurrency(order.total)}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <Tag>{order.status}</Tag>
+                        </td>
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {customer.orderHistory.map((order) => (
-                    <tr
-                      key={order.id}
-                      className="border-b border-[#E4E6EB]/70 last:border-b-0"
-                    >
-                      <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
-                        {order.id}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm text-muted-strong">
-                        {order.date}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm text-foreground">
-                        {order.items}
-                      </td>
-                      <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
-                        {formatCurrency(order.total)}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <Tag>{order.status}</Tag>
-                      </td>
-                    </tr>
-                  ))}
-                  {customer.orderHistory.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={ORDER_COLUMNS.length}
-                        className="px-3 py-4 text-sm text-muted"
-                      >
-                        No order history
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                    {customer.orderHistory.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={ORDER_COLUMNS.length}
+                          className="px-3 py-4 text-sm text-muted"
+                        >
+                          No order history
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </td>
         </tr>
