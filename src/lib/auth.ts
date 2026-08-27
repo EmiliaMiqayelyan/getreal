@@ -9,7 +9,7 @@ export const DEMO_ACCOUNTS = {
     username: "admin",
     password: "getreal",
     role: "superadmin" as const,
-    home: "/dashboard",
+    home: "/distributors",
   },
   warehouse: {
     username: "warehouse",

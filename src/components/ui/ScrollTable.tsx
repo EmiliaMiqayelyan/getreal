@@ -26,7 +26,9 @@ export function ScrollTable({
       )}
     >
       <div className="overflow-x-auto overscroll-x-contain">
-        <div style={{ minWidth: width }}>{children}</div>
+        <div className="w-full" style={{ minWidth: width }}>
+          {children}
+        </div>
       </div>
     </div>
   );

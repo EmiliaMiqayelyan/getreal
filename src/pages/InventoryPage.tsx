@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpDown,
   Check,
@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
@@ -113,7 +114,7 @@ const INITIAL_SECTIONS: InventorySection[] = [
           {
             orderId: "OPE-10044",
             distributor: "Rancho Protein LLC",
-            source: "Lena Hoffman",
+            source: "FreshAlley Meat Co",
             deliveryDate: "Jul 17, 2026, 07:30",
             purchased: "$18.50/ea",
             qty: 5,
@@ -129,7 +130,7 @@ const INITIAL_SECTIONS: InventorySection[] = [
           {
             orderId: "OPE-10045",
             distributor: "4PF Co.",
-            source: "FreshMarket Co.",
+            source: "FreshAlley Meat Co",
             deliveryDate: "Jul 16, 2026, 08:00",
             purchased: "$90/case",
             qty: 5,
@@ -145,7 +146,7 @@ const INITIAL_SECTIONS: InventorySection[] = [
           {
             orderId: "OPE-10050",
             distributor: "4PF Co.",
-            source: "FreshMarket Co.",
+            source: "FreshAlley Meat Co",
             deliveryDate: "Jul 16, 2026, 08:00",
             purchased: "$14.00/ea",
             qty: 3,
@@ -404,7 +405,7 @@ const GRID =
   "grid grid-cols-[28px_100px_1.15fr_1.1fr_1.25fr_100px_80px_70px_120px] items-center gap-2";
 
 const STOCK_GRID =
-  "grid grid-cols-[110px_1.4fr_48px_70px_120px_110px_1fr_120px] items-center gap-2";
+  "grid grid-cols-[104px_220px_48px_60px_148px_112px_200px_minmax(0,1fr)_100px] items-center gap-x-5";
 
 function stockTotal(product: InventoryProduct) {
   return product.lots.reduce((sum, lot) => sum + lot.qty, 0);
@@ -440,25 +441,25 @@ function QtyStepper({
   min?: number;
 }) {
   return (
-    <div className="flex h-9 w-[108px] items-center overflow-hidden rounded-[8px] border border-[#E6E6E3] bg-white">
+    <div className="flex shrink-0 items-center gap-2.5">
       <button
         type="button"
         aria-label="Decrease quantity"
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="flex h-full w-8 items-center justify-center text-[#8A8A8A] hover:bg-[#F5F5F3]"
+        className="flex size-7 items-center justify-center rounded-[6px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
-        <Minus size={14} />
+        <Minus size={13} strokeWidth={2.5} />
       </button>
-      <span className="flex-1 text-center text-[14px] font-semibold text-[#2E2E2E]">
+      <span className="min-w-[1.25rem] text-center text-[15px] font-medium text-[#111118]">
         {value}
       </span>
       <button
         type="button"
         aria-label="Increase quantity"
         onClick={() => onChange(value + 1)}
-        className="flex h-full w-8 items-center justify-center text-[#8A8A8A] hover:bg-[#F5F5F3]"
+        className="flex size-7 items-center justify-center rounded-[6px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
-        <Plus size={14} />
+        <Plus size={13} strokeWidth={2.5} />
       </button>
     </div>
   );
@@ -480,7 +481,7 @@ function LocationSelect({
       className={cn("w-full", className)}
       aria-label="Location"
       options={[
-        { value: "", label: "Select location" },
+        { value: "", label: "Select Location" },
         ...LOCATION_OPTIONS.map((location) => ({
           value: location,
           label: location,
@@ -490,10 +491,116 @@ function LocationSelect({
   );
 }
 
+function FlatLocationSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const label = value || "Select Location";
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative min-w-0">
+      <button
+        type="button"
+        aria-label="Location"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex items-center gap-1.5 text-left text-[14px] text-[#111118]"
+      >
+        <ChevronDown
+          size={14}
+          className={cn(
+            "shrink-0 text-[#6B6B6B] transition-transform",
+            open && "rotate-180",
+          )}
+        />
+        <span className={cn(!value && "text-[#8A8A8A]")}>{label}</span>
+      </button>
+      {open ? (
+        <ul
+          role="listbox"
+          className="absolute top-[calc(100%+6px)] left-0 z-50 max-h-60 min-w-[180px] overflow-auto rounded-[8px] border border-[#E6E6E3] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+        >
+          <li role="presentation">
+            <button
+              type="button"
+              role="option"
+              aria-selected={!value}
+              onClick={() => {
+                onChange("");
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full px-3 py-2 text-left text-[13px]",
+                !value
+                  ? "bg-[#28402B] font-medium text-white"
+                  : "text-[#111118] hover:bg-[#F5F5F3]",
+              )}
+            >
+              Select Location
+            </button>
+          </li>
+          {LOCATION_OPTIONS.map((location) => {
+            const selected = value === location;
+            return (
+              <li key={location} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    onChange(location);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full px-3 py-2 text-left text-[13px]",
+                    selected
+                      ? "bg-[#28402B] font-medium text-white"
+                      : "text-[#111118] hover:bg-[#F5F5F3]",
+                  )}
+                >
+                  {location}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function SplitModal({
   open,
   title,
-  subtitle,
+  itemName,
+  itemCount,
   confirmLabel,
   splits,
   onChangeSplits,
@@ -502,13 +609,16 @@ function SplitModal({
 }: {
   open: boolean;
   title: string;
-  subtitle: string;
+  itemName: string;
+  itemCount: number | string;
   confirmLabel: string;
   splits: LocationSplit[];
   onChangeSplits: (next: LocationSplit[]) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
+  useScrollLock(open);
+
   if (!open) return null;
 
   function updateRow(index: number, patch: Partial<LocationSplit>) {
@@ -520,7 +630,7 @@ function SplitModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:items-center sm:p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-none p-4 sm:items-center sm:p-6">
       <button
         type="button"
         aria-label="Close dialog overlay"
@@ -530,40 +640,51 @@ function SplitModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="relative z-10 w-full max-w-[420px] overflow-hidden rounded-[12px] bg-white shadow-2xl"
+        data-scroll-lock-allow
+        className="relative z-10 w-full max-w-[420px] overflow-visible rounded-[12px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
       >
-        <div className="flex items-start justify-between px-6 pt-5 pb-2">
-          <div>
-            <h2 className="text-[18px] font-semibold text-[#2E2E2E]">{title}</h2>
-            <p className="mt-1 text-[13px] text-[#8A8A8A]">{subtitle}</p>
+        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
+          <div className="min-w-0">
+            <h2 className="text-[18px] font-semibold tracking-tight text-[#111118]">
+              {title}
+            </h2>
+            <p className="mt-2 text-[14px] font-semibold text-[#111118]">
+              {itemName}{" "}
+              <span className="font-medium text-[#7A8B9A]">({itemCount})</span>
+            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+            className="shrink-0 rounded-md p-1 text-[#A9A9A9] hover:bg-[#F5F5F3] hover:text-[#6B6B6B]"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-3 px-6 py-4">
+        <div className="px-6 pb-2">
           {splits.map((row, index) => (
-            <div key={index} className="flex items-center gap-3">
+            <div
+              key={index}
+              className={cn(
+                "flex items-center gap-5 py-3.5",
+                index < splits.length - 1 && "border-b border-[#EEEEEE]",
+              )}
+            >
               <QtyStepper
                 value={row.qty}
                 onChange={(qty) => updateRow(index, { qty })}
               />
-              <LocationSelect
+              <FlatLocationSelect
                 value={row.location}
                 onChange={(location) => updateRow(index, { location })}
-                className="flex-1"
               />
             </div>
           ))}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-[#F0F0EE] px-6 py-4">
+        <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
@@ -574,8 +695,7 @@ function SplitModal({
           <button
             type="button"
             onClick={onConfirm}
-            className="rounded-[8px] px-5 py-2.5 text-[14px] font-semibold text-white"
-            style={{ background: GREEN }}
+            className="rounded-[8px] bg-[#28402B] px-5 py-2.5 text-[14px] font-semibold text-white"
           >
             {confirmLabel}
           </button>
@@ -653,11 +773,32 @@ function StockItemsView({
     );
     if (!valid.length) return;
 
-    const primary = valid[0];
-    updateItem(distributeTarget.sectionTitle, distributeTarget.itemId, {
-      location: primary.location,
-      splits: valid,
-    });
+    // Figma: distributing creates one table row per location.
+    setDraft((current) => ({
+      ...current,
+      sections: current.sections.map((section) => {
+        if (section.title !== distributeTarget.sectionTitle) return section;
+
+        const nextItems: StockItem[] = [];
+        for (const item of section.items) {
+          if (item.id !== distributeTarget.itemId) {
+            nextItems.push(item);
+            continue;
+          }
+          valid.forEach((split, index) => {
+            nextItems.push({
+              ...item,
+              id: index === 0 ? item.id : `${item.id}-loc-${index}`,
+              qtyAfterUnpack: String(split.qty),
+              location: split.location,
+              splits: [{ qty: split.qty, location: split.location }],
+            });
+          });
+        }
+
+        return { ...section, items: nextItems };
+      }),
+    }));
     setDistributeTarget(null);
   }
 
@@ -665,7 +806,7 @@ function StockItemsView({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             Stock Items
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -673,35 +814,47 @@ function StockItemsView({
       </div>
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
-        <h2 className="mb-4 text-[20px] font-semibold text-[#2E2E2E]">Protein</h2>
+        <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+          Protein
+        </h2>
         <div className="space-y-5">
           {draft.sections.map((section) => (
             <div key={section.title}>
-              <div className="mb-2 flex items-end justify-between gap-4 px-1">
-                <h3 className="text-[15px] font-semibold text-[#2E2E2E]">
-                  {section.title}
-                </h3>
-                <div className="hidden items-center gap-16 pr-4 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase sm:flex">
-                  <span>In Stock</span>
-                  <span>Date Receiving By</span>
-                </div>
-              </div>
-
-              <ScrollTable minWidth={980} className="rounded-[10px]">
+              <ScrollTable minWidth={1040} className="rounded-[12px]">
                 <div
                   className={cn(
                     STOCK_GRID,
-                    "border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                    "border-b border-[#E8E8E6] bg-[#F0F0EE] px-4 py-2.5",
                   )}
                 >
-                  <span>Order ID</span>
-                  <span>Item Name</span>
-                  <span>Qty</span>
-                  <span>Unit</span>
-                  <span>Qty After Unpack</span>
-                  <span>Exp. Date</span>
-                  <span>Enter Location</span>
-                  <span />
+                  <span className="col-span-2 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
+                    {section.title}
+                  </span>
+                  <span className="col-span-4 text-center text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                    In Stock
+                  </span>
+                  <span className="whitespace-nowrap text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                    Date Receiving By
+                  </span>
+                  <span aria-hidden />
+                  <span aria-hidden />
+                </div>
+
+                <div
+                  className={cn(
+                    STOCK_GRID,
+                    "border-b border-[#F0F0EE] bg-white px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                  )}
+                >
+                  <span className="whitespace-nowrap">Order ID</span>
+                  <span className="whitespace-nowrap">Item Name</span>
+                  <span className="whitespace-nowrap">Qty</span>
+                  <span className="whitespace-nowrap">Unit</span>
+                  <span className="whitespace-nowrap">Qty After Unpack</span>
+                  <span className="whitespace-nowrap">Exp. Date</span>
+                  <span className="whitespace-nowrap">Location</span>
+                  <span aria-hidden />
+                  <span aria-hidden />
                 </div>
 
                 {section.items.map((item) => (
@@ -709,14 +862,16 @@ function StockItemsView({
                     key={item.id}
                     className={cn(
                       STOCK_GRID,
-                      "border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0",
+                      "border-b border-[#F0F0EE] bg-white px-4 py-3 text-[13px] text-[#111118] last:border-b-0",
                     )}
                   >
-                    <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                    <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                       {item.orderId}
                     </span>
-                    <span className="font-medium">{item.itemName}</span>
-                    <span className="font-semibold">{item.qty}</span>
+                    <span className="min-w-0 truncate font-medium">
+                      {item.itemName}
+                    </span>
+                    <span className="text-center font-semibold">{item.qty}</span>
                     <span className="font-semibold">{item.unit}</span>
                     <Input
                       value={item.qtyAfterUnpack}
@@ -725,10 +880,10 @@ function StockItemsView({
                           qtyAfterUnpack: event.target.value,
                         })
                       }
-                      className="h-8 rounded-[8px] border-[#E6E6E3] px-2 text-[12px]"
+                      className="h-8 w-14 rounded-[8px] border-[#E6E6E3] px-1 text-center text-[12px]"
                     />
-                    <span>{item.expDate}</span>
-                    <div className="group flex items-center gap-1.5">
+                    <span className="whitespace-nowrap">{item.expDate}</span>
+                    <div className="group flex min-w-0 items-center gap-1.5">
                       <LocationSelect
                         value={item.location}
                         onChange={(location) =>
@@ -751,20 +906,17 @@ function StockItemsView({
                         type="button"
                         aria-label="Distribute item"
                         onClick={() => openDistribute(section.title, item)}
-                        className="shrink-0 rounded-md p-1.5 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#2E2E2E]"
+                        className="shrink-0 rounded-md p-1.5 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#111118]"
                       >
                         <ArrowUpDown size={15} />
                       </button>
                     </div>
+                    <span aria-hidden />
                     <button
                       type="button"
-                      className="justify-self-end text-[13px] font-medium text-[#3B82F6]"
+                      className="justify-self-end whitespace-nowrap text-[13px] font-medium text-[#3B82F6] hover:underline"
                     >
-                      (
-                      {item.qtyAfterUnpack ||
-                        item.splits.reduce((sum, row) => sum + row.qty, 0) ||
-                        item.qty}
-                      ) Print Label
+                      Print Label
                     </button>
                   </div>
                 ))}
@@ -774,11 +926,11 @@ function StockItemsView({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 md:px-7 py-4">
+      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={onClose}
-          className="text-[14px] font-medium text-[#8A8A8A]"
+          className="text-[14px] font-medium text-[#111118]"
         >
           Cancel & Close
         </button>
@@ -795,10 +947,11 @@ function StockItemsView({
       <SplitModal
         open={distributeTarget != null && activeItem != null}
         title="Distribute Item"
-        subtitle={
+        itemName={activeItem?.itemName ?? ""}
+        itemCount={
           activeItem
-            ? `${activeItem.itemName} (${parseUnpackQty(activeItem.qtyAfterUnpack) || activeItem.qty})`
-            : ""
+            ? parseUnpackQty(activeItem.qtyAfterUnpack) || activeItem.qty
+            : 0
         }
         confirmLabel="Distribute"
         splits={distributeSplits}
@@ -1060,7 +1213,7 @@ export default function InventoryPage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             Inventory
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -1125,30 +1278,26 @@ export default function InventoryPage() {
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {orders.length ? (
-          <div className="mb-5 space-y-2">
+          <div className="mb-5 space-y-2.5">
             {orders.map((order) => (
               <div key={order.id} className="overflow-x-auto">
                 <button
                   type="button"
                   onClick={() => setStoringId(order.id)}
-                  className="grid w-full min-w-[640px] grid-cols-[140px_1.6fr_0.8fr_1.2fr_40px] items-center rounded-[10px] px-4 py-4 text-left text-white"
+                  className="grid w-full min-w-[640px] grid-cols-[150px_1.6fr_0.8fr_1.2fr_40px] items-center rounded-full px-3 py-3 text-left text-white sm:px-4"
                   style={{ background: GREEN }}
                 >
-                  <span className="inline-flex w-fit items-center rounded-full bg-white/15 px-2.5 py-1 text-[12px] font-medium">
+                  <span className="inline-flex w-fit items-center rounded-full bg-[#1E3222] px-3 py-1.5 text-[12px] font-medium">
                     Order Received
                   </span>
-                  <span className="border-l border-white/20 pl-5 text-[14px] font-semibold">
+                  <span className="border-l border-white/25 pl-5 text-[14px] font-semibold">
                     {order.supplier}
                   </span>
-                  <span className="text-[13px] font-semibold">
-                    {order.itemsCount}
-                  </span>
-                  <span className="text-[13px] font-semibold">
-                    {order.receivedAt}
-                  </span>
+                  <span className="text-[13px]">{order.itemsCount}</span>
+                  <span className="text-[13px]">{order.receivedAt}</span>
                   <ChevronRight
                     size={16}
-                    className="justify-self-end text-white/80"
+                    className="justify-self-end text-white/90"
                   />
                 </button>
               </div>
@@ -1157,28 +1306,22 @@ export default function InventoryPage() {
         ) : null}
 
         <section>
-          <h2 className="mb-4 text-[20px] font-semibold text-[#2E2E2E]">
+          <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
             Protein
           </h2>
 
           <div className="space-y-5">
             {filteredSections.map((section) => (
               <div key={section.title}>
-                <div className="mb-2 flex items-end justify-between gap-4 px-1">
-                  <h3 className="text-[15px] font-semibold text-[#2E2E2E]">
-                    {section.title}
-                  </h3>
-                  <div className="hidden items-center gap-16 pr-[108px] text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase sm:flex">
-                    <span>In Stock</span>
-                    <span>Date Receiving By</span>
-                  </div>
-                </div>
+                <h3 className="mb-2 px-1 text-[15px] font-semibold text-[#111118]">
+                  {section.title}
+                </h3>
 
-                <ScrollTable minWidth={980} className="rounded-[10px]">
+                <ScrollTable minWidth={980} className="rounded-[12px]">
                   <div
                     className={cn(
                       GRID,
-                      "border-b border-[#F0F0EE] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                      "border-b border-[#F0F0EE] bg-white px-3 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
                     )}
                   >
                     <div />
@@ -1201,7 +1344,7 @@ export default function InventoryPage() {
                       <div
                         key={product.id}
                         className={cn(
-                          !isLast || open ? "border-b border-[#F3F3F1]" : "",
+                          !isLast || open ? "border-b border-[#F0F0EE]" : "",
                         )}
                       >
                         <button
@@ -1209,22 +1352,22 @@ export default function InventoryPage() {
                           onClick={() => toggleExpanded(product.id)}
                           className={cn(
                             GRID,
-                            "w-full bg-[#F7F1EC] px-3 py-3 text-left",
+                            "w-full bg-white px-3 py-3.5 text-left hover:bg-[#FAFAF8]",
                           )}
                         >
-                          <span className="flex justify-center text-[#F57850]">
+                          <span className="flex justify-center text-[#8A8A8A]">
                             <ChevronDown
                               size={14}
                               className={cn(
                                 "transition-transform",
-                                open ? "rotate-0" : "-rotate-90",
+                                open ? "rotate-0 text-[#E25B5B]" : "-rotate-90",
                               )}
                             />
                           </span>
-                          <div className="col-span-5 text-[13px] font-semibold text-[#2E2E2E]">
+                          <div className="col-span-5 text-[13px] font-semibold text-[#111118]">
                             {product.name}
                           </div>
-                          <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                          <div className="text-[13px] font-semibold text-[#111118]">
                             {total}
                           </div>
                           <div />
@@ -1240,14 +1383,14 @@ export default function InventoryPage() {
                                     key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
                                     className={cn(
                                       GRID,
-                                      "group bg-white px-3 py-3 text-[12px] text-[#2E2E2E]",
+                                      "group bg-[#FAFAF8] px-3 py-3 text-[12px] text-[#111118]",
                                       lotIndex < product.lots.length - 1
-                                        ? "border-b border-[#F3F3F1]"
+                                        ? "border-b border-[#F0F0EE]"
                                         : "",
                                     )}
                                   >
                                     <div />
-                                    <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                                    <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                                       {lot.orderId}
                                     </span>
                                     <div>{lot.distributor}</div>
@@ -1270,7 +1413,7 @@ export default function InventoryPage() {
                                             lotIndex,
                                           )
                                         }
-                                        className="shrink-0 rounded-md p-1 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#2E2E2E]"
+                                        className="shrink-0 rounded-md p-1 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F0F0EE] hover:text-[#111118]"
                                       >
                                         <ArrowUpDown size={14} />
                                       </button>
@@ -1281,11 +1424,11 @@ export default function InventoryPage() {
                                 <div
                                   className={cn(
                                     GRID,
-                                    "bg-white px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                    "bg-[#F7F7F5] px-3 py-3 text-[12px] text-[#8A8A8A]",
                                   )}
                                 >
                                   <div />
-                                  <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 text-center text-[11px]">
+                                  <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 text-center text-[11px]">
                                     -
                                   </span>
                                   <div className="col-span-7">Inventory Empty</div>
@@ -1313,11 +1456,8 @@ export default function InventoryPage() {
       <SplitModal
         open={editTarget != null && editLot != null && editProduct != null}
         title="Edit Location"
-        subtitle={
-          editProduct
-            ? `${editProduct.name} (${editLot?.qty ?? stockTotal(editProduct)})`
-            : ""
-        }
+        itemName={editProduct?.name ?? ""}
+        itemCount={editLot?.qty ?? (editProduct ? stockTotal(editProduct) : 0)}
         confirmLabel="Edit"
         splits={editSplits}
         onChangeSplits={setEditSplits}

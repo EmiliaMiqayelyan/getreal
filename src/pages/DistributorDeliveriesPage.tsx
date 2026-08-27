@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar,
   Camera,
@@ -19,6 +20,7 @@ import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
 const GREEN = "#28402B";
+const LINK_BLUE = "#3B82F6";
 
 type DeliveryChip = { id: string; label: string; count: number };
 
@@ -70,6 +72,316 @@ const REJECT_REASONS: RejectReason[] = [
   "Missing Exp Date",
 ];
 
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+
+function toIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatExpirationDate(iso: string) {
+  const date = parseIsoDate(iso);
+  if (!date) return iso;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function monthLabel(year: number, month: number) {
+  return new Date(year, month, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function RejectReasonPopover({
+  anchor,
+  onClose,
+  onSelect,
+}: {
+  anchor: HTMLElement;
+  onClose: () => void;
+  onSelect: (reason: RejectReason) => void;
+}) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  useEffect(() => {
+    function place() {
+      const rect = anchor.getBoundingClientRect();
+      const width = 248;
+      const height = panelRef.current?.offsetHeight ?? 200;
+      const gap = 8;
+      let top = rect.bottom + gap;
+      if (top + height > window.innerHeight - 12) {
+        top = Math.max(12, rect.top - height - gap);
+      }
+      let left = rect.left;
+      if (left + width > window.innerWidth - 12) {
+        left = Math.max(12, rect.right - width);
+      }
+      setPos({ top, left });
+    }
+
+    place();
+    // Re-measure after paint so height-aware flip works.
+    requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchor]);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target) || anchor.contains(target)) return;
+      onClose();
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [anchor, onClose]);
+
+  return createPortal(
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="Reject reason"
+      className="fixed z-[80] w-[248px] rounded-[12px] border border-[#ECECEA] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      style={{ top: pos.top, left: pos.left }}
+    >
+      <div className="mb-2.5 text-[13px] font-semibold text-[#111118]">
+        Reason
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {REJECT_REASONS.map((reason) => (
+          <button
+            key={reason}
+            type="button"
+            onClick={() => onSelect(reason)}
+            className={cn(
+              "rounded-full px-2.5 py-1.5 text-center text-[11px] font-medium",
+              reason === "Missing Exp Date"
+                ? "bg-[#FDECEC] text-[#E25B5B]"
+                : "bg-[#F3F3F1] text-[#111118] hover:bg-[#ECECEA]",
+            )}
+          >
+            {reason}
+          </button>
+        ))}
+      </div>
+      <div className="mt-3 border-t border-[#F0F0EE] pt-2.5">
+        <button
+          type="button"
+          className="inline-flex w-full items-center justify-center gap-1.5 text-[12px] font-medium text-[#111118]"
+        >
+          <Camera size={14} />
+          Take photo of problem
+        </button>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function ExpirationDatePicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (iso: string) => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const selected = parseIsoDate(value);
+  const initial = selected ?? new Date();
+  const [viewYear, setViewYear] = useState(initial.getFullYear());
+  const [viewMonth, setViewMonth] = useState(initial.getMonth());
+
+  useEffect(() => {
+    if (!open) return;
+    const next = parseIsoDate(value) ?? new Date();
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth());
+  }, [open, value]);
+
+  useEffect(() => {
+    if (!open) return;
+    const anchor = triggerRef.current;
+    if (!anchor) return;
+
+    function place() {
+      if (!anchor) return;
+      const rect = anchor.getBoundingClientRect();
+      const width = 280;
+      const gap = 8;
+      // Always open below the pill so the trigger stays visible.
+      const top = rect.bottom + gap;
+      let left = rect.left;
+      if (left + width > window.innerWidth - 12) {
+        left = Math.max(12, rect.right - width);
+      }
+      setPos({ top, left });
+    }
+
+    place();
+    requestAnimationFrame(place);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const anchor = triggerRef.current;
+    if (!anchor) return;
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target) || anchor.contains(target)) return;
+      setOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const todayIso = toIsoDate(new Date());
+  const selectedIso = selected ? toIsoDate(selected) : "";
+
+  function shiftMonth(delta: number) {
+    const next = new Date(viewYear, viewMonth + delta, 1);
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth());
+  }
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label="Expiration date"
+        onClick={() => setOpen((current) => !current)}
+        className="relative flex h-8 w-[128px] items-center rounded-full border border-[#E0E0DE] bg-white pr-3 pl-9 text-left text-[13px] text-[#111118] outline-none"
+      >
+        <Calendar
+          size={14}
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
+        />
+        <span className="min-w-0 truncate">
+          {value ? formatExpirationDate(value) : "Select"}
+        </span>
+      </button>
+
+      {open
+        ? createPortal(
+            <div
+              ref={panelRef}
+              role="dialog"
+              aria-label="Select expiration date"
+              className="fixed z-[80] w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+              style={{ top: pos.top, left: pos.left }}
+            >
+              <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
+                <span>{monthLabel(viewYear, viewMonth)}</span>
+                <div className="flex gap-1 text-[#8A8A8A]">
+                  <button
+                    type="button"
+                    aria-label="Previous month"
+                    onClick={() => shiftMonth(-1)}
+                    className="flex size-7 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Next month"
+                    onClick={() => shiftMonth(1)}
+                    className="flex size-7 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
+                {WEEKDAYS.map((day) => (
+                  <div key={day} className="py-1">
+                    {day}
+                  </div>
+                ))}
+                {Array.from({ length: firstWeekday }, (_, index) => (
+                  <div key={`pad-${index}`} />
+                ))}
+                {Array.from({ length: daysInMonth }, (_, index) => {
+                  const day = index + 1;
+                  const iso = toIsoDate(new Date(viewYear, viewMonth, day));
+                  const isSelected = iso === selectedIso;
+                  const isToday = iso === todayIso;
+                  return (
+                    <button
+                      key={iso}
+                      type="button"
+                      onClick={() => {
+                        onChange(iso);
+                        setOpen(false);
+                      }}
+                      className={cn(
+                        "rounded-full py-1.5 text-[13px] text-[#111118]",
+                        isSelected
+                          ? "bg-[#28402B] font-semibold text-white"
+                          : isToday
+                            ? "bg-[#E8E5E0] font-semibold"
+                            : "hover:bg-[#F5F5F3]",
+                      )}
+                    >
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 const INITIAL_ORDERS: DeliveryOrder[] = [
   {
     id: "DP-1043",
@@ -79,72 +391,12 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     totalPrice: 480,
     checked: false,
     items: [
-      {
-        id: "li-1",
-        itemCode: "ID-002-02",
-        name: "Angus Chuck Ground Beef",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 125,
-        priceLabel: "$125/case",
-      },
-      {
-        id: "li-2",
-        itemCode: "ID-001-10",
-        name: "Rib-eye Steak",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 90,
-        priceLabel: "$90/case",
-      },
-      {
-        id: "li-3",
-        itemCode: "ID-001-11",
-        name: "Rib-eye Steak",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 90,
-        priceLabel: "$90/case",
-      },
-      {
-        id: "li-4",
-        itemCode: "ID-001-12",
-        name: "Rib-eye Steak",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 90,
-        priceLabel: "$90/case",
-      },
-      {
-        id: "li-5",
-        itemCode: "ID-015-03",
-        name: "Legion Fields Whole Chicken",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 50,
-        priceLabel: "$50/case",
-      },
-      {
-        id: "li-6",
-        itemCode: "ID-015-04",
-        name: "Legion Fields Whole Chicken",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 50,
-        priceLabel: "$50/case",
-      },
+      { id: "li-1", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
+      { id: "li-2", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
+      { id: "li-3", itemCode: "ID-001-11", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
+      { id: "li-4", itemCode: "ID-001-12", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
+      { id: "li-5", itemCode: "ID-015-03", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
+      { id: "li-6", itemCode: "ID-015-04", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
     ],
   },
   {
@@ -155,28 +407,8 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     totalPrice: 101.25,
     checked: false,
     items: [
-      {
-        id: "li-7",
-        itemCode: "ID-020-01",
-        name: "Lemons",
-        category: "Fruits",
-        quantity: 4,
-        unit: "Box",
-        source: "Omara Okafor",
-        unitPrice: 6,
-        priceLabel: "$6/box",
-      },
-      {
-        id: "li-8",
-        itemCode: "ID-020-02",
-        name: "Blueberries",
-        category: "Fruits",
-        quantity: 2,
-        unit: "Box",
-        source: "Omara Okafor",
-        unitPrice: 32,
-        priceLabel: "$32/box",
-      },
+      { id: "li-7", itemCode: "ID-020-01", name: "Lemons", category: "Fruits", quantity: 4, unit: "Box", source: "Omara Okafor", unitPrice: 6, priceLabel: "$6/box" },
+      { id: "li-8", itemCode: "ID-020-02", name: "Blueberries", category: "Fruits", quantity: 2, unit: "Box", source: "Omara Okafor", unitPrice: 32, priceLabel: "$32/box" },
     ],
   },
   {
@@ -187,61 +419,11 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     totalPrice: 101.25,
     checked: false,
     items: [
-      {
-        id: "li-9",
-        itemCode: "ID-002-02",
-        name: "Angus Chuck Ground Beef",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 125,
-        priceLabel: "$125/case",
-      },
-      {
-        id: "li-10",
-        itemCode: "ID-001-10",
-        name: "Rib-eye Steak",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 90,
-        priceLabel: "$90/case",
-      },
-      {
-        id: "li-11",
-        itemCode: "ID-015-03",
-        name: "Legion Fields Whole Chicken",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "Lena Hoffman",
-        unitPrice: 50,
-        priceLabel: "$50/case",
-      },
-      {
-        id: "li-12",
-        itemCode: "ID-021-01",
-        name: "Blueberries",
-        category: "Fruits",
-        quantity: 1,
-        unit: "Box",
-        source: "FreshMarket Co.",
-        unitPrice: 12.5,
-        priceLabel: "$12.50/box",
-      },
-      {
-        id: "li-13",
-        itemCode: "ID-021-02",
-        name: "Blueberries",
-        category: "Fruits",
-        quantity: 1,
-        unit: "Box",
-        source: "FreshMarket Co.",
-        unitPrice: 12.5,
-        priceLabel: "$12.50/box",
-      },
+      { id: "li-9", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
+      { id: "li-10", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
+      { id: "li-11", itemCode: "ID-015-03", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
+      { id: "li-12", itemCode: "ID-021-01", name: "Blueberries", category: "Fruits", quantity: 1, unit: "Box", source: "FreshMarket Co.", unitPrice: 12.5, priceLabel: "$12.50/box" },
+      { id: "li-13", itemCode: "ID-021-02", name: "Blueberries", category: "Fruits", quantity: 1, unit: "Box", source: "FreshMarket Co.", unitPrice: 12.5, priceLabel: "$12.50/box" },
     ],
   },
 ];
@@ -277,6 +459,7 @@ function CheckOrderView({
 }) {
   const [checks, setChecks] = useState(() => emptyChecks(order.items));
   const [rejectFor, setRejectFor] = useState<string | null>(null);
+  const [rejectAnchor, setRejectAnchor] = useState<HTMLElement | null>(null);
   const [phase, setPhase] = useState<"check" | "review">("check");
 
   const categories = useMemo(() => {
@@ -300,19 +483,19 @@ function CheckOrderView({
   }
 
   const col =
-    "grid-cols-[minmax(180px,1.4fr)_48px_64px_minmax(140px,1fr)_minmax(120px,0.9fr)_minmax(200px,1.1fr)]";
+    "grid-cols-[220px_40px_52px_132px_118px_minmax(0,1fr)_200px]";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+            <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
               Check Order
             </h1>
             <p className="mt-1 text-[13px] text-[#8A8A8A]">
-              From{" "}
-              <span className="font-medium text-[#2E2E2E]">
+              Delivery Validation From{" "}
+              <span className="font-medium text-[#111118]">
                 {order.distributor}
               </span>
             </p>
@@ -321,17 +504,17 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
-        <div className="space-y-5">
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <div className="space-y-6">
           {categories.map(([category, items]) => (
             <section key={category}>
-              <h2 className="mb-3 text-[16px] font-semibold text-[#2E2E2E]">
+              <h2 className="mb-3 text-[16px] font-semibold text-[#111118]">
                 {category}
               </h2>
-              <ScrollTable minWidth={900} className="rounded-[10px]">
+              <ScrollTable minWidth={860} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid gap-3 border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
                     col,
                   )}
                 >
@@ -339,7 +522,10 @@ function CheckOrderView({
                   <span>Qty</span>
                   <span>Unit</span>
                   <span>Expiration Date</span>
-                  <span>{category === "Fruits" ? "Item ID" : "Order ID"}</span>
+                  <span>
+                    {category === "Fruits" ? "Item ID" : "Order ID"}
+                  </span>
+                  <span aria-hidden />
                   <span>Actions</span>
                 </div>
 
@@ -349,34 +535,29 @@ function CheckOrderView({
                     <div
                       key={item.id}
                       className={cn(
-                        "relative grid items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 last:border-b-0",
+                        "relative grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-3 last:border-b-0",
                         col,
+                        state.status === "accepted" &&
+                          "border-l-[3px] border-l-[#2F8F4E]",
+                        state.status === "rejected" &&
+                          "border-l-[3px] border-l-[#F57850]",
                       )}
                     >
-                      <span className="text-[13px] font-medium text-[#2E2E2E]">
+                      <span className="min-w-0 truncate text-[13px] font-medium text-[#111118]">
                         {item.name}
                       </span>
-                      <span className="text-[13px] text-[#2E2E2E]">
+                      <span className="text-center text-[13px] text-[#111118]">
                         {item.quantity}
                       </span>
-                      <span className="text-[13px] text-[#2E2E2E]">
+                      <span className="text-[13px] font-medium text-[#111118]">
                         {item.unit}
                       </span>
-                      <div className="relative">
-                        <Calendar
-                          size={13}
-                          className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-[#A9A9A9]"
-                        />
-                        <input
-                          type="text"
+                      <div className="w-[128px]">
+                        <ExpirationDatePicker
                           value={state.expiration}
-                          onChange={(event) =>
-                            updateCheck(item.id, {
-                              expiration: event.target.value,
-                            })
+                          onChange={(expiration) =>
+                            updateCheck(item.id, { expiration })
                           }
-                          placeholder="Select"
-                          className="h-9 w-full rounded-[8px] border border-[#E6E6E3] bg-white pr-3 pl-8 text-[12px] text-[#2E2E2E] outline-none placeholder:text-[#A9A9A9]"
                         />
                       </div>
                       <input
@@ -385,12 +566,14 @@ function CheckOrderView({
                         onChange={(event) =>
                           updateCheck(item.id, { itemId: event.target.value })
                         }
-                        className="h-9 w-full rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[12px] text-[#2E2E2E] outline-none"
+                        className="h-8 w-[118px] rounded-full border border-[#E0E0DE] bg-white px-3 text-[12px] text-[#111118] outline-none"
                       />
-                      <div className="flex items-center gap-3">
+                      <span aria-hidden />
+                      <div className="flex items-center gap-x-3 whitespace-nowrap">
                         <button
                           type="button"
-                          className="text-[13px] font-medium text-[#3B82F6]"
+                          className="text-[13px] font-medium"
+                          style={{ color: LINK_BLUE }}
                         >
                           Print
                         </button>
@@ -399,7 +582,7 @@ function CheckOrderView({
                           <>
                             <button
                               type="button"
-                              className="text-[13px] font-medium text-[#3B82F6]"
+                              className="text-[13px] font-medium text-[#E25B5B]"
                               onClick={() =>
                                 updateCheck(item.id, {
                                   status: "pending",
@@ -417,7 +600,8 @@ function CheckOrderView({
                           <>
                             <button
                               type="button"
-                              className="text-[13px] font-medium text-[#3B82F6]"
+                              className="text-[13px] font-medium"
+                              style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, {
                                   status: "accepted",
@@ -433,59 +617,25 @@ function CheckOrderView({
                           </>
                         ) : (
                           <>
-                            <div className="relative">
-                              <button
-                                type="button"
-                                className="text-[13px] font-medium text-[#3B82F6]"
-                                onClick={() =>
-                                  setRejectFor(
-                                    rejectFor === item.id ? null : item.id,
-                                  )
-                                }
-                              >
-                                Reject
-                              </button>
-                              {rejectFor === item.id ? (
-                                <div className="absolute top-7 left-0 z-20 w-[240px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-                                  <div className="mb-2 text-[12px] font-semibold text-[#2E2E2E]">
-                                    Reason
-                                  </div>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {REJECT_REASONS.map((reason) => (
-                                      <button
-                                        key={reason}
-                                        type="button"
-                                        onClick={() => {
-                                          updateCheck(item.id, {
-                                            status: "rejected",
-                                            reason,
-                                          });
-                                          setRejectFor(null);
-                                        }}
-                                        className={cn(
-                                          "rounded-full border px-2.5 py-1 text-[11px]",
-                                          reason === "Missing Exp Date"
-                                            ? "border-[#E25B5B] bg-[#FDECEC] font-medium text-[#E25B5B]"
-                                            : "border-transparent bg-[#F3F3F1] text-[#6B6B6B]",
-                                        )}
-                                      >
-                                        {reason}
-                                      </button>
-                                    ))}
-                                  </div>
-                                  <button
-                                    type="button"
-                                    className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-[8px] border border-[#E6E6E3] px-3 py-2 text-[12px] font-medium text-[#2E2E2E]"
-                                  >
-                                    <Camera size={13} />
-                                    Take photo of problem
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
                             <button
                               type="button"
-                              className="text-[13px] font-medium text-[#3B82F6]"
+                              className="text-[13px] font-medium text-[#E25B5B]"
+                              onClick={(event) => {
+                                if (rejectFor === item.id) {
+                                  setRejectFor(null);
+                                  setRejectAnchor(null);
+                                } else {
+                                  setRejectFor(item.id);
+                                  setRejectAnchor(event.currentTarget);
+                                }
+                              }}
+                            >
+                              Reject
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[13px] font-medium"
+                              style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, { status: "accepted" })
                               }
@@ -504,11 +654,26 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 md:px-7 py-4">
+      {rejectFor && rejectAnchor ? (
+        <RejectReasonPopover
+          anchor={rejectAnchor}
+          onClose={() => {
+            setRejectFor(null);
+            setRejectAnchor(null);
+          }}
+          onSelect={(reason) => {
+            updateCheck(rejectFor, { status: "rejected", reason });
+            setRejectFor(null);
+            setRejectAnchor(null);
+          }}
+        />
+      ) : null}
+
+      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={onClose}
-          className="text-[14px] font-medium text-[#8A8A8A]"
+          className="text-[14px] font-medium text-[#111118]"
         >
           Cancel & Close
         </button>
@@ -538,7 +703,7 @@ function CheckOrderView({
 }
 
 const ROW_GRID =
-  "grid grid-cols-[28px_100px_minmax(140px,1.2fr)_130px_140px_90px_110px] items-center gap-2";
+  "grid grid-cols-[18px_108px_220px_150px_150px_100px_minmax(0,1fr)_88px] items-center gap-x-5";
 
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
@@ -563,7 +728,9 @@ export default function DistributorDeliveriesPage() {
   const productOptions = useMemo(
     () =>
       Array.from(
-        new Set(orders.flatMap((order) => order.items.map((item) => item.name))),
+        new Set(
+          orders.flatMap((order) => order.items.map((item) => item.name)),
+        ),
       ).sort(),
     [orders],
   );
@@ -631,10 +798,10 @@ export default function DistributorDeliveriesPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-4 md:px-7 pt-5">
+        <div className="px-4 pt-5 md:px-7">
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
             <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+              <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
                 Distributor Receiving
               </h1>
               <div className="flex flex-col items-end gap-1 lg:hidden">
@@ -651,7 +818,7 @@ export default function DistributorDeliveriesPage() {
                   className={cn(
                     "border-b-2 pb-3 text-[14px] lg:pb-4",
                     activeTab === tab
-                      ? "border-[#F57850] font-medium text-[#2E2E2E]"
+                      ? "border-[#F57850] font-medium text-[#111118]"
                       : "border-transparent text-[#8A8A8A]",
                   )}
                 >
@@ -669,7 +836,7 @@ export default function DistributorDeliveriesPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 md:px-7 py-3">
+        <div className="border-t border-[#ECECEA] px-4 py-3 md:px-7">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-full sm:w-[220px]">
               <Search
@@ -708,10 +875,6 @@ export default function DistributorDeliveriesPage() {
                 })),
               ]}
             />
-
-            <div className="ml-auto text-[12px] text-[#8A8A8A]">
-              Today, Tue, Jun 22, 2026
-            </div>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -723,10 +886,10 @@ export default function DistributorDeliveriesPage() {
                   type="button"
                   onClick={() => setActiveChip(chip.id)}
                   className={cn(
-                    "inline-flex min-w-[120px] items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-left",
+                    "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
                     active
                       ? "border-transparent text-white"
-                      : "border-[#ECECEA] bg-white text-[#2E2E2E]",
+                      : "border-[#ECECEA] bg-white text-[#111118]",
                   )}
                   style={active ? { background: GREEN } : undefined}
                 >
@@ -735,7 +898,7 @@ export default function DistributorDeliveriesPage() {
                     className={cn(
                       "rounded-full px-2 py-0.5 text-[11px] font-semibold",
                       active
-                        ? "bg-white/15 text-white"
+                        ? "bg-[#3D5A40] text-white"
                         : "bg-[#F3F3F1] text-[#6B6B6B]",
                     )}
                   >
@@ -748,37 +911,37 @@ export default function DistributorDeliveriesPage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
-                <ChevronLeft size={16} />
+                <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
-                <ChevronRight size={16} />
+                <ChevronRight size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
-                <Calendar size={15} />
+                <Calendar size={14} />
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
-        <h2 className="mb-3 text-[20px] font-semibold text-[#2E2E2E]">
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <h2 className="mb-3 text-[20px] font-semibold text-[#111118]">
           Receiving Log
         </h2>
 
-        <ScrollTable minWidth={900} className="rounded-[10px]">
+        <ScrollTable minWidth={920} className="rounded-[12px]">
           <div
             className={cn(
               ROW_GRID,
-              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+              "border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
             )}
           >
             <div />
@@ -787,6 +950,7 @@ export default function DistributorDeliveriesPage() {
             <div>Order Date</div>
             <div>Expected Delivery</div>
             <div>Total Price</div>
+            <div aria-hidden />
             <div>Action</div>
           </div>
 
@@ -797,51 +961,52 @@ export default function DistributorDeliveriesPage() {
             return (
               <div
                 key={order.id}
-                className="border-b border-[#F3F3F1] last:border-b-0"
+                className={cn(
+                  "border-b border-[#F0F0EE] last:border-b-0",
+                  open && "bg-[#F7F7F5]",
+                )}
               >
-                <div
-                  className={cn(
-                    ROW_GRID,
-                    "px-4 py-3.5",
-                    open && "bg-[#F7FBFF]",
-                  )}
-                >
+                <div className={cn(ROW_GRID, "px-4 py-3.5")}>
                   <button
                     type="button"
                     aria-label={open ? "Collapse" : "Expand"}
                     onClick={() => toggleExpanded(order.id)}
-                    className="flex justify-center text-[#F57850]"
+                    className="flex items-center justify-center"
                   >
                     <ChevronDown
                       size={15}
                       className={cn(
-                        "transition-transform",
-                        open ? "rotate-0" : "-rotate-90",
+                        "shrink-0 transition-transform",
+                        open
+                          ? "rotate-0 text-[#E25B5B]"
+                          : "-rotate-90 text-[#6A6A6A]",
                       )}
                     />
                   </button>
 
-                  <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                  <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
                     {order.id}
                   </span>
-                  <span className="text-[14px] font-semibold text-[#2E2E2E]">
+                  <span className="truncate text-[14px] font-semibold text-[#111118]">
                     {order.distributor}
                   </span>
-                  <span className="text-[13px] text-[#6B6B6B]">
+                  <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
                     {order.orderDate}
                   </span>
-                  <span className="text-[13px] text-[#6B6B6B]">
+                  <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
                     {order.expectedDelivery}
                   </span>
-                  <span className="text-[13px] font-semibold text-[#2E2E2E]">
+                  <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
                     {currency(order.totalPrice)}
                   </span>
+                  <div aria-hidden />
                   <div>
                     {order.checked ? (
                       <button
                         type="button"
                         onClick={() => toggleExpanded(order.id)}
-                        className="inline-flex items-center gap-1.5 text-[13px] font-medium text-[#3B82F6]"
+                        className="inline-flex items-center gap-1.5 text-[13px] font-medium"
+                        style={{ color: LINK_BLUE }}
                       >
                         View
                         <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
@@ -852,7 +1017,8 @@ export default function DistributorDeliveriesPage() {
                       <button
                         type="button"
                         onClick={() => setCheckingId(order.id)}
-                        className="text-[13px] font-medium text-[#3B82F6]"
+                        className="text-[13px] font-medium"
+                        style={{ color: LINK_BLUE }}
                       >
                         Validate
                       </button>
@@ -860,64 +1026,62 @@ export default function DistributorDeliveriesPage() {
                   </div>
                 </div>
 
-                {open ? (
-                  <div className="border-t border-[#ECECEA] bg-[#FAFAF8]">
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[900px]">
-                        {order.items.map((item) => {
-                          const result = results?.[item.id];
-                          const rejected = result?.status === "rejected";
+                {open
+                  ? order.items.map((item) => {
+                      const result = results?.[item.id];
+                      const rejected = result?.status === "rejected";
 
-                          return (
-                            <div
-                              key={item.id}
-                              className={cn(
-                                ROW_GRID,
-                                "border-b border-[#F3F3F1] px-4 py-2.5 text-[12px] last:border-b-0",
-                              )}
-                            >
-                              <div />
-                              <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
-                                {result?.itemId ?? item.itemCode}
+                      return (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            ROW_GRID,
+                            "border-t border-[#ECECEA] px-4 py-3 text-[13px]",
+                          )}
+                        >
+                          <div />
+                          <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                            {result?.itemId ?? item.itemCode}
+                          </span>
+                          <div
+                            className={cn(
+                              "min-w-0 truncate",
+                              rejected ? "text-[#E25B5B]" : "text-[#111118]",
+                            )}
+                          >
+                            {item.name}
+                          </div>
+                          <div className="truncate text-[#8A8A8A]">
+                            {item.source}
+                          </div>
+                          <div />
+                          <div className="whitespace-nowrap">
+                            {rejected && result?.reason ? (
+                              <span className="font-medium text-[#E25B5B]">
+                                Rejected · {result.reason}
                               </span>
-                              <div
-                                className={cn(
-                                  "font-medium",
-                                  rejected ? "text-[#E25B5B]" : "text-[#2E2E2E]",
-                                )}
+                            ) : (
+                              <span className="text-[#111118]">
+                                {item.priceLabel}
+                              </span>
+                            )}
+                          </div>
+                          <div aria-hidden />
+                          <div>
+                            {rejected ? (
+                              <button
+                                type="button"
+                                className="text-[12px] font-medium"
+                                style={{ color: LINK_BLUE }}
                               >
-                                {item.name}
-                              </div>
-                              <div className="text-[#6B6B6B]">{item.source}</div>
-                              <div />
-                              <div>
-                                {rejected && result?.reason ? (
-                                  <span className="font-medium text-[#E25B5B]">
-                                    Rejected · {result.reason}
-                                  </span>
-                                ) : (
-                                  <span className="text-[#2E2E2E]">
-                                    {item.priceLabel}
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                {rejected ? (
-                                  <button
-                                    type="button"
-                                    className="text-[12px] font-medium text-[#3B82F6]"
-                                  >
-                                    Image
-                                  </button>
-                                ) : null}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
+                                Image
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
               </div>
             );
           })}

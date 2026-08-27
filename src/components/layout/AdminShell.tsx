@@ -57,13 +57,13 @@ export function AdminShell({ children }: AdminShellProps) {
             aria-label="Open menu"
             aria-expanded={navOpen}
             onClick={() => setNavOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-[8px] border border-[#E6E6E3] text-[#2E2E2E]"
+            className="inline-flex size-9 items-center justify-center rounded-[8px] border border-[#E6E6E3] text-[#111118]"
           >
             <Menu size={18} />
           </button>
           <Link
             to={home}
-            className="text-[15px] font-semibold tracking-tight text-[#2E2E2E]"
+            className="text-[15px] font-semibold tracking-tight text-[#111118]"
           >
             {APP_NAME}
           </Link>

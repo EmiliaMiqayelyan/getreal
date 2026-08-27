@@ -6,7 +6,11 @@ import {
   CartIcon,
   DashboardIcon,
   InventoryIcon,
+  ItemsIcon,
+  PackageIcon,
+  PhoneIcon,
   RolesIcon,
+  SourceIcon,
   TruckIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -25,6 +29,10 @@ const ICONS = {
   users: UsersIcon,
   customers: UsersIcon,
   roles: RolesIcon,
+  source: SourceIcon,
+  items: ItemsIcon,
+  phone: PhoneIcon,
+  package: PackageIcon,
 } as const;
 
 function SidebarItem({

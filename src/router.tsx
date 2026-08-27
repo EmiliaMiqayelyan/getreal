@@ -14,7 +14,10 @@ const DistributorDeliveriesPage = lazy(
   () => import("@/pages/DistributorDeliveriesPage"),
 );
 const PackingCoolersPage = lazy(() => import("@/pages/PackingCoolersPage"));
+const PackerManagerPage = lazy(() => import("@/pages/PackerManagerPage"));
 const DistributorsPage = lazy(() => import("@/pages/DistributorsPage"));
+const SourcePage = lazy(() => import("@/pages/SourcePage"));
+const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
 const CustomerOrdersPage = lazy(() => import("@/pages/CustomerOrdersPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
@@ -63,10 +66,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: ROUTES.inventory,
+        path: ROUTES.distributors,
         element: (
           <RoleGuard allow={["superadmin", "warehouse"]}>
-            <InventoryPage />
+            <DistributorsPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.source,
+        element: (
+          <RoleGuard allow={["superadmin"]}>
+            <SourcePage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.items,
+        element: (
+          <RoleGuard allow={["superadmin"]}>
+            <ItemsPage />
           </RoleGuard>
         ),
       },
@@ -87,26 +106,18 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: ROUTES.distributorDeliveries,
-        element: (
-          <RoleGuard allow={["warehouse"]}>
-            <DistributorDeliveriesPage />
-          </RoleGuard>
-        ),
-      },
-      {
-        path: ROUTES.packingCoolers,
-        element: (
-          <RoleGuard allow={["warehouse"]}>
-            <PackingCoolersPage />
-          </RoleGuard>
-        ),
-      },
-      {
-        path: ROUTES.distributors,
+        path: ROUTES.inventory,
         element: (
           <RoleGuard allow={["superadmin", "warehouse"]}>
-            <DistributorsPage />
+            <InventoryPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.customers,
+        element: (
+          <RoleGuard allow={["superadmin"]}>
+            <CustomersPage />
           </RoleGuard>
         ),
       },
@@ -119,10 +130,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
-        path: ROUTES.customers,
+        path: ROUTES.distributorDeliveries,
+        element: (
+          <RoleGuard allow={["superadmin", "warehouse"]}>
+            <DistributorDeliveriesPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.packingCoolers,
+        element: (
+          <RoleGuard allow={["superadmin", "warehouse"]}>
+            <PackingCoolersPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.packerManager,
         element: (
           <RoleGuard allow={["superadmin"]}>
-            <CustomersPage />
+            <PackerManagerPage />
           </RoleGuard>
         ),
       },

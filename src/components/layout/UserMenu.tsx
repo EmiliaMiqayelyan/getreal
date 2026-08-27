@@ -83,7 +83,7 @@ export function UserMenu({
               !showAvatar && "text-right",
             )}
           >
-            <div className="text-[13px] font-semibold text-[#2E2E2E]">
+            <div className="text-[13px] font-semibold text-[#111118]">
               James Miller
             </div>
             <div className="text-[11px] text-[#8F8F8F]">{roleLabel}</div>
@@ -106,7 +106,7 @@ export function UserMenu({
               type="button"
               role="menuitem"
               onClick={handleLogout}
-              className="w-full px-3.5 py-2 text-left text-[13px] font-medium text-[#2E2E2E] transition-colors hover:bg-[#F7F6F3]"
+              className="w-full px-3.5 py-2 text-left text-[13px] font-medium text-[#111118] transition-colors hover:bg-[#F7F6F3]"
             >
               Log out
             </button>

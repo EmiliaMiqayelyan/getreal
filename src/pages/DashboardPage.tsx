@@ -99,8 +99,8 @@ function ChartToggle({
             className={cn(
               "rounded-[6px] px-3 py-1.5 text-[12px] font-medium transition-colors",
               active
-                ? "bg-white text-[#2E2E2E] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
-                : "text-[#8A8A8A] hover:text-[#2E2E2E]",
+                ? "bg-white text-[#111118] shadow-[0_1px_2px_rgba(0,0,0,0.06)]"
+                : "text-[#8A8A8A] hover:text-[#111118]",
             )}
           >
             {label}
@@ -129,7 +129,7 @@ function AreaChartCard({
   return (
     <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-[15px] font-semibold text-[#2E2E2E]">{title}</h2>
+        <h2 className="text-[15px] font-semibold text-[#111118]">{title}</h2>
         <ChartToggle value={mode} onChange={onModeChange} />
       </div>
 
@@ -213,7 +213,7 @@ export default function DashboardPage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="min-w-0 text-[18px] font-semibold tracking-tight text-[#2E2E2E] md:text-[22px]">
+          <h1 className="min-w-0 text-[18px] font-semibold tracking-tight text-[#111118] md:text-[22px]">
             Dashboard Report
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -222,7 +222,7 @@ export default function DashboardPage() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#2E2E2E]"
+            className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
           >
             <Calendar size={14} className="text-[#8A8A8A]" />
             Select Date
@@ -295,7 +295,7 @@ export default function DashboardPage() {
                     <p className="text-[13px] font-medium text-[#8A8A8A]">
                       {card.title}
                     </p>
-                    <p className="mt-2 text-[26px] font-semibold tracking-tight text-[#2E2E2E]">
+                    <p className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
                       {card.value}
                     </p>
                     <p className="mt-1 text-[12px] text-[#9A9A9A]">
@@ -336,7 +336,7 @@ export default function DashboardPage() {
 
           <div className="space-y-4">
             <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
-              <h2 className="mb-4 text-[15px] font-semibold text-[#2E2E2E]">
+              <h2 className="mb-4 text-[15px] font-semibold text-[#111118]">
                 Order Status
               </h2>
 
@@ -381,10 +381,10 @@ export default function DashboardPage() {
                       >
                         <Icon size={16} strokeWidth={1.75} />
                       </div>
-                      <span className="min-w-0 flex-1 text-[13px] font-medium text-[#2E2E2E]">
+                      <span className="min-w-0 flex-1 text-[13px] font-medium text-[#111118]">
                         {row.label}
                       </span>
-                      <span className="shrink-0 text-[14px] font-semibold text-[#2E2E2E]">
+                      <span className="shrink-0 text-[14px] font-semibold text-[#111118]">
                         {row.value}
                       </span>
                     </button>
@@ -403,14 +403,14 @@ export default function DashboardPage() {
                   <Package size={16} strokeWidth={1.75} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-medium text-[#2E2E2E]">
+                  <div className="text-[13px] font-medium text-[#111118]">
                     Pending Orders from Distributors
                   </div>
                   <div className="mt-0.5 text-[11px] text-[#9A9A9A]">
                     Awaiting delivery
                   </div>
                 </div>
-                <span className="shrink-0 text-[14px] font-semibold text-[#2E2E2E]">
+                <span className="shrink-0 text-[14px] font-semibold text-[#111118]">
                   3
                 </span>
               </button>
@@ -418,13 +418,13 @@ export default function DashboardPage() {
 
             <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
               <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold text-[#2E2E2E]">
+                <h2 className="text-[15px] font-semibold text-[#111118]">
                   Top Customers
                 </h2>
                 <button
                   type="button"
                   onClick={() => navigate(ROUTES.customers)}
-                  className="inline-flex items-center gap-0.5 text-[13px] font-medium text-[#2E2E2E]"
+                  className="inline-flex items-center gap-0.5 text-[13px] font-medium text-[#111118]"
                 >
                   View All
                   <ArrowUpRight size={13} />
@@ -440,7 +440,7 @@ export default function DashboardPage() {
                     className="flex w-full items-center justify-between py-3 text-left transition-colors first:pt-1 last:pb-0 hover:opacity-80"
                   >
                     <div>
-                      <div className="text-[13px] font-medium text-[#2E2E2E]">
+                      <div className="text-[13px] font-medium text-[#111118]">
                         {customer.firstName} {customer.lastName}
                       </div>
                       <div className="mt-0.5 text-[12px] text-[#9A9A9A]">

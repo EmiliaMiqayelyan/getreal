@@ -162,6 +162,49 @@ export function FileIcon(props: IconProps) {
   );
 }
 
+export function SourceIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="12" cy="12" r="8" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2v2.5" />
+      <path d="M12 19.5V22" />
+      <path d="M2 12h2.5" />
+      <path d="M19.5 12H22" />
+    </svg>
+  );
+}
+
+export function ItemsIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3c2.5 3.5 4 6.2 4 9a4 4 0 1 1-8 0c0-2.8 1.5-5.5 4-9Z" />
+      <path d="M12 14v7" />
+    </svg>
+  );
+}
+
+export function PhoneIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <rect x="7" y="2.5" width="10" height="19" rx="2" />
+      <path d="M10 5h4" />
+      <path d="M11 18.5h2" />
+    </svg>
+  );
+}
+
+export function PackageIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" />
+      <path d="M12 12v8" />
+      <path d="m4 8.5 8 3.5 8-3.5" />
+      <path d="M8.5 6.2 15.5 10" />
+    </svg>
+  );
+}
+
 export function LogoMark(props: IconProps) {
   return (
     <svg

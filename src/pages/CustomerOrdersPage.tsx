@@ -395,21 +395,21 @@ function HoverCard({
   if (step.key === "requested") {
     return (
       <div className="w-[260px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-        <div className="text-[13px] font-semibold text-[#2E2E2E]">Ordered</div>
+        <div className="text-[13px] font-semibold text-[#111118]">Ordered</div>
         <div className="mt-1 text-[12px] text-[#18A34A]">
-          Jun 16, 12:31 AM, 2024
+          {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
         </div>
-        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#2E2E2E]">
+        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#111118]">
           <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#F57850] text-[9px] font-semibold text-white">
-            {order.customerName[0]}
+            {(step.person ?? order.customerName)[0]}
           </span>
-          {order.customerName}
+          {step.person ?? order.customerName}
         </div>
         <div className="mt-3 space-y-1.5 border-t border-[#F0F0EE] pt-2">
           {order.items.map((item) => (
             <div
               key={item.name}
-              className="grid grid-cols-[1fr_24px_56px] gap-2 text-[12px] text-[#2E2E2E]"
+              className="grid grid-cols-[1fr_24px_56px] gap-2 text-[12px] text-[#111118]"
             >
               <span className="truncate">{item.name}</span>
               <span className="text-center text-[#8A8A8A]">{item.qty}</span>
@@ -418,7 +418,7 @@ function HoverCard({
               </span>
             </div>
           ))}
-          <div className="flex items-center justify-between border-t border-[#F0F0EE] pt-2 text-[12px] font-semibold text-[#2E2E2E]">
+          <div className="flex items-center justify-between border-t border-[#F0F0EE] pt-2 text-[12px] font-semibold text-[#111118]">
             <span>Order Total</span>
             <span>{currency(order.total)}</span>
           </div>
@@ -430,11 +430,11 @@ function HoverCard({
   if (step.key === "coolerPickup") {
     return (
       <div className="w-[200px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-        <div className="text-[13px] font-semibold text-[#2E2E2E]">
+        <div className="text-[13px] font-semibold text-[#111118]">
           Cooler Pickup
         </div>
         <div className="mt-1 text-[12px] text-[#18A34A]">
-          Jul 16, 12:31 AM, 2024
+          {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
         </div>
         <div className="mt-2">
           <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
@@ -454,14 +454,14 @@ function HoverCard({
 
   return (
     <div className="w-[220px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-      <div className="text-[13px] font-semibold text-[#2E2E2E]">
+      <div className="text-[13px] font-semibold text-[#111118]">
         {titles[step.key] ?? step.key}
       </div>
       <div className="mt-1 text-[12px] text-[#18A34A]">
-        {step.at ? `${step.at}, 2024` : "Jul 16, 12:31 AM, 2024"}
+        {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
       </div>
       {step.person ? (
-        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#2E2E2E]">
+        <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#111118]">
           <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#F57850] text-[9px] font-semibold text-white">
             {step.person[0]}
           </span>
@@ -474,31 +474,31 @@ function HoverCard({
             <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
               Street Address
             </div>
-            <div className="mt-0.5 text-[#2E2E2E]">{order.address}</div>
+            <div className="mt-0.5 text-[#111118]">{order.address}</div>
           </div>
           <div>
             <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
               Apt / Unit
             </div>
-            <div className="mt-0.5 text-[#2E2E2E]">{order.apt}</div>
+            <div className="mt-0.5 text-[#111118]">{order.apt}</div>
           </div>
           <div>
             <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
               City
             </div>
-            <div className="mt-0.5 text-[#2E2E2E]">{order.city}</div>
+            <div className="mt-0.5 text-[#111118]">{order.city}</div>
           </div>
           <div>
             <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
               State
             </div>
-            <div className="mt-0.5 text-[#2E2E2E]">{order.state}</div>
+            <div className="mt-0.5 text-[#111118]">{order.state}</div>
           </div>
           <div>
             <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
               Zip
             </div>
-            <div className="mt-0.5 text-[#2E2E2E]">{order.zip}</div>
+            <div className="mt-0.5 text-[#111118]">{order.zip}</div>
           </div>
         </div>
       ) : null}
@@ -523,6 +523,10 @@ function StepNode({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
     >
+      <div className="mb-1.5 flex h-[14px] w-full items-end justify-center truncate text-center text-[10px] font-medium text-[#111118] sm:text-[11px]">
+        {step.done && step.shortLabel ? step.shortLabel : null}
+      </div>
+
       <button
         type="button"
         onClick={(event) => {
@@ -543,15 +547,12 @@ function StepNode({
         ) : null}
       </button>
 
-      <div className="mt-1.5 min-h-[16px] w-full truncate text-center text-[10px] font-medium text-[#2E2E2E] sm:text-[11px]">
-        {step.done && step.shortLabel ? step.shortLabel : null}
-      </div>
-      <div className="mt-0.5 min-h-[14px] w-full truncate text-center text-[9px] leading-tight text-[#9A948C] sm:text-[10px]">
+      <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[9px] leading-tight text-[#9A948C] sm:text-[10px]">
         {step.done && step.at ? step.at : null}
       </div>
 
       {hover && step.done ? (
-        <div className="absolute top-9 z-30 hidden sm:block">
+        <div className="absolute top-[52px] left-1/2 z-30 hidden -translate-x-1/2 sm:block">
           <HoverCard step={step} order={order} />
         </div>
       ) : null}
@@ -567,8 +568,24 @@ function OrderTimelineTrack({
   onStatusClick: (stepKey: TimelineStepKey) => void;
 }) {
   return (
-    <div className="relative min-w-[520px] lg:min-w-0">
-      <div className="absolute top-[8px] right-[8%] left-[8%] border-t border-dashed border-[#D9D4CD]" />
+    <div className="relative">
+      <div className="pointer-events-none absolute top-[29px] right-[8%] left-[8%] flex">
+        {order.steps.slice(0, -1).map((step, index) => {
+          const segmentDone =
+            order.steps[index]?.done && order.steps[index + 1]?.done;
+          return (
+            <div
+              key={step.key}
+              className={cn(
+                "h-0 flex-1 border-t",
+                segmentDone
+                  ? "border-solid border-[#D9D4CD]"
+                  : "border-dashed border-[#D9D4CD]",
+              )}
+            />
+          );
+        })}
+      </div>
       <div className="relative grid grid-cols-6">
         {order.steps.map((step) => (
           <StepNode
@@ -592,14 +609,7 @@ function OrderDetailPanel({
   onClose: () => void;
 }) {
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Close order details"
-        className="absolute inset-0 z-30 bg-[#333333]/25"
-        onClick={onClose}
-      />
-      <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[#ECECEA] bg-white shadow-2xl">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
         <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 py-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -610,25 +620,22 @@ function OrderDetailPanel({
                 Ordered: {order.orderDate}
               </span>
             </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#2E2E2E]">
+            <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
               {order.customerName}
             </h2>
-            <div className="mt-2 inline-flex rounded-[6px] bg-[#E8F5EC] px-2 py-1 text-[12px] font-medium text-[#2F8F4E]">
-              Payment Status: {order.paymentStatus}
-            </div>
           </div>
           <button
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
           >
             <X size={18} />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto px-5 py-5">
-          <h3 className="mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+          <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
             Requested Items
           </h3>
           <div className="overflow-hidden rounded-[10px] border border-[#ECECEA]">
@@ -641,7 +648,7 @@ function OrderDetailPanel({
             {order.items.map((item) => (
               <div
                 key={item.name}
-                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-[12px] text-[#2E2E2E] last:border-b-0"
+                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
               >
                 <div>{item.name}</div>
                 <div>{item.qty}</div>
@@ -653,13 +660,13 @@ function OrderDetailPanel({
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between border-t border-[#ECECEA] bg-[#FAFAF8] px-3 py-2.5 text-[13px] font-semibold text-[#2E2E2E]">
+            <div className="flex items-center justify-between border-t border-[#ECECEA] bg-[#FAFAF8] px-3 py-2.5 text-[13px] font-semibold text-[#111118]">
               <span>Order Total</span>
               <span>{currency(order.total)}</span>
             </div>
           </div>
 
-          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
             Packing Information
           </h3>
           <div className="grid grid-cols-2 gap-4">
@@ -667,7 +674,7 @@ function OrderDetailPanel({
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 Packer Assigned
               </div>
-              <div className="mt-1 text-[13px] text-[#2E2E2E]">
+              <div className="mt-1 text-[13px] text-[#111118]">
                 {order.packerAssigned ?? "—"}
               </div>
             </div>
@@ -691,7 +698,7 @@ function OrderDetailPanel({
             </div>
           </div>
 
-          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
             Delivery Information
           </h3>
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-[6px] bg-[#FFF0E8] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
@@ -703,36 +710,35 @@ function OrderDetailPanel({
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 Street Address
               </div>
-              <div className="mt-1 text-[#2E2E2E]">{order.address}</div>
+              <div className="mt-1 text-[#111118]">{order.address}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 Apt / Unit
               </div>
-              <div className="mt-1 text-[#2E2E2E]">{order.apt}</div>
+              <div className="mt-1 text-[#111118]">{order.apt}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 City
               </div>
-              <div className="mt-1 text-[#2E2E2E]">{order.city}</div>
+              <div className="mt-1 text-[#111118]">{order.city}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 State
               </div>
-              <div className="mt-1 text-[#2E2E2E]">{order.state}</div>
+              <div className="mt-1 text-[#111118]">{order.state}</div>
             </div>
             <div>
               <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
                 Zip
               </div>
-              <div className="mt-1 text-[#2E2E2E]">{order.zip}</div>
+              <div className="mt-1 text-[#111118]">{order.zip}</div>
             </div>
           </div>
         </div>
-      </aside>
-    </>
+    </aside>
   );
 }
 
@@ -824,12 +830,12 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="px-4 pt-5 md:px-7">
           <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
             <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[18px] font-semibold tracking-tight text-[#2E2E2E] md:text-[22px]">
+              <h1 className="text-[18px] font-semibold tracking-tight text-[#111118] md:text-[22px]">
                 Customer Orders
               </h1>
               <div className="flex flex-col items-end gap-1 lg:hidden">
@@ -850,7 +856,7 @@ export default function CustomerOrdersPage() {
                   className={cn(
                     "border-b-2 pb-3 text-[14px] lg:pb-4",
                     activeTab === tab
-                      ? "border-[#F57850] font-medium text-[#2E2E2E]"
+                      ? "border-[#F57850] font-medium text-[#111118]"
                       : "border-transparent text-[#8A8A8A]",
                   )}
                 >
@@ -910,7 +916,7 @@ export default function CustomerOrdersPage() {
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#2E2E2E]"
+                  className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
                 >
                   <Calendar size={13} className="text-[#8A8A8A]" />
                   Select Date
@@ -937,6 +943,7 @@ export default function CustomerOrdersPage() {
         </div>
       </div>
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {activeTab === "Orders" ? (
           <>
@@ -950,10 +957,10 @@ export default function CustomerOrdersPage() {
                       type="button"
                       onClick={() => setActiveChip(chip.id)}
                       className={cn(
-                        "inline-flex min-w-[120px] items-center justify-between gap-3 rounded-[12px] border px-4 py-3 text-left",
+                        "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
                         active
                           ? "border-transparent text-white"
-                          : "border-[#ECECEA] bg-white text-[#2E2E2E]",
+                          : "border-[#ECECEA] bg-white text-[#111118]",
                       )}
                       style={active ? { background: GREEN } : undefined}
                     >
@@ -964,7 +971,7 @@ export default function CustomerOrdersPage() {
                         className={cn(
                           "rounded-full px-2 py-0.5 text-[11px] font-semibold",
                           active
-                            ? "bg-white/15 text-white"
+                            ? "bg-[#3D5A40] text-white"
                             : "bg-[#F3F3F1] text-[#6B6B6B]",
                         )}
                       >
@@ -978,27 +985,32 @@ export default function CustomerOrdersPage() {
               <div className="relative flex items-center gap-2">
                 <button
                   type="button"
-                  className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                  className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={15} />
                 </button>
                 <button
                   type="button"
-                  className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                  className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={15} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                  className={cn(
+                    "flex size-8 items-center justify-center rounded-[8px] border bg-white",
+                    calendarOpen
+                      ? "border-[#28402B] text-[#28402B]"
+                      : "border-[#ECECEA] text-[#8A8A8A]",
+                  )}
                 >
-                  <Calendar size={15} />
+                  <Calendar size={14} />
                 </button>
 
                 {calendarOpen ? (
                   <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
-                    <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#2E2E2E]">
+                    <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
                       <span>July 2026</span>
                       <div className="flex gap-1 text-[#8A8A8A]">
                         <ChevronLeft size={14} />
@@ -1019,7 +1031,7 @@ export default function CustomerOrdersPage() {
                             type="button"
                             onClick={() => setSelectedDay(day)}
                             className={cn(
-                              "rounded-full py-1.5 text-[#2E2E2E]",
+                              "rounded-full py-1.5 text-[#111118]",
                               selectedDay === day
                                 ? "bg-[#E8E5E0] font-semibold"
                                 : "hover:bg-[#F5F5F3]",
@@ -1052,42 +1064,42 @@ export default function CustomerOrdersPage() {
               </div>
             </div>
 
-            <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-              <div className="hidden grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase lg:grid">
-                <div>Order ID</div>
-                {STEPS_META.map((step) => (
-                  <div key={step.key} className="text-center">
-                    {step.header}
-                  </div>
-                ))}
-              </div>
+            <div className="overflow-x-auto rounded-[10px] border border-[#ECECEA] bg-white">
+              <div className="min-w-[900px]">
+                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                  <div>Order ID</div>
+                  {STEPS_META.map((step) => (
+                    <div key={step.key} className="text-center">
+                      {step.header}
+                    </div>
+                  ))}
+                </div>
 
-              {filteredActive.map((order) => (
-                <div
-                  key={order.id}
-                  className="relative border-b border-[#F3F3F1] px-4 py-4 last:border-b-0 sm:px-5"
-                >
-                  <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedOrderId(order.id)}
-                      className="text-left"
-                    >
-                      <div className="flex items-center gap-1 text-[14px] font-semibold text-[#2E2E2E]">
-                        {order.customerName}
-                        <ChevronRight size={13} className="text-[#A9A9A9]" />
-                      </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                        <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
-                          {order.id}
-                        </span>
-                        <span className="text-[12px] text-[#8A8A8A]">
-                          {order.itemCount} items
-                        </span>
-                      </div>
-                    </button>
+                {filteredActive.map((order) => (
+                  <div
+                    key={order.id}
+                    className="relative border-b border-[#F3F3F1] px-4 py-4 last:border-b-0 sm:px-5"
+                  >
+                    <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrderId(order.id)}
+                        className="text-left"
+                      >
+                        <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
+                          {order.customerName}
+                          <ChevronRight size={13} className="text-[#A9A9A9]" />
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                            {order.id}
+                          </span>
+                          <span className="text-[12px] text-[#8A8A8A]">
+                            {order.itemCount} items
+                          </span>
+                        </div>
+                      </button>
 
-                    <div className="-mx-1 overflow-x-auto pb-1 lg:mx-0 lg:overflow-visible lg:pb-0">
                       <OrderTimelineTrack
                         order={order}
                         onStatusClick={(stepKey) =>
@@ -1100,85 +1112,93 @@ export default function CustomerOrdersPage() {
                         }
                       />
                     </div>
-                  </div>
 
-                  {statusMenu?.orderId === order.id ? (
-                    <div className="absolute top-auto right-4 bottom-3 left-4 z-20 rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl sm:top-14 sm:right-auto sm:bottom-auto sm:left-[260px] sm:w-auto">
-                      <div className="mb-2 text-[12px] font-semibold text-[#2E2E2E]">
-                        Change Status
+                    {statusMenu?.orderId === order.id ? (
+                      <div className="absolute top-12 left-[220px] z-20 w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+                        <div className="mb-2 text-[12px] font-semibold text-[#111118]">
+                          Change Status
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
+                            onClick={() => advanceStatus(order.id, 1)}
+                          >
+                            Requested
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
+                            style={{ background: ORANGE }}
+                            onClick={() => advanceStatus(order.id, 3)}
+                          >
+                            On Route
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#2E2E2E]"
-                          onClick={() => advanceStatus(order.id, 1)}
-                        >
-                          Requested
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
-                          style={{ background: ORANGE }}
-                          onClick={() => advanceStatus(order.id, 3)}
-                        >
-                          On Route
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+                    ) : null}
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         ) : (
           <div className="space-y-8">
             {completedGroups.map(([week, days]) => (
               <section key={week}>
-                <h2 className="mb-4 text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+                <h2 className="mb-5 text-[22px] font-semibold tracking-tight text-[#111118]">
                   {week}
                 </h2>
                 {Array.from(days.entries()).map(([day, dayOrders]) => (
-                  <div key={day} className="mb-5 overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-                    <div className="flex items-center gap-2 border-b border-[#F0F0EE] bg-[#FAFAF8] px-4 py-3 text-[13px] font-semibold text-[#2E2E2E]">
-                      <Truck size={14} className="text-[#F57850]" />
+                  <div key={day} className="mb-6">
+                    <div className="mb-3 flex items-center gap-2 text-[14px] font-semibold text-[#111118]">
+                      <Truck size={15} className="text-[#F57850]" />
                       {day}
-                      <span className="text-[12px] font-medium text-[#8A8A8A]">
+                      <span className="font-medium text-[#8A8A8A]">
                         · {dayOrders.length} orders
                       </span>
                     </div>
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[860px]">
-                    <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
-                      <div>Order ID</div>
-                      <div>Customer</div>
-                      <div>Address</div>
-                      <div>Zip Code</div>
-                      <div>Order Date</div>
-                      <div>Delivered</div>
-                      <div>Items</div>
-                      <div>Total</div>
-                    </div>
-                    {dayOrders.map((order) => (
-                      <div
-                        key={order.id}
-                        className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
-                      >
-                        <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
-                          {order.id}
-                        </span>
-                        <div className="font-semibold">{order.customer}</div>
-                        <div className="truncate text-[#6B6B6B]">
-                          {order.address}
+                    <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                      <div className="overflow-x-auto">
+                        <div className="min-w-[860px]">
+                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                            <div>Order ID</div>
+                            <div>Customer</div>
+                            <div>Address</div>
+                            <div>Zip Code</div>
+                            <div>Order Date</div>
+                            <div>Delivered</div>
+                            <div>Items</div>
+                            <div>Total</div>
+                          </div>
+                          {dayOrders.map((order) => (
+                            <div
+                              key={order.id}
+                              className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
+                            >
+                              <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                                {order.id}
+                              </span>
+                              <div className="font-semibold">
+                                {order.customer}
+                              </div>
+                              <div className="truncate text-[#6B6B6B]">
+                                {order.address}
+                              </div>
+                              <div>{order.zip}</div>
+                              <div className="text-[#6B6B6B]">
+                                {order.orderDate}
+                              </div>
+                              <div className="text-[#6B6B6B]">
+                                {order.delivered}
+                              </div>
+                              <div>{order.items}</div>
+                              <div className="font-semibold">
+                                {currency(order.total)}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <div>{order.zip}</div>
-                        <div className="text-[#6B6B6B]">{order.orderDate}</div>
-                        <div className="text-[#6B6B6B]">{order.delivered}</div>
-                        <div>{order.items}</div>
-                        <div className="font-semibold">
-                          {currency(order.total)}
-                        </div>
-                      </div>
-                    ))}
                       </div>
                     </div>
                   </div>
@@ -1195,6 +1215,7 @@ export default function CustomerOrdersPage() {
           onClose={() => setSelectedOrderId(null)}
         />
       ) : null}
+      </div>
     </div>
   );
 }

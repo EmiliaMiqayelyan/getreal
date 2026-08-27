@@ -12,7 +12,11 @@ export type NavItem = {
     | "truck"
     | "users"
     | "customers"
-    | "roles";
+    | "roles"
+    | "source"
+    | "items"
+    | "phone"
+    | "package";
   badge?: number;
 };
 
@@ -23,26 +27,16 @@ export type NavSection = {
 
 export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
   {
-    title: "MENU",
+    title: "MAIN",
     items: [
-      { label: "Dashboard Report", href: ROUTES.dashboard, icon: "dashboard" },
-    ],
-  },
-  {
-    title: "CUSTOMER",
-    items: [
+      { label: "Distributors", href: ROUTES.distributors, icon: "truck" },
+      { label: "Source", href: ROUTES.source, icon: "source" },
+      { label: "Items", href: ROUTES.items, icon: "items" },
       {
-        label: "Customer Orders",
-        href: ROUTES.customerOrders,
-        icon: "users",
-        badge: 13,
+        label: "Products For Sale",
+        href: ROUTES.productsForSale,
+        icon: "phone",
       },
-      { label: "Customers", href: ROUTES.customers, icon: "customers" },
-    ],
-  },
-  {
-    title: "WAREHOUSE",
-    items: [
       {
         label: "Distributors Orders",
         href: ROUTES.productOrders,
@@ -50,12 +44,37 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
         badge: 8,
       },
       { label: "Inventory", href: ROUTES.inventory, icon: "inventory" },
+    ],
+  },
+  {
+    title: "CUSTOMER",
+    items: [
+      { label: "Customers", href: ROUTES.customers, icon: "customers" },
       {
-        label: "Products For Sale",
-        href: ROUTES.productsForSale,
-        icon: "box",
+        label: "Customer Orders",
+        href: ROUTES.customerOrders,
+        icon: "roles",
       },
-      { label: "Distributors", href: ROUTES.distributors, icon: "truck" },
+    ],
+  },
+  {
+    title: "WAREHOUSE",
+    items: [
+      {
+        label: "Distributor Receiving",
+        href: ROUTES.distributorDeliveries,
+        icon: "cart",
+      },
+      {
+        label: "Packing Coolers",
+        href: ROUTES.packingCoolers,
+        icon: "package",
+      },
+      {
+        label: "Packer Manager",
+        href: ROUTES.packerManager,
+        icon: "package",
+      },
     ],
   },
   {
@@ -74,7 +93,11 @@ export const WAREHOUSE_NAV_SECTIONS: NavSection[] = [
         icon: "cart",
       },
       { label: "Inventory", href: ROUTES.inventory, icon: "inventory" },
-      { label: "Packing Coolers", href: ROUTES.packingCoolers, icon: "box" },
+      {
+        label: "Packing Coolers",
+        href: ROUTES.packingCoolers,
+        icon: "package",
+      },
       { label: "Distributors", href: ROUTES.distributors, icon: "truck" },
     ],
   },
@@ -90,5 +113,5 @@ export function getNavSections(role: AppRole | null): NavSection[] {
 
 export function getRoleHome(role: AppRole | null): string {
   if (role === "warehouse") return ROUTES.distributorDeliveries;
-  return ROUTES.dashboard;
+  return ROUTES.distributors;
 }

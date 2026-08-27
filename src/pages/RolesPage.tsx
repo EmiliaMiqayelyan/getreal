@@ -11,6 +11,7 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
 } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import type { RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
 
@@ -121,7 +122,7 @@ function PermissionCheckbox({
   onChange: () => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-[#2E2E2E]">
+    <label className="flex cursor-pointer items-start gap-2.5 text-[13px] text-[#111118]">
       <button
         type="button"
         role="checkbox"
@@ -130,7 +131,7 @@ function PermissionCheckbox({
         className={cn(
           "mt-0.5 flex size-[16px] shrink-0 items-center justify-center rounded-[3px] border transition-colors",
           checked
-            ? "border-[#2E2E2E] bg-[#2E2E2E] text-white"
+            ? "border-[#111118] bg-[#111118] text-white"
             : "border-[#C9C9C6] bg-white",
         )}
       >
@@ -155,6 +156,7 @@ export default function RolesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  useScrollLock(modalOpen);
 
   const roleOptions = useMemo(
     () => Array.from(new Set(users.map((user) => user.type))).sort(),
@@ -291,7 +293,7 @@ export default function RolesPage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             Roles
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -334,7 +336,7 @@ export default function RolesPage() {
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <ScrollTable minWidth={860}>
-          <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
+          <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#111118] uppercase">
             <div />
             <div>ID</div>
             <div>Name</div>
@@ -380,17 +382,17 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={() => openEditModal(user)}
-                    className="text-left text-[13px] font-semibold text-[#2E2E2E] hover:underline"
+                    className="text-left text-[13px] font-semibold text-[#111118] hover:underline"
                   >
                     {user.name}
                   </button>
 
-                  <div className="truncate text-[13px] text-[#2E2E2E]">
+                  <div className="truncate text-[13px] text-[#111118]">
                     {user.email}
                   </div>
-                  <div className="text-[13px] text-[#2E2E2E]">{user.phone}</div>
+                  <div className="text-[13px] text-[#111118]">{user.phone}</div>
                   <div>
-                    <span className="inline-flex rounded-[6px] bg-[#F3F3F1] px-2 py-1 text-[12px] font-medium text-[#2E2E2E]">
+                    <span className="inline-flex rounded-[6px] bg-[#F3F3F1] px-2 py-1 text-[12px] font-medium text-[#111118]">
                       {user.type}
                     </span>
                   </div>
@@ -402,7 +404,7 @@ export default function RolesPage() {
                       <div className="min-w-[520px] grid gap-8 md:grid-cols-2 xl:grid-cols-4">
                         {PERMISSION_GROUPS.map((group) => (
                           <div key={group.label}>
-                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#111118] uppercase">
                               {group.label}
                             </h3>
                             <div className="space-y-2.5">
@@ -444,7 +446,7 @@ export default function RolesPage() {
       </div>
 
       {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6 sm:items-center">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-none p-6 sm:items-center">
           <button
             type="button"
             aria-label="Close dialog overlay"
@@ -456,12 +458,13 @@ export default function RolesPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="roles-modal-title"
-            className="relative z-10 w-full max-w-[460px] overflow-hidden rounded-[14px] bg-white shadow-2xl"
+            data-scroll-lock-allow
+            className="relative z-10 w-full max-w-[460px] overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
           >
             <div className="flex items-center justify-between px-6 pt-5 pb-3">
               <h2
                 id="roles-modal-title"
-                className="text-[20px] font-semibold tracking-tight text-[#2E2E2E]"
+                className="text-[20px] font-semibold tracking-tight text-[#111118]"
               >
                 {draft.id ? "Edit User" : "Add User"}
               </h2>
@@ -477,7 +480,7 @@ export default function RolesPage() {
 
             <div className="space-y-4 px-6 pb-5">
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#2E2E2E]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   Name
                 </label>
                 <Input
@@ -494,7 +497,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#2E2E2E]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   Email
                 </label>
                 <Input
@@ -512,7 +515,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#2E2E2E]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   {draft.id ? "Set a New Password" : "Set Password"}
                 </label>
                 <div className="relative">
@@ -544,7 +547,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#2E2E2E]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   Phone
                 </label>
                 <Input
@@ -561,7 +564,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#2E2E2E]">
+                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   Role Name
                 </label>
                 <Select

@@ -87,17 +87,10 @@ function OrderDetailDrawer({
   const address = parseAddress(order.deliveryAddress || customer.fullAddress);
 
   return (
-    <>
-      <button
-        type="button"
-        aria-label="Close order details"
-        className="absolute inset-0 z-30 bg-[#333333]/25"
-        onClick={onClose}
-      />
-      <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[#ECECEA] bg-white shadow-2xl">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
         <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 py-4">
           <div>
-            <div className="text-[13px] font-semibold text-[#2E2E2E]">
+            <div className="text-[13px] font-semibold text-[#111118]">
               {order.id}
             </div>
             <div className="mt-0.5 text-[12px] text-[#8A8A8A]">
@@ -108,14 +101,14 @@ function OrderDetailDrawer({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
           >
             <X size={18} />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto px-5 py-5">
-          <h2 className="text-[26px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h2 className="text-[26px] font-semibold tracking-tight text-[#111118]">
             {customer.firstName} {customer.lastName}
           </h2>
           <div className="mt-2 inline-flex rounded-[6px] bg-[#E8F5EC] px-2 py-1 text-[12px] font-medium text-[#2F8F4E]">
@@ -123,7 +116,7 @@ function OrderDetailDrawer({
           </div>
 
           <section className="mt-6">
-            <h3 className="mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+            <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
               Requested Items
             </h3>
               <div className="overflow-x-auto">
@@ -137,17 +130,20 @@ function OrderDetailDrawer({
               {order.items.map((item) => (
                 <div
                   key={`${order.id}-${item.itemName}`}
-                  className="grid grid-cols-[1.6fr_50px_80px_70px] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-[12px] text-[#2E2E2E] last:border-b-0"
+                  className="grid grid-cols-[1.6fr_50px_80px_70px] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
                 >
                   <div>{item.itemName}</div>
                   <div>{item.quantity}</div>
-                  <div>{currency(item.pricePerUnit)}</div>
+                  <div className="whitespace-nowrap">
+                    {currency(item.pricePerUnit)}
+                    {item.unit ? ` / ${item.unit}` : ""}
+                  </div>
                   <div className="text-right font-semibold">
                     {currency(item.totalPrice)}
                   </div>
                 </div>
               ))}
-              <div className="flex items-center justify-between border-t border-[#ECECEA] bg-[#FAFAF8] px-3 py-2.5 text-[13px] font-semibold text-[#2E2E2E]">
+              <div className="flex items-center justify-between border-t border-[#ECECEA] bg-[#FAFAF8] px-3 py-2.5 text-[13px] font-semibold text-[#111118]">
                 <span>Order Total</span>
                 <span>{currency(order.orderPrice)}</span>
               </div>
@@ -156,7 +152,7 @@ function OrderDetailDrawer({
           </section>
 
           <section className="mt-6">
-            <h3 className="mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+            <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
               Packing Information
             </h3>
             <div className="grid grid-cols-2 gap-4">
@@ -164,7 +160,7 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   Packer Assigned
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {order.packerAssigned ?? "—"}
                 </div>
               </div>
@@ -191,7 +187,7 @@ function OrderDetailDrawer({
           </section>
 
           <section className="mt-6">
-            <h3 className="mb-3 text-[13px] font-semibold text-[#2E2E2E]">
+            <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
               Delivery Information
             </h3>
             <div className="mb-3 inline-flex rounded-[8px] bg-[#FFF0E8] px-2.5 py-1 text-[12px] font-medium text-[#E07A4F]">
@@ -202,7 +198,7 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   Street Address
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {address.street || "—"}
                 </div>
               </div>
@@ -210,7 +206,7 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   Apt/Unit
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {address.apt || "—"}
                 </div>
               </div>
@@ -218,7 +214,7 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   City
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {address.city || "—"}
                 </div>
               </div>
@@ -226,7 +222,7 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   State
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {address.state || "—"}
                 </div>
               </div>
@@ -234,15 +230,14 @@ function OrderDetailDrawer({
                 <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
                   Zip
                 </div>
-                <div className="mt-1 text-[13px] text-[#2E2E2E]">
+                <div className="mt-1 text-[13px] text-[#111118]">
                   {address.zip || customer.zip || "—"}
                 </div>
               </div>
             </div>
           </section>
         </div>
-      </aside>
-    </>
+    </aside>
   );
 }
 
@@ -264,7 +259,7 @@ function CustomerOrdersPanel({
           >
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                <div className="text-[13px] font-semibold text-[#111118]">
                   {order.id}
                 </div>
                 <div className="mt-1 text-[12px] text-[#8A8A8A]">
@@ -273,7 +268,7 @@ function CustomerOrdersPanel({
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                <div className="text-[13px] font-semibold text-[#111118]">
                   {currency(order.orderPrice)}
                 </div>
                 <button
@@ -299,49 +294,65 @@ function CustomerOrdersPanel({
         ))}
       </div>
 
-      {/* Desktop: table */}
+      {/* Desktop: table — fixed cols + trailing spacer so Status/Total sit together */}
       <div className="hidden md:block">
-        <ScrollTable minWidth={640} className="rounded-[10px]">
-          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] gap-3 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+        <ScrollTable minWidth={720} className="rounded-[10px]">
+          <div className="grid grid-cols-[150px_100px_90px_120px_88px_minmax(0,1fr)_52px] items-center gap-x-5 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
             <div>Order ID</div>
             <div>Order Date</div>
             <div>Delivery</div>
             <div>Status</div>
             <div>Total</div>
+            <div aria-hidden />
             <div />
           </div>
-          {customer.orders.map((order) => (
-            <div
-              key={order.id}
-              className="grid grid-cols-[1.2fr_1fr_1fr_1fr_70px_80px] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#2E2E2E] last:border-b-0"
-            >
-              <div className="font-medium">{order.id}</div>
-              <div>{formatShortDate(order.orderDate)}</div>
-              <div>{formatShortDate(order.deliveryDate)}</div>
-              <div>
-                <span
-                  className={cn(
-                    "inline-flex rounded-[6px] px-2 py-0.5 text-[11px] font-medium",
-                    statusStyles(order.status),
-                  )}
-                >
-                  {order.status}
+          {customer.orders.map((order) => {
+            const timeLabel = order.orderedAt
+              ? order.orderedAt.replace(/^.*,\s*/, "").trim()
+              : "";
+            return (
+              <div
+                key={order.id}
+                className="grid grid-cols-[150px_100px_90px_120px_88px_minmax(0,1fr)_52px] items-center gap-x-5 border-b border-[#F3F3F1] px-4 py-3 text-[13px] text-[#111118] last:border-b-0"
+              >
+                <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                  {order.id}
                 </span>
+                <div>
+                  <div>{formatShortDate(order.orderDate)}</div>
+                  {timeLabel ? (
+                    <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                      {timeLabel}
+                    </div>
+                  ) : null}
+                </div>
+                <div>{formatShortDate(order.deliveryDate)}</div>
+                <div>
+                  <span
+                    className={cn(
+                      "inline-flex rounded-[6px] px-2 py-0.5 text-[11px] font-medium",
+                      statusStyles(order.status),
+                    )}
+                  >
+                    {order.status}
+                  </span>
+                </div>
+                <div className="font-semibold">
+                  {currency(order.orderPrice)}
+                </div>
+                <div aria-hidden />
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={() => onViewOrder(customer, order)}
+                    className="text-[13px] font-medium text-[#3B82F6]"
+                  >
+                    View
+                  </button>
+                </div>
               </div>
-              <div className="font-semibold">
-                {currency(order.orderPrice)}
-              </div>
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => onViewOrder(customer, order)}
-                  className="text-[13px] font-medium text-[#3B82F6]"
-                >
-                  View
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </ScrollTable>
       </div>
     </div>
@@ -395,12 +406,12 @@ function CustomerTable({
                     <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                       {customer.id}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#2E2E2E]">
+                    <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                       {customer.firstName} {customer.lastName}
                       {customer.flagged ? (
                         <Flag
                           size={12}
-                          className="text-[#2E2E2E]"
+                          className="text-[#111118]"
                           strokeWidth={1.75}
                         />
                       ) : null}
@@ -414,11 +425,13 @@ function CustomerTable({
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-[14px] font-semibold text-[#2E2E2E]">
+                  <div className="text-[14px] font-semibold text-[#111118]">
                     {currency(customer.lifetimeTotal)}
                   </div>
-                  <div className="mt-0.5 text-[11px] font-medium text-[#1C5752]">
-                    {dayAbbrev(customer.deliveryDay)}
+                  <div className="mt-1">
+                    <span className="inline-flex rounded-full bg-[#E7F2EA] px-2 py-0.5 text-[11px] font-semibold text-[#1C5752]">
+                      {dayAbbrev(customer.deliveryDay)}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -487,39 +500,41 @@ function CustomerTable({
                     {customer.id}
                   </button>
 
-                  <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#2E2E2E]">
+                  <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#111118]">
                     <span>
                       {customer.firstName} {customer.lastName}
                     </span>
                     {customer.flagged ? (
                       <Flag
                         size={12}
-                        className="text-[#2E2E2E]"
+                        className="text-[#111118]"
                         strokeWidth={1.75}
                       />
                     ) : null}
                   </div>
 
-                  <div className="truncate text-[13px] text-[#2E2E2E]">
+                  <div className="truncate text-[13px] text-[#111118]">
                     {customer.email}
                   </div>
-                  <div className="whitespace-nowrap text-[13px] text-[#2E2E2E]">
+                  <div className="whitespace-nowrap text-[13px] text-[#111118]">
                     {customer.phone}
                   </div>
-                  <div className="truncate text-[13px] text-[#2E2E2E]">
+                  <div className="truncate text-[13px] text-[#111118]">
                     {customer.shortLocation}
                   </div>
-                  <div className="text-[13px] text-[#2E2E2E]">
+                  <div className="text-[13px] text-[#111118]">
                     {customer.orderQuantity}
                   </div>
-                  <div className="text-[13px] font-semibold text-[#2E2E2E]">
+                  <div className="text-[13px] font-semibold text-[#111118]">
                     {currency(customer.lifetimeTotal)}
                   </div>
-                  <div className="text-[13px] text-[#2E2E2E]">
+                  <div className="text-[13px] text-[#111118]">
                     {formatShortDate(customer.lastOrderedDate)}
                   </div>
-                  <div className="text-[13px] font-medium text-[#1C5752]">
-                    {dayAbbrev(customer.deliveryDay)}
+                  <div>
+                    <span className="inline-flex rounded-full bg-[#E7F2EA] px-2.5 py-0.5 text-[12px] font-semibold text-[#1C5752]">
+                      {dayAbbrev(customer.deliveryDay)}
+                    </span>
                   </div>
                 </div>
 
@@ -586,10 +601,10 @@ export default function CustomersPage() {
   const inactive = filtered.filter((customer) => customer.blocked);
 
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F5F5F3]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#2E2E2E]">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             Customers
           </h1>
           <UserMenu showAvatar className="items-center" />
@@ -604,7 +619,7 @@ export default function CustomersPage() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, name, phone"
+              placeholder="Search ID, customer name"
               className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
             />
           </div>
@@ -635,42 +650,44 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
-        <section className="mb-6">
-          <h2 className="mb-3 text-[15px] font-semibold text-[#2E2E2E]">
-            Active ({active.length})
-          </h2>
-          <CustomerTable
-            customers={active}
-            expandedId={expandedId}
-            onToggle={(id) =>
-              setExpandedId((current) => (current === id ? null : id))
-            }
-            onViewOrder={(customer, order) => setSelected({ customer, order })}
-          />
-        </section>
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+          <section className="mb-6">
+            <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
+              Active ({active.length})
+            </h2>
+            <CustomerTable
+              customers={active}
+              expandedId={expandedId}
+              onToggle={(id) =>
+                setExpandedId((current) => (current === id ? null : id))
+              }
+              onViewOrder={(customer, order) => setSelected({ customer, order })}
+            />
+          </section>
 
-        <section>
-          <h2 className="mb-3 text-[15px] font-semibold text-[#2E2E2E]">
-            Inactive ({inactive.length})
-          </h2>
-          <CustomerTable
-            customers={inactive}
-            expandedId={expandedId}
-            onToggle={(id) =>
-              setExpandedId((current) => (current === id ? null : id))
-            }
-            onViewOrder={(customer, order) => setSelected({ customer, order })}
+          <section>
+            <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
+              Inactive ({inactive.length})
+            </h2>
+            <CustomerTable
+              customers={inactive}
+              expandedId={expandedId}
+              onToggle={(id) =>
+                setExpandedId((current) => (current === id ? null : id))
+              }
+              onViewOrder={(customer, order) => setSelected({ customer, order })}
+            />
+          </section>
+        </div>
+
+        {selected ? (
+          <OrderDetailDrawer
+            selected={selected}
+            onClose={() => setSelected(null)}
           />
-        </section>
+        ) : null}
       </div>
-
-      {selected ? (
-        <OrderDetailDrawer
-          selected={selected}
-          onClose={() => setSelected(null)}
-        />
-      ) : null}
     </div>
   );
 }

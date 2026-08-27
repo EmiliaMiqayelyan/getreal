@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 
 import { CloseIcon } from "@/components/icons";
+import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
 type ModalProps = {
@@ -21,6 +22,8 @@ export function Modal({
   footer,
   className,
 }: ModalProps) {
+  useScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
 
@@ -28,24 +31,18 @@ export function Modal({
       if (event.key === "Escape") onClose();
     }
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
     window.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", onKeyDown);
-    };
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-6 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden overscroll-none p-6 sm:items-center">
       <button
         type="button"
         aria-label="Close dialog overlay"
-        className="absolute inset-0 bg-[#333333]/70"
+        className="fixed inset-0 bg-[#333333]/70"
         onClick={onClose}
       />
 
@@ -54,7 +51,7 @@ export function Modal({
         aria-modal="true"
         aria-labelledby="modal-title"
         className={cn(
-          "bg-surface relative z-10 flex max-h-[calc(100dvh-3rem)] w-full max-w-[540px] flex-col overflow-hidden rounded-2xl shadow-xl",
+          "bg-surface relative z-10 flex max-h-[calc(100dvh-3rem)] w-full max-w-[540px] flex-col overflow-hidden overscroll-contain rounded-2xl shadow-xl",
           className,
         )}
       >
@@ -75,7 +72,12 @@ export function Modal({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
+        <div
+          data-scroll-lock-allow
+          className="flex-1 overflow-y-auto overscroll-contain px-6 py-5"
+        >
+          {children}
+        </div>
 
         {footer ? (
           <div className="border-border/70 flex items-center justify-end gap-2 border-t px-6 py-4">

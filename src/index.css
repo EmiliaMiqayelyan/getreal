@@ -1,10 +1,13 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap");
 
 :root {
-  --font-plus-jakarta-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
-    system-ui, sans-serif;
+  --font-plus-jakarta-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui,
+    sans-serif;
+  --font-sf-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
   --background: #eef0f4;
-  --foreground: #2e2e2e;
+  --foreground: #111118;
   --sidebar: #242424;
   --sidebar-active: #28402b;
   --sidebar-muted: #ffffff59;
@@ -36,6 +39,7 @@
   --color-id-pill: var(--id-pill);
   --color-danger: var(--danger);
   --font-sans: var(--font-plus-jakarta-sans);
+  --font-mono: var(--font-sf-mono);
   --spacing-sidebar: 13.75rem;
 }
 
@@ -54,7 +58,7 @@ body {
   margin: 0;
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-plus-jakarta-sans), system-ui, sans-serif;
+  font-family: var(--font-plus-jakarta-sans);
 }
 
 #root {
