@@ -262,7 +262,7 @@ function ExpirationDatePicker({
 
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
-      if (panelRef.current?.contains(target) || anchor.contains(target)) return;
+      if (panelRef.current?.contains(target) || anchor?.contains(target)) return;
       setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
