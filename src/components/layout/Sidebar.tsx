@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { LogOut, X } from "lucide-react";
 
 import {
+  BellIcon,
   BoxIcon,
   CartIcon,
   DashboardIcon,
@@ -33,6 +34,7 @@ const ICONS = {
   items: ItemsIcon,
   phone: PhoneIcon,
   package: PackageIcon,
+  bell: BellIcon,
 } as const;
 
 function SidebarItem({

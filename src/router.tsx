@@ -21,6 +21,9 @@ const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
 const CustomerOrdersPage = lazy(() => import("@/pages/CustomerOrdersPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const RolesPage = lazy(() => import("@/pages/RolesPage"));
+const PushNotificationsPage = lazy(
+  () => import("@/pages/PushNotificationsPage"),
+);
 
 function HomeRedirect() {
   return (
@@ -158,6 +161,14 @@ export const router = createBrowserRouter([
         element: (
           <RoleGuard allow={["superadmin"]}>
             <RolesPage />
+          </RoleGuard>
+        ),
+      },
+      {
+        path: ROUTES.notifications,
+        element: (
+          <RoleGuard allow={["superadmin"]}>
+            <PushNotificationsPage />
           </RoleGuard>
         ),
       },

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 
-import { BellIcon, ChevronDownIcon } from "@/components/icons";
+import { ChevronDownIcon } from "@/components/icons";
 import { ROUTES } from "@/constants";
 import { logout } from "@/lib/auth";
 import { cn } from "@/utils/cn";
@@ -51,15 +51,6 @@ export function Header({ title, toolbar }: HeaderProps) {
         </h1>
 
         <div className="flex items-center gap-5">
-          <button
-            type="button"
-            aria-label="Notifications"
-            className="text-muted-strong hover:bg-background relative rounded-full p-1.5 transition-colors"
-          >
-            <BellIcon className="size-5" />
-            <span className="bg-danger absolute top-1.5 right-1.5 size-1.5 rounded-full" />
-          </button>
-
           <div ref={menuRef} className="relative">
             <button
               type="button"

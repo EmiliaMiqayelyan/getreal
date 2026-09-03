@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { Bell, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 import { ROUTES } from "@/constants";
 import { getRole, logout } from "@/lib/auth";
@@ -12,16 +12,11 @@ const ROLE_LABELS = {
 } as const;
 
 type UserMenuProps = {
-  showBell?: boolean;
   showAvatar?: boolean;
   className?: string;
 };
 
-export function UserMenu({
-  showBell = true,
-  showAvatar = false,
-  className,
-}: UserMenuProps) {
+export function UserMenu({ showAvatar = false, className }: UserMenuProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -54,17 +49,6 @@ export function UserMenu({
 
   return (
     <div className={cn("flex items-start gap-4", className)}>
-      {showBell ? (
-        <button
-          type="button"
-          aria-label="Notifications"
-          className="relative mt-0.5 rounded-full p-1.5 text-[#8B857D]"
-        >
-          <Bell size={16} />
-          <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-[#EF4444]" />
-        </button>
-      ) : null}
-
       <div ref={rootRef} className="relative">
         <button
           type="button"

@@ -190,11 +190,7 @@ export function CreateManualOrderFlow({
               </p>
             ) : null}
           </div>
-          <UserMenu
-            showAvatar
-            showBell={step === "create"}
-            className="items-center"
-          />
+          <UserMenu showAvatar className="items-center" />
         </div>
       </div>
 

@@ -732,7 +732,7 @@ export default function ProductOrdersPage() {
               </span>
             </p>
           </div>
-          <UserMenu showAvatar showBell={false} className="items-center" />
+          <UserMenu showAvatar className="items-center" />
         </div>
       </div>
 

@@ -16,7 +16,8 @@ export type NavItem = {
     | "source"
     | "items"
     | "phone"
-    | "package";
+    | "package"
+    | "bell";
   badge?: number;
 };
 
@@ -79,7 +80,14 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "SETTINGS",
-    items: [{ label: "Roles", href: ROUTES.roles, icon: "roles" }],
+    items: [
+      { label: "Roles", href: ROUTES.roles, icon: "roles" },
+      {
+        label: "Notifications",
+        href: ROUTES.notifications,
+        icon: "bell",
+      },
+    ],
   },
 ];
 

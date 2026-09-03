@@ -3,12 +3,11 @@ import { Navigate, Outlet } from "react-router";
 
 import { AdminShell } from "@/components/layout/AdminShell";
 import { ROUTES } from "@/constants";
+import { useIdleLogout } from "@/hooks/useIdleLogout";
 import { isAuthenticated } from "@/lib/auth";
 
-export function AdminLayout() {
-  if (!isAuthenticated()) {
-    return <Navigate to={ROUTES.login} replace />;
-  }
+function AuthenticatedShell() {
+  useIdleLogout();
 
   return (
     <AdminShell>
@@ -17,4 +16,12 @@ export function AdminLayout() {
       </Suspense>
     </AdminShell>
   );
+}
+
+export function AdminLayout() {
+  if (!isAuthenticated()) {
+    return <Navigate to={ROUTES.login} replace />;
+  }
+
+  return <AuthenticatedShell />;
 }

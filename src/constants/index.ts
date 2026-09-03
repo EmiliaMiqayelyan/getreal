@@ -16,6 +16,7 @@ export const ROUTES = {
   customerOrders: "/customer-orders",
   customers: "/customers",
   roles: "/roles",
+  notifications: "/notifications",
 } as const;
 
 export type AppRoute = (typeof ROUTES)[keyof typeof ROUTES];

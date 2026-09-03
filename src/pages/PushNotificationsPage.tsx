@@ -1,0 +1,457 @@
+import { useMemo, useState } from "react";
+import { Plus, Search, X } from "lucide-react";
+
+import { UserMenu } from "@/components/layout/UserMenu";
+import { Input } from "@/components/ui/Input";
+import { Label } from "@/components/ui/Label";
+import { ScrollTable } from "@/components/ui/ScrollTable";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { cn } from "@/utils/cn";
+
+const ORANGE = "#F57850";
+const LINK_BLUE = "#3B82F6";
+
+type PushNotification = {
+  id: string;
+  trigger: string;
+  scheduledFor: string;
+  subject: string;
+  body: string;
+};
+
+const TRIGGER_OPTIONS = [
+  "Order Confirmation",
+  "Delivery Alert",
+  "Order Locked",
+  "Cooler Ready",
+  "Payment Reminder",
+];
+
+const SCHEDULE_OPTIONS = [
+  "After Order Confirmed",
+  "1 day before order lock",
+  "3 hrs after order arrived",
+  "On delivery day morning",
+  "When cooler is ready",
+];
+
+const INITIAL: PushNotification[] = [
+  {
+    id: "PN-001",
+    trigger: "Order Confirmation",
+    scheduledFor: "After Order Confirmed",
+    subject: "Your GetReal Box is Scheduled!",
+    body: "Your order for [Date] is confirmed. We'll deliver to [Address] during [Time Window].",
+  },
+  {
+    id: "PN-002",
+    trigger: "Delivery Alert",
+    scheduledFor: "1 day before order lock",
+    subject: "Truck is out for Delivery",
+    body: "Your GetReal delivery is on the way. Expected window: [Time Window].",
+  },
+  {
+    id: "PN-003",
+    trigger: "Delivery Alert",
+    scheduledFor: "3 hrs after order arrived",
+    subject: "Your box has arrived",
+    body: "Your cooler was delivered to [Address]. Please bring it in when you can.",
+  },
+  {
+    id: "PN-004",
+    trigger: "Order Locked",
+    scheduledFor: "On delivery day morning",
+    subject: "Order lock reminder",
+    body: "Last chance to edit your order for [Date] before we lock it tonight.",
+  },
+  {
+    id: "PN-005",
+    trigger: "Cooler Ready",
+    scheduledFor: "When cooler is ready",
+    subject: "Cooler packed and ready",
+    body: "Your cooler for [Date] is packed and ready for loading.",
+  },
+];
+
+type Draft = {
+  id?: string;
+  trigger: string;
+  scheduledFor: string;
+  subject: string;
+  body: string;
+};
+
+function emptyDraft(): Draft {
+  return {
+    trigger: "",
+    scheduledFor: "",
+    subject: "",
+    body: "",
+  };
+}
+
+function nextId(items: PushNotification[]) {
+  const max = items.reduce((acc, item) => {
+    const n = Number(item.id.replace(/\D/g, ""));
+    return Number.isFinite(n) ? Math.max(acc, n) : acc;
+  }, 0);
+  return `PN-${String(max + 1).padStart(3, "0")}`;
+}
+
+export default function PushNotificationsPage() {
+  useDocumentTitle("Push Notifications");
+
+  const [items, setItems] = useState(INITIAL);
+  const [query, setQuery] = useState("");
+  const [triggerFilter, setTriggerFilter] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  useScrollLock(modalOpen);
+
+  const triggers = useMemo(
+    () => Array.from(new Set(items.map((item) => item.trigger))).sort(),
+    [items],
+  );
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return items.filter((item) => {
+      const matchesQuery =
+        !q ||
+        item.id.toLowerCase().includes(q) ||
+        item.trigger.toLowerCase().includes(q) ||
+        item.subject.toLowerCase().includes(q) ||
+        item.body.toLowerCase().includes(q);
+      const matchesTrigger = !triggerFilter || item.trigger === triggerFilter;
+      return matchesQuery && matchesTrigger;
+    });
+  }, [items, query, triggerFilter]);
+
+  function openCreate() {
+    setDraft(emptyDraft());
+    setModalOpen(true);
+  }
+
+  function openEdit(item: PushNotification) {
+    setDraft({
+      id: item.id,
+      trigger: item.trigger,
+      scheduledFor: item.scheduledFor,
+      subject: item.subject,
+      body: item.body,
+    });
+    setModalOpen(true);
+  }
+
+  function closeModal() {
+    setModalOpen(false);
+    setDraft(emptyDraft());
+  }
+
+  function save() {
+    if (!draft.trigger || !draft.scheduledFor || !draft.subject.trim()) return;
+
+    if (draft.id) {
+      setItems((current) =>
+        current.map((item) =>
+          item.id === draft.id
+            ? {
+                ...item,
+                trigger: draft.trigger,
+                scheduledFor: draft.scheduledFor,
+                subject: draft.subject.trim(),
+                body: draft.body.trim(),
+              }
+            : item,
+        ),
+      );
+    } else {
+      setItems((current) => [
+        {
+          id: nextId(current),
+          trigger: draft.trigger,
+          scheduledFor: draft.scheduledFor,
+          subject: draft.subject.trim(),
+          body: draft.body.trim(),
+        },
+        ...current,
+      ]);
+    }
+    closeModal();
+  }
+
+  const canSave =
+    Boolean(draft.trigger) &&
+    Boolean(draft.scheduledFor) &&
+    Boolean(draft.subject.trim());
+
+  const th =
+    "px-0 py-3 text-left text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase";
+  const td = "px-0 py-[18px] align-middle text-[13px] leading-5 text-[#111118]";
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
+            Push Notifications
+          </h1>
+          <UserMenu showAvatar className="items-center" />
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-[220px]">
+            <Search
+              size={13}
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search ID, name"
+              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+            />
+          </div>
+
+          <Select
+            value={triggerFilter}
+            onChange={setTriggerFilter}
+            aria-label="All Triggers"
+            className="w-[160px]"
+            options={[
+              { value: "", label: "All Triggers" },
+              ...triggers.map((trigger) => ({
+                value: trigger,
+                label: trigger,
+              })),
+            ]}
+          />
+
+          <button
+            type="button"
+            onClick={openCreate}
+            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white"
+            style={{ background: ORANGE }}
+          >
+            <Plus size={14} />
+            Add Push Notification
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <ScrollTable minWidth={1100} className="rounded-[10px]">
+          <table className="w-full table-fixed border-collapse">
+            <colgroup>
+              <col style={{ width: "84px" }} />
+              <col style={{ width: "160px" }} />
+              <col style={{ width: "168px" }} />
+              <col style={{ width: "200px" }} />
+              <col style={{ width: "280px" }} />
+              <col />
+              <col style={{ width: "64px" }} />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-[#ECECEA] bg-[#FAFAF8]">
+                <th className={cn(th, "pl-5 pr-3")}>ID</th>
+                <th className={cn(th, "pr-3")}>Data Trigger</th>
+                <th className={cn(th, "pr-3")}>Scheduled For</th>
+                <th className={cn(th, "pr-3")}>Header / Subject Line</th>
+                <th className={cn(th, "pr-4")}>Content Body</th>
+                <th aria-hidden className="p-0" />
+                <th className={cn(th, "pr-5")} />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => (
+                <tr
+                  key={item.id}
+                  className="border-b border-[#ECECEA] last:border-b-0"
+                >
+                  <td className={cn(td, "pl-5 pr-3")}>
+                    <span className="inline-flex rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                      {item.id}
+                    </span>
+                  </td>
+                  <td className={cn(td, "pr-3 font-semibold")}>{item.trigger}</td>
+                  <td className={cn(td, "pr-3")}>{item.scheduledFor}</td>
+                  <td className={cn(td, "pr-3")}>
+                    <span className="block truncate">{item.subject}</span>
+                  </td>
+                  <td className={cn(td, "pr-4")}>
+                    <span className="block w-[280px] max-w-[280px] text-[13px] leading-5 text-[#111118]">
+                      {item.body}
+                    </span>
+                  </td>
+                  <td aria-hidden className="p-0" />
+                  <td className={cn(td, "pr-5 text-right")}>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(item)}
+                      className="whitespace-nowrap text-[13px] font-medium"
+                      style={{ color: LINK_BLUE }}
+                    >
+                      Edit
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!filtered.length ? (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="px-5 py-12 text-center text-[13px] text-[#8A8A8A]"
+                  >
+                    No push notifications found
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </ScrollTable>
+      </div>
+
+      {modalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-none p-6 sm:items-center">
+          <button
+            type="button"
+            aria-label="Close dialog overlay"
+            className="absolute inset-0 bg-[#333333]/55"
+            onClick={closeModal}
+          />
+
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pn-modal-title"
+            className="relative z-10 flex w-full max-w-[480px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
+          >
+            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+              <h2
+                id="pn-modal-title"
+                className="text-[18px] font-semibold tracking-tight text-[#111118]"
+              >
+                {draft.id ? "Edit Push Notification" : "Create Push Notification"}
+              </h2>
+              <button
+                type="button"
+                onClick={closeModal}
+                aria-label="Close"
+                className="rounded-md p-1 text-[#8A8A8A] transition-colors hover:bg-[#F5F5F3] hover:text-[#111118]"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-4 px-6 pb-5">
+              <div>
+                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                  Data Trigger
+                </Label>
+                <Select
+                  value={draft.trigger}
+                  onChange={(value) =>
+                    setDraft((current) => ({ ...current, trigger: value }))
+                  }
+                  placeholder="Select"
+                  aria-label="Data Trigger"
+                  options={[
+                    { value: "", label: "Select", disabled: true },
+                    ...TRIGGER_OPTIONS.map((option) => ({
+                      value: option,
+                      label: option,
+                    })),
+                  ]}
+                  size="md"
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                  Scheduled for
+                </Label>
+                <Select
+                  value={draft.scheduledFor}
+                  onChange={(value) =>
+                    setDraft((current) => ({
+                      ...current,
+                      scheduledFor: value,
+                    }))
+                  }
+                  placeholder="Select time and case"
+                  aria-label="Scheduled for"
+                  options={[
+                    {
+                      value: "",
+                      label: "Select time and case",
+                      disabled: true,
+                    },
+                    ...SCHEDULE_OPTIONS.map((option) => ({
+                      value: option,
+                      label: option,
+                    })),
+                  ]}
+                  size="md"
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                  Header / Subject Line
+                </Label>
+                <Input
+                  value={draft.subject}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      subject: event.target.value,
+                    }))
+                  }
+                  className="h-10 rounded-[8px] border-[#E6E6E3] text-[13px]"
+                />
+              </div>
+
+              <div>
+                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                  Content Body
+                </Label>
+                <Textarea
+                  value={draft.body}
+                  onChange={(event) =>
+                    setDraft((current) => ({
+                      ...current,
+                      body: event.target.value,
+                    }))
+                  }
+                  rows={4}
+                  className="min-h-[110px] rounded-[8px] border-[#E6E6E3] text-[13px]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] px-6 py-4">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="text-[14px] font-medium text-[#8A8A8A]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!canSave}
+                onClick={save}
+                className="h-[36px] rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white disabled:opacity-40"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
