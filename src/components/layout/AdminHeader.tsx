@@ -64,7 +64,14 @@ export function Header({ title, toolbar }: HeaderProps) {
                 menuOpen && "bg-background",
               )}
             >
-              <div className="size-9 rounded-full bg-[#d1d5db]" aria-hidden />
+              <img
+                src="/avatars/james.png"
+                alt=""
+                width={36}
+                height={36}
+                className="size-9 shrink-0 rounded-full object-cover"
+                aria-hidden
+              />
               <div className="text-left leading-tight">
                 <p className="text-foreground text-sm font-semibold">
                   James Miller

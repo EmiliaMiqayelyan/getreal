@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from "react-router";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { BrandLogo } from "@/components/layout/BrandLogo";
 import { APP_NAME } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -55,13 +56,7 @@ export default function LoginPage() {
           }}
         />
         <div className="relative">
-          <img
-            src="/logo.png"
-            alt={APP_NAME}
-            width={160}
-            height={70}
-            className="h-auto w-[160px]"
-          />
+          <BrandLogo variant="whiteColor" width={148} maxHeight={88} />
         </div>
         <div className="relative max-w-sm">
           <h1 className="text-[2rem] leading-tight font-semibold tracking-tight text-white">
@@ -78,14 +73,8 @@ export default function LoginPage() {
 
       <div className="flex flex-1 items-center justify-center px-6 py-12">
         <div className="w-full max-w-[400px]">
-          <div className="mb-8 lg:hidden">
-            <img
-              src="/logo.png"
-              alt={APP_NAME}
-              width={125}
-              height={45}
-              className="mx-auto h-auto w-[138px]"
-            />
+          <div className="mb-8 flex justify-center lg:hidden">
+            <BrandLogo variant="blackColor" width={128} maxHeight={76} />
           </div>
 
           <div className="border-border bg-surface rounded-2xl border px-8 py-9 shadow-sm">

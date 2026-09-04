@@ -1,4 +1,4 @@
-export const APP_NAME = "GetReal Food" as const;
+export const APP_NAME = "Rachel's Habit" as const;
 
 export const ROUTES = {
   home: "/",

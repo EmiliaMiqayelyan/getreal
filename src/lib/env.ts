@@ -17,7 +17,7 @@ function getEnv(key: keyof ImportMetaEnv, fallback?: string): string {
 export const env = {
   appUrl: import.meta.env.VITE_APP_URL ?? "http://localhost:3000",
   apiUrl: import.meta.env.VITE_API_URL ?? "",
-  appName: import.meta.env.VITE_APP_NAME ?? "GetReal Admin",
+  appName: import.meta.env.VITE_APP_NAME ?? "Rachel's Habit",
   mode: import.meta.env.MODE,
   get: getEnv,
 } as const;

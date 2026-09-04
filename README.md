@@ -1,6 +1,6 @@
-# GetReal Admin Panel
+# Rachel's Habit Admin Panel
 
-React admin panel for GetReal Food. UI implemented from Figma designs.
+React admin panel for Rachel's Habit. UI implemented from Figma designs.
 
 ## Stack
 

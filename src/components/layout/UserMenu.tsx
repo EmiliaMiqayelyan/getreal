@@ -59,7 +59,14 @@ export function UserMenu({ showAvatar = false, className }: UserMenuProps) {
           className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-[#F5F4F1]"
         >
           {showAvatar ? (
-            <div className="size-9 rounded-full bg-[#D1D5DB]" aria-hidden />
+            <img
+              src="/avatars/james.png"
+              alt=""
+              width={36}
+              height={36}
+              className="size-9 shrink-0 rounded-full object-cover"
+              aria-hidden
+            />
           ) : null}
           <div
             className={cn(

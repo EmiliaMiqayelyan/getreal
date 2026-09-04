@@ -15,6 +15,7 @@ import {
   TruckIcon,
   UsersIcon,
 } from "@/components/icons";
+import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CountBadge } from "@/components/ui/Badge";
 import { APP_NAME, ROUTES } from "@/constants";
 import { getNavSections, getRoleHome, type NavItem } from "@/constants/navigation";
@@ -93,14 +94,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       )}
     >
       <div className="flex items-start justify-between px-5 pt-6 pb-8">
-        <Link to={home} onClick={onClose} className="block w-[148px]">
-          <img
-            src="/logo.png"
-            alt={APP_NAME}
-            width={125}
-            height={45}
-            className="h-auto w-full"
-          />
+        <Link
+          to={home}
+          onClick={onClose}
+          className="block w-[120px]"
+          aria-label={APP_NAME}
+        >
+          <BrandLogo variant="whiteColor" width={120} maxHeight={72} />
         </Link>
         <button
           type="button"

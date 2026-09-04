@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Menu } from "lucide-react";
 
+import { BrandLogo } from "@/components/layout/BrandLogo";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { APP_NAME } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
@@ -51,21 +52,22 @@ export function AdminShell({ children }: AdminShellProps) {
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        <div className="flex h-14 shrink-0 items-center gap-3 border-b border-[#ECECEA] bg-white px-4 lg:hidden">
+        <div className="flex h-14 shrink-0 items-center gap-3 overflow-hidden border-b border-[#ECECEA] bg-white px-4 lg:hidden">
           <button
             type="button"
             aria-label="Open menu"
             aria-expanded={navOpen}
             onClick={() => setNavOpen(true)}
-            className="inline-flex size-9 items-center justify-center rounded-[8px] border border-[#E6E6E3] text-[#111118]"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#E6E6E3] text-[#111118]"
           >
             <Menu size={18} />
           </button>
           <Link
             to={home}
-            className="text-[15px] font-semibold tracking-tight text-[#111118]"
+            className="flex h-9 max-w-[140px] items-center"
+            aria-label={APP_NAME}
           >
-            {APP_NAME}
+            <BrandLogo variant="icon" width={96} maxHeight={36} />
           </Link>
         </div>
 

@@ -43,7 +43,7 @@ const INITIAL: PushNotification[] = [
     id: "PN-001",
     trigger: "Order Confirmation",
     scheduledFor: "After Order Confirmed",
-    subject: "Your GetReal Box is Scheduled!",
+    subject: "Your Rachel's Habit Box is Scheduled!",
     body: "Your order for [Date] is confirmed. We'll deliver to [Address] during [Time Window].",
   },
   {
@@ -51,7 +51,7 @@ const INITIAL: PushNotification[] = [
     trigger: "Delivery Alert",
     scheduledFor: "1 day before order lock",
     subject: "Truck is out for Delivery",
-    body: "Your GetReal delivery is on the way. Expected window: [Time Window].",
+    body: "Your Rachel's Habit delivery is on the way. Expected window: [Time Window].",
   },
   {
     id: "PN-003",
