@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Check, ChevronRight, Copy, Plus, Search, X } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -290,53 +290,49 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Roles
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Roles"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <div className="relative w-full sm:w-[220px]">
+              <Search
+                size={13}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search ID, supplier name"
+                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+              />
+            </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-[220px]">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            <Select
+              value={roleFilter}
+              onChange={setRoleFilter}
+              aria-label="All Roles"
+              options={[
+                { value: "", label: "All Roles" },
+                ...roleOptions.map((role) => ({ value: role, label: role })),
+              ]}
             />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, supplier name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
-            />
+
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#242424] px-3.5 text-[13px] font-medium text-white"
+            >
+              <Plus size={14} />
+              Add User
+            </button>
           </div>
-
-          <Select
-            value={roleFilter}
-            onChange={setRoleFilter}
-            aria-label="All Roles"
-            options={[
-              { value: "", label: "All Roles" },
-              ...roleOptions.map((role) => ({ value: role, label: role })),
-            ]}
-          />
-
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#242424] px-3.5 text-[13px] font-medium text-white"
-          >
-            <Plus size={14} />
-            Add User
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <ScrollTable minWidth={860}>
-          <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#111118] uppercase">
+          <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div />
             <div>ID</div>
             <div>Name</div>

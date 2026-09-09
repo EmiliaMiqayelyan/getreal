@@ -486,7 +486,7 @@ function CheckOrderView({
     "grid-cols-[220px_40px_52px_132px_118px_minmax(0,1fr)_200px]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -500,7 +500,7 @@ function CheckOrderView({
               </span>
             </p>
           </div>
-          <UserMenu showAvatar className="items-center" />
+          <UserMenu className="items-center" />
         </div>
       </div>
 
@@ -514,7 +514,7 @@ function CheckOrderView({
               <ScrollTable minWidth={860} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                     col,
                   )}
                 >
@@ -796,27 +796,27 @@ export default function DistributorDeliveriesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-4 pt-5 md:px-7">
-          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
+        <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
+          <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                 Distributor Receiving
               </h1>
-              <div className="flex flex-col items-end gap-1 lg:hidden">
-                <UserMenu showAvatar className="items-center" />
+              <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+                <UserMenu className="items-center" />
               </div>
             </div>
 
-            <div className="flex items-center gap-6 sm:gap-8">
+            <div className="flex h-full items-center gap-6 sm:gap-8">
               {(["Orders", "Received"] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "border-b-2 pb-3 text-[14px] lg:pb-4",
+                    "flex h-[52px] items-center border-b-2 text-[14px]",
                     activeTab === tab
                       ? "border-[#F57850] font-medium text-[#111118]"
                       : "border-transparent text-[#8A8A8A]",
@@ -827,8 +827,8 @@ export default function DistributorDeliveriesPage() {
               ))}
             </div>
 
-            <div className="hidden flex-col items-end gap-1 lg:flex">
-              <UserMenu showAvatar className="items-center" />
+            <div className="hidden items-center justify-end gap-3 border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+              <UserMenu className="items-center" />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jun 22, 2026
               </div>
@@ -836,8 +836,8 @@ export default function DistributorDeliveriesPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-3 md:px-7">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
+          <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
             <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
@@ -941,7 +941,7 @@ export default function DistributorDeliveriesPage() {
           <div
             className={cn(
               ROW_GRID,
-              "border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+              "border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
             )}
           >
             <div />

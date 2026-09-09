@@ -2,4 +2,4 @@
  * Shared/cross-feature components.
  */
 
-export {};
+export { LocationHover } from "./LocationHover";

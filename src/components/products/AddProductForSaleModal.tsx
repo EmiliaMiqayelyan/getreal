@@ -3,30 +3,42 @@ import { Search, X } from "lucide-react";
 
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Item } from "@/types/item";
+import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
+import { getItemDisplayName } from "@/utils/items";
+import { validateAddProductForSale } from "@/utils/productForSaleForm";
 
 type AddProductForSaleModalProps = {
   open: boolean;
   onClose: () => void;
   onAdd: (item: Item) => void;
+  /** Remove the product being edited from the sale list. Edit mode only. */
+  onRemove?: () => void;
   catalog: Item[];
+  existingProducts: ProductForSale[];
   /** Item IDs already on the Products For Sale list (excluded from picker). */
   excludedItemIds: Set<string>;
   /** Prefill when editing which catalog item is linked. */
   initialItemId?: string | null;
+  editingProductId?: string | null;
+  mode?: "add" | "edit";
 };
-
 export function AddProductForSaleModal({
   open,
   onClose,
   onAdd,
+  onRemove,
   catalog,
+  existingProducts,
   excludedItemIds,
   initialItemId = null,
+  editingProductId = null,
+  mode = "add",
 }: AddProductForSaleModalProps) {
   const [selectedId, setSelectedId] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [itemError, setItemError] = useState("");
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -49,6 +61,7 @@ export function AddProductForSaleModal({
     setSelectedId(initialItemId ?? "");
     setMenuOpen(false);
     setQuery("");
+    setItemError("");
   }, [open, initialItemId]);
 
   useEffect(() => {
@@ -56,7 +69,7 @@ export function AddProductForSaleModal({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
-        else onClose();
+        else handleClose();
       }
     }
     window.addEventListener("keydown", onKey);
@@ -110,14 +123,41 @@ export function AddProductForSaleModal({
     if (!q) return options;
     return options.filter(
       (item) =>
-        item.merchandisingName.toLowerCase().includes(q) ||
+        getItemDisplayName(item).toLowerCase().includes(q) ||
         item.name.toLowerCase().includes(q) ||
         item.source.toLowerCase().includes(q),
     );
   }, [options, query]);
 
-  const selected = options.find((item) => item.id === selectedId) ?? null;
+  const selected = catalog.find((item) => item.id === selectedId) ?? null;
   const canSubmit = Boolean(selected);
+  const isEdit = mode === "edit" || Boolean(editingProductId);
+
+  function handleSubmit() {
+    const errors = validateAddProductForSale({
+      selectedItemId: selectedId,
+      catalog,
+      existingProducts,
+      editingProductId,
+    });
+    if (errors.item) {
+      setItemError(errors.item);
+      return;
+    }
+    if (!selected) return;
+    onAdd(selected);
+    onClose();
+  }
+
+  function handleRemove() {
+    onRemove?.();
+    handleClose();
+  }
+
+  function handleClose() {
+    setItemError("");
+    onClose();
+  }
 
   if (!open) return null;
 
@@ -132,17 +172,24 @@ export function AddProductForSaleModal({
         data-scroll-lock-allow
       >
         <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-5">
-          <h2
-            id="add-pfs-title"
-            className="text-[18px] font-semibold text-[#111118]"
-          >
-            Add Product For Sale
-          </h2>
+          <div>
+            <h2
+              id="add-pfs-title"
+              className="text-[18px] font-semibold text-[#111118]"
+            >
+              {isEdit ? "Edit Product For Sale" : "Add Product For Sale"}
+            </h2>
+            {isEdit && editingProductId ? (
+              <p className="mt-1 text-[13px] text-[#8A8A8A]">
+                Product ID {editingProductId}
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             aria-label="Close"
-            onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
+            onClick={handleClose}
+            className="cursor-pointer rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
           >
             <X className="size-5" />
           </button>
@@ -167,31 +214,35 @@ export function AddProductForSaleModal({
                 });
               }}
               className={cn(
-                "flex h-11 w-full items-center justify-between rounded-[8px] border bg-white px-3 text-left text-[14px] transition-colors",
-                menuOpen
-                  ? "border-[#F57850] ring-2 ring-[#F57850]/20"
-                  : "border-[#DCDCD8] hover:border-[#B8B8B4]",
+                "flex h-11 w-full cursor-pointer items-center justify-between rounded-[8px] border bg-white px-3 text-left text-[14px] transition-colors",
+                itemError
+                  ? "border-[#D64545] ring-2 ring-[#D64545]/15"
+                  : menuOpen
+                    ? "border-[#F57850] ring-2 ring-[#F57850]/20"
+                    : "border-[#DCDCD8] hover:border-[#B8B8B4]",
               )}
             >
               {selected ? (
                 <span className="flex min-w-0 flex-1 items-center gap-2 pr-2">
                   <span className="truncate text-[#111118]">
-                    {selected.merchandisingName}
+                    {getItemDisplayName(selected)}
                   </span>
                   <span
                     role="button"
                     tabIndex={0}
                     aria-label="Clear selection"
-                    className="inline-flex shrink-0 rounded p-0.5 text-[#8A8A8A] hover:bg-[#F0F0EE] hover:text-[#111118]"
+                    className="inline-flex shrink-0 cursor-pointer rounded p-0.5 text-[#8A8A8A] hover:bg-[#F0F0EE] hover:text-[#111118]"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId("");
+                      setItemError("");
                     }}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
                         e.stopPropagation();
                         setSelectedId("");
+                        setItemError("");
                       }
                     }}
                   >
@@ -217,27 +268,35 @@ export function AddProductForSaleModal({
               </svg>
             </button>
           </div>
+          {itemError ? (
+            <p className="mt-2 text-[12px] text-[#D64545]">{itemError}</p>
+          ) : null}
+          {isEdit ? (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="mt-3 cursor-pointer text-[14px] font-medium text-[#D64545] hover:underline"
+            >
+              Remove
+            </button>
+          ) : null}
         </div>
 
         <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
+            onClick={handleClose}
+            className="cursor-pointer rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
           >
             Cancel
           </button>
           <button
             type="button"
             disabled={!canSubmit}
-            onClick={() => {
-              if (!selected) return;
-              onAdd(selected);
-              onClose();
-            }}
-            className="rounded-[8px] bg-[#111118] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:opacity-40"
+            onClick={handleSubmit}
+            className="cursor-pointer rounded-[8px] bg-[#111118] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Add to List
+            {isEdit ? "Edit" : "Add to List"}
           </button>
         </div>
       </div>
@@ -276,18 +335,19 @@ export function AddProductForSaleModal({
                   <button
                     type="button"
                     className={cn(
-                      "flex w-full px-3 py-2.5 text-left text-[13px] hover:bg-[#F7F7F5]",
+                      "flex w-full cursor-pointer px-3 py-2.5 text-left text-[13px] hover:bg-[#F7F7F5]",
                       item.id === selectedId
                         ? "bg-[#FFF4F0] font-medium text-[#111118]"
                         : "text-[#111118]",
                     )}
                     onClick={() => {
                       setSelectedId(item.id);
+                      setItemError("");
                       setMenuOpen(false);
                       setQuery("");
                     }}
                   >
-                    {item.merchandisingName}
+                    {getItemDisplayName(item)}
                   </button>
                 </li>
               ))

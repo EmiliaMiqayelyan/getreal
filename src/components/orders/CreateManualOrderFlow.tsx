@@ -1,16 +1,22 @@
 import { useMemo, useState } from "react";
-import { Calendar, ChevronLeft, Minus, Plus, X } from "lucide-react";
+import { Check, ChevronLeft, Minus, Plus, X } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import {
-  MANUAL_CATALOG,
   MANUAL_DISTRIBUTORS,
   MANUAL_TIME_SLOTS,
 } from "@/constants/distributorOrders";
+import { TABLE_HEADER } from "@/constants/table";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import type { ManualLine, PlacedOrder } from "@/types/distributorOrder";
+import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
+import {
+  createManualLines,
+  formatManualDeliveryLabel,
+  getManualCatalogForDistributor,
+} from "@/utils/manualOrder";
 
 const ORANGE = "#F57850";
 
@@ -18,7 +24,7 @@ type Step = "create" | "review";
 
 type CreateManualOrderFlowProps = {
   onClose: () => void;
-  onCreated: (order: PlacedOrder) => void;
+  onCreated: (draft: ManualOrderDraft) => void;
 };
 
 function money(value: number) {
@@ -34,25 +40,25 @@ function QtyStepper({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="inline-flex h-8 items-center rounded-[8px] border border-[#E6E6E3] bg-[#F7F7F5]">
+    <div className="flex shrink-0 items-center gap-2.5">
       <button
         type="button"
         aria-label="Decrease"
         onClick={() => onChange(Math.max(0, value - 1))}
-        className="flex size-8 items-center justify-center text-[#5A5A5A]"
+        className="flex size-8 items-center justify-center rounded-[8px] bg-id-pill text-[#111118] hover:bg-[#E4E6EB]"
       >
-        <Minus className="size-3.5" />
+        <Minus className="size-3.5" strokeWidth={2.5} />
       </button>
-      <span className="min-w-[24px] text-center text-[13px] font-medium text-[#111118]">
+      <span className="min-w-[1.25rem] text-center text-[14px] font-medium text-[#111118]">
         {value}
       </span>
       <button
         type="button"
         aria-label="Increase"
         onClick={() => onChange(value + 1)}
-        className="flex size-8 items-center justify-center text-[#5A5A5A]"
+        className="flex size-8 items-center justify-center rounded-[8px] bg-id-pill text-[#111118] hover:bg-[#E4E6EB]"
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-3.5" strokeWidth={2.5} />
       </button>
     </div>
   );
@@ -66,7 +72,7 @@ export function CreateManualOrderFlow({
   const [distributor, setDistributor] = useState("");
   const [lines, setLines] = useState<ManualLine[]>([]);
   const [deliveryDate, setDeliveryDate] = useState("");
-  const [timeSlots, setTimeSlots] = useState<string[]>([]);
+  const [timeSlot, setTimeSlot] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   useScrollLock(confirmClose);
 
@@ -89,54 +95,26 @@ export function CreateManualOrderFlow({
     return Array.from(map.entries());
   }, [lines]);
 
-  const reviewBySource = useMemo(() => {
-    const map = new Map<
-      string,
-      { source: string; itemCount: number; totalPrice: number }
-    >();
-    for (const line of selectedLines) {
-      const lineTotal = line.price * line.quantity;
-      const existing = map.get(line.source);
-      if (!existing) {
-        map.set(line.source, {
-          source: line.source,
-          itemCount: line.quantity,
-          totalPrice: lineTotal,
-        });
-        continue;
-      }
-      existing.itemCount += line.quantity;
-      existing.totalPrice += lineTotal;
-    }
-    return Array.from(map.values());
-  }, [selectedLines]);
-
-  const expectedDeliveryLabel = useMemo(() => {
-    if (!deliveryDate) return "Tue, Jul 18, 06:00";
-    const date = new Date(`${deliveryDate}T12:00:00`);
-    const day = date.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-    const slot = timeSlots[0] ?? MANUAL_TIME_SLOTS[0];
-    const start = slot.split("–")[0] ?? "06:00";
-    return `${day}, ${start}`;
-  }, [deliveryDate, timeSlots]);
+  const expectedDeliveryLabel = useMemo(
+    () => formatManualDeliveryLabel(deliveryDate, timeSlot),
+    [deliveryDate, timeSlot],
+  );
 
   const canReview =
     Boolean(distributor) &&
     selectedLines.length > 0 &&
     Boolean(deliveryDate) &&
-    timeSlots.length > 0;
+    Boolean(timeSlot);
 
   function selectDistributor(name: string) {
     setDistributor(name);
+    setDeliveryDate("");
+    setTimeSlot("");
     if (!name) {
       setLines([]);
       return;
     }
-    setLines(MANUAL_CATALOG.map((item) => ({ ...item, quantity: 0 })));
+    setLines(createManualLines(getManualCatalogForDistributor(name)));
   }
 
   function setQty(id: string, quantity: number) {
@@ -147,18 +125,9 @@ export function CreateManualOrderFlow({
     );
   }
 
-  function toggleTime(slot: string) {
-    setTimeSlots((prev) =>
-      prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot],
-    );
-  }
-
   function createOrder() {
-    const order: PlacedOrder = {
-      id: `manual-${Date.now()}`,
-      deliveryId: String(810 + Math.floor(Math.random() * 80)).padStart(4, "0"),
+    onCreated({
       distributor,
-      orderDate: "Jul 16, 12:34 PM",
       deliveryDate: expectedDeliveryLabel,
       totalPrice: total,
       items: selectedLines.map((line) => ({
@@ -169,12 +138,11 @@ export function CreateManualOrderFlow({
         price: line.price,
         unit: line.unit,
       })),
-    };
-    onCreated(order);
+    });
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-[#F5F5F3]">
+    <div className="relative flex h-full min-h-0 flex-col bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -185,207 +153,230 @@ export function CreateManualOrderFlow({
               <p className="mt-1 text-[13px] text-[#8A8A8A]">
                 Orders for{" "}
                 <span className="font-semibold text-[#111118]">
-                  Wed, Jul 14 delivery
+                  {expectedDeliveryLabel} delivery
                 </span>
               </p>
             ) : null}
           </div>
-          <UserMenu showAvatar className="items-center" />
+          <UserMenu className="items-center" />
         </div>
       </div>
 
       {step === "create" ? (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
           <div className="mx-auto max-w-[920px] space-y-4">
-            <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5 md:p-6">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-[16px] font-semibold text-[#111118]">
+            <section className="overflow-hidden rounded-[8px] border border-[#ECECEA] bg-white">
+              <div className="p-5 md:p-6">
+                <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Distributor
                 </h2>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <Select
+                    value={distributor}
+                    onChange={selectDistributor}
+                    placeholder="Select"
+                    aria-label="Select Distributor"
+                    className="w-full max-w-[420px]"
+                    options={[
+                      { value: "", label: "Select" },
+                      ...MANUAL_DISTRIBUTORS.map((name) => ({
+                        value: name,
+                        label: name,
+                      })),
+                    ]}
+                  />
+                  {distributor ? (
+                    <div className="ml-auto text-[14px] font-semibold text-[#111118]">
+                      Total: {money(total)}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+
+              <div
+                className={cn(
+                  "border-t border-[#ECECEA]",
+                  !distributor && "min-h-[220px] md:min-h-[280px]",
+                )}
+              >
                 {distributor ? (
-                  <div className="text-[14px] font-semibold text-[#111118]">
-                    Total: {money(total)}
+                  <div className="p-5 md:p-6">
+                    <div className="mb-4">
+                      <div className={TABLE_HEADER}>Select Items From Source</div>
+                    </div>
+
+                    <div className="space-y-6">
+                      {groupedBySource.map(([source, sourceLines]) => (
+                        <div key={source}>
+                          <h3 className="mb-1 text-[16px] font-semibold text-[#111118]">
+                            {source}
+                          </h3>
+                          <div>
+                            {sourceLines.map((line) => (
+                              <div
+                                key={line.id}
+                                className="flex items-center gap-4 border-b border-[#ECECEA] py-3 last:border-b-0"
+                              >
+                                <span className="w-fit shrink-0 rounded-[8px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#6A6A6A]">
+                                  {line.sku}
+                                </span>
+                                <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
+                                  {line.name}
+                                </span>
+                                <span className="w-[88px] shrink-0 text-[13px] text-[#111118]">
+                                  In stock: {line.inStock}
+                                </span>
+                                <span className="w-[96px] shrink-0 text-[13px] text-[#111118]">
+                                  {money(line.price)}/{line.unit}
+                                </span>
+                                <div className="ml-auto">
+                                  <QtyStepper
+                                    value={line.quantity}
+                                    onChange={(q) => setQty(line.id, q)}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
               </div>
-
-              <Select
-                value={distributor}
-                onChange={selectDistributor}
-                placeholder="Select"
-                aria-label="Select Distributor"
-                className="w-full max-w-[420px]"
-                options={[
-                  { value: "", label: "Select" },
-                  ...MANUAL_DISTRIBUTORS.map((name) => ({
-                    value: name,
-                    label: name,
-                  })),
-                ]}
-              />
-
-              {distributor ? (
-                <div className="mt-6">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <div className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
-                      Select Items From Source
-                    </div>
-                    <button
-                      type="button"
-                      className="inline-flex h-8 items-center gap-1 rounded-[8px] bg-[#111118] px-3 text-[12px] font-semibold text-white"
-                    >
-                      <Plus className="size-3.5" />
-                      Add Item
-                    </button>
-                  </div>
-
-                  <div className="space-y-5">
-                    {groupedBySource.map(([source, sourceLines]) => (
-                      <div key={source}>
-                        <h3 className="mb-2 text-[14px] font-semibold text-[#111118]">
-                          {source}
-                        </h3>
-                        <div className="divide-y divide-[#F0F0EE] border-t border-[#F0F0EE]">
-                          {sourceLines.map((line) => (
-                            <div
-                              key={line.id}
-                              className="grid grid-cols-[72px_minmax(0,1.4fr)_0.9fr_0.9fr_auto] items-center gap-3 py-3"
-                            >
-                              <span className="w-fit rounded-full bg-[#F0F0EE] px-2 py-0.5 text-[11px] font-medium text-[#6A6A6A]">
-                                {line.sku}
-                              </span>
-                              <span className="truncate text-[13px] font-medium text-[#111118]">
-                                {line.name}
-                              </span>
-                              <span className="text-[12px] text-[#8A8A8A]">
-                                In stock: {line.inStock}
-                              </span>
-                              <span className="text-[13px] text-[#111118]">
-                                {money(line.price)}/{line.unit}
-                              </span>
-                              <QtyStepper
-                                value={line.quantity}
-                                onChange={(q) => setQty(line.id, q)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </section>
 
             {distributor ? (
-              <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5 md:p-6">
+              <section className="rounded-[8px] border border-[#ECECEA] bg-white p-5 md:p-6">
                 <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Delivery Date
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-                  <div className="relative w-full max-w-[220px] sm:w-[220px]">
-                    <Calendar className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#8A8A8A]" />
-                    <input
-                      type="date"
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                      className="h-10 w-full rounded-[8px] border border-[#E6E6E3] bg-white pr-3 pl-10 text-[13px] text-[#111118] outline-none focus:border-[#C8C8C6]"
-                      aria-label="Select Date"
-                    />
-                  </div>
+                  <DatePicker
+                    value={deliveryDate}
+                    onChange={setDeliveryDate}
+                    className="w-full max-w-[220px] sm:w-[220px]"
+                    placeholder="Select Date"
+                    aria-label="Select Date"
+                  />
                   <span className="text-[13px] font-medium text-[#111118]">
                     Select Time
                   </span>
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                    {MANUAL_TIME_SLOTS.map((slot) => (
-                      <label
-                        key={slot}
-                        className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#111118]"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={timeSlots.includes(slot)}
-                          onChange={() => toggleTime(slot)}
-                          className="size-4 rounded border-[#C8C8C6] accent-[#28402B]"
-                        />
-                        {slot}
-                      </label>
-                    ))}
+                    {MANUAL_TIME_SLOTS.map((slot) => {
+                      const checked = timeSlot === slot;
+                      return (
+                        <label
+                          key={slot}
+                          className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#111118]"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              setTimeSlot(checked ? "" : slot)
+                            }
+                            className="peer sr-only"
+                          />
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-[#C8C8C6] bg-white",
+                              checked && "border-[#28402B] bg-[#28402B]",
+                            )}
+                            aria-hidden
+                          >
+                            {checked ? (
+                              <Check className="size-2.5 text-white" strokeWidth={3} />
+                            ) : null}
+                          </span>
+                          {slot}
+                        </label>
+                      );
+                    })}
                   </div>
                 </div>
+                {deliveryDate || timeSlot ? (
+                  <p className="mt-4 text-[13px] text-[#8A8A8A]">
+                    Selected delivery{" "}
+                    <span className="font-semibold text-[#111118]">
+                      {expectedDeliveryLabel}
+                    </span>
+                  </p>
+                ) : null}
               </section>
             ) : null}
           </div>
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
-            <div className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
-              <h3 className="mb-4 text-[22px] font-semibold tracking-tight text-[#111118]">
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5">
+              <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
                 {distributor}
               </h3>
-              <div className="space-y-3">
+              <div>
                 {selectedLines.map((line) => (
                   <div
                     key={line.id}
-                    className="grid grid-cols-[1.4fr_1fr_0.45fr_0.9fr_0.7fr] gap-3 text-[13px]"
+                    className="flex items-center gap-6 border-b border-[#ECECEA] py-2.5 text-[12px]"
                   >
-                    <span className="text-[#111118]">{line.name}</span>
-                    <span className="text-[#8A8A8A]">{line.source}</span>
-                    <span className="font-semibold text-[#111118]">
-                      {line.quantity}x
+                    <span className="min-w-0 max-w-[14rem] truncate text-[#111118]">
+                      {line.name}
                     </span>
-                    <span className="text-[#111118]">
-                      {money(line.price)}/{line.unit}
+                    <span className="shrink-0 truncate text-[#8A8A8A]">
+                      {line.source}
                     </span>
-                    <span className="text-right font-semibold text-[#111118]">
-                      {money(line.price * line.quantity)}
-                    </span>
+                    <div className="flex shrink-0 items-center gap-4">
+                      <span className="w-8 text-right font-medium text-[#111118]">
+                        {line.quantity}x
+                      </span>
+                      <span className="w-[4.75rem] whitespace-nowrap text-right text-[#111118]">
+                        {money(line.price)}
+                        {line.unit ? ` / ${line.unit}` : ""}
+                      </span>
+                      <span className="w-[3.75rem] text-right font-semibold whitespace-nowrap text-[#111118]">
+                        {money(line.price * line.quantity)}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
-              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#F0F0EE] pt-4">
-                <span className="text-[13px] text-[#8A8A8A]">
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
+                <span className="text-[12px] text-[#8A8A8A]">
                   Expected delivery{" "}
                   <span className="font-semibold text-[#111118]">
                     {expectedDeliveryLabel}
                   </span>
                 </span>
-                <span className="text-[18px] font-semibold text-[#111118]">
+                <span className="w-[3.75rem] text-right text-[16px] font-semibold text-[#111118]">
                   {money(total)}
                 </span>
               </div>
             </div>
 
-            <aside className="h-fit rounded-[12px] border border-[#ECECEA] bg-white p-5 xl:sticky xl:top-4">
-              <h3 className="mb-4 text-[16px] font-semibold text-[#111118]">
+            <aside className="h-fit rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5 xl:sticky xl:top-4">
+              <h3 className="mb-1 text-[15px] font-semibold text-[#111118]">
                 Order Summary
               </h3>
-              <div className="space-y-3">
-                {reviewBySource.map((group) => (
-                  <div
-                    key={group.source}
-                    className="flex items-start justify-between gap-3 text-[13px]"
-                  >
-                    <div>
-                      <div className="font-medium text-[#111118]">
-                        {group.source}
-                      </div>
-                      <div className="text-[12px] text-[#8A8A8A]">
-                        {group.itemCount} items
-                      </div>
-                    </div>
-                    <div className="font-medium text-[#111118]">
-                      {money(group.totalPrice)}
-                    </div>
+              <div className="flex items-center justify-between gap-3 border-b border-[#ECECEA] py-3 text-[13px]">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-[#111118]">
+                    {distributor}
                   </div>
-                ))}
+                  <div className="text-[12px] text-[#8A8A8A]">
+                    {selectedLines.length} item
+                    {selectedLines.length === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <div className="shrink-0 font-semibold text-[#111118]">
+                  {money(total)}
+                </div>
               </div>
-              <div className="mt-4 flex items-center justify-between border-t border-[#F0F0EE] pt-4">
-                <span className="text-[14px] font-semibold text-[#111118]">
+              <div className="flex items-center justify-between pt-3">
+                <span className="text-[14px] font-medium text-[#111118]">
                   Total
                 </span>
-                <span className="text-[22px] font-semibold text-[#111118]">
+                <span className="text-[18px] font-semibold text-[#111118]">
                   {money(total)}
                 </span>
               </div>
@@ -411,7 +402,7 @@ export function CreateManualOrderFlow({
           <button
             type="button"
             onClick={() => setConfirmClose(true)}
-            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
+            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#000000] hover:bg-background"
           >
             Cancel & Close
           </button>
@@ -435,13 +426,13 @@ export function CreateManualOrderFlow({
       {confirmClose ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4">
           <div
-            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white p-6 shadow-xl"
+            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="manual-cancel-title"
             data-scroll-lock-allow
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-4">
               <h2
                 id="manual-cancel-title"
                 className="text-[18px] font-semibold text-[#111118]"
@@ -452,26 +443,26 @@ export function CreateManualOrderFlow({
                 type="button"
                 aria-label="Close"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+                className="rounded-md p-1 text-[#8A8A8A] hover:bg-background"
               >
                 <X className="size-5" />
               </button>
             </div>
-            <p className="mb-6 text-[14px] text-[#5A5A5A]">
+            <p className="px-6 py-5 text-[14px] text-[#111118]">
               Are you sure you want to close order request?
             </p>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
               <button
                 type="button"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
+                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#111118] hover:bg-background"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-[8px] bg-[#111118] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A1A1A]"
+                className="rounded-[8px] bg-[#2E2E2E] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#252525]"
               >
                 Cancel Order
               </button>

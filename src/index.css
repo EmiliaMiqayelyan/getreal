@@ -6,7 +6,7 @@
     sans-serif;
   --font-sf-mono: "SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco,
     Consolas, "Liberation Mono", "Courier New", monospace;
-  --background: #eef0f4;
+  --background: #fafafa;
   --foreground: #111118;
   --sidebar: #242424;
   --sidebar-active: #28402b;
@@ -64,4 +64,15 @@ body {
 #root {
   height: 100dvh;
   min-height: 100dvh;
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+button:disabled,
+button[aria-disabled="true"],
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
 }

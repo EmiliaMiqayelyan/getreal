@@ -13,7 +13,9 @@ export type Item = {
   category: string;
   subcategory: string;
   distributor: string;
+  distributorId?: string;
   source: string;
+  sourceId?: string;
   buyingUnit: string;
   buyingPrice: number;
   contents: number;

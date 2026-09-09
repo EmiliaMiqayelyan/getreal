@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { Select } from "@/components/ui/Select";
 import { ROUTES } from "@/constants";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
@@ -210,38 +210,34 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="min-w-0 text-[18px] font-semibold tracking-tight text-[#111118] md:text-[22px]">
-            Dashboard Report
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Dashboard Report"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <button
+              type="button"
+              className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+            >
+              <Calendar size={14} className="text-[#8A8A8A]" />
+              Select Date
+              <ChevronDown size={14} className="text-[#8A8A8A]" />
+            </button>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
-          >
-            <Calendar size={14} className="text-[#8A8A8A]" />
-            Select Date
-            <ChevronDown size={14} className="text-[#8A8A8A]" />
-          </button>
-
-          <Select
-            value={statusFilter}
-            onChange={setStatusFilter}
-            aria-label="All Statuses"
-            options={[
-              { value: "all", label: "All Statuses" },
-              { value: "requests", label: "Requests" },
-              { value: "packing", label: "Packing & Ready" },
-              { value: "on-the-way", label: "On the Way" },
-            ]}
-          />
-        </div>
-      </div>
+            <Select
+              value={statusFilter}
+              onChange={setStatusFilter}
+              aria-label="All Statuses"
+              options={[
+                { value: "all", label: "All Statuses" },
+                { value: "requests", label: "Requests" },
+                { value: "packing", label: "Packing & Ready" },
+                { value: "on-the-way", label: "On the Way" },
+              ]}
+            />
+          </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">

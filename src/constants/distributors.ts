@@ -17,7 +17,7 @@ export const DISTRIBUTORS: Distributor[] = [
     documents: [
       {
         id: "D001",
-        name: "Order 4 _ Milestone 3.pdf",
+        name: "Order 4_ Milestone 3.pdf",
         size: "560.4 KB",
       },
     ],
@@ -82,7 +82,7 @@ export const DISTRIBUTORS: Distributor[] = [
   {
     id: "DIS-10002",
     name: "FreshFood LLC",
-    paymentTerms: "NET-10",
+    paymentTerms: "NET-15",
     contact: "Priya Patel",
     phone: "(510) 555-0198",
     location: "Oakland, CA",

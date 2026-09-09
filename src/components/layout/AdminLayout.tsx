@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Navigate, Outlet } from "react-router";
 
+import { AppCatalogProvider } from "@/context/AppCatalogContext";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { ROUTES } from "@/constants";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
@@ -23,5 +24,9 @@ export function AdminLayout() {
     return <Navigate to={ROUTES.login} replace />;
   }
 
-  return <AuthenticatedShell />;
+  return (
+    <AppCatalogProvider>
+      <AuthenticatedShell />
+    </AppCatalogProvider>
+  );
 }

@@ -5,6 +5,10 @@ import { DistributorFilters } from "@/components/distributors/DistributorFilters
 import { DistributorTable } from "@/components/distributors/DistributorTable";
 import { Header } from "@/components/layout/AdminHeader";
 import type { Distributor } from "@/types/distributor";
+import {
+  filterDistributors,
+  uniqueDistributorLocations,
+} from "@/utils/distributors";
 
 type DistributorsViewProps = {
   distributors: Distributor[];
@@ -12,37 +16,19 @@ type DistributorsViewProps = {
 
 export function DistributorsView({ distributors }: DistributorsViewProps) {
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState("");
   const [location, setLocation] = useState("");
+  const [weekday, setWeekday] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
 
-  const categoryOptions = useMemo(
-    () => [...new Set(distributors.flatMap((item) => item.categories))].sort(),
-    [distributors],
-  );
-
   const locationOptions = useMemo(
-    () => [...new Set(distributors.map((item) => item.location))].sort(),
+    () => uniqueDistributorLocations(distributors),
     [distributors],
   );
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-
-    return distributors.filter((distributor) => {
-      const matchesQuery =
-        !normalized ||
-        distributor.name.toLowerCase().includes(normalized) ||
-        distributor.contact.toLowerCase().includes(normalized);
-
-      const matchesCategory =
-        !category || distributor.categories.includes(category);
-
-      const matchesLocation = !location || distributor.location === location;
-
-      return matchesQuery && matchesCategory && matchesLocation;
-    });
-  }, [distributors, query, category, location]);
+  const filtered = useMemo(
+    () => filterDistributors(distributors, { query, location, weekday }),
+    [distributors, location, query, weekday],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -51,13 +37,12 @@ export function DistributorsView({ distributors }: DistributorsViewProps) {
         toolbar={
           <DistributorFilters
             query={query}
-            category={category}
             location={location}
-            categoryOptions={categoryOptions}
+            weekday={weekday}
             locationOptions={locationOptions}
             onQueryChange={setQuery}
-            onCategoryChange={setCategory}
             onLocationChange={setLocation}
+            onWeekdayChange={setWeekday}
             onAdd={() => setIsAddOpen(true)}
           />
         }

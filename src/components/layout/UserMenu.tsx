@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
-import { ChevronDown } from "lucide-react";
 
 import { ROUTES } from "@/constants";
 import { getRole, logout } from "@/lib/auth";
@@ -12,11 +11,10 @@ const ROLE_LABELS = {
 } as const;
 
 type UserMenuProps = {
-  showAvatar?: boolean;
   className?: string;
 };
 
-export function UserMenu({ showAvatar = false, className }: UserMenuProps) {
+export function UserMenu({ className }: UserMenuProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,34 +56,12 @@ export function UserMenu({ showAvatar = false, className }: UserMenuProps) {
           onClick={() => setOpen((current) => !current)}
           className="flex items-center gap-2.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-[#F5F4F1]"
         >
-          {showAvatar ? (
-            <img
-              src="/avatars/james.png"
-              alt=""
-              width={36}
-              height={36}
-              className="size-9 shrink-0 rounded-full object-cover"
-              aria-hidden
-            />
-          ) : null}
-          <div
-            className={cn(
-              "hidden leading-tight sm:block",
-              !showAvatar && "text-right",
-            )}
-          >
+          <div className="leading-tight text-right">
             <div className="text-[13px] font-semibold text-[#111118]">
               James Miller
             </div>
             <div className="text-[11px] text-[#8F8F8F]">{roleLabel}</div>
           </div>
-          <ChevronDown
-            size={14}
-            className={cn(
-              "shrink-0 text-[#8F8F8F] transition-transform",
-              open && "rotate-180",
-            )}
-          />
         </button>
 
         {open ? (

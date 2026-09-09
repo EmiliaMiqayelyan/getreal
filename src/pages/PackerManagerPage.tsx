@@ -13,6 +13,7 @@ import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { TABLE_HEADER } from "@/constants/table";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
 
@@ -285,24 +286,22 @@ export default function PackerManagerPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-4 pt-5 md:px-7">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-              Cooler Packing
-            </h1>
-            <div className="flex flex-col items-end gap-1">
-              <UserMenu showAvatar className="items-center" />
-              <div className="hidden text-[12px] text-[#8A8A8A] lg:block">
-                Today, Tue, Jun 22, 2026
-              </div>
+        <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
+          <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
+            Cooler Packing
+          </h1>
+          <div className="flex items-center gap-3 border-l border-[#ECECEA] pl-5">
+            <UserMenu className="items-center" />
+            <div className="hidden text-[12px] text-[#8A8A8A] lg:block">
+              Today, Tue, Jun 22, 2026
             </div>
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-3 md:px-7">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
+          <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
             <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
@@ -387,7 +386,8 @@ export default function PackerManagerPage() {
           <div
             className={cn(
               ROW_GRID,
-              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+              TABLE_HEADER,
+              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5",
             )}
           >
             <div>Customer Order ID</div>

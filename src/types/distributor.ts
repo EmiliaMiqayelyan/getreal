@@ -23,6 +23,8 @@ export type DistributorDocument = {
   id: string;
   name: string;
   size: string;
+  /** Object/data URL when file bytes are available; omitted for mock metadata-only docs. */
+  url?: string;
 };
 
 export type DistributorDeliverySlot = {

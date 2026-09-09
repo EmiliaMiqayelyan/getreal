@@ -1,34 +1,52 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Plus, Search } from "lucide-react";
 
 import { AddItemModal } from "@/components/items/AddItemModal";
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { ITEMS } from "@/constants/items";
+import { TABLE_HEADER } from "@/constants/table";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import { cn } from "@/utils/cn";
+import {
+  getItemDisplayName,
+  getItemPrimaryPhoto,
+  nextItemId,
+} from "@/utils/items";
 
-const ORANGE = "#F57850";
-const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
+const EDIT_LINK =
+  "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
+const SECONDARY =
+  "text-[12px] font-medium leading-[18px] text-[#6B718099]";
+const VIEW_DESCRIPTION_LINK =
+  "cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] font-medium italic underline leading-[18px] text-[#6B718099] hover:opacity-80";
+const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
+const ID_MONO =
+  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 const TABS = ["All", ...ITEM_CATEGORIES] as const;
+type ItemTab = (typeof TABS)[number];
 
 const GRID =
-  "grid grid-cols-[100px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_48px] items-center gap-3";
-
-function nextItemId(rows: Item[]) {
-  const numbers = rows
-    .map((row) => Number(row.id.replace(/\D/g, "")))
-    .filter((value) => Number.isFinite(value));
-  const max = numbers.length ? Math.max(...numbers) : 0;
-  return `IT-${String(max + 1).padStart(6, "0")}`;
-}
+  "grid grid-cols-[100px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
 
 function formatSalePrice(value: number) {
   if (Number.isInteger(value)) return `$${value}`;
   return `$${value.toFixed(2)}`;
+}
+
+function SourceCell({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <span
+        className="h-6 w-px shrink-0 self-center bg-[#E0E0DC]"
+        aria-hidden
+      />
+      <div className={cn(BODY, "min-w-0 truncate")}>{children}</div>
+    </div>
+  );
 }
 
 function DescriptionHover({ description }: { description: string }) {
@@ -36,6 +54,8 @@ function DescriptionHover({ description }: { description: string }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
   function show() {
     window.clearTimeout(hideTimer.current);
@@ -53,25 +73,29 @@ function DescriptionHover({ description }: { description: string }) {
     hideTimer.current = window.setTimeout(() => setOpen(false), 140);
   }
 
-  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
-
   if (!description.trim()) {
-    return <span className="text-[12px] text-[#8A8A8A]">—</span>;
+    return <span className={SECONDARY}>—</span>;
   }
 
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
+    <div
+      className="relative justify-self-start"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
       <button
         ref={btnRef}
         type="button"
-        className="text-[12px] text-[#8A8A8A] hover:text-[#5A5A5A]"
-        onClick={show}
+        className={VIEW_DESCRIPTION_LINK}
+        aria-haspopup="true"
+        aria-expanded={open}
       >
         View description
       </button>
       {open ? (
         <div
-          className="fixed z-50 w-[300px] rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          role="tooltip"
+          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
           onMouseLeave={hide}
@@ -79,7 +103,7 @@ function DescriptionHover({ description }: { description: string }) {
           <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
             Description
           </div>
-          <p className="text-[12px] leading-relaxed text-[#111118]">
+          <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
             {description}
           </p>
         </div>
@@ -89,12 +113,19 @@ function DescriptionHover({ description }: { description: string }) {
 }
 
 function PhotoThumb({ item }: { item: Item }) {
-  const cover = item.photos[0];
+  const src = getItemPrimaryPhoto(item);
+  const hasUploadedPhoto = item.photos.length > 0;
+
   return (
-    <div className="relative size-10 overflow-hidden rounded-[8px] bg-[#F3F3F1]">
-      {cover ? (
-        <img src={cover.url} alt="" className="size-full object-cover" />
-      ) : null}
+    <div className="relative h-[51px] w-[53px] overflow-hidden rounded-[8px] bg-[#F3F3F1]">
+      <img
+        src={src}
+        alt={getItemDisplayName(item)}
+        className={cn(
+          "size-full",
+          hasUploadedPhoto ? "object-cover" : "object-contain p-1",
+        )}
+      />
       {item.photos.length > 1 ? (
         <span className="absolute right-0.5 bottom-0.5 rounded bg-black/65 px-1 text-[9px] font-semibold text-white">
           {item.photos.length}
@@ -107,12 +138,12 @@ function PhotoThumb({ item }: { item: Item }) {
 export default function ItemsPage() {
   useDocumentTitle("Items");
 
-  const [rows, setRows] = useState<Item[]>(ITEMS);
+  const { items: rows, setItems } = useAppCatalog();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [tab, setTab] = useState<(typeof TABS)[number]>("All");
+  const [tab, setTab] = useState<ItemTab>("All");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
 
@@ -129,23 +160,42 @@ export default function ItemsPage() {
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return rows.filter((row) => {
+      const displayName = getItemDisplayName(row).toLowerCase();
       const matchesQuery =
-        !normalized || row.name.toLowerCase().includes(normalized);
+        !normalized ||
+        row.name.toLowerCase().includes(normalized) ||
+        displayName.includes(normalized);
       const matchesCategory =
-        !categoryFilter || row.category === categoryFilter;
+        tab === "All"
+          ? !categoryFilter || row.category === categoryFilter
+          : row.category === tab;
       const matchesDistributor =
         !distributorFilter || row.distributor === distributorFilter;
       const matchesSource = !sourceFilter || row.source === sourceFilter;
-      const matchesTab = tab === "All" || row.category === tab;
       return (
         matchesQuery &&
         matchesCategory &&
         matchesDistributor &&
-        matchesSource &&
-        matchesTab
+        matchesSource
       );
     });
   }, [categoryFilter, distributorFilter, query, rows, sourceFilter, tab]);
+
+  function selectTab(nextTab: ItemTab) {
+    setTab(nextTab);
+    setCategoryFilter(nextTab === "All" ? "" : nextTab);
+  }
+
+  function selectCategoryFilter(value: string) {
+    setCategoryFilter(value);
+    if (!value) {
+      setTab("All");
+      return;
+    }
+    if ((ITEM_CATEGORIES as readonly string[]).includes(value)) {
+      setTab(value as ItemTab);
+    }
+  }
 
   function openCreate() {
     setEditing(null);
@@ -153,7 +203,8 @@ export default function ItemsPage() {
   }
 
   function openEdit(item: Item) {
-    setEditing(item);
+    const latest = rows.find((row) => row.id === item.id) ?? item;
+    setEditing(latest);
     setModalOpen(true);
   }
 
@@ -162,116 +213,124 @@ export default function ItemsPage() {
     setEditing(null);
   }
 
+  function handleRemoveItem() {
+    if (!editing) return;
+    const id = editing.id;
+    setItems((current) => current.filter((row) => row.id !== id));
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-0 md:px-7">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Items
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Items"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
+              <Search
+                size={13}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search name"
+                aria-label="Search name"
+                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+              />
+            </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            <Select
+              value={categoryFilter}
+              onChange={selectCategoryFilter}
+              className="w-full sm:w-[140px]"
+              aria-label="Category"
+              placeholder="Category"
+              options={[
+                { value: "", label: "Category" },
+                ...ITEM_CATEGORIES.map((category) => ({
+                  value: category,
+                  label: category,
+                })),
+              ]}
             />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+
+            <Select
+              value={distributorFilter}
+              onChange={setDistributorFilter}
+              className="w-full sm:w-[150px]"
+              aria-label="Distributor"
+              placeholder="Distributor"
+              options={[
+                { value: "", label: "Distributor" },
+                ...distributorOptions.map((distributor) => ({
+                  value: distributor,
+                  label: distributor,
+                })),
+              ]}
             />
+
+            <Select
+              value={sourceFilter}
+              onChange={setSourceFilter}
+              className="w-full sm:w-[160px]"
+              aria-label="Source"
+              placeholder="Source"
+              options={[
+                { value: "", label: "Source" },
+                ...sourceOptions.map((source) => ({
+                  value: source,
+                  label: source,
+                })),
+              ]}
+            />
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="inline-flex h-[34px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[8px] bg-badge px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
+            >
+              <Plus size={14} />
+              Add Item
+            </button>
           </div>
-
-          <Select
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            className="w-full sm:w-[140px]"
-            aria-label="Category"
-            placeholder="Category"
-            options={[
-              { value: "", label: "Category" },
-              ...ITEM_CATEGORIES.map((category) => ({
-                value: category,
-                label: category,
-              })),
-            ]}
-          />
-
-          <Select
-            value={distributorFilter}
-            onChange={setDistributorFilter}
-            className="w-full sm:w-[150px]"
-            aria-label="Distributor"
-            placeholder="Distributor"
-            options={[
-              { value: "", label: "Distributor" },
-              ...distributorOptions.map((distributor) => ({
-                value: distributor,
-                label: distributor,
-              })),
-            ]}
-          />
-
-          <Select
-            value={sourceFilter}
-            onChange={setSourceFilter}
-            className="w-full sm:w-[160px]"
-            aria-label="Source"
-            placeholder="Source"
-            options={[
-              { value: "", label: "Source" },
-              ...sourceOptions.map((source) => ({
-                value: source,
-                label: source,
-              })),
-            ]}
-          />
-
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
-            style={{ background: ORANGE }}
-          >
-            <Plus size={14} />
-            Add Item
-          </button>
-        </div>
-
-        <div className="mt-4 flex gap-5 overflow-x-auto">
-          {TABS.map((entry) => {
-            const active = tab === entry;
-            return (
-              <button
-                key={entry}
-                type="button"
-                onClick={() => setTab(entry)}
-                className={cn(
-                  "relative shrink-0 pb-3 text-[13px] font-medium transition-colors",
-                  active
-                    ? "text-[#111118]"
-                    : "text-[#8A8A8A] hover:text-[#111118]",
-                )}
-              >
-                {entry}
-                {active ? (
-                  <span
-                    className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full"
-                    style={{ background: ORANGE }}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        }
+        below={
+          <div className="flex gap-5 overflow-x-auto border-b border-[#ECECEA] bg-white px-4 md:px-7">
+            {TABS.map((entry) => {
+              const active = tab === entry;
+              return (
+                <button
+                  key={entry}
+                  type="button"
+                  onClick={() => selectTab(entry)}
+                  className={cn(
+                    "relative shrink-0 cursor-pointer px-0 pt-3 pb-3 text-[13px] font-medium transition-colors",
+                    active
+                      ? "text-[#111118]"
+                      : "text-[#8A8A8A] hover:text-[#111118]",
+                  )}
+                >
+                  {entry}
+                  {active ? (
+                    <span
+                      className="absolute -bottom-px -left-1 -right-1 h-[3px] bg-badge"
+                      aria-hidden
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
+          {filtered.length === 0 ? (
+            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+              No items found
+            </div>
+          ) : null}
           {filtered.map((row) => (
             <div
               key={row.id}
@@ -281,11 +340,14 @@ export default function ItemsPage() {
                 <div className="flex min-w-0 items-start gap-3">
                   <PhotoThumb item={row} />
                   <div className="min-w-0">
-                    <span className="rounded-full bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                    <span
+                      className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
+                      style={{ fontFamily: ID_MONO }}
+                    >
                       {row.id}
                     </span>
-                    <div className="mt-2 text-[14px] font-semibold text-[#111118]">
-                      {row.name}
+                    <div className={cn(BODY, "mt-2 font-semibold")}>
+                      {getItemDisplayName(row)}
                     </div>
                     <div className="mt-1 text-[12px] text-[#6B6B6B]">
                       {row.category}
@@ -294,12 +356,15 @@ export default function ItemsPage() {
                     <div className="mt-0.5 text-[13px] font-semibold text-[#111118]">
                       {formatSalePrice(row.sellingPrice)}
                     </div>
+                    <div className={cn(SECONDARY, "mt-0.5")}>
+                      {row.singleItemUnit || "—"}
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => openEdit(row)}
-                  className={LINK}
+                  className={EDIT_LINK}
                 >
                   Edit
                 </button>
@@ -313,19 +378,26 @@ export default function ItemsPage() {
             <div
               className={cn(
                 GRID,
-                "border-b border-[#ECECEA] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                TABLE_HEADER,
+                "border-b border-[#ECECEA] bg-white px-4 py-2.5",
               )}
             >
-              <div>ID</div>
+              <div>Item ID</div>
               <div>Photo</div>
               <div>Name / Description</div>
               <div>Category</div>
-              <div>Sub-category</div>
+              <div>Sub-Category</div>
               <div>Sale Price</div>
-              <div>Source</div>
-              <div>Distributor</div>
-              <div />
+              <div className="min-w-0 truncate pl-[13px] text-[#111118]">Source</div>
+              <div className="min-w-0 truncate text-[#111118]">Distributor</div>
+              <div aria-hidden />
             </div>
+
+            {filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                No items found
+              </div>
+            ) : null}
 
             {filtered.map((row, index) => {
               const isLast = index === filtered.length - 1;
@@ -338,40 +410,42 @@ export default function ItemsPage() {
                     !isLast && "border-b border-[#F0F0EE]",
                   )}
                 >
-                  <span className="w-fit rounded-full bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                  <span
+                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
+                    style={{ fontFamily: ID_MONO }}
+                  >
                     {row.id}
                   </span>
                   <PhotoThumb item={row} />
                   <div className="min-w-0">
-                    <div className="truncate text-[13px] font-semibold text-[#111118]">
-                      {row.name}
+                    <div className={cn(BODY, "truncate font-semibold")}>
+                      {getItemDisplayName(row)}
                     </div>
                     <div className="mt-0.5">
                       <DescriptionHover description={row.description} />
                     </div>
                   </div>
-                  <div className="text-[13px] text-[#111118]">{row.category}</div>
-                  <div className="text-[13px] text-[#111118]">
+                  <div className={cn(BODY, "min-w-0 truncate")}>{row.category}</div>
+                  <div className={cn(BODY, "min-w-0 truncate")}>
                     {row.subcategory || "—"}
                   </div>
                   <div>
-                    <div className="text-[13px] font-semibold text-[#111118]">
+                    <div className={cn(BODY, "font-semibold")}>
                       {formatSalePrice(row.sellingPrice)}
                     </div>
-                    <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                    <div className={cn(SECONDARY, "mt-0.5")}>
                       {row.singleItemUnit || "—"}
                     </div>
                   </div>
-                  <div className="truncate text-[13px] text-[#111118]">
-                    {row.source || "—"}
-                  </div>
-                  <div className="truncate text-[13px] text-[#111118]">
+                  <SourceCell>{row.source || "—"}</SourceCell>
+                  <div className={cn(BODY, "min-w-0 truncate")}>
                     {row.distributor || "—"}
                   </div>
                   <button
                     type="button"
                     onClick={() => openEdit(row)}
-                    className={LINK}
+                    className={cn(EDIT_LINK, "justify-self-end")}
+                    aria-label={`Edit ${getItemDisplayName(row)}`}
                   >
                     Edit
                   </button>
@@ -386,15 +460,24 @@ export default function ItemsPage() {
         open={modalOpen}
         item={editing}
         onClose={closeModal}
+        onRemove={handleRemoveItem}
         onSave={(item) => {
-          setRows((current) => {
+          setItems((current) => {
             if (editing) {
               return current.map((row) =>
-                row.id === editing.id ? { ...item, id: editing.id } : row,
+                row.id === editing.id
+                  ? {
+                      ...item,
+                      id: editing.id,
+                      sourceId: item.sourceId ?? editing.sourceId,
+                      distributorId: item.distributorId ?? editing.distributorId,
+                    }
+                  : row,
               );
             }
             return [{ ...item, id: nextItemId(current) }, ...current];
           });
+          closeModal();
         }}
       />
     </div>

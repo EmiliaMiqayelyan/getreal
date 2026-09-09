@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { ChevronRight, Flag, Search, X } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -13,6 +14,7 @@ import type {
   AdminCustomerOrderStatus,
 } from "@/types/admin";
 import { cn } from "@/utils/cn";
+import { resolveFullAddress } from "@/utils/format";
 
 function currency(value: number) {
   return `$${value.toLocaleString(undefined, {
@@ -121,7 +123,7 @@ function OrderDetailDrawer({
             </h3>
               <div className="overflow-x-auto">
               <div className="min-w-[320px] overflow-hidden rounded-[10px] border border-[#ECECEA]">
-              <div className="grid grid-cols-[1.6fr_50px_80px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="grid grid-cols-[1.6fr_50px_80px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 <div>Item</div>
                 <div>Qty</div>
                 <div>Unit Price</div>
@@ -157,7 +159,7 @@ function OrderDetailDrawer({
             </h3>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Packer Assigned
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -165,7 +167,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Cooler ID
                 </div>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -195,7 +197,7 @@ function OrderDetailDrawer({
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <div className="col-span-2">
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Street Address
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -203,7 +205,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Apt/Unit
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -211,7 +213,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   City
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -219,7 +221,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   State
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -227,7 +229,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold tracking-[0.05em] text-[#8A8A8A] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Zip
                 </div>
                 <div className="mt-1 text-[13px] text-[#111118]">
@@ -297,7 +299,7 @@ function CustomerOrdersPanel({
       {/* Desktop: table — fixed cols + trailing spacer so Status/Total sit together */}
       <div className="hidden md:block">
         <ScrollTable minWidth={720} className="rounded-[10px]">
-          <div className="grid grid-cols-[150px_100px_90px_120px_88px_minmax(0,1fr)_52px] items-center gap-x-5 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+          <div className="grid grid-cols-[150px_100px_90px_120px_88px_minmax(0,1fr)_52px] items-center gap-x-5 border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div>Order ID</div>
             <div>Order Date</div>
             <div>Delivery</div>
@@ -420,8 +422,19 @@ function CustomerTable({
                   <div className="mt-1.5 text-[12px] whitespace-nowrap text-[#6B6B6B]">
                     {customer.phone}
                   </div>
-                  <div className="mt-0.5 truncate text-[12px] text-[#8A8A8A]">
-                    {customer.shortLocation} · {customer.orderQuantity} orders
+                  <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] text-[#8A8A8A]">
+                    <LocationHover
+                      className="min-w-0 text-[12px] text-[#8A8A8A]"
+                      fullAddress={resolveFullAddress(
+                        customer.fullAddress,
+                        customer.shortLocation,
+                      )}
+                    >
+                      {customer.shortLocation}
+                    </LocationHover>
+                    <span className="shrink-0">
+                      · {customer.orderQuantity} orders
+                    </span>
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
@@ -452,7 +465,7 @@ function CustomerTable({
           <div
             className={cn(
               GRID,
-              "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+              "border-b border-[#ECECEA] bg-[#FAFAF8] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
             )}
           >
             <div />
@@ -519,9 +532,15 @@ function CustomerTable({
                   <div className="whitespace-nowrap text-[13px] text-[#111118]">
                     {customer.phone}
                   </div>
-                  <div className="truncate text-[13px] text-[#111118]">
+                  <LocationHover
+                    className="text-[13px] text-[#111118]"
+                    fullAddress={resolveFullAddress(
+                      customer.fullAddress,
+                      customer.shortLocation,
+                    )}
+                  >
                     {customer.shortLocation}
-                  </div>
+                  </LocationHover>
                   <div className="text-[13px] text-[#111118]">
                     {customer.orderQuantity}
                   </div>
@@ -601,54 +620,50 @@ export default function CustomersPage() {
   const inactive = filtered.filter((customer) => customer.blocked);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Customers
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+      <Header
+        title="Customers"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
+              <Search
+                size={13}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search ID, customer name"
+                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+              />
+            </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            <Select
+              value={zipFilter}
+              onChange={setZipFilter}
+              className="w-full sm:w-[150px]"
+              aria-label="By Zip Code"
+              options={[
+                { value: "", label: "By Zip Code" },
+                ...zipOptions.map((zip) => ({ value: zip, label: zip })),
+              ]}
             />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, customer name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+
+            <Select
+              value={orderCountFilter}
+              onChange={setOrderCountFilter}
+              className="w-full sm:w-[170px]"
+              aria-label="All Order Counts"
+              options={[
+                { value: "", label: "All Order Counts" },
+                { value: "1-10", label: "1–10 orders" },
+                { value: "11-20", label: "11–20 orders" },
+                { value: "21+", label: "21+ orders" },
+              ]}
             />
           </div>
-
-          <Select
-            value={zipFilter}
-            onChange={setZipFilter}
-            className="w-full sm:w-[150px]"
-            aria-label="By Zip Code"
-            options={[
-              { value: "", label: "By Zip Code" },
-              ...zipOptions.map((zip) => ({ value: zip, label: zip })),
-            ]}
-          />
-
-          <Select
-            value={orderCountFilter}
-            onChange={setOrderCountFilter}
-            className="w-full sm:w-[170px]"
-            aria-label="All Order Counts"
-            options={[
-              { value: "", label: "All Order Counts" },
-              { value: "1-10", label: "1–10 orders" },
-              { value: "11-20", label: "11–20 orders" },
-              { value: "21+", label: "21+ orders" },
-            ]}
-          />
-        </div>
-      </div>
+        }
+      />
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto px-4 md:px-7 py-5">

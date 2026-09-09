@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -471,31 +472,31 @@ function HoverCard({
       {step.key === "onRoute" ? (
         <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#F0F0EE] pt-2 text-[11px]">
           <div>
-            <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Street Address
             </div>
             <div className="mt-0.5 text-[#111118]">{order.address}</div>
           </div>
           <div>
-            <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Apt / Unit
             </div>
             <div className="mt-0.5 text-[#111118]">{order.apt}</div>
           </div>
           <div>
-            <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               City
             </div>
             <div className="mt-0.5 text-[#111118]">{order.city}</div>
           </div>
           <div>
-            <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               State
             </div>
             <div className="mt-0.5 text-[#111118]">{order.state}</div>
           </div>
           <div>
-            <div className="text-[9px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Zip
             </div>
             <div className="mt-0.5 text-[#111118]">{order.zip}</div>
@@ -628,7 +629,7 @@ function OrderDetailPanel({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
+            className="rounded-md p-1 text-[#8A8A8A] hover:bg-background hover:text-[#111118]"
           >
             <X size={18} />
           </button>
@@ -639,7 +640,7 @@ function OrderDetailPanel({
             Requested Items
           </h3>
           <div className="overflow-hidden rounded-[10px] border border-[#ECECEA]">
-            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               <div>Item</div>
               <div>Qty</div>
               <div>Unit Price</div>
@@ -671,7 +672,7 @@ function OrderDetailPanel({
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Packer Assigned
               </div>
               <div className="mt-1 text-[13px] text-[#111118]">
@@ -679,7 +680,7 @@ function OrderDetailPanel({
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Cooler ID
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
@@ -707,31 +708,31 @@ function OrderDetailPanel({
           </div>
           <div className="grid grid-cols-2 gap-4 text-[13px]">
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Street Address
               </div>
               <div className="mt-1 text-[#111118]">{order.address}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Apt / Unit
               </div>
               <div className="mt-1 text-[#111118]">{order.apt}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 City
               </div>
               <div className="mt-1 text-[#111118]">{order.city}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 State
               </div>
               <div className="mt-1 text-[#111118]">{order.state}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Zip
               </div>
               <div className="mt-1 text-[#111118]">{order.zip}</div>
@@ -830,20 +831,20 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#F5F5F3]">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-        <div className="px-4 pt-5 md:px-7">
-          <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start lg:gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <h1 className="text-[18px] font-semibold tracking-tight text-[#111118] md:text-[22px]">
+        <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
+          <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                 Customer Orders
               </h1>
-              <div className="flex flex-col items-end gap-1 lg:hidden">
-                <UserMenu showAvatar className="items-center" />
+              <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+                <UserMenu className="items-center" />
               </div>
             </div>
 
-            <div className="flex items-center gap-6 sm:gap-8">
+            <div className="flex h-full items-center gap-6 sm:gap-8">
               {(["Orders", "Completed"] as const).map((tab) => (
                 <button
                   key={tab}
@@ -854,7 +855,7 @@ export default function CustomerOrdersPage() {
                     setStatusMenu(null);
                   }}
                   className={cn(
-                    "border-b-2 pb-3 text-[14px] lg:pb-4",
+                    "flex h-[52px] items-center border-b-2 text-[14px]",
                     activeTab === tab
                       ? "border-[#F57850] font-medium text-[#111118]"
                       : "border-transparent text-[#8A8A8A]",
@@ -865,8 +866,8 @@ export default function CustomerOrdersPage() {
               ))}
             </div>
 
-            <div className="hidden flex-col items-end gap-1 lg:flex">
-              <UserMenu showAvatar className="items-center" />
+            <div className="hidden items-center justify-end gap-3 border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+              <UserMenu className="items-center" />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jul 16, 2026
               </div>
@@ -874,8 +875,8 @@ export default function CustomerOrdersPage() {
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-3 md:px-7">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex min-h-[52px] items-center border-t border-[#ECECEA] px-4 py-2 md:h-[52px] md:py-0 md:px-7">
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search
                 size={13}
@@ -1034,7 +1035,7 @@ export default function CustomerOrdersPage() {
                               "rounded-full py-1.5 text-[#111118]",
                               selectedDay === day
                                 ? "bg-[#E8E5E0] font-semibold"
-                                : "hover:bg-[#F5F5F3]",
+                                : "hover:bg-background",
                             )}
                           >
                             {day}
@@ -1066,7 +1067,7 @@ export default function CustomerOrdersPage() {
 
             <div className="overflow-x-auto rounded-[10px] border border-[#ECECEA] bg-white">
               <div className="min-w-[900px]">
-                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   <div>Order ID</div>
                   {STEPS_META.map((step) => (
                     <div key={step.key} className="text-center">
@@ -1161,7 +1162,7 @@ export default function CustomerOrdersPage() {
                     <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
                       <div className="overflow-x-auto">
                         <div className="min-w-[860px]">
-                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                             <div>Order ID</div>
                             <div>Customer</div>
                             <div>Address</div>
@@ -1182,9 +1183,12 @@ export default function CustomerOrdersPage() {
                               <div className="font-semibold">
                                 {order.customer}
                               </div>
-                              <div className="truncate text-[#6B6B6B]">
+                              <LocationHover
+                                className="text-[13px] text-[#6B6B6B]"
+                                fullAddress={order.address}
+                              >
                                 {order.address}
-                              </div>
+                              </LocationHover>
                               <div>{order.zip}</div>
                               <div className="text-[#6B6B6B]">
                                 {order.orderDate}

@@ -10,7 +10,8 @@ import {
   X,
 } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -803,15 +804,8 @@ function StockItemsView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Stock Items
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
-      </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header title="Stock Items" />
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
@@ -830,10 +824,10 @@ function StockItemsView({
                   <span className="col-span-2 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
                     {section.title}
                   </span>
-                  <span className="col-span-4 text-center text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                  <span className="col-span-4 text-center text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                     In Stock
                   </span>
-                  <span className="whitespace-nowrap text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                  <span className="whitespace-nowrap text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                     Date Receiving By
                   </span>
                   <span aria-hidden />
@@ -843,7 +837,7 @@ function StockItemsView({
                 <div
                   className={cn(
                     STOCK_GRID,
-                    "border-b border-[#F0F0EE] bg-white px-4 py-2 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                    "border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                   )}
                 >
                   <span className="whitespace-nowrap">Order ID</span>
@@ -1210,71 +1204,67 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 md:px-7 pt-5 pb-4">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Inventory
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Inventory"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <div className="relative w-full sm:w-[220px]">
+              <Search
+                size={13}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+              />
+            </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-[220px]">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            <Select
+              value={itemFilter}
+              onChange={setItemFilter}
+              aria-label="All Items"
+              options={[
+                { value: "", label: "All Items" },
+                ...itemOptions.map((name) => ({ value: name, label: name })),
+              ]}
             />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+            <Select
+              value={categoryFilter}
+              onChange={setCategoryFilter}
+              aria-label="All Categories"
+              options={[
+                { value: "", label: "All Categories" },
+                { value: "Meat", label: "Meat" },
+                { value: "Poultry", label: "Poultry" },
+              ]}
+            />
+            <Select
+              value={unitFilter}
+              onChange={setUnitFilter}
+              aria-label="All Units"
+              options={[
+                { value: "", label: "All Units" },
+                ...unitOptions.map((unit) => ({ value: unit, label: unit })),
+              ]}
+            />
+            <Select
+              value={distributorFilter}
+              onChange={setDistributorFilter}
+              aria-label="All Distributors"
+              options={[
+                { value: "", label: "All Distributors" },
+                ...distributorOptions.map((distributor) => ({
+                  value: distributor,
+                  label: distributor,
+                })),
+              ]}
             />
           </div>
-
-          <Select
-            value={itemFilter}
-            onChange={setItemFilter}
-            aria-label="All Items"
-            options={[
-              { value: "", label: "All Items" },
-              ...itemOptions.map((name) => ({ value: name, label: name })),
-            ]}
-          />
-          <Select
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            aria-label="All Categories"
-            options={[
-              { value: "", label: "All Categories" },
-              { value: "Meat", label: "Meat" },
-              { value: "Poultry", label: "Poultry" },
-            ]}
-          />
-          <Select
-            value={unitFilter}
-            onChange={setUnitFilter}
-            aria-label="All Units"
-            options={[
-              { value: "", label: "All Units" },
-              ...unitOptions.map((unit) => ({ value: unit, label: unit })),
-            ]}
-          />
-          <Select
-            value={distributorFilter}
-            onChange={setDistributorFilter}
-            aria-label="All Distributors"
-            options={[
-              { value: "", label: "All Distributors" },
-              ...distributorOptions.map((distributor) => ({
-                value: distributor,
-                label: distributor,
-              })),
-            ]}
-          />
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         {orders.length ? (
@@ -1321,7 +1311,7 @@ export default function InventoryPage() {
                   <div
                     className={cn(
                       GRID,
-                      "border-b border-[#F0F0EE] bg-white px-3 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+                      "border-b border-[#F0F0EE] bg-white px-3 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                     )}
                   >
                     <div />
@@ -1399,10 +1389,14 @@ export default function InventoryPage() {
                                     <div>{lot.purchased}</div>
                                     <div className="font-semibold">{lot.qty}</div>
                                     <div>{lot.unit}</div>
-                                    <div className="flex items-center gap-1">
-                                      <span className="min-w-0 truncate">
+                                    <div className="flex min-w-0 items-center gap-1">
+                                      <LocationHover
+                                        className="min-w-0 flex-1 text-[12px] text-[#111118]"
+                                        fullAddress={lot.location}
+                                        label="Location"
+                                      >
                                         {lot.location}
-                                      </span>
+                                      </LocationHover>
                                       <button
                                         type="button"
                                         aria-label="Edit location"

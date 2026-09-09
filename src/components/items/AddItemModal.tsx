@@ -3,8 +3,7 @@ import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { DISTRIBUTORS } from "@/constants/distributors";
-import { SOURCES } from "@/constants/sources";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
   BUYING_UNITS,
@@ -14,14 +13,43 @@ import {
   type Item,
   type ItemPhoto,
 } from "@/types/item";
+import { resolveDistributorId } from "@/utils/distributorSync";
+import {
+  resolveSourceId,
+  sourceNamesForDistributor,
+} from "@/utils/sources";
+import { cn } from "@/utils/cn";
+import {
+  firstItemFormErrorField,
+  hasItemFormErrors,
+  ITEM_DESCRIPTION_MAX,
+  ITEM_PHOTO_MAX,
+  validateItemForm,
+  type ItemFormErrors,
+} from "@/utils/itemForm";
+import {
+  calcCostPerUnit,
+  calcFinalMarginPercent,
+  calcSuggestedPrice,
+  formatCalculatedMoney,
+  formatFinalMarginPercent,
+  formatMoneyInput,
+  parseContentsInput,
+  parseMoneyInput,
+} from "@/utils/itemPricing";
 
-const DESC_MAX = 320;
-const PHOTO_MAX = 3;
+const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
+const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
+/** Read-only calculated fields — solid gray, no border (matches design). */
+const READONLY_FIELD =
+  "h-[40px] rounded-[8px] border border-transparent bg-[#F3F3F1] text-[13px] text-[#6B6B6B]";
 
 type AddItemModalProps = {
   open: boolean;
   onClose: () => void;
   onSave: (item: Item) => void;
+  /** Remove the item being edited from the list. Edit mode only. */
+  onRemove?: () => void;
   item?: Item | null;
 };
 
@@ -29,25 +57,22 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
 
-function formatMoney(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  return value.toFixed(2).replace(/\.00$/, "");
-}
-
-function parseMoney(value: string) {
-  const n = Number(value.replace(/[^0-9.]/g, ""));
-  return Number.isFinite(n) ? n : 0;
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="mt-1 text-[11px] text-[#E25B5B]">{message}</p>;
 }
 
 export function AddItemModal({
   open,
   onClose,
   onSave,
+  onRemove,
   item = null,
 }: AddItemModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const isEdit = Boolean(item);
   useScrollLock(open);
+  const { distributors, sources: catalogSources } = useAppCatalog();
 
   const [distributor, setDistributor] = useState("");
   const [source, setSource] = useState("");
@@ -59,55 +84,73 @@ export function AddItemModal({
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<ItemPhoto[]>([]);
   const [buyingUnit, setBuyingUnit] = useState("");
-  const [buyingPrice, setBuyingPrice] = useState("0");
-  const [contents, setContents] = useState("0");
+  const [buyingPrice, setBuyingPrice] = useState("");
+  const [contents, setContents] = useState("");
   const [singleItemUnit, setSingleItemUnit] = useState("");
-  const [sellingPrice, setSellingPrice] = useState("0");
+  const [sellingPrice, setSellingPrice] = useState("");
+  const [errors, setErrors] = useState<ItemFormErrors>({});
 
   const distributorOptions = useMemo(
-    () => DISTRIBUTORS.map((entry) => entry.name),
-    [],
+    () => distributors.map((entry) => entry.name).sort(),
+    [distributors],
   );
 
   const sourceOptions = useMemo(() => {
-    const names = new Set(SOURCES.map((entry) => entry.name));
-    names.add("FreshMarket Co");
-    names.add("MeatFactory Co");
-    names.add("NanasFruits");
-    if (item?.source) names.add(item.source);
-    return Array.from(names).sort();
-  }, [item]);
+    if (!distributor) return [];
+    return sourceNamesForDistributor(catalogSources, distributor);
+  }, [catalogSources, distributor]);
 
   const subcategoryOptions = category
     ? (ITEM_SUBCATEGORIES[category] ?? [])
     : [];
 
-  const buying = parseMoney(buyingPrice);
-  const qty = Number(contents) || 0;
-  const costPerUnit = qty > 0 ? buying / qty : 0;
-  const suggested = costPerUnit > 0 ? costPerUnit / 0.6 : 0;
-  const sell = parseMoney(sellingPrice);
-  const finalMargin =
-    sell > 0 ? ((sell - costPerUnit) / sell) * 100 : 0;
+  function handleDistributorChange(value: string) {
+    setDistributor(value);
+    if (errors.distributor) {
+      setErrors((current) => ({ ...current, distributor: undefined }));
+    }
+    if (
+      source &&
+      !sourceNamesForDistributor(catalogSources, value).includes(source)
+    ) {
+      setSource("");
+      if (errors.source) {
+        setErrors((current) => ({ ...current, source: undefined }));
+      }
+    }
+  }
+
+  const buying = parseMoneyInput(buyingPrice);
+  const qty = parseContentsInput(contents);
+  const costPerUnit = calcCostPerUnit(buying, qty);
+  const suggested = calcSuggestedPrice(costPerUnit);
+  const sell = parseMoneyInput(sellingPrice);
+  const finalMargin = calcFinalMarginPercent(sell, costPerUnit);
 
   useEffect(() => {
     if (!open) return;
+
+    setErrors({});
 
     if (item) {
       setDistributor(item.distributor);
       setSource(item.source);
       setCategory(item.category);
-      setSubcategory(item.subcategory);
+      setSubcategory(
+        (ITEM_SUBCATEGORIES[item.category] ?? []).includes(item.subcategory)
+          ? item.subcategory
+          : "",
+      );
       setName(item.name);
       setPreorderInfo(item.preorderInfo);
       setMerchandisingName(item.merchandisingName);
       setDescription(item.description);
       setPhotos(item.photos.map((photo) => ({ ...photo })));
       setBuyingUnit(item.buyingUnit);
-      setBuyingPrice(String(item.buyingPrice));
-      setContents(String(item.contents));
+      setBuyingPrice(formatMoneyInput(item.buyingPrice));
+      setContents(item.contents > 0 ? String(item.contents) : "");
       setSingleItemUnit(item.singleItemUnit);
-      setSellingPrice(String(item.sellingPrice));
+      setSellingPrice(formatMoneyInput(item.sellingPrice));
       return;
     }
 
@@ -121,27 +164,70 @@ export function AddItemModal({
     setDescription("");
     setPhotos([]);
     setBuyingUnit("");
-    setBuyingPrice("0");
-    setContents("0");
+    setBuyingPrice("");
+    setContents("");
     setSingleItemUnit("");
-    setSellingPrice("0");
+    setSellingPrice("");
   }, [item, open]);
 
   if (!open) return null;
 
+  function handleClose() {
+    setErrors({});
+    onClose();
+  }
+
+  function handleRemove() {
+    onRemove?.();
+    handleClose();
+  }
+
   function handleSave() {
-    if (!name.trim()) return;
+    const nextErrors = validateItemForm({
+      name,
+      merchandisingName,
+      distributor,
+      source,
+      category,
+      subcategory,
+      description,
+      photosCount: photos.length,
+      buyingUnit,
+      buyingPrice,
+      contents,
+      singleItemUnit,
+      sellingPrice,
+      distributorOptions,
+      sourceOptions,
+    });
+
+    if (hasItemFormErrors(nextErrors)) {
+      setErrors(nextErrors);
+      const firstField = firstItemFormErrorField(nextErrors);
+      if (firstField) {
+        requestAnimationFrame(() => {
+          document
+            .querySelector(`[data-field="${firstField}"]`)
+            ?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+      return;
+    }
+
+    setErrors({});
 
     onSave({
       id: item?.id ?? "IT-TEMP",
       name: name.trim(),
-      merchandisingName: merchandisingName.trim() || name.trim(),
+      merchandisingName: merchandisingName.trim(),
       description: description.trim(),
       preorderInfo: preorderInfo.trim(),
       category,
       subcategory,
       distributor,
+      distributorId: resolveDistributorId(distributor, distributors),
       source,
+      sourceId: resolveSourceId(source, catalogSources) ?? item?.sourceId,
       buyingUnit,
       buyingPrice: buying,
       contents: qty,
@@ -149,7 +235,6 @@ export function AddItemModal({
       sellingPrice: sell,
       photos,
     });
-    onClose();
   }
 
   return (
@@ -158,7 +243,7 @@ export function AddItemModal({
         type="button"
         aria-label="Close overlay"
         className="absolute inset-0 bg-[#333333]/55"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       <div
@@ -167,159 +252,240 @@ export function AddItemModal({
         data-scroll-lock-allow
         className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[680px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between px-6 pt-5 pb-3">
+        <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
           <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Item" : "Add Item"}
           </h2>
           <button
             type="button"
             aria-label="Close"
-            onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+            onClick={handleClose}
+            className="cursor-pointer rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
           >
             <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-auto px-6 py-2 pb-5">
+        <div className="flex-1 space-y-6 overflow-auto px-6 pt-4 pb-5">
           <section>
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
               Basic Info
             </h3>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Distributor">
-                  <Select
-                    value={distributor}
-                    onChange={setDistributor}
-                    className="w-full"
-                    aria-label="Distributor"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...distributorOptions.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field label="Source">
-                  <Select
-                    value={source}
-                    onChange={setSource}
-                    className="w-full"
-                    aria-label="Source"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...sourceOptions.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field label="Category">
-                  <Select
-                    value={category}
-                    onChange={(value) => {
-                      setCategory(value);
-                      setSubcategory("");
-                    }}
-                    className="w-full"
-                    aria-label="Category"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...ITEM_CATEGORIES.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field label="Subcategory">
-                  <Select
-                    value={subcategory}
-                    onChange={setSubcategory}
-                    className="w-full"
-                    aria-label="Subcategory"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...subcategoryOptions.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
+                <div data-field="distributor">
+                  <Field label="Distributor">
+                    <Select
+                      value={distributor}
+                      onChange={handleDistributorChange}
+                      className="w-full"
+                      aria-label="Distributor"
+                      placeholder="Select"
+                      buttonClassName={cn(errors.distributor && INVALID_BORDER)}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...distributorOptions.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.distributor} />
+                </div>
+                <div data-field="source">
+                  <Field label="Source">
+                    <Select
+                      value={source}
+                      onChange={(value) => {
+                        setSource(value);
+                        if (errors.source) {
+                          setErrors((current) => ({
+                            ...current,
+                            source: undefined,
+                          }));
+                        }
+                      }}
+                      disabled={!distributor}
+                      className="w-full"
+                      aria-label="Source"
+                      placeholder={
+                        distributor ? "Select" : "Select distributor first"
+                      }
+                      buttonClassName={cn(errors.source && INVALID_BORDER)}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...sourceOptions.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.source} />
+                </div>
+                <div data-field="category">
+                  <Field label="Category">
+                    <Select
+                      value={category}
+                      onChange={(value) => {
+                        setCategory(value);
+                        setSubcategory("");
+                        setErrors((current) => ({
+                          ...current,
+                          category: undefined,
+                          subcategory: undefined,
+                        }));
+                      }}
+                      className="w-full"
+                      aria-label="Category"
+                      placeholder="Select"
+                      buttonClassName={cn(errors.category && INVALID_BORDER)}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...ITEM_CATEGORIES.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.category} />
+                </div>
+                <div data-field="subcategory">
+                  <Field label="Subcategory">
+                    <Select
+                      value={subcategory}
+                      onChange={(value) => {
+                        setSubcategory(value);
+                        if (errors.subcategory) {
+                          setErrors((current) => ({
+                            ...current,
+                            subcategory: undefined,
+                          }));
+                        }
+                      }}
+                      disabled={!category || subcategoryOptions.length === 0}
+                      className="w-full"
+                      aria-label="Subcategory"
+                      placeholder="Select"
+                      buttonClassName={cn(errors.subcategory && INVALID_BORDER)}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...subcategoryOptions.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.subcategory} />
+                </div>
               </div>
-              <Field label="Item Name">
-                <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
-                />
-              </Field>
+              <div data-field="name">
+                <Field label="Item Name">
+                  <Input
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      if (errors.name) {
+                        setErrors((current) => ({ ...current, name: undefined }));
+                      }
+                    }}
+                    className={cn(
+                      "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                      errors.name && INVALID_BORDER,
+                    )}
+                  />
+                </Field>
+                <FieldError message={errors.name} />
+              </div>
               <Field label="Item Pre-order Information">
                 <textarea
                   value={preorderInfo}
                   onChange={(event) => setPreorderInfo(event.target.value)}
                   rows={3}
-                  className="w-full resize-none rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] text-[#111118] outline-none"
+                  className="min-h-[80px] w-full resize-y rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none"
                 />
               </Field>
             </div>
           </section>
 
-          <section>
+          <section className="border-t border-[#ECECEA] pt-5">
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
               Merchandising
             </h3>
             <div className="space-y-3">
-              <Field label="Merchandising name">
-                <Input
-                  value={merchandisingName}
-                  onChange={(event) => setMerchandisingName(event.target.value)}
-                  placeholder="e.g. Beef Ribeye Steak"
-                  className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
-                />
-              </Field>
-              <Field label="Item Description">
-                <div className="relative">
+              <div data-field="merchandisingName">
+                <Field label="Merchandising Name">
+                  <Input
+                    value={merchandisingName}
+                    onChange={(event) => {
+                      setMerchandisingName(event.target.value);
+                      if (errors.merchandisingName) {
+                        setErrors((current) => ({
+                          ...current,
+                          merchandisingName: undefined,
+                        }));
+                      }
+                    }}
+                    placeholder="e.g. Wagyu Aged Tenderloin Steak"
+                    className={cn(
+                      "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                      errors.merchandisingName && INVALID_BORDER,
+                    )}
+                  />
+                </Field>
+                <FieldError message={errors.merchandisingName} />
+              </div>
+              <div data-field="description">
+                <Field label="Item Description">
                   <textarea
                     value={description}
-                    onChange={(event) =>
-                      setDescription(event.target.value.slice(0, DESC_MAX))
-                    }
+                    maxLength={ITEM_DESCRIPTION_MAX}
+                    onChange={(event) => {
+                      setDescription(
+                        event.target.value.slice(0, ITEM_DESCRIPTION_MAX),
+                      );
+                      if (errors.description) {
+                        setErrors((current) => ({
+                          ...current,
+                          description: undefined,
+                        }));
+                      }
+                    }}
                     rows={4}
-                    className="w-full resize-none rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 pb-7 text-[13px] text-[#111118] outline-none"
+                    className={cn(
+                      "min-h-[100px] w-full resize-y rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none",
+                      errors.description && INVALID_BORDER,
+                    )}
                   />
-                  <span className="pointer-events-none absolute right-3 bottom-2.5 text-[11px] text-[#8A8A8A]">
-                    {description.length}/{DESC_MAX}
-                  </span>
-                </div>
-              </Field>
+                  <p className="mt-1 text-right text-[11px] font-medium text-[#8A8A8A]">
+                    {description.length}/{ITEM_DESCRIPTION_MAX}
+                  </p>
+                </Field>
+                <FieldError message={errors.description} />
+              </div>
 
-              <div>
+              <div data-field="photos">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <div className="text-[12px] font-medium text-[#111118]">
-                    Upload Item Photos{" "}
-                    <span className="text-[#8A8A8A]">
-                      {photos.length}/{PHOTO_MAX}
+                  <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#000000] uppercase">
+                    Upload Item Photos
+                  </h4>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-medium text-[#000000]">
+                      {photos.length}/{ITEM_PHOTO_MAX}
                     </span>
+                    <button
+                      type="button"
+                      disabled={photos.length >= ITEM_PHOTO_MAX}
+                      onClick={() => fileRef.current?.click()}
+                      className="inline-flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[8px] bg-[#242424] px-3 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <CloudUpload size={14} />
+                      Upload Photo
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    disabled={photos.length >= PHOTO_MAX}
-                    onClick={() => fileRef.current?.click()}
-                    className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] bg-[#242424] px-3 text-[12px] font-medium text-white disabled:opacity-40"
-                  >
-                    <CloudUpload size={14} />
-                    Upload Photo
-                  </button>
                   <input
                     ref={fileRef}
                     type="file"
@@ -327,7 +493,7 @@ export function AddItemModal({
                     className="hidden"
                     onChange={(event) => {
                       const file = event.target.files?.[0];
-                      if (!file || photos.length >= PHOTO_MAX) return;
+                      if (!file || photos.length >= ITEM_PHOTO_MAX) return;
                       setPhotos((current) => [
                         ...current,
                         {
@@ -336,6 +502,12 @@ export function AddItemModal({
                           name: file.name,
                         },
                       ]);
+                      if (errors.photos) {
+                        setErrors((current) => ({
+                          ...current,
+                          photos: undefined,
+                        }));
+                      }
                       event.target.value = "";
                     }}
                   />
@@ -344,20 +516,21 @@ export function AddItemModal({
                 {photos.length === 0 ? (
                   <button
                     type="button"
+                    disabled={photos.length >= ITEM_PHOTO_MAX}
                     onClick={() => fileRef.current?.click()}
-                    className="flex h-[120px] w-full items-center justify-center rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] text-[#C0C0BC] transition-colors hover:border-[#C8C8C6]"
+                    className="flex h-[100px] w-[160px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] text-[#C0C0BC] transition-colors hover:border-[#C8C8C6] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ImageIcon size={28} />
                   </button>
                 ) : (
                   <div className="flex flex-wrap gap-3">
                     {photos.map((photo) => (
-                      <div key={photo.id} className="w-[110px]">
-                        <div className="overflow-hidden rounded-[8px] border border-[#E6E6E3]">
+                      <div key={photo.id} className="w-[160px]">
+                        <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#E6E6E3]">
                           <img
                             src={photo.url}
-                            alt=""
-                            className="aspect-square w-full object-cover"
+                            alt={photo.name}
+                            className="size-full object-cover"
                           />
                         </div>
                         <button
@@ -367,7 +540,7 @@ export function AddItemModal({
                               current.filter((entry) => entry.id !== photo.id),
                             )
                           }
-                          className="mt-1.5 text-[12px] font-medium text-[#3B7DC4] hover:underline"
+                          className="mt-1.5 cursor-pointer text-[12px] font-medium text-[#3B7DC4] hover:underline"
                         >
                           Delete
                         </button>
@@ -375,78 +548,151 @@ export function AddItemModal({
                     ))}
                   </div>
                 )}
+                <FieldError message={errors.photos} />
               </div>
             </div>
           </section>
 
-          <section>
+          <section className="border-t border-[#ECECEA] pt-5">
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
               Pricing
             </h3>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Buying Unit">
-                  <Select
-                    value={buyingUnit}
-                    onChange={setBuyingUnit}
-                    className="w-full"
-                    aria-label="Buying Unit"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...BUYING_UNITS.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field label="Buying Price">
-                  <MoneyInput value={buyingPrice} onChange={setBuyingPrice} />
-                </Field>
-                <Field label="Contents">
-                  <Input
-                    value={contents}
-                    onChange={(event) => setContents(event.target.value)}
-                    className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
-                  />
-                </Field>
+                <div data-field="buyingUnit">
+                  <Field label="Buying Unit">
+                    <Select
+                      value={buyingUnit}
+                      onChange={(value) => {
+                        setBuyingUnit(value);
+                        if (errors.buyingUnit) {
+                          setErrors((current) => ({
+                            ...current,
+                            buyingUnit: undefined,
+                          }));
+                        }
+                      }}
+                      className="w-full"
+                      aria-label="Buying Unit"
+                      placeholder="Select"
+                      buttonClassName={cn(errors.buyingUnit && INVALID_BORDER)}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...BUYING_UNITS.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.buyingUnit} />
+                </div>
+                <div data-field="buyingPrice">
+                  <Field label="Buying Price">
+                    <MoneyInput
+                      value={buyingPrice}
+                      placeholder="0.00"
+                      onChange={(value) => {
+                        setBuyingPrice(sanitizeMoneyTyping(value));
+                        if (errors.buyingPrice) {
+                          setErrors((current) => ({
+                            ...current,
+                            buyingPrice: undefined,
+                          }));
+                        }
+                      }}
+                      invalid={Boolean(errors.buyingPrice)}
+                    />
+                  </Field>
+                  <FieldError message={errors.buyingPrice} />
+                </div>
+                <div data-field="contents">
+                  <Field label="Contents">
+                    <Input
+                      value={contents}
+                      inputMode="numeric"
+                      placeholder="0"
+                      onChange={(event) => {
+                        setContents(event.target.value.replace(/\D/g, ""));
+                        if (errors.contents) {
+                          setErrors((current) => ({
+                            ...current,
+                            contents: undefined,
+                          }));
+                        }
+                      }}
+                      className={cn(
+                        "h-[40px] rounded-[8px] border-[#E6E6E3] bg-white text-[13px]",
+                        errors.contents && INVALID_BORDER,
+                      )}
+                    />
+                  </Field>
+                  <FieldError message={errors.contents} />
+                </div>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Single Item Unit">
-                  <Select
-                    value={singleItemUnit}
-                    onChange={setSingleItemUnit}
-                    className="w-full"
-                    aria-label="Single Item Unit"
-                    placeholder="Select"
-                    options={[
-                      { value: "", label: "Select" },
-                      ...SINGLE_ITEM_UNITS.map((entry) => ({
-                        value: entry,
-                        label: entry,
-                      })),
-                    ]}
-                  />
-                </Field>
+                <div data-field="singleItemUnit">
+                  <Field label="Single Item Unit">
+                    <Select
+                      value={singleItemUnit}
+                      onChange={(value) => {
+                        setSingleItemUnit(value);
+                        if (errors.singleItemUnit) {
+                          setErrors((current) => ({
+                            ...current,
+                            singleItemUnit: undefined,
+                          }));
+                        }
+                      }}
+                      className="w-full"
+                      aria-label="Single Item Unit"
+                      placeholder="Select"
+                      buttonClassName={cn(
+                        errors.singleItemUnit && INVALID_BORDER,
+                      )}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...SINGLE_ITEM_UNITS.map((entry) => ({
+                          value: entry,
+                          label: entry,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.singleItemUnit} />
+                </div>
                 <Field label="Cost per Unit">
-                  <MoneyInput value={formatMoney(costPerUnit)} readOnly />
+                  <CalculatedMoney value={formatCalculatedMoney(costPerUnit)} />
                 </Field>
-                <Field label="40% Margin Sug Price">
-                  <MoneyInput value={formatMoney(suggested)} readOnly />
+                <Field label="40% Margin Suggested Price">
+                  <CalculatedMoney value={formatCalculatedMoney(suggested)} />
                 </Field>
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <Field label="Selling Price">
-                  <MoneyInput value={sellingPrice} onChange={setSellingPrice} />
-                </Field>
+                <div data-field="sellingPrice">
+                  <Field label="Selling Price">
+                    <MoneyInput
+                      value={sellingPrice}
+                      placeholder="0.00"
+                      onChange={(value) => {
+                        setSellingPrice(sanitizeMoneyTyping(value));
+                        if (errors.sellingPrice) {
+                          setErrors((current) => ({
+                            ...current,
+                            sellingPrice: undefined,
+                          }));
+                        }
+                      }}
+                      invalid={Boolean(errors.sellingPrice)}
+                    />
+                  </Field>
+                  <FieldError message={errors.sellingPrice} />
+                </div>
                 <Field label="Final Margin">
-                  <Input
-                    readOnly
-                    value={finalMargin ? `${finalMargin.toFixed(2)}%` : "0%"}
-                    className="h-[40px] rounded-[8px] border-[#E6E6E3] bg-[#F3F3F1] text-[13px] text-[#6B6B6B]"
+                  <CalculatedValue
+                    value={formatFinalMarginPercent(finalMargin)}
                   />
                 </Field>
               </div>
@@ -454,21 +700,34 @@ export function AddItemModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-4 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[13px] font-medium text-[#8A8A8A]"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="h-[36px] rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
-          >
-            {isEdit ? "Save Item" : "Create Item"}
-          </button>
+        <div className="flex items-center justify-between gap-4 px-6 py-4">
+          {isEdit ? (
+            <button
+              type="button"
+              onClick={handleRemove}
+              className="cursor-pointer text-[13px] font-medium text-[#111118] underline"
+            >
+              Remove Item
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={handleClose}
+              className="cursor-pointer text-[13px] font-medium text-[#8A8A8A]"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="h-[36px] cursor-pointer rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
+            >
+              {isEdit ? "Save Item" : "Create Item"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -478,10 +737,46 @@ export function AddItemModal({
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[12px] font-medium text-[#111118]">
-        {label}
-      </label>
+      <label className={cn(FIELD_LABEL, "mb-1.5 block")}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+/** Keep a single decimal point while typing monetary values. */
+function sanitizeMoneyTyping(value: string) {
+  const cleaned = value.replace(/[^0-9.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return (
+    cleaned.slice(0, firstDot + 1) +
+    cleaned.slice(firstDot + 1).replace(/\./g, "")
+  );
+}
+
+/** Gray calculated money — display only, never editable. */
+function CalculatedMoney({ value }: { value: string }) {
+  return (
+    <div
+      className={cn(READONLY_FIELD, "relative flex items-center pl-7")}
+      aria-readonly="true"
+    >
+      <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[13px] text-[#8A8A8A]">
+        $
+      </span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/** Gray calculated text (e.g. Final Margin %) — display only. */
+function CalculatedValue({ value }: { value: string }) {
+  return (
+    <div
+      className={cn(READONLY_FIELD, "flex items-center px-3.5")}
+      aria-readonly="true"
+    >
+      <span className="tabular-nums">{value}</span>
     </div>
   );
 }
@@ -489,11 +784,13 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 function MoneyInput({
   value,
   onChange,
-  readOnly = false,
+  placeholder,
+  invalid = false,
 }: {
   value: string;
-  onChange?: (value: string) => void;
-  readOnly?: boolean;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  invalid?: boolean;
 }) {
   return (
     <div className="relative">
@@ -501,16 +798,14 @@ function MoneyInput({
         $
       </span>
       <Input
-        readOnly={readOnly}
         value={value}
-        onChange={
-          onChange ? (event) => onChange(event.target.value) : undefined
-        }
-        className={
-          readOnly
-            ? "h-[40px] rounded-[8px] border-[#E6E6E3] bg-[#F3F3F1] pl-7 text-[13px] text-[#6B6B6B]"
-            : "h-[40px] rounded-[8px] border-[#E6E6E3] pl-7 text-[13px]"
-        }
+        placeholder={placeholder}
+        inputMode="decimal"
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          "h-[40px] rounded-[8px] border-[#E6E6E3] bg-white pl-7 text-[13px]",
+          invalid && INVALID_BORDER,
+        )}
       />
     </div>
   );

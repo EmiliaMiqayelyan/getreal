@@ -4,6 +4,7 @@ export type Source = {
   location: string;
   fullAddress: string;
   distributor: string;
+  distributorId?: string;
   description: string;
   logoUrl: string | null;
   logoName?: string;

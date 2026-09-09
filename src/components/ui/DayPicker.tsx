@@ -31,7 +31,7 @@ export function DayPicker({ value, onChange }: DayPickerProps) {
               "h-9 min-w-[44px] rounded-lg px-3 text-sm font-medium transition-colors",
               selected
                 ? "bg-sidebar text-white"
-                : "text-muted-strong bg-[#eef0f4] hover:bg-[#e4e7ed]",
+                : "text-muted-strong bg-id-pill hover:bg-[#e4e7ed]",
             )}
           >
             {day}

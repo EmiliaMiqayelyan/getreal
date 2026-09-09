@@ -2,29 +2,30 @@ import { Plus, Search } from "lucide-react";
 
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
-import { WEEK_DAYS } from "@/utils/format";
 
-type DistributorFiltersProps = {
+type SourceFiltersProps = {
   query: string;
   location: string;
-  weekday: string;
+  distributor: string;
   locationOptions: string[];
+  distributorOptions: string[];
   onQueryChange: (value: string) => void;
   onLocationChange: (value: string) => void;
-  onWeekdayChange: (value: string) => void;
+  onDistributorChange: (value: string) => void;
   onAdd: () => void;
 };
 
-export function DistributorFilters({
+export function SourceFilters({
   query,
   location,
-  weekday,
+  distributor,
   locationOptions,
+  distributorOptions,
   onQueryChange,
   onLocationChange,
-  onWeekdayChange,
+  onDistributorChange,
   onAdd,
-}: DistributorFiltersProps) {
+}: SourceFiltersProps) {
   return (
     <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
       <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
@@ -57,24 +58,27 @@ export function DistributorFilters({
       />
 
       <Select
-        value={weekday}
-        onChange={onWeekdayChange}
-        className="w-full sm:w-[150px]"
-        aria-label="Weekday"
-        placeholder="Weekday"
+        value={distributor}
+        onChange={onDistributorChange}
+        className="w-full sm:w-[160px]"
+        aria-label="Distributor"
+        placeholder="Distributor"
         options={[
-          { value: "", label: "Weekday" },
-          ...WEEK_DAYS.map((day) => ({ value: day, label: day })),
+          { value: "", label: "Distributor" },
+          ...distributorOptions.map((option) => ({
+            value: option,
+            label: option,
+          })),
         ]}
       />
 
       <button
         type="button"
         onClick={onAdd}
-        className="inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[8px] bg-badge px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
+        className="inline-flex h-[34px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[8px] bg-badge px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
       >
         <Plus size={14} />
-        Add Distributor
+        Add Source
       </button>
     </div>
   );

@@ -58,9 +58,14 @@ export type PlacedOrder = {
   }>;
 };
 
+export type DeliveredOrderStatus = "Delivered" | "Partial";
+
 export type DeliveredOrder = PlacedOrder & {
   week: string;
   day: string;
+  zipCode: string;
+  status: DeliveredOrderStatus;
+  sortTimestamp: number;
 };
 
 export type DeliveryChip = {
@@ -82,6 +87,7 @@ export type ManualCatalogItem = {
   id: string;
   sku: string;
   name: string;
+  distributor: string;
   source: string;
   inStock: number;
   price: number;
@@ -90,4 +96,12 @@ export type ManualCatalogItem = {
 
 export type ManualLine = ManualCatalogItem & {
   quantity: number;
+};
+
+/** Payload passed from Create Manual Order before Delivery ID assignment. */
+export type ManualOrderDraft = {
+  distributor: string;
+  deliveryDate: string;
+  totalPrice: number;
+  items: PlacedOrder["items"];
 };

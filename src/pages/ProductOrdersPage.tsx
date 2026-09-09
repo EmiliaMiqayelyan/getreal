@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Calendar,
   Check,
@@ -12,37 +12,72 @@ import {
 } from "lucide-react";
 
 import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow";
+import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import {
   DELIVERED_ORDERS,
-  DELIVERY_CHIPS,
-  DELIVERY_LABEL,
+  DELIVERED_SORT_OPTIONS,
+  DELIVERED_ORDER_STATUSES,
+  DELIVERY_CHIP_COUNTS,
   DISTRIBUTOR_EMAILS,
-  EXPECTED_DELIVERY,
-  MAIN_ORDER_PREVIEW,
   ORDER_CATEGORIES,
   ORDER_LIST_ITEMS,
   SEED_IN_PROGRESS,
 } from "@/constants/distributorOrders";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type {
+  ManualOrderDraft,
   OrderCategory,
   PlacedOrder,
   ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
+import {
+  appendInProgressOrders,
+  applyCalculatedQuantitiesForCategory,
+  createPlacedOrderFromManualDraft,
+  createPlacedOrderFromReviewGroup,
+  type DeliveredFilterCriteria,
+  downloadOrderInvoice,
+  filterDeliveredOrders,
+  filterOrderDemandRows,
+  getDeliveredEmptyMessage,
+  getOrderDemandEmptyMessage,
+  getOrderDemandForDate,
+  groupDeliveredOrders,
+  makeWorkingRowsForDate,
+  nextDeliveryId,
+  productFilterOptions,
+  sortDeliveredOrders,
+  uniqueDeliveredFieldValues,
+} from "@/utils/distributorOrdersPage";
+import {
+  formatDeliveryChipLabel,
+  formatExpectedDelivery,
+  getDeliveryDatesInRange,
+  getDeliveryWeekdayIndices,
+  parseDeliveryDateId,
+  toDeliveryDateId,
+} from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
-const GREEN = "#28402B";
+const GREEN = "#2B5B31";
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
-/** Shared by review item rows + vendor footer so line totals align with vendor total. Trailing track nudges the price cluster left. */
-const REVIEW_VENDOR_COLS =
-  "grid-cols-[minmax(0,1fr)_minmax(0,1fr)_40px_110px_72px_minmax(2.75rem,0.2fr)]";
+const DEFAULT_DELIVERY_DATE_ID = "2026-07-14";
+const CHIP_WINDOW_SIZE = 3;
+/** Right-side price cluster widths shared by review item rows. */
+const REVIEW_QTY_W = "w-8";
+const REVIEW_UNIT_W = "w-[4.75rem]";
+const REVIEW_LINE_W = "w-[3.75rem]";
+/** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
+const ORDER_PREP_COLS =
+  "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
 
 type View = "list" | "orderList" | "review" | "manual";
 type Tab = "Orders" | "Delivered";
@@ -52,11 +87,8 @@ function money(value: number) {
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
 }
 
-function makeRows(): WorkingOrderRow[] {
-  return ORDER_LIST_ITEMS.map((row) => ({
-    ...row,
-    quantity: row.suggestedQty,
-  }));
+function makeRows(dateId: string): WorkingOrderRow[] {
+  return makeWorkingRowsForDate(dateId);
 }
 
 function buildReview(rows: WorkingOrderRow[]): ReviewGroup[] {
@@ -83,18 +115,20 @@ function buildReview(rows: WorkingOrderRow[]): ReviewGroup[] {
         distributor: option.distributor,
         email: DISTRIBUTOR_EMAILS[option.distributor] ?? "orders@example.com",
         items: [line],
-        itemCount: row.quantity,
+        itemCount: 1,
         totalPrice: lineTotal,
       });
       continue;
     }
 
     existing.items.push(line);
-    existing.itemCount += row.quantity;
     existing.totalPrice += lineTotal;
   }
 
-  return Array.from(map.values());
+  return Array.from(map.values()).map((group) => ({
+    ...group,
+    itemCount: group.items.length,
+  }));
 }
 
 function QtyStepper({
@@ -105,25 +139,25 @@ function QtyStepper({
   onChange: (next: number) => void;
 }) {
   return (
-    <div className="inline-flex h-[34px] items-center rounded-[8px] border border-[#E6E6E3] bg-[#F7F7F5]">
+    <div className="flex shrink-0 items-center gap-2.5">
       <button
         type="button"
         aria-label="Decrease"
         onClick={() => onChange(Math.max(0, value - 1))}
-        className="flex size-8 items-center justify-center text-[#5A5A5A]"
+        className="flex size-8 items-center justify-center rounded-[10px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
-        <Minus className="size-3.5" />
+        <Minus className="size-3.5" strokeWidth={2.5} />
       </button>
-      <span className="min-w-[28px] text-center text-[13px] font-medium text-[#111118]">
+      <span className="min-w-[1.25rem] text-center text-[15px] font-medium text-[#111118]">
         {value}
       </span>
       <button
         type="button"
         aria-label="Increase"
         onClick={() => onChange(value + 1)}
-        className="flex size-8 items-center justify-center text-[#5A5A5A]"
+        className="flex size-8 items-center justify-center rounded-[10px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
-        <Plus className="size-3.5" />
+        <Plus className="size-3.5" strokeWidth={2.5} />
       </button>
     </div>
   );
@@ -139,26 +173,26 @@ function ExpandableOrders({
   onToggle: (id: string) => void;
 }) {
   return (
-    <ScrollTable minWidth={860}>
+    <ScrollTable minWidth={920}>
       <table className="w-full table-fixed border-collapse text-left">
         <colgroup>
           <col className="w-10" />
           <col className="w-[132px]" />
-          <col className="w-[260px]" />
-          <col className="w-[188px]" />
-          <col className="w-[188px]" />
-          <col className="w-[128px]" />
+          <col className="w-[240px]" />
+          <col className="w-[168px]" />
+          <col className="w-[220px]" />
+          <col className="w-[140px]" />
           <col />
           <col className="w-[100px]" />
         </colgroup>
         <thead>
-          <tr className="border-b border-[#F0F0EE] bg-white text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+          <tr className="border-b border-[#F0F0EE] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <th className="px-4 py-2.5 font-semibold" />
             <th className="py-2.5 pr-10 font-semibold">Delivery ID</th>
             <th className="py-2.5 pr-10 font-semibold">Distributor</th>
             <th className="py-2.5 pr-10 font-semibold">Order Date</th>
             <th className="py-2.5 pr-10 font-semibold">Delivery Date</th>
-            <th className="py-2.5 pr-10 font-semibold">Total Price</th>
+            <th className="py-2.5 pr-10 pl-6 font-semibold">Total Price</th>
             <th aria-hidden className="py-2.5" />
             <th className="px-4 py-2.5 text-right font-semibold">Invoice</th>
           </tr>
@@ -192,7 +226,7 @@ function ExpandableOrders({
                   </button>
                 </td>
                 <td className="py-3.5 pr-10 align-middle">
-                  <span className="rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                  <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
                     {order.deliveryId}
                   </span>
                 </td>
@@ -205,12 +239,17 @@ function ExpandableOrders({
                 <td className="py-3.5 pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
                   {order.deliveryDate}
                 </td>
-                <td className="py-3.5 pr-10 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
+                <td className="py-3.5 pr-10 pl-6 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
                   {money(order.totalPrice)}
                 </td>
                 <td aria-hidden className="py-3.5" />
                 <td className="px-4 py-3.5 text-right align-middle">
-                  <button type="button" className={LINK}>
+                  <button
+                    type="button"
+                    className={LINK}
+                    aria-label={`Download invoice for ${order.distributor}`}
+                    onClick={() => downloadOrderInvoice(order)}
+                  >
                     Download
                   </button>
                 </td>
@@ -223,7 +262,7 @@ function ExpandableOrders({
                     >
                       <td className="px-4 py-2.5" />
                       <td className="py-2.5 pr-10 align-middle">
-                        <span className="rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                        <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
                           {item.sku}
                         </span>
                       </td>
@@ -233,9 +272,12 @@ function ExpandableOrders({
                       <td className="truncate py-2.5 pr-10 text-[13px] text-[#8A8A8A] align-middle">
                         {item.source}
                       </td>
-                      <td className="py-2.5 pr-10" />
-                      <td className="py-2.5 pr-10 text-[13px] text-[#111118] align-middle whitespace-nowrap">
+                      <td className="py-2.5 pr-10 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
+                        {item.quantity}x
+                      </td>
+                      <td className="py-2.5 pr-10 pl-6 text-[13px] text-[#111118] align-middle whitespace-nowrap">
                         {money(item.price)}
+                        {item.unit ? ` / ${item.unit}` : ""}
                       </td>
                       <td aria-hidden className="py-2.5" />
                       <td className="px-4 py-2.5" />
@@ -252,13 +294,23 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
+  const { distributors } = useAppCatalog();
 
   const [view, setView] = useState<View>("list");
   const [tab, setTab] = useState<Tab>("Orders");
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
-  const [activeChip, setActiveChip] = useState("jul-20");
+  const [deliveredZipFilter, setDeliveredZipFilter] = useState("");
+  const [deliveredDateFilter, setDeliveredDateFilter] = useState("");
+  const [deliveredStatusFilter, setDeliveredStatusFilter] = useState("");
+  const [deliveredSort, setDeliveredSort] = useState<
+    "newest" | "oldest" | "distributor" | "total"
+  >("newest");
+  const [activeDeliveryDateId, setActiveDeliveryDateId] = useState(
+    DEFAULT_DELIVERY_DATE_ID,
+  );
+  const [chipWindowStart, setChipWindowStart] = useState(0);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
@@ -267,21 +319,117 @@ export default function ProductOrdersPage() {
     DELIVERED_ORDERS[0]?.id ?? null,
   );
 
-  const [rows, setRows] = useState<WorkingOrderRow[]>(makeRows);
+  const [rows, setRows] = useState<WorkingOrderRow[]>(() =>
+    makeRows(DEFAULT_DELIVERY_DATE_ID),
+  );
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
     () => new Set(),
   );
   const [confirmClose, setConfirmClose] = useState(false);
   const [toast, setToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("Orders created successfully");
   useScrollLock(confirmClose);
 
-  const filteredPreview = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return MAIN_ORDER_PREVIEW.filter((row) => {
-      if (q && !row.itemName.toLowerCase().includes(q)) return false;
-      return true;
-    });
-  }, [search]);
+  const deliveryWeekdays = useMemo(
+    () => getDeliveryWeekdayIndices(distributors, distributorFilter),
+    [distributors, distributorFilter],
+  );
+
+  const deliveryDates = useMemo(() => {
+    const start = new Date(2026, 5, 1);
+    const end = new Date(2026, 7, 31);
+    return getDeliveryDatesInRange(start, end, deliveryWeekdays);
+  }, [deliveryWeekdays]);
+
+  const visibleDeliveryChips = useMemo(() => {
+    return deliveryDates
+      .slice(chipWindowStart, chipWindowStart + CHIP_WINDOW_SIZE)
+      .map((date) => {
+        const id = toDeliveryDateId(date);
+        return {
+          id,
+          label: formatDeliveryChipLabel(date),
+          count: DELIVERY_CHIP_COUNTS[id] ?? 0,
+        };
+      });
+  }, [chipWindowStart, deliveryDates]);
+
+  const activeDeliveryDate =
+    parseDeliveryDateId(activeDeliveryDateId) ?? deliveryDates[0] ?? new Date();
+  const activeDeliveryLabel = formatDeliveryChipLabel(activeDeliveryDate);
+  const expectedDeliveryLabel = formatExpectedDelivery(activeDeliveryDate);
+
+  const orderDemandCriteria = useMemo(
+    () => ({
+      query: search,
+      productFilter,
+    }),
+    [productFilter, search],
+  );
+
+  const orderDemandRows = useMemo(
+    () => getOrderDemandForDate(activeDeliveryDateId),
+    [activeDeliveryDateId],
+  );
+
+  const filteredPreview = useMemo(
+    () => filterOrderDemandRows(orderDemandRows, orderDemandCriteria),
+    [orderDemandCriteria, orderDemandRows],
+  );
+
+  const productOptions = useMemo(
+    () => productFilterOptions(ORDER_LIST_ITEMS),
+    [],
+  );
+
+  const showDistributorFilter = inProgress.length > 0;
+
+  const canShiftChipsBack = chipWindowStart > 0;
+  const canShiftChipsForward =
+    chipWindowStart + CHIP_WINDOW_SIZE < deliveryDates.length;
+
+  function selectDeliveryDate(dateId: string) {
+    setActiveDeliveryDateId(dateId);
+    const index = deliveryDates.findIndex((date) => toDeliveryDateId(date) === dateId);
+    if (index === -1) return;
+    if (index < chipWindowStart) {
+      setChipWindowStart(index);
+      return;
+    }
+    if (index >= chipWindowStart + CHIP_WINDOW_SIZE) {
+      setChipWindowStart(
+        Math.max(0, index - CHIP_WINDOW_SIZE + 1),
+      );
+    }
+  }
+
+  function shiftChipWindow(delta: number) {
+    setChipWindowStart((current) =>
+      Math.max(
+        0,
+        Math.min(current + delta, deliveryDates.length - CHIP_WINDOW_SIZE),
+      ),
+    );
+  }
+
+  useEffect(() => {
+    if (deliveryDates.length === 0) return;
+
+    const activeValid = deliveryDates.some(
+      (date) => toDeliveryDateId(date) === activeDeliveryDateId,
+    );
+    if (activeValid) return;
+
+    const fallback =
+      deliveryDates.find(
+        (date) => toDeliveryDateId(date) === DEFAULT_DELIVERY_DATE_ID,
+      ) ?? deliveryDates[0];
+    const fallbackId = toDeliveryDateId(fallback);
+    const fallbackIndex = deliveryDates.indexOf(fallback);
+
+    setActiveDeliveryDateId(fallbackId);
+    setChipWindowStart(Math.max(0, fallbackIndex - 1));
+  }, [deliveryDates, activeDeliveryDateId]);
 
   const filteredInProgress = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -297,26 +445,40 @@ export default function ProductOrdersPage() {
     });
   }, [inProgress, search, distributorFilter]);
 
+  const deliveredFilterCriteria = useMemo(
+    () => ({
+      query: search,
+      zipCode: deliveredZipFilter,
+      deliveryDate: deliveredDateFilter,
+      status: deliveredStatusFilter,
+      sortBy: deliveredSort,
+    }),
+    [
+      deliveredDateFilter,
+      deliveredSort,
+      deliveredStatusFilter,
+      deliveredZipFilter,
+      search,
+    ],
+  );
+
+  const deliveredZipOptions = useMemo(
+    () => uniqueDeliveredFieldValues(DELIVERED_ORDERS, "zipCode"),
+    [],
+  );
+  const deliveredDateOptions = useMemo(
+    () => uniqueDeliveredFieldValues(DELIVERED_ORDERS, "day"),
+    [],
+  );
+
   const deliveredGroups = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const list = DELIVERED_ORDERS.filter((order) => {
-      if (distributorFilter && order.distributor !== distributorFilter)
-        return false;
-      if (!q) return true;
-      return (
-        order.distributor.toLowerCase().includes(q) ||
-        order.deliveryId.includes(q)
-      );
-    });
-    const weeks = new Map<string, Map<string, typeof list>>();
-    for (const order of list) {
-      if (!weeks.has(order.week)) weeks.set(order.week, new Map());
-      const days = weeks.get(order.week)!;
-      if (!days.has(order.day)) days.set(order.day, []);
-      days.get(order.day)!.push(order);
-    }
-    return Array.from(weeks.entries());
-  }, [search, distributorFilter]);
+    const filtered = filterDeliveredOrders(
+      DELIVERED_ORDERS,
+      deliveredFilterCriteria,
+    );
+    const sorted = sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
+    return groupDeliveredOrders(sorted);
+  }, [deliveredFilterCriteria]);
 
   const groupedRows = useMemo(() => {
     const groups: Record<OrderCategory, WorkingOrderRow[]> = {
@@ -331,8 +493,20 @@ export default function ProductOrdersPage() {
   }, [rows]);
 
   const reviewGroups = useMemo(() => buildReview(rows), [rows]);
-  const grandTotal = reviewGroups.reduce((sum, g) => sum + g.totalPrice, 0);
+  const pendingReviewGroups = useMemo(
+    () =>
+      reviewGroups.filter(
+        (group) => !orderedDistributors.has(group.distributor),
+      ),
+    [orderedDistributors, reviewGroups],
+  );
+  const grandTotal = reviewGroups.reduce((sum, group) => sum + group.totalPrice, 0);
+  const pendingTotal = pendingReviewGroups.reduce(
+    (sum, group) => sum + group.totalPrice,
+    0,
+  );
   const canReview = rows.some((row) => row.quantity > 0);
+  const canOrderAll = pendingReviewGroups.length > 0;
 
   const distributorOptions = useMemo(() => {
     const names = new Set([
@@ -343,13 +517,14 @@ export default function ProductOrdersPage() {
     return Array.from(names).sort();
   }, [inProgress]);
 
-  function showToast() {
+  function showToast(message = "Orders created successfully") {
+    setToastMessage(message);
     setToast(true);
     window.setTimeout(() => setToast(false), 2800);
   }
 
   function openOrderFlow() {
-    setRows(makeRows());
+    setRows(makeRows(activeDeliveryDateId));
     setOrderedDistributors(new Set());
     setConfirmClose(false);
     setView("orderList");
@@ -363,25 +538,30 @@ export default function ProductOrdersPage() {
   function resetToList() {
     setView("list");
     setConfirmClose(false);
+    setTab("Orders");
   }
 
-  function handleManualCreated(order: PlacedOrder) {
+  function cancelOrderRequest() {
+    setOrderedDistributors(new Set());
+    setRows(makeRows(activeDeliveryDateId));
+    resetToList();
+  }
+
+  function handleManualCreated(draft: ManualOrderDraft) {
+    const order = createPlacedOrderFromManualDraft(
+      draft,
+      nextDeliveryId(inProgress),
+    );
     setInProgress((prev) =>
-      prev.length === 0 ? [order, SEED_IN_PROGRESS] : [order, ...prev],
+      appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
     );
     setExpandedId(order.id);
-    showToast();
+    showToast("Order created successfully");
     resetToList();
   }
 
   function calculateQty(category: OrderCategory) {
-    setRows((prev) =>
-      prev.map((row) =>
-        row.category === category
-          ? { ...row, quantity: row.suggestedQty }
-          : row,
-      ),
-    );
+    setRows((prev) => applyCalculatedQuantitiesForCategory(prev, category));
   }
 
   function setQty(id: string, quantity: number) {
@@ -392,41 +572,59 @@ export default function ProductOrdersPage() {
     );
   }
 
-  function markOrdered(distributor: string) {
-    setOrderedDistributors((prev) => new Set(prev).add(distributor));
-  }
+  function submitDistributorOrder(distributor: string) {
+    if (orderedDistributors.has(distributor)) return;
 
-  function finalizeOrders() {
-    const created: PlacedOrder[] = reviewGroups.map((group, index) => ({
-      id: `created-${Date.now()}-${index}`,
-      deliveryId: String(803 + index).padStart(4, "0"),
-      distributor: group.distributor,
-      orderDate: "Jul 16, 12:34 PM",
-      deliveryDate: "Jul 18, 8:00 AM",
-      totalPrice: group.totalPrice,
-      items: group.items.map((item, i) => ({
-        sku: `OPE-${18048 + i}`,
-        itemName: item.itemName,
-        source: item.source,
-        quantity: item.quantity,
-        price: item.price,
-        unit: item.unit,
-      })),
-    }));
+    const group = reviewGroups.find((entry) => entry.distributor === distributor);
+    if (!group) return;
+
+    const order = createPlacedOrderFromReviewGroup(
+      group,
+      nextDeliveryId(inProgress),
+      expectedDeliveryLabel,
+    );
 
     setInProgress((prev) =>
-      prev.length === 0
-        ? [...created, SEED_IN_PROGRESS]
-        : [...created, ...prev],
+      appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
     );
-    setExpandedId(created[0]?.id ?? SEED_IN_PROGRESS.id);
-    showToast();
+    setOrderedDistributors((prev) => new Set(prev).add(distributor));
+    setExpandedId(order.id);
+    showToast("Order submitted");
+  }
+
+  function submitRemainingOrders() {
+    const remaining = reviewGroups.filter(
+      (group) => !orderedDistributors.has(group.distributor),
+    );
+    if (remaining.length === 0) return;
+
+    let deliveryCounter = inProgress;
+    const created = remaining.map((group) => {
+      const deliveryId = nextDeliveryId(deliveryCounter);
+      const order = createPlacedOrderFromReviewGroup(
+        group,
+        deliveryId,
+        expectedDeliveryLabel,
+      );
+      deliveryCounter = [order, ...deliveryCounter];
+      return order;
+    });
+
+    setInProgress((prev) =>
+      appendInProgressOrders(prev, created, SEED_IN_PROGRESS),
+    );
+    setOrderedDistributors(new Set(reviewGroups.map((group) => group.distributor)));
+    setExpandedId(created[0]?.id ?? null);
+    showToast("Orders created successfully");
     resetToList();
   }
 
   function orderAll() {
-    setOrderedDistributors(new Set(reviewGroups.map((g) => g.distributor)));
-    finalizeOrders();
+    submitRemainingOrders();
+  }
+
+  function findPlacedOrderForDistributor(distributor: string) {
+    return inProgress.find((order) => order.distributor === distributor);
   }
 
   if (view === "manual") {
@@ -440,21 +638,21 @@ export default function ProductOrdersPage() {
 
   if (view === "list") {
     return (
-      <div className="relative flex h-full min-h-0 flex-col bg-[#F5F5F3]">
+      <div className="relative flex h-full min-h-0 flex-col bg-background">
         <div className="shrink-0 border-b border-[#ECECEA] bg-white">
-          <div className="px-4 pt-5 md:px-7">
-            <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-start">
-              <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
+          <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
+            <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
+              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                 Distributor Orders
               </h1>
-              <div className="flex items-center gap-6 sm:gap-8">
+              <div className="flex h-full items-center gap-6 sm:gap-8">
                 {(["Orders", "Delivered"] as const).map((name) => (
                   <button
                     key={name}
                     type="button"
                     onClick={() => setTab(name)}
                     className={cn(
-                      "relative pb-3 text-[14px]",
+                      "relative flex h-[52px] items-center text-[14px]",
                       tab === name
                         ? "font-medium text-[#111118]"
                         : "text-[#8A8A8A] hover:text-[#4A4A4A]",
@@ -470,13 +668,13 @@ export default function ProductOrdersPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex justify-end">
-                <UserMenu showAvatar className="items-center" />
+              <div className="flex justify-end border-l border-[#ECECEA] pl-5 lg:justify-self-end">
+                <UserMenu className="items-center" />
               </div>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-[#ECECEA] px-4 py-3 md:px-7">
+          <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#ECECEA] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#A9A9A9]" />
               <Input
@@ -496,23 +694,25 @@ export default function ProductOrdersPage() {
                   className="w-[140px]"
                   options={[
                     { value: "", label: "All products" },
-                    ...ORDER_CATEGORIES.map((c) => ({ value: c, label: c })),
+                    ...productOptions,
                   ]}
                 />
-                <Select
-                  value={distributorFilter}
-                  onChange={setDistributorFilter}
-                  placeholder="All Distributors"
-                  aria-label="All Distributors"
-                  className="w-[160px]"
-                  options={[
-                    { value: "", label: "All Distributors" },
-                    ...distributorOptions.map((name) => ({
-                      value: name,
-                      label: name,
-                    })),
-                  ]}
-                />
+                {showDistributorFilter ? (
+                  <Select
+                    value={distributorFilter}
+                    onChange={setDistributorFilter}
+                    placeholder="All Distributors"
+                    aria-label="All Distributors"
+                    className="w-[160px]"
+                    options={[
+                      { value: "", label: "All Distributors" },
+                      ...distributorOptions.map((name) => ({
+                        value: name,
+                        label: name,
+                      })),
+                    ]}
+                  />
+                ) : null}
                 <button
                   type="button"
                   onClick={openManualFlow}
@@ -524,20 +724,65 @@ export default function ProductOrdersPage() {
                 </button>
               </>
             ) : (
-              <Select
-                value={distributorFilter}
-                onChange={setDistributorFilter}
-                placeholder="All Distributors"
-                aria-label="All Distributors"
-                className="w-[160px]"
-                options={[
-                  { value: "", label: "All Distributors" },
-                  ...distributorOptions.map((name) => ({
-                    value: name,
-                    label: name,
-                  })),
-                ]}
-              />
+              <>
+                <Select
+                  value={deliveredZipFilter}
+                  onChange={setDeliveredZipFilter}
+                  placeholder="ZIP Code"
+                  aria-label="ZIP Code"
+                  className="w-[130px]"
+                  options={[
+                    { value: "", label: "ZIP Code" },
+                    ...deliveredZipOptions.map((zip) => ({
+                      value: zip,
+                      label: zip,
+                    })),
+                  ]}
+                />
+                <Select
+                  value={deliveredDateFilter}
+                  onChange={setDeliveredDateFilter}
+                  placeholder="Select Date"
+                  aria-label="Select Date"
+                  className="w-[190px]"
+                  options={[
+                    { value: "", label: "Select Date" },
+                    ...deliveredDateOptions.map((day) => ({
+                      value: day,
+                      label: day,
+                    })),
+                  ]}
+                />
+                <Select
+                  value={deliveredStatusFilter}
+                  onChange={setDeliveredStatusFilter}
+                  placeholder="Status"
+                  aria-label="Status"
+                  className="w-[130px]"
+                  options={[
+                    { value: "", label: "Status" },
+                    ...DELIVERED_ORDER_STATUSES.map((status) => ({
+                      value: status,
+                      label: status,
+                    })),
+                  ]}
+                />
+                <Select
+                  value={deliveredSort}
+                  onChange={(value) =>
+                    setDeliveredSort(
+                      value as DeliveredFilterCriteria["sortBy"],
+                    )
+                  }
+                  placeholder="Sort by"
+                  aria-label="Sort by"
+                  className="w-[140px]"
+                  options={DELIVERED_SORT_OPTIONS.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
+                />
+              </>
             )}
           </div>
         </div>
@@ -546,14 +791,14 @@ export default function ProductOrdersPage() {
           {tab === "Orders" ? (
             <>
               <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  {DELIVERY_CHIPS.map((chip) => {
-                    const active = chip.id === activeChip;
+                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+                  {visibleDeliveryChips.map((chip) => {
+                    const active = chip.id === activeDeliveryDateId;
                     return (
                       <button
                         key={chip.id}
                         type="button"
-                        onClick={() => setActiveChip(chip.id)}
+                        onClick={() => selectDeliveryDate(chip.id)}
                         className={cn(
                           "inline-flex min-w-[128px] items-center justify-between gap-3 rounded-[12px] border px-4 py-3",
                           active
@@ -579,45 +824,46 @@ export default function ProductOrdersPage() {
                     );
                   })}
                 </div>
-                <div className="relative flex items-center gap-2">
+                <div className="relative z-20 flex shrink-0 items-center gap-2">
                   <button
                     type="button"
-                    className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#D8D8D4] bg-white text-[#5A5A5A] shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Previous dates"
+                    disabled={!canShiftChipsBack}
+                    onClick={() => shiftChipWindow(-1)}
                   >
-                    <ChevronLeft className="size-4" />
+                    <ChevronLeft className="size-4" strokeWidth={2} />
                   </button>
                   <button
                     type="button"
-                    className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                    className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#D8D8D4] bg-white text-[#5A5A5A] shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
                     aria-label="Next dates"
+                    disabled={!canShiftChipsForward}
+                    onClick={() => shiftChipWindow(1)}
                   >
-                    <ChevronRight className="size-4" />
+                    <ChevronRight className="size-4" strokeWidth={2} />
                   </button>
                   <button
                     type="button"
                     onClick={() => setCalendarOpen((v) => !v)}
-                    className="flex size-9 items-center justify-center rounded-full border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                    className={cn(
+                      "flex size-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm",
+                      calendarOpen
+                        ? "border-[#242424] bg-[#242424] text-white"
+                        : "border-[#D8D8D4] text-[#5A5A5A]",
+                    )}
                     aria-label="Calendar"
                   >
-                    <Calendar className="size-4" />
+                    <Calendar className="size-4" strokeWidth={2} />
                   </button>
                   {calendarOpen ? (
-                    <div className="absolute top-11 right-0 z-30 w-[260px] rounded-[12px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-                      <div className="mb-2 text-[13px] font-semibold text-[#111118]">
-                        July 2026
-                      </div>
-                      <p className="text-[12px] text-[#8A8A8A]">
-                        Pick a delivery week to filter orders.
-                      </p>
-                      <button
-                        type="button"
-                        className="mt-3 text-[13px] font-medium text-[#3B7DC4]"
-                        onClick={() => setCalendarOpen(false)}
-                      >
-                        Close
-                      </button>
-                    </div>
+                    <DeliveryDateCalendar
+                      deliveryWeekdays={deliveryWeekdays}
+                      selectedDateId={activeDeliveryDateId}
+                      onSelectDate={selectDeliveryDate}
+                      onClose={() => setCalendarOpen(false)}
+                      initialMonth={activeDeliveryDate}
+                    />
                   ) : null}
                 </div>
               </div>
@@ -645,62 +891,75 @@ export default function ProductOrdersPage() {
                   <button
                     type="button"
                     onClick={openOrderFlow}
-                    className="h-[32px] rounded-[8px] bg-[#242424] px-4 text-[14px] font-medium text-white"
+                    disabled={filteredPreview.length === 0}
+                    className="h-[32px] rounded-[8px] bg-[#242424] px-4 text-[14px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Order now
                   </button>
                 </div>
                 <ScrollTable minWidth={860}>
-                  <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[10px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+                  <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                     <span>Item Name</span>
                     <span>Cust. Order Total</span>
                     <span>In Stock</span>
                     <span>Quantity Receiving</span>
                     <span>Date Receiving By</span>
                   </div>
-                  {filteredPreview.map((row) => (
-                    <div
-                      key={row.id}
-                      className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F3F3F1] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
-                    >
-                      <span>{row.itemName}</span>
-                      <span>{row.custOrderTotal}</span>
-                      <span>{row.inStock ?? "—"}</span>
-                      <span>{row.qtyReceiving}</span>
-                      <span>{row.dateReceivingBy}</span>
+                  {filteredPreview.length === 0 ? (
+                    <div className="px-5 py-12 text-center text-[14px] text-[#8A8A8A]">
+                      {getOrderDemandEmptyMessage(orderDemandCriteria)}
                     </div>
-                  ))}
+                  ) : (
+                    filteredPreview.map((row) => (
+                      <div
+                        key={row.id}
+                        className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F3F3F1] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
+                      >
+                        <span>{row.itemName}</span>
+                        <span>{row.custOrderTotal}</span>
+                        <span>{row.inStock ?? "—"}</span>
+                        <span>{row.qtyReceiving}</span>
+                        <span>{row.dateReceivingBy}</span>
+                      </div>
+                    ))
+                  )}
                 </ScrollTable>
               </section>
             </>
           ) : (
             <div className="space-y-8">
-              {deliveredGroups.map(([week, days]) => (
-                <section key={week}>
-                  <h2 className="mb-4 text-[22px] font-semibold tracking-tight text-[#111118]">
-                    {week}
-                  </h2>
-                  {Array.from(days.entries()).map(([day, dayOrders]) => (
-                    <div key={day} className="mb-5">
-                      <div className="mb-2 text-[13px] font-semibold text-[#111118]">
-                        {day}
-                        <span className="ml-2 text-[12px] font-medium text-[#8A8A8A]">
-                          · {dayOrders.length} orders
-                        </span>
+              {deliveredGroups.length === 0 ? (
+                <div className="rounded-[10px] border border-dashed border-[#DCDCD8] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
+                  {getDeliveredEmptyMessage(deliveredFilterCriteria)}
+                </div>
+              ) : (
+                deliveredGroups.map(({ week, days }) => (
+                  <section key={week}>
+                    <h2 className="mb-4 text-[22px] font-semibold tracking-tight text-[#111118]">
+                      {week}
+                    </h2>
+                    {days.map(({ day, orders }) => (
+                      <div key={day} className="mb-5">
+                        <div className="mb-2 text-[13px] font-semibold text-[#111118]">
+                          {day}
+                          <span className="ml-2 text-[12px] font-medium text-[#8A8A8A]">
+                            · {orders.length} orders
+                          </span>
+                        </div>
+                        <ExpandableOrders
+                          orders={orders}
+                          expandedId={expandedDeliveredId}
+                          onToggle={(id) =>
+                            setExpandedDeliveredId((cur) =>
+                              cur === id ? null : id,
+                            )
+                          }
+                        />
                       </div>
-                      <ExpandableOrders
-                        orders={dayOrders}
-                        expandedId={expandedDeliveredId}
-                        onToggle={(id) =>
-                          setExpandedDeliveredId((cur) =>
-                            cur === id ? null : id,
-                          )
-                        }
-                      />
-                    </div>
-                  ))}
-                </section>
-              ))}
+                    ))}
+                  </section>
+                ))
+              )}
             </div>
           )}
         </div>
@@ -710,7 +969,7 @@ export default function ProductOrdersPage() {
             <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
               <Check className="size-3.5" />
             </span>
-            Orders Created
+            {toastMessage}
           </div>
         ) : null}
       </div>
@@ -718,7 +977,7 @@ export default function ProductOrdersPage() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-[#F5F5F3]">
+    <div className="relative flex h-full min-h-0 flex-col bg-background">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -728,11 +987,11 @@ export default function ProductOrdersPage() {
             <p className="mt-1 text-[13px] text-[#8A8A8A]">
               {view === "review" ? "Orders for" : "Item orders for"}{" "}
               <span className="font-semibold text-[#111118]">
-                {DELIVERY_LABEL} delivery
+                {activeDeliveryLabel} delivery
               </span>
             </p>
           </div>
-          <UserMenu showAvatar className="items-center" />
+          <UserMenu className="items-center" />
         </div>
       </div>
 
@@ -743,124 +1002,159 @@ export default function ProductOrdersPage() {
             if (sectionRows.length === 0) return null;
             return (
               <section key={section} className="mb-7">
-                <div className="mb-3 flex items-center justify-between">
-                  <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-                    {section}
-                  </h2>
-                  <button
-                    type="button"
-                    onClick={() => calculateQty(section)}
-                    className="text-[13px] font-medium text-[#4E7CFF]"
-                  >
-                    Calculate QTY
-                  </button>
-                </div>
-                <ScrollTable minWidth={980} className="rounded-[12px]">
-                  <div className="grid grid-cols-[1.3fr_1.5fr_0.85fr_0.85fr_0.95fr_0.7fr_0.95fr] gap-3 border-b border-[#F0F0EE] px-4 py-3 text-[10px] font-semibold tracking-wide text-[#8A8A8A] uppercase">
-                    <span>Item Name</span>
-                    <span>Distributor / Source</span>
-                    <span>Price</span>
-                    <span>Qty Per Unit</span>
-                    <span>Cust. Order Total</span>
-                    <span>In Stock</span>
-                    <span>Qty Needed</span>
-                  </div>
-                  {sectionRows.map((row) => {
-                    const option = row.options[0];
-                    return (
-                      <div
-                        key={row.id}
-                        className="grid grid-cols-[1.3fr_1.5fr_0.85fr_0.85fr_0.95fr_0.7fr_0.95fr] items-center gap-3 border-b border-[#F3F3F1] px-4 py-3.5 last:border-b-0"
+                <h2 className="mb-3 text-[22px] font-semibold tracking-tight text-[#111118]">
+                  {section}
+                </h2>
+                <div className="overflow-x-auto overscroll-x-contain">
+                  <div className="w-full" style={{ minWidth: 980 }}>
+                    <div
+                      className={cn(
+                        "mb-1.5 grid items-center gap-3 px-4",
+                        ORDER_PREP_COLS,
+                      )}
+                    >
+                      <span aria-hidden />
+                      <span aria-hidden />
+                      <span aria-hidden />
+                      <span aria-hidden />
+                      <span aria-hidden />
+                      <span aria-hidden />
+                      <button
+                        type="button"
+                        onClick={() => calculateQty(section)}
+                        className="w-[120px] text-center text-[13px] font-medium text-[#4E7CFF]"
                       >
-                        <span className="text-[14px] text-[#111118]">
-                          {row.itemName}
-                        </span>
-                        <span className="truncate text-[13px] text-[#111118]">
-                          {option
-                            ? `${option.distributor} / ${option.source}`
-                            : "—"}
-                        </span>
-                        <span className="text-[13px] text-[#111118]">
-                          {option
-                            ? `${money(option.price)} / ${option.unit}`
-                            : "—"}
-                        </span>
-                        <span className="text-[13px] text-[#111118]">
-                          {option?.qtyPerUnit ?? "—"}
-                        </span>
-                        <span className="text-[13px] text-[#111118]">
-                          {row.custOrderTotal}
-                        </span>
-                        <span className="text-[13px] text-[#111118]">
-                          {row.inStock ?? "—"}
-                        </span>
-                        <QtyStepper
-                          value={row.quantity}
-                          onChange={(q) => setQty(row.id, q)}
-                        />
+                        Calculate QTY
+                      </button>
+                    </div>
+                    <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
+                      <div
+                        className={cn(
+                          "grid gap-3 border-b border-[#F0F0EE] px-4 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                          ORDER_PREP_COLS,
+                        )}
+                      >
+                        <span>Item Name</span>
+                        <span>Distributor / Source</span>
+                        <span>Price</span>
+                        <span>QTY per Unit</span>
+                        <span>Cust. Order Total</span>
+                        <span>In Stock</span>
+                        <span className="w-[120px] text-center">QTY Needed</span>
                       </div>
-                    );
-                  })}
-                </ScrollTable>
+                      {sectionRows.map((row) => {
+                        const option = row.options[0];
+                        return (
+                          <div
+                            key={row.id}
+                            className={cn(
+                              "grid items-center gap-3 border-b border-[#F3F3F1] px-4 py-3.5 last:border-b-0",
+                              ORDER_PREP_COLS,
+                            )}
+                          >
+                            <span className="min-w-0 truncate text-[14px] text-[#111118]">
+                              {row.itemName}
+                            </span>
+                            <span className="min-w-0 truncate text-[13px] text-[#111118]">
+                              {option
+                                ? `${option.distributor} / ${option.source}`
+                                : "—"}
+                            </span>
+                            <span className="min-w-0 truncate text-[13px] text-[#111118]">
+                              {option
+                                ? `${money(option.price)} / ${option.unit}`
+                                : "—"}
+                            </span>
+                            <span className="text-[13px] text-[#111118]">
+                              {option?.qtyPerUnit ?? "—"}
+                            </span>
+                            <span className="text-[13px] text-[#111118]">
+                              {row.custOrderTotal}
+                            </span>
+                            <span className="text-[13px] text-[#111118]">
+                              {row.inStock ?? "—"}
+                            </span>
+                            <div className="flex w-[120px] justify-center">
+                              <QtyStepper
+                                value={row.quantity}
+                                onChange={(q) => setQty(row.id, q)}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
               </section>
             );
           })}
         </div>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
-          <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-10">
-            <div className="min-w-0 space-y-4">
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
+            <div className="min-w-0 space-y-3">
               {reviewGroups.map((group) => {
                 const ordered = orderedDistributors.has(group.distributor);
                 return (
                   <div
                     key={group.distributor}
-                    className="rounded-[12px] border border-[#ECECEA] bg-white p-5"
+                    className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5"
                   >
-                    <h3 className="mb-4 text-[22px] font-semibold tracking-tight text-[#111118]">
+                    <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
                       {group.distributor}
                     </h3>
-                    <div className="space-y-3">
+                    <div>
                       {group.items.map((item) => (
                         <div
                           key={`${group.distributor}-${item.itemName}`}
-                          className={cn(
-                            "grid items-center gap-x-4 text-[13px]",
-                            REVIEW_VENDOR_COLS,
-                          )}
+                          className="flex items-center gap-3 border-b border-[#ECECEA] py-2.5 text-[12px]"
                         >
-                          <span className="min-w-0 truncate text-[#111118]">
+                          <span className="min-w-0 flex-[1.15] truncate text-[#111118]">
                             {item.itemName}
                           </span>
-                          <span className="min-w-0 truncate text-[#8A8A8A]">
+                          <span className="min-w-0 flex-1 truncate text-[#8A8A8A]">
                             {item.source}
                           </span>
-                          <span className="text-right font-semibold text-[#111118]">
-                            {item.quantity}x
-                          </span>
-                          <span className="whitespace-nowrap text-right text-[#111118]">
-                            {money(item.price)} / {item.unit}
-                          </span>
-                          <span className="text-right font-semibold whitespace-nowrap text-[#111118]">
-                            {money(item.lineTotal)}
-                          </span>
+                          <div className="ml-auto flex shrink-0 items-center gap-4">
+                            <span
+                              className={cn(
+                                REVIEW_QTY_W,
+                                "text-right font-medium text-[#111118]",
+                              )}
+                            >
+                              {item.quantity}x
+                            </span>
+                            <span
+                              className={cn(
+                                REVIEW_UNIT_W,
+                                "whitespace-nowrap text-right text-[#111118]",
+                              )}
+                            >
+                              {money(item.price)}
+                              {item.unit ? ` / ${item.unit}` : ""}
+                            </span>
+                            <span
+                              className={cn(
+                                REVIEW_LINE_W,
+                                "text-right font-semibold whitespace-nowrap text-[#111118]",
+                              )}
+                            >
+                              {money(item.lineTotal)}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>
-                    <div
-                      className={cn(
-                        "mt-5 grid items-center gap-x-4 border-t border-[#F0F0EE] pt-4",
-                        REVIEW_VENDOR_COLS,
-                      )}
-                    >
-                      <div className="col-span-4 flex min-w-0 flex-wrap items-center gap-3">
+                    <div className="flex items-center justify-between gap-3 pt-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
                         {ordered ? (
                           <div className="flex min-w-0 items-start gap-2">
                             <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-[#18BC33] text-white">
                               <Check className="size-2.5" />
                             </span>
                             <div className="flex min-w-0 flex-col items-start gap-1.5">
-                              <div className="text-[13px] text-[#111118]">
+                              <div className="text-[12px] text-[#111118]">
                                 Order sent to email{" "}
                                 <span className="font-semibold">
                                   {group.email}
@@ -869,11 +1163,21 @@ export default function ProductOrdersPage() {
                                   {" "}
                                   · Expected delivery{" "}
                                   <span className="font-semibold text-[#111118]">
-                                    {EXPECTED_DELIVERY}
+                                    {expectedDeliveryLabel}
                                   </span>
                                 </span>
                               </div>
-                              <button type="button" className={LINK}>
+                              <button
+                                type="button"
+                                className={LINK}
+                                onClick={() => {
+                                  const placed =
+                                    findPlacedOrderForDistributor(
+                                      group.distributor,
+                                    );
+                                  if (placed) downloadOrderInvoice(placed);
+                                }}
+                              >
                                 Download order
                               </button>
                             </div>
@@ -882,22 +1186,29 @@ export default function ProductOrdersPage() {
                           <>
                             <button
                               type="button"
-                              onClick={() => markOrdered(group.distributor)}
-                              className="h-[34px] rounded-[8px] px-4 text-[13px] font-semibold text-white"
+                              onClick={() =>
+                                submitDistributorOrder(group.distributor)
+                              }
+                              className="h-[32px] rounded-[8px] px-3.5 text-[12px] font-semibold text-white"
                               style={{ backgroundColor: ORANGE }}
                             >
                               Order now
                             </button>
-                            <span className="text-[13px] text-[#8A8A8A]">
+                            <span className="text-[12px] text-[#8A8A8A]">
                               Expected delivery{" "}
                               <span className="font-semibold text-[#111118]">
-                                {EXPECTED_DELIVERY}
+                                {expectedDeliveryLabel}
                               </span>
                             </span>
                           </>
                         )}
                       </div>
-                      <div className="text-right text-[18px] font-semibold text-[#111118]">
+                      <div
+                        className={cn(
+                          REVIEW_LINE_W,
+                          "shrink-0 text-right text-[16px] font-semibold text-[#111118]",
+                        )}
+                      >
                         {money(group.totalPrice)}
                       </div>
                     </div>
@@ -906,35 +1217,53 @@ export default function ProductOrdersPage() {
               })}
             </div>
 
-            <aside className="h-fit shrink-0 rounded-[12px] border border-[#ECECEA] bg-white p-5 xl:sticky xl:top-4">
-              <h3 className="mb-4 text-[16px] font-semibold text-[#111118]">
+            <aside className="h-fit shrink-0 rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5 xl:sticky xl:top-4">
+              <h3 className="mb-1 text-[15px] font-semibold text-[#111118]">
                 Order Summary
               </h3>
-              <div className="space-y-3">
-                {reviewGroups.map((group) => (
-                  <div
-                    key={`sum-${group.distributor}`}
-                    className="flex items-start justify-between gap-3 text-[13px]"
-                  >
-                    <div>
-                      <div className="font-medium text-[#111118]">
-                        {group.distributor}
+              <div>
+                {reviewGroups.map((group) => {
+                  const submitted = orderedDistributors.has(group.distributor);
+                  return (
+                    <div
+                      key={`sum-${group.distributor}`}
+                      className="flex items-center justify-between gap-3 border-b border-[#ECECEA] py-3 text-[13px]"
+                    >
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-[#111118]">
+                          {group.distributor}
+                        </div>
+                        <div
+                          className={cn(
+                            "text-[12px]",
+                            submitted ? "text-[#18BC33]" : "text-[#8A8A8A]",
+                          )}
+                        >
+                          {submitted
+                            ? "Submitted"
+                            : `${group.itemCount} item${group.itemCount === 1 ? "" : "s"}`}
+                        </div>
                       </div>
-                      <div className="text-[12px] text-[#8A8A8A]">
-                        {group.itemCount} items
+                      <div className="shrink-0 font-semibold text-[#111118]">
+                        {money(group.totalPrice)}
                       </div>
                     </div>
-                    <div className="font-medium text-[#111118]">
-                      {money(group.totalPrice)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-              <div className="mt-4 flex items-center justify-between border-t border-[#F0F0EE] pt-4">
-                <span className="text-[14px] font-semibold text-[#111118]">
+              {pendingReviewGroups.length > 0 ? (
+                <div className="flex items-center justify-between border-b border-[#ECECEA] py-3 text-[12px] text-[#8A8A8A]">
+                  <span>Remaining</span>
+                  <span className="font-medium text-[#111118]">
+                    {money(pendingTotal)}
+                  </span>
+                </div>
+              ) : null}
+              <div className="flex items-center justify-between pt-3">
+                <span className="text-[14px] font-medium text-[#111118]">
                   Total
                 </span>
-                <span className="text-[22px] font-semibold text-[#111118]">
+                <span className="text-[18px] font-semibold text-[#111118]">
                   {money(grandTotal)}
                 </span>
               </div>
@@ -960,13 +1289,13 @@ export default function ProductOrdersPage() {
           <button
             type="button"
             onClick={() => setConfirmClose(true)}
-            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
+            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#000000] hover:bg-background"
           >
             Cancel & Close
           </button>
           <button
             type="button"
-            disabled={view === "orderList" && !canReview}
+            disabled={view === "orderList" ? !canReview : !canOrderAll}
             onClick={() => {
               if (view === "review") orderAll();
               else setView("review");
@@ -982,13 +1311,13 @@ export default function ProductOrdersPage() {
       {confirmClose ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4">
           <div
-            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white p-6 shadow-xl"
+            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white shadow-xl"
             role="dialog"
             aria-modal="true"
             aria-labelledby="cancel-order-title"
             data-scroll-lock-allow
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-4">
               <h2
                 id="cancel-order-title"
                 className="text-[18px] font-semibold text-[#111118]"
@@ -999,31 +1328,40 @@ export default function ProductOrdersPage() {
                 type="button"
                 aria-label="Close"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
+                className="rounded-md p-1 text-[#8A8A8A] hover:bg-background"
               >
                 <X className="size-5" />
               </button>
             </div>
-            <p className="mb-6 text-[14px] text-[#5A5A5A]">
+            <p className="px-6 py-5 text-[14px] text-[#111118]">
               Are you sure you want to close order request?
             </p>
-            <div className="flex items-center justify-end gap-3">
+            <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
               <button
                 type="button"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
+                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#111118] hover:bg-background"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={resetToList}
-                className="rounded-[8px] bg-[#111118] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A1A1A]"
+                onClick={cancelOrderRequest}
+                className="rounded-[8px] bg-[#2E2E2E] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#252525]"
               >
                 Cancel Order
               </button>
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {toast ? (
+        <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">
+          <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
+            <Check className="size-3.5" />
+          </span>
+          {toastMessage}
         </div>
       ) : null}
     </div>

@@ -3,12 +3,15 @@ import type { ItemPhoto } from "@/types/item";
 export type ProductForSale = {
   id: string;
   itemId: string;
+  sortOrder: number;
   live: boolean;
   merchandisingName: string;
   category: string;
   subcategory: string;
   source: string;
+  sourceId?: string;
   distributor: string;
+  distributorId?: string;
   salesPrice: number;
   unitOfSales: string;
   photos: ItemPhoto[];

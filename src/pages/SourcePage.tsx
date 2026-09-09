@@ -1,32 +1,47 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Search } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { AddSourceModal } from "@/components/sources/AddSourceModal";
-import { Input } from "@/components/ui/Input";
+import { SourceFilters } from "@/components/sources/SourceFilters";
 import { ScrollTable } from "@/components/ui/ScrollTable";
-import { Select } from "@/components/ui/Select";
-import { SOURCES } from "@/constants/sources";
+import { TABLE_HEADER } from "@/constants/table";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
+import {
+  filterSources,
+  getSourceDistributorDisplay,
+  getSourceFullAddress,
+  getSourceLocation,
+  nextSourceId,
+  uniqueSourceLocations,
+} from "@/utils/sources";
 
-const ORANGE = "#F57850";
-const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
+const EDIT_LINK =
+  "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
+const NOTES_LINK =
+  "cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] font-medium italic underline leading-[18px] text-[#111118] hover:opacity-80";
+const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
+const ID_MONO =
+  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
-/**
- * Figma: fixed-width data columns packed on the left; `1fr` only on Edit
- * so extra space is after Description — not between Name/Location/Distributor.
- */
 const GRID =
-  "grid grid-cols-[110px_48px_160px_150px_140px_64px_minmax(48px,1fr)] items-center gap-x-3";
+  "grid grid-cols-[100px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
 
-function nextSourceId(rows: Source[]) {
-  const numbers = rows
-    .map((row) => Number(row.id.replace(/\D/g, "")))
-    .filter((value) => Number.isFinite(value));
-  const max = numbers.length ? Math.max(...numbers) : 0;
-  return `SOR-${String(max + 1).padStart(5, "0")}`;
+function SourcePhoto({ logoUrl, name }: { logoUrl: string | null; name: string }) {
+  return (
+    <div className="flex h-[46px] w-[67px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[#F3F3F1]">
+      {logoUrl ? (
+        <img
+          src={logoUrl}
+          alt={name}
+          className="size-full object-contain"
+        />
+      ) : null}
+    </div>
+  );
 }
 
 function DescriptionHover({ description }: { description: string }) {
@@ -34,6 +49,8 @@ function DescriptionHover({ description }: { description: string }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef<number>(0);
+
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
   function show() {
     window.clearTimeout(hideTimer.current);
@@ -51,22 +68,29 @@ function DescriptionHover({ description }: { description: string }) {
     hideTimer.current = window.setTimeout(() => setOpen(false), 140);
   }
 
-  useEffect(() => {
-    return () => window.clearTimeout(hideTimer.current);
-  }, []);
-
   if (!description.trim()) {
     return <span className="text-[13px] text-[#8A8A8A]">—</span>;
   }
 
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
-      <button ref={btnRef} type="button" className={LINK} onClick={show}>
+    <div
+      className="relative justify-self-start"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
+      <button
+        ref={btnRef}
+        type="button"
+        className={NOTES_LINK}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
         View
       </button>
       {open ? (
         <div
-          className="fixed z-50 w-[300px] rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          role="tooltip"
+          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
           onMouseLeave={hide}
@@ -74,7 +98,7 @@ function DescriptionHover({ description }: { description: string }) {
           <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
             Description
           </div>
-          <p className="text-[12px] leading-relaxed text-[#111118]">
+          <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
             {description}
           </p>
         </div>
@@ -86,7 +110,7 @@ function DescriptionHover({ description }: { description: string }) {
 export default function SourcePage() {
   useDocumentTitle("Source");
 
-  const [rows, setRows] = useState<Source[]>(SOURCES);
+  const { sources: rows, distributors, setSources } = useAppCatalog();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -94,27 +118,27 @@ export default function SourcePage() {
   const [editing, setEditing] = useState<Source | null>(null);
 
   const locationOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.location))).sort(),
+    () => uniqueSourceLocations(rows),
     [rows],
   );
 
-  const distributorOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.distributor))).sort(),
-    [rows],
-  );
+  const distributorOptions = useMemo(() => {
+    const names = new Set([
+      ...rows.map((row) => getSourceDistributorDisplay(row)),
+      ...distributors.map((entry) => entry.name),
+    ]);
+    return Array.from(names).sort();
+  }, [distributors, rows]);
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesQuery =
-        !normalized || row.name.toLowerCase().includes(normalized);
-      const matchesLocation =
-        !locationFilter || row.location === locationFilter;
-      const matchesDistributor =
-        !distributorFilter || row.distributor === distributorFilter;
-      return matchesQuery && matchesLocation && matchesDistributor;
-    });
-  }, [distributorFilter, locationFilter, query, rows]);
+  const filtered = useMemo(
+    () =>
+      filterSources(rows, {
+        query,
+        location: locationFilter,
+        distributor: distributorFilter,
+      }),
+    [distributorFilter, locationFilter, query, rows],
+  );
 
   function openCreate() {
     setEditing(null);
@@ -131,74 +155,38 @@ export default function SourcePage() {
     setEditing(null);
   }
 
+  function handleRemoveSource() {
+    if (!editing) return;
+    const id = editing.id;
+    setSources((current) => current.filter((row) => row.id !== id));
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Source
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
-            />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
-            />
-          </div>
-
-          <Select
-            value={locationFilter}
-            onChange={setLocationFilter}
-            className="w-full sm:w-[150px]"
-            aria-label="Location"
-            placeholder="Location"
-            options={[
-              { value: "", label: "Location" },
-              ...locationOptions.map((location) => ({
-                value: location,
-                label: location,
-              })),
-            ]}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Source"
+        toolbar={
+          <SourceFilters
+            query={query}
+            location={locationFilter}
+            distributor={distributorFilter}
+            locationOptions={locationOptions}
+            distributorOptions={distributorOptions}
+            onQueryChange={setQuery}
+            onLocationChange={setLocationFilter}
+            onDistributorChange={setDistributorFilter}
+            onAdd={openCreate}
           />
-
-          <Select
-            value={distributorFilter}
-            onChange={setDistributorFilter}
-            className="w-full sm:w-[160px]"
-            aria-label="Distributor"
-            placeholder="Distributor"
-            options={[
-              { value: "", label: "Distributor" },
-              ...distributorOptions.map((distributor) => ({
-                value: distributor,
-                label: distributor,
-              })),
-            ]}
-          />
-
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
-            style={{ background: ORANGE }}
-          >
-            <Plus size={14} />
-            Add Source
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
+          {filtered.length === 0 ? (
+            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+              No sources found
+            </div>
+          ) : null}
           {filtered.map((row) => (
             <div
               key={row.id}
@@ -206,34 +194,30 @@ export default function SourcePage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
-                  <div className="size-10 shrink-0 overflow-hidden rounded-[8px] bg-[#F3F3F1]">
-                    {row.logoUrl ? (
-                      <img
-                        src={row.logoUrl}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                    ) : null}
-                  </div>
+                  <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
                   <div className="min-w-0">
-                    <span className="rounded-full bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                    <span
+                      className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
+                      style={{ fontFamily: ID_MONO }}
+                    >
                       {row.id}
                     </span>
-                    <div className="mt-2 text-[14px] font-semibold text-[#111118]">
-                      {row.name}
-                    </div>
-                    <div className="mt-1 text-[12px] text-[#6B6B6B]">
-                      {row.location}
-                    </div>
-                    <div className="mt-0.5 text-[12px] text-[#111118]">
-                      {row.distributor}
+                    <div className={cn(BODY, "mt-2 truncate")}>{row.name}</div>
+                    <LocationHover
+                      className={cn(BODY, "mt-1")}
+                      fullAddress={getSourceFullAddress(row)}
+                    >
+                      {getSourceLocation(row)}
+                    </LocationHover>
+                    <div className={cn(BODY, "mt-0.5 truncate")}>
+                      {getSourceDistributorDisplay(row)}
                     </div>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => openEdit(row)}
-                  className={LINK}
+                  className={EDIT_LINK}
                 >
                   Edit
                 </button>
@@ -243,21 +227,28 @@ export default function SourcePage() {
         </div>
 
         <div className="hidden md:block">
-          <ScrollTable minWidth={980}>
+          <ScrollTable minWidth={860} className="w-full">
             <div
               className={cn(
                 GRID,
-                "h-10 border-b border-[#ECECEA] bg-white px-4 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase",
+                TABLE_HEADER,
+                "h-10 border-b border-[#ECECEA] px-4",
               )}
             >
               <div>Source ID</div>
               <div>Photo</div>
-              <div>Name</div>
+              <div className="pl-3">Name</div>
               <div>Location</div>
               <div>Distributor</div>
               <div>Description</div>
-              <div />
+              <div aria-hidden />
             </div>
+
+            {filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                No sources found
+              </div>
+            ) : null}
 
             {filtered.map((row, index) => {
               const isLast = index === filtered.length - 1;
@@ -267,38 +258,37 @@ export default function SourcePage() {
                   key={row.id}
                   className={cn(
                     GRID,
-                    "h-[72px] px-4",
+                    "h-[78px] px-4",
                     !isLast && "border-b border-[#ECECEA]",
                   )}
                 >
-                  <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                  <span
+                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
+                    style={{ fontFamily: ID_MONO }}
+                  >
                     {row.id}
                   </span>
 
-                  <div className="size-10 overflow-hidden rounded-[8px] bg-[#F3F3F1]">
-                    {row.logoUrl ? (
-                      <img
-                        src={row.logoUrl}
-                        alt=""
-                        className="size-full object-cover"
-                      />
-                    ) : null}
-                  </div>
+                  <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
 
-                  <div className="truncate text-[13px] font-semibold text-[#111118]">
+                  <div className={cn(BODY, "min-w-0 truncate pl-3")}>
                     {row.name}
                   </div>
-                  <div className="truncate text-[13px] text-[#111118]">
-                    {row.location}
-                  </div>
-                  <div className="truncate text-[13px] text-[#111118]">
-                    {row.distributor}
+                  <LocationHover
+                    className={BODY}
+                    fullAddress={getSourceFullAddress(row)}
+                  >
+                    {getSourceLocation(row)}
+                  </LocationHover>
+                  <div className={cn(BODY, "min-w-0 truncate")}>
+                    {getSourceDistributorDisplay(row)}
                   </div>
                   <DescriptionHover description={row.description} />
                   <button
                     type="button"
                     onClick={() => openEdit(row)}
-                    className={cn(LINK, "justify-self-end")}
+                    className={cn(EDIT_LINK, "justify-self-end")}
+                    aria-label={`Edit ${row.name}`}
                   >
                     Edit
                   </button>
@@ -313,8 +303,9 @@ export default function SourcePage() {
         open={modalOpen}
         source={editing}
         onClose={closeModal}
+        onRemove={handleRemoveSource}
         onSave={(source) => {
-          setRows((current) => {
+          setSources((current) => {
             if (editing) {
               return current.map((row) =>
                 row.id === editing.id ? { ...source, id: editing.id } : row,
@@ -322,6 +313,7 @@ export default function SourcePage() {
             }
             return [{ ...source, id: nextSourceId(current) }, ...current];
           });
+          closeModal();
         }}
       />
     </div>

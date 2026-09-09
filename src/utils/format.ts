@@ -31,6 +31,18 @@ export function locationFromAddress(address: string) {
   return address.trim() || "—";
 }
 
+/** Prefer street-level address; fall back to the short location string. */
+export function resolveFullAddress(
+  fullAddress?: string | null,
+  fallback?: string | null,
+) {
+  const full = fullAddress?.trim();
+  if (full) return full;
+  const short = fallback?.trim();
+  if (short && short !== "—") return short;
+  return "";
+}
+
 export function formatDeliveryLabel(
   slots: Array<{ day: string; time: string }>,
 ) {

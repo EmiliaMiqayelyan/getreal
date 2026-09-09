@@ -51,7 +51,7 @@ export const SOURCES: Source[] = [
   },
   {
     id: "SOR-00005",
-    name: "Siberian Meat Co",
+    name: "SIberianMeat Co",
     location: "Los Angeles, CA",
     fullAddress: "78 Cold Storage Way, Los Angeles, CA 90058",
     distributor: "FreshFood LLC",
@@ -64,7 +64,7 @@ export const SOURCES: Source[] = [
     name: "MeatWorld",
     location: "Los Angeles, CA",
     fullAddress: "1500 Packing Plant Blvd, Los Angeles, CA 90023",
-    distributor: "Ranch Protein LLC",
+    distributor: "Rancho Protein LLC",
     description: DESC,
     logoUrl: logo("MW", "#8B3A3A"),
     logoName: "meatworld-logo.png",

@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { TABLE_HEADER } from "@/constants/table";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
@@ -188,59 +189,54 @@ export default function PushNotificationsPage() {
     Boolean(draft.scheduledFor) &&
     Boolean(draft.subject.trim());
 
-  const th =
-    "px-0 py-3 text-left text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase";
+  const th = cn("px-0 py-3 text-left", TABLE_HEADER);
   const td = "px-0 py-[18px] align-middle text-[13px] leading-5 text-[#111118]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Push Notifications
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Push Notifications"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <div className="relative w-full sm:w-[220px]">
+              <Search
+                size={13}
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+              />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search ID, name"
+                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+              />
+            </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="relative w-full sm:w-[220px]">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            <Select
+              value={triggerFilter}
+              onChange={setTriggerFilter}
+              aria-label="All Triggers"
+              className="w-[160px]"
+              options={[
+                { value: "", label: "All Triggers" },
+                ...triggers.map((trigger) => ({
+                  value: trigger,
+                  label: trigger,
+                })),
+              ]}
             />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
-            />
+
+            <button
+              type="button"
+              onClick={openCreate}
+              className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white"
+              style={{ background: ORANGE }}
+            >
+              <Plus size={14} />
+              Add Push Notification
+            </button>
           </div>
-
-          <Select
-            value={triggerFilter}
-            onChange={setTriggerFilter}
-            aria-label="All Triggers"
-            className="w-[160px]"
-            options={[
-              { value: "", label: "All Triggers" },
-              ...triggers.map((trigger) => ({
-                value: trigger,
-                label: trigger,
-              })),
-            ]}
-          />
-
-          <button
-            type="button"
-            onClick={openCreate}
-            className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white"
-            style={{ background: ORANGE }}
-          >
-            <Plus size={14} />
-            Add Push Notification
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
         <ScrollTable minWidth={1100} className="rounded-[10px]">

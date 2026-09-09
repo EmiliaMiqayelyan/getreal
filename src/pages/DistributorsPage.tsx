@@ -1,37 +1,121 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, Plus, Search } from "lucide-react";
 
 import { AddDistributorModal } from "@/components/distributors/AddDistributorModal";
-import { UserMenu } from "@/components/layout/UserMenu";
-import { Input } from "@/components/ui/Input";
+import { DistributorFilters } from "@/components/distributors/DistributorFilters";
+import { Header } from "@/components/layout/AdminHeader";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { ScrollTable } from "@/components/ui/ScrollTable";
-import { Select } from "@/components/ui/Select";
-import { DISTRIBUTORS } from "@/constants/distributors";
+import { TABLE_HEADER } from "@/constants/table";
+import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
-import { formatDeliveryLabel, WEEK_DAYS } from "@/utils/format";
+import {
+  filterDistributors,
+  getDistributorFullAddress,
+  getDistributorLocation,
+  getPrimaryContactName,
+  getPrimaryContactPhone,
+  uniqueDistributorLocations,
+} from "@/utils/distributors";
+import { formatDeliveryLabel } from "@/utils/format";
 
-const ORANGE = "#F57850";
-const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
-const BODY = "text-[13px] leading-[18px] text-[#111118]";
-const SECONDARY = "text-[12px] leading-[16px] text-[#8A8A8A]";
+const EDIT_LINK =
+  "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
+const NOTES_LINK =
+  "cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] font-medium italic underline leading-[18px] text-[#111118] hover:opacity-80";
+const FILES_TRIGGER =
+  "inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[13px] font-medium leading-[18px] text-[#111118] hover:opacity-80";
+const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
+const SECONDARY = "text-[12px] leading-[16px] font-medium text-[#6B7180]";
 const ID_MONO =
   '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
-/**
- * Figma: ~100px rows, 16px padding, all columns share width so
- * PHONE / DELIVERY INFO / DOCUMENTS stay packed (no empty middle gaps).
- */
 const GRID =
-  "grid grid-cols-[0.85fr_1.1fr_1.25fr_1.1fr_1.15fr_1fr_0.75fr_0.55fr_0.45fr] items-center gap-x-3";
+  "grid grid-cols-[100px_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_92px_56px_48px] items-center gap-x-4";
 
-function nextDistributorId(rows: Distributor[]) {
-  const numbers = rows
-    .map((row) => Number(row.id.replace(/\D/g, "")))
-    .filter((value) => Number.isFinite(value));
-  const max = numbers.length ? Math.max(...numbers) : 10000;
-  return `DIS-${max + 1}`;
+function FilesChevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="8"
+      height="5"
+      viewBox="0 0 8 5"
+      fill="none"
+      aria-hidden
+      className={cn(
+        "block shrink-0 transition-transform",
+        open && "rotate-180",
+      )}
+    >
+      <path
+        d="M0.585 1.17L4 4.17L7.415 1.17"
+        stroke="#111118"
+        strokeWidth="1.17"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/**
+ * Open a distributor document in a new tab.
+ * Real uploads use their blob/object URL; mock metadata-only docs get a blob HTML
+ * preview (data: URLs are blocked by Chromium for target=_blank navigations).
+ */
+function openDistributorDocument(doc: Distributor["documents"][number]) {
+  if (doc.url) {
+    window.open(doc.url, "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  const title = escapeHtml(doc.name);
+  const sizeLine = doc.size
+    ? `<p style="color:#6B7180;margin:0 0 1rem">${escapeHtml(doc.size)}</p>`
+    : "";
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+    body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: #f7f7f5; color: #111118; }
+    main { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.5rem; }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${title}</h1>
+    ${sizeLine}
+    <p>Preview placeholder — no file bytes are stored for this demo document.</p>
+  </main>
+</body>
+</html>`;
+
+  const blobUrl = URL.createObjectURL(
+    new Blob([html], { type: "text/html;charset=utf-8" }),
+  );
+  const opened = window.open(blobUrl, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }
 
 function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
@@ -67,42 +151,52 @@ function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className="relative justify-self-start">
       <button
         type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
         onClick={(event) => {
           const rect = event.currentTarget.getBoundingClientRect();
           setPos({ top: rect.bottom + 8, left: rect.left });
           setOpen((current) => !current);
         }}
-        className={cn(BODY, "inline-flex items-center gap-1")}
+        className={FILES_TRIGGER}
       >
+        <FilesChevron open={open} />
         Files
-        <ChevronDown
-          size={12}
-          className={cn(
-            "text-[#8A8A8A] transition-transform",
-            open && "rotate-180",
-          )}
-        />
       </button>
       {open ? (
         <div
           ref={menuRef}
-          className="fixed z-50 min-w-[220px] rounded-[10px] border border-[#ECECEA] bg-white py-2 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          role="menu"
+          className="fixed z-50 flex min-w-[240px] flex-col gap-2"
           style={{ top: pos.top, left: pos.left }}
         >
           {documents.length ? (
             documents.map((doc) => (
-              <div
+              <button
                 key={doc.id}
-                className="px-3 py-1.5 text-[12px] text-[#111118]"
+                type="button"
+                role="menuitem"
+                className="cursor-pointer rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-2.5 text-left shadow-[0_8px_24px_rgba(0,0,0,0.12)] hover:bg-[#FAFAF8]"
+                onClick={() => {
+                  openDistributorDocument(doc);
+                  setOpen(false);
+                }}
               >
-                {doc.name}
-              </div>
+                <div className="text-[12px] font-medium text-[#111118]">
+                  {doc.name}
+                </div>
+                {doc.size ? (
+                  <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                    {doc.size}
+                  </div>
+                ) : null}
+              </button>
             ))
           ) : (
-            <div className="px-3 py-1.5 text-[12px] text-[#8A8A8A]">
+            <div className="rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-2.5 text-[12px] text-[#8A8A8A] shadow-[0_8px_24px_rgba(0,0,0,0.12)]">
               No files
             </div>
           )}
@@ -117,6 +211,8 @@ function NotesHover({ notes }: { notes: string }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef<number>(0);
+
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
   function show() {
     window.clearTimeout(hideTimer.current);
@@ -139,12 +235,19 @@ function NotesHover({ notes }: { notes: string }) {
   }
 
   return (
-    <div className="relative" onMouseEnter={show} onMouseLeave={hide}>
-      <button ref={btnRef} type="button" className={LINK} onClick={show}>
+    <div className="relative justify-self-start" onMouseEnter={show} onMouseLeave={hide}>
+      <button
+        ref={btnRef}
+        type="button"
+        className={NOTES_LINK}
+        aria-haspopup="true"
+        aria-expanded={open}
+      >
         View
       </button>
       {open ? (
         <div
+          role="tooltip"
           className="fixed z-50 w-[240px] rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
@@ -163,7 +266,8 @@ function NotesHover({ notes }: { notes: string }) {
 export default function DistributorsPage() {
   useDocumentTitle("Distributors");
 
-  const [rows, setRows] = useState<Distributor[]>(DISTRIBUTORS);
+  const { distributors: rows, saveDistributor, removeDistributor } =
+    useAppCatalog();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [weekdayFilter, setWeekdayFilter] = useState("");
@@ -171,23 +275,19 @@ export default function DistributorsPage() {
   const [editing, setEditing] = useState<Distributor | null>(null);
 
   const locationOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.location))).sort(),
+    () => uniqueDistributorLocations(rows),
     [rows],
   );
 
-  const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesQuery =
-        !normalized || row.name.toLowerCase().includes(normalized);
-      const matchesLocation =
-        !locationFilter || row.location === locationFilter;
-      const matchesWeekday =
-        !weekdayFilter ||
-        row.deliveryDays.some((slot) => slot.day === weekdayFilter);
-      return matchesQuery && matchesLocation && matchesWeekday;
-    });
-  }, [locationFilter, query, rows, weekdayFilter]);
+  const filtered = useMemo(
+    () =>
+      filterDistributors(rows, {
+        query,
+        location: locationFilter,
+        weekday: weekdayFilter,
+      }),
+    [locationFilter, query, rows, weekdayFilter],
+  );
 
   function openCreate() {
     setEditing(null);
@@ -204,71 +304,36 @@ export default function DistributorsPage() {
     setEditing(null);
   }
 
+  function handleRemoveDistributor() {
+    if (!editing) return;
+    removeDistributor(editing.id);
+  }
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#F5F5F3]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
-        <div className="flex items-start justify-between gap-4">
-          <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            Distributors
-          </h1>
-          <UserMenu showAvatar className="items-center" />
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2 md:flex-nowrap">
-          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-            <Search
-              size={13}
-              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
-            />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search name"
-              className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
-            />
-          </div>
-
-          <Select
-            value={locationFilter}
-            onChange={setLocationFilter}
-            className="w-full sm:w-[150px]"
-            aria-label="Location"
-            placeholder="Location"
-            options={[
-              { value: "", label: "Location" },
-              ...locationOptions.map((location) => ({
-                value: location,
-                label: location,
-              })),
-            ]}
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <Header
+        title="Distributors"
+        toolbar={
+          <DistributorFilters
+            query={query}
+            location={locationFilter}
+            weekday={weekdayFilter}
+            locationOptions={locationOptions}
+            onQueryChange={setQuery}
+            onLocationChange={setLocationFilter}
+            onWeekdayChange={setWeekdayFilter}
+            onAdd={openCreate}
           />
-
-          <Select
-            value={weekdayFilter}
-            onChange={setWeekdayFilter}
-            className="w-full sm:w-[150px]"
-            aria-label="Weekday"
-            placeholder="Weekday"
-            options={[
-              { value: "", label: "Weekday" },
-              ...WEEK_DAYS.map((day) => ({ value: day, label: day })),
-            ]}
-          />
-
-          <button
-            type="button"
-            onClick={openCreate}
-            className="inline-flex h-[34px] w-full items-center justify-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
-            style={{ background: ORANGE }}
-          >
-            <Plus size={14} />
-            Add Distributor
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
+          {filtered.length === 0 ? (
+            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+              No distributors found
+            </div>
+          ) : null}
           {filtered.map((row) => (
             <div
               key={row.id}
@@ -277,26 +342,29 @@ export default function DistributorsPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <span
-                    className="rounded-[6px] bg-[#F0F0EE] px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
+                    className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
                     style={{ fontFamily: ID_MONO }}
                   >
                     {row.id}
                   </span>
-                  <div className="mt-2 text-[14px] font-semibold text-[#111118]">
+                  <div className="mt-2 truncate text-[13px] leading-[18px] font-medium text-[#111118]">
                     {row.name}
                   </div>
-                  <div className={SECONDARY}>{row.paymentTerms}</div>
-                  <div className="mt-1 text-[12px] text-[#111118]">
-                    {row.location}
-                  </div>
+                  <div className={SECONDARY}>{row.paymentTerms || "—"}</div>
+                  <LocationHover
+                    className="mt-1 text-[12px] text-[#111118]"
+                    fullAddress={getDistributorFullAddress(row)}
+                  >
+                    {getDistributorLocation(row)}
+                  </LocationHover>
                   <div className="mt-0.5 text-[12px] text-[#111118]">
-                    {row.contact}
+                    {getPrimaryContactName(row)}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => openEdit(row)}
-                  className={LINK}
+                  className={EDIT_LINK}
                 >
                   Edit
                 </button>
@@ -310,7 +378,8 @@ export default function DistributorsPage() {
             <div
               className={cn(
                 GRID,
-                "h-10 border-b border-[#ECECEA] px-4 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase",
+                TABLE_HEADER,
+                "h-10 border-b border-[#ECECEA] px-4",
               )}
             >
               <div>Distr. ID</div>
@@ -321,8 +390,14 @@ export default function DistributorsPage() {
               <div>Delivery Info</div>
               <div>Documents</div>
               <div>Notes</div>
-              <div />
+              <div aria-hidden />
             </div>
+
+            {filtered.length === 0 ? (
+              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                No distributors found
+              </div>
+            ) : null}
 
             {filtered.map((row, index) => {
               const delivery = formatDeliveryLabel(row.deliveryDays);
@@ -338,34 +413,35 @@ export default function DistributorsPage() {
                   )}
                 >
                   <span
-                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-[#F0F0EE] px-2 text-[11px] font-medium text-[#5A5A5A]"
+                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
                     style={{ fontFamily: ID_MONO }}
                   >
                     {row.id}
                   </span>
 
                   <div className="min-w-0">
-                    <div className="truncate text-[13px] leading-[18px] font-semibold text-[#111118]">
+                    <div className={cn(BODY, "truncate")}>
                       {row.name}
                     </div>
                     <div className={cn("mt-1", SECONDARY)}>
-                      {row.paymentTerms}
+                      {row.paymentTerms || "—"}
                     </div>
                   </div>
 
+                  <LocationHover
+                    className={BODY}
+                    fullAddress={getDistributorFullAddress(row)}
+                  >
+                    {getDistributorLocation(row)}
+                  </LocationHover>
                   <div className={cn(BODY, "min-w-0 truncate")}>
-                    {row.location}
-                  </div>
-                  <div className={cn(BODY, "min-w-0 truncate")}>
-                    {row.contact}
+                    {getPrimaryContactName(row)}
                   </div>
                   <div className={cn(BODY, "whitespace-nowrap")}>
-                    {row.phone}
+                    {getPrimaryContactPhone(row)}
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[13px] leading-[18px] font-medium text-[#111118]">
-                      {delivery.days}
-                    </div>
+                    <div className={cn(BODY, "truncate")}>{delivery.days}</div>
                     {delivery.time ? (
                       <div className={cn("mt-1", SECONDARY)}>
                         {delivery.time}
@@ -377,7 +453,8 @@ export default function DistributorsPage() {
                   <button
                     type="button"
                     onClick={() => openEdit(row)}
-                    className={cn(LINK, "justify-self-start")}
+                    className={cn(EDIT_LINK, "justify-self-end")}
+                    aria-label={`Edit ${row.name}`}
                   >
                     Edit
                   </button>
@@ -392,20 +469,18 @@ export default function DistributorsPage() {
         open={modalOpen}
         distributor={editing}
         onClose={closeModal}
+        onRemove={handleRemoveDistributor}
         onSave={(distributor) => {
-          setRows((current) => {
-            if (editing) {
-              return current.map((row) =>
-                row.id === editing.id
-                  ? { ...distributor, id: editing.id }
-                  : row,
-              );
-            }
-            return [
-              { ...distributor, id: nextDistributorId(current) },
-              ...current,
-            ];
-          });
+          if (editing) {
+            saveDistributor(
+              { ...distributor, id: editing.id },
+              "update",
+              editing,
+            );
+            return;
+          }
+          const id = nextDistributorId(rows);
+          saveDistributor({ ...distributor, id }, "create");
         }}
       />
     </div>

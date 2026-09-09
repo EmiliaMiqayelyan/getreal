@@ -112,7 +112,7 @@ export function Select({
         aria-controls={listId}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "relative flex items-center text-left outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+          "relative flex cursor-pointer items-center text-left outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50",
           isFlat
             ? "h-auto w-auto gap-1 border-0 bg-transparent p-0 text-[13px]"
             : cn(
@@ -174,7 +174,7 @@ export function Select({
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex w-full px-3 py-2 text-left text-[13px] transition-colors",
+                        "flex w-full cursor-pointer px-3 py-2 text-left text-[13px] transition-colors",
                         "disabled:cursor-not-allowed disabled:opacity-40",
                         isSelected
                           ? "bg-[#28402B] font-medium text-white"

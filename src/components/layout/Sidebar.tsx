@@ -1,5 +1,5 @@
-import { Link, useLocation, useNavigate } from "react-router";
-import { LogOut, X } from "lucide-react";
+import { Link, useLocation } from "react-router";
+import { X } from "lucide-react";
 
 import {
   BellIcon,
@@ -17,9 +17,9 @@ import {
 } from "@/components/icons";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CountBadge } from "@/components/ui/Badge";
-import { APP_NAME, ROUTES } from "@/constants";
+import { APP_NAME } from "@/constants";
 import { getNavSections, getRoleHome, type NavItem } from "@/constants/navigation";
-import { getRole, logout } from "@/lib/auth";
+import { getRole } from "@/lib/auth";
 import { cn } from "@/utils/cn";
 
 const ICONS = {
@@ -74,16 +74,9 @@ type SidebarProps = {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { pathname } = useLocation();
-  const navigate = useNavigate();
   const role = getRole();
   const sections = getNavSections(role);
   const home = getRoleHome(role);
-
-  function handleLogout() {
-    onClose?.();
-    logout();
-    navigate(ROUTES.login, { replace: true });
-  }
 
   return (
     <aside
@@ -135,17 +128,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </div>
         ))}
       </nav>
-
-      <div className="border-t border-white/10 px-3 py-4">
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-white/35 transition-colors hover:bg-white/5 hover:text-white"
-        >
-          <LogOut className="size-[17px] shrink-0" />
-          <span>Log out</span>
-        </button>
-      </div>
     </aside>
   );
 }

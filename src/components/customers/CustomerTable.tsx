@@ -5,7 +5,9 @@ import {
   ChevronRightIcon,
   NoteIcon,
 } from "@/components/icons";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
+import { TABLE_HEADER } from "@/constants/table";
 import type { Customer } from "@/types/customer";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/format";
@@ -52,7 +54,7 @@ export function CustomerTable({ customers }: CustomerTableProps) {
               {COLUMNS.map((column) => (
                 <th
                   key={column}
-                  className="px-3 py-3 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                  className={cn("px-3 py-3", TABLE_HEADER)}
                 >
                   {column}
                 </th>
@@ -136,7 +138,12 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
           {customer.phone}
         </td>
         <td className="px-3 py-3.5 text-sm text-muted-strong">
-          {customer.address}
+          <LocationHover
+            className="text-sm text-muted-strong"
+            fullAddress={customer.address}
+          >
+            {customer.address}
+          </LocationHover>
         </td>
         <td className="px-3 py-3.5 text-sm text-foreground">{customer.orders}</td>
         <td className="px-3 py-3.5 text-sm font-semibold text-foreground">
@@ -149,7 +156,7 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
 
       {expanded ? (
         <tr className="border-b border-[#E4E6EB] last:border-b-0">
-          <td colSpan={COLUMNS.length + 1} className="bg-[#EEF0F4] p-0">
+          <td colSpan={COLUMNS.length + 1} className="bg-background p-0">
             <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
@@ -158,7 +165,7 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
                       {ORDER_COLUMNS.map((column) => (
                         <th
                           key={column}
-                          className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                          className={cn("px-3 py-2", TABLE_HEADER)}
                         >
                           {column}
                         </th>

@@ -1,9 +1,12 @@
 import { useState } from "react";
 
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/icons";
+import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
+import { TABLE_HEADER } from "@/constants/table";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
+import { getDistributorFullAddress } from "@/utils/distributors";
 import { formatPricePerUnit } from "@/utils/format";
 
 type DistributorTableProps = {
@@ -57,7 +60,7 @@ export function DistributorTable({ distributors }: DistributorTableProps) {
               {COLUMNS.map((column) => (
                 <th
                   key={column}
-                  className="px-3 py-3 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                  className={cn("px-3 py-3", TABLE_HEADER)}
                 >
                   {column}
                 </th>
@@ -158,7 +161,12 @@ function DistributorRow({
           </div>
         </td>
         <td className="px-3 py-3.5 text-sm text-muted-strong">
-          {distributor.location}
+          <LocationHover
+            className="text-sm text-muted-strong"
+            fullAddress={getDistributorFullAddress(distributor)}
+          >
+            {distributor.location}
+          </LocationHover>
         </td>
         <td className="px-3 py-3.5 text-sm text-muted-strong">
           {distributor.delivery}
@@ -173,7 +181,7 @@ function DistributorRow({
 
       {expanded ? (
         <tr className="border-b border-[#E4E6EB] last:border-b-0">
-          <td colSpan={COLUMNS.length + 1} className="bg-[#EEF0F4] p-0">
+          <td colSpan={COLUMNS.length + 1} className="bg-background p-0">
             <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
@@ -182,7 +190,7 @@ function DistributorRow({
                       {PRODUCT_COLUMNS.map((column) => (
                         <th
                           key={column}
-                          className="px-3 py-2 text-[11px] font-medium tracking-[0.04em] text-muted uppercase"
+                          className={cn("px-3 py-2", TABLE_HEADER)}
                         >
                           {column}
                         </th>
