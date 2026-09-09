@@ -156,12 +156,12 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
 
       {expanded ? (
         <tr className="border-b border-[#E4E6EB] last:border-b-0">
-          <td colSpan={COLUMNS.length + 1} className="bg-background p-0">
+          <td colSpan={COLUMNS.length + 1} className="bg-[#F9FAFB] p-0">
             <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-[#E4E6EB]">
+                    <tr className="border-b border-[#F0F0EE] bg-white">
                       {ORDER_COLUMNS.map((column) => (
                         <th
                           key={column}
@@ -176,7 +176,7 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
                     {customer.orderHistory.map((order) => (
                       <tr
                         key={order.id}
-                        className="border-b border-[#E4E6EB]/70 last:border-b-0"
+                        className="border-b border-[#F0F0EE] bg-[#F9FAFB] last:border-b-0"
                       >
                         <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
                           {order.id}

@@ -67,7 +67,7 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
         icon: "cart",
       },
       {
-        label: "Packing Coolers",
+        label: "Cooler Packing",
         href: ROUTES.packingCoolers,
         icon: "package",
       },
@@ -102,7 +102,7 @@ export const WAREHOUSE_NAV_SECTIONS: NavSection[] = [
       },
       { label: "Inventory", href: ROUTES.inventory, icon: "inventory" },
       {
-        label: "Packing Coolers",
+        label: "Cooler Packing",
         href: ROUTES.packingCoolers,
         icon: "package",
       },

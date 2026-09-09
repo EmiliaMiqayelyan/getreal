@@ -57,6 +57,13 @@ type ItemCheckState = {
   expiration: string;
   itemId: string;
   reason?: RejectReason;
+  photoName?: string;
+  photoUrl?: string;
+};
+
+type RejectImagePreview = {
+  item: LineItem;
+  result: ItemCheckState;
 };
 
 const DELIVERY_CHIPS: DeliveryChip[] = [
@@ -71,6 +78,67 @@ const REJECT_REASONS: RejectReason[] = [
   "Not Fresh",
   "Missing Exp Date",
 ];
+
+const REJECT_PHOTO_SAMPLE = "/images/receiving-reject-sample.jpg";
+
+function RejectImageDrawer({
+  preview,
+  onClose,
+}: {
+  preview: RejectImagePreview;
+  onClose: () => void;
+}) {
+  const { item, result } = preview;
+  const photoSrc = result.photoUrl;
+
+  return (
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
+      <div className="flex items-start justify-end px-5 pt-4">
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="inline-flex size-10 items-center justify-center rounded-[8px] text-[#A9A9A9] hover:bg-[#F5F5F3] hover:text-[#6B6B6B]"
+        >
+          <X size={20} />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-auto px-6 pb-8">
+        <h2 className="text-[28px] leading-tight font-semibold tracking-tight text-[#111118]">
+          {item.name}
+        </h2>
+        <div className="mt-3">
+          <div className="text-[15px] font-medium text-[#111118]">
+            {item.source}
+          </div>
+          <div className="mt-0.5 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            Source
+          </div>
+        </div>
+
+        <div className="mt-8">
+          {photoSrc ? (
+            <img
+              src={photoSrc}
+              alt={`Problem photo for ${item.name}`}
+              className="h-[180px] w-[220px] rounded-[12px] object-cover"
+            />
+          ) : (
+            <div className="flex h-[180px] w-[220px] items-center justify-center rounded-[12px] bg-[#F5F5F3] text-[13px] text-[#8A8A8A]">
+              No photo attached
+            </div>
+          )}
+          {result.reason ? (
+            <p className="mt-3 text-[15px] font-medium text-[#E25B5B]">
+              {result.reason}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </aside>
+  );
+}
 
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
@@ -108,13 +176,19 @@ function RejectReasonPopover({
   anchor,
   onClose,
   onSelect,
+  onPhoto,
+  hasPhoto = false,
 }: {
   anchor: HTMLElement;
   onClose: () => void;
   onSelect: (reason: RejectReason) => void;
+  onPhoto?: (file: File) => void;
+  hasPhoto?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [photoTaken, setPhotoTaken] = useState(hasPhoto);
 
   useEffect(() => {
     function place() {
@@ -179,7 +253,7 @@ function RejectReasonPopover({
             type="button"
             onClick={() => onSelect(reason)}
             className={cn(
-              "rounded-full px-2.5 py-1.5 text-center text-[11px] font-medium",
+              "h-10 rounded-[10px] px-2.5 text-center text-[11px] font-medium",
               reason === "Missing Exp Date"
                 ? "bg-[#FDECEC] text-[#E25B5B]"
                 : "bg-[#F3F3F1] text-[#111118] hover:bg-[#ECECEA]",
@@ -190,12 +264,28 @@ function RejectReasonPopover({
         ))}
       </div>
       <div className="mt-3 border-t border-[#F0F0EE] pt-2.5">
+        <input
+          ref={photoInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            setPhotoTaken(true);
+            onPhoto?.(file);
+            // Allow taking another photo of the same item.
+            event.target.value = "";
+          }}
+        />
         <button
           type="button"
-          className="inline-flex w-full items-center justify-center gap-1.5 text-[12px] font-medium text-[#111118]"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#F3F3F1] text-[12px] font-medium text-[#111118] hover:bg-[#ECECEA]"
+          onClick={() => photoInputRef.current?.click()}
         >
           <Camera size={14} />
-          Take photo of problem
+          {photoTaken ? "Photo attached · Retake" : "Take photo of problem"}
         </button>
       </div>
     </div>,
@@ -296,7 +386,7 @@ function ExpirationDatePicker({
         aria-expanded={open}
         aria-label="Expiration date"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-8 w-[128px] items-center rounded-full border border-[#E0E0DE] bg-white pr-3 pl-9 text-left text-[13px] text-[#111118] outline-none"
+        className="relative flex h-10 w-[128px] items-center rounded-[8px] border border-[#E0E0DE] bg-white pr-3 pl-9 text-left text-[13px] text-[#111118] outline-none"
       >
         <Calendar
           size={14}
@@ -323,17 +413,17 @@ function ExpirationDatePicker({
                     type="button"
                     aria-label="Previous month"
                     onClick={() => shiftMonth(-1)}
-                    className="flex size-7 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
+                    className="flex size-10 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
                   >
-                    <ChevronLeft size={14} />
+                    <ChevronLeft size={16} />
                   </button>
                   <button
                     type="button"
                     aria-label="Next month"
                     onClick={() => shiftMonth(1)}
-                    className="flex size-7 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
+                    className="flex size-10 items-center justify-center rounded-[8px] hover:bg-[#F5F5F3]"
                   >
-                    <ChevronRight size={14} />
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               </div>
@@ -361,7 +451,7 @@ function ExpirationDatePicker({
                         setOpen(false);
                       }}
                       className={cn(
-                        "rounded-full py-1.5 text-[13px] text-[#111118]",
+                        "inline-flex size-10 items-center justify-center rounded-full text-[13px] text-[#111118]",
                         isSelected
                           ? "bg-[#28402B] font-semibold text-white"
                           : isToday
@@ -426,7 +516,43 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
       { id: "li-13", itemCode: "ID-021-02", name: "Blueberries", category: "Fruits", quantity: 1, unit: "Box", source: "FreshMarket Co.", unitPrice: 12.5, priceLabel: "$12.50/box" },
     ],
   },
+  {
+    id: "DP-1038",
+    distributor: "4PF Co.",
+    orderDate: "Jul 14, 10:12 AM",
+    expectedDelivery: "Jul 16, 8:00 AM",
+    totalPrice: 355,
+    checked: true,
+    items: [
+      { id: "li-r1", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 125, priceLabel: "$125/case" },
+      { id: "li-r2", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 90, priceLabel: "$90/case" },
+      { id: "li-r3", itemCode: "ID-015-04", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 50, priceLabel: "$50/case" },
+    ],
+  },
 ];
+
+const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {
+  "DP-1038": {
+    "li-r1": {
+      status: "accepted",
+      expiration: "2026-08-01",
+      itemId: "ID-002-02",
+    },
+    "li-r2": {
+      status: "accepted",
+      expiration: "2026-08-01",
+      itemId: "ID-001-10",
+    },
+    "li-r3": {
+      status: "rejected",
+      expiration: "",
+      itemId: "ID-015-04",
+      reason: "Missing Exp Date",
+      photoName: "problem.jpg",
+      photoUrl: REJECT_PHOTO_SAMPLE,
+    },
+  },
+};
 
 function currency(value: number) {
   return `$${value.toLocaleString(undefined, {
@@ -483,7 +609,7 @@ function CheckOrderView({
   }
 
   const col =
-    "grid-cols-[220px_40px_52px_132px_118px_minmax(0,1fr)_200px]";
+    "grid-cols-[220px_48px_56px_140px_minmax(200px,auto)_minmax(0,1fr)_220px]";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -552,7 +678,7 @@ function CheckOrderView({
                       <span className="text-[13px] font-medium text-[#111118]">
                         {item.unit}
                       </span>
-                      <div className="w-[128px]">
+                      <div className="w-[140px]">
                         <ExpirationDatePicker
                           value={state.expiration}
                           onChange={(expiration) =>
@@ -560,29 +686,30 @@ function CheckOrderView({
                           }
                         />
                       </div>
-                      <input
-                        type="text"
-                        value={state.itemId}
-                        onChange={(event) =>
-                          updateCheck(item.id, { itemId: event.target.value })
-                        }
-                        className="h-8 w-[118px] rounded-full border border-[#E0E0DE] bg-white px-3 text-[12px] text-[#111118] outline-none"
-                      />
-                      <span aria-hidden />
-                      <div className="flex items-center gap-x-3 whitespace-nowrap">
+                      <div className="flex items-center gap-x-2.5">
                         <button
                           type="button"
-                          className="text-[13px] font-medium"
+                          className="inline-flex h-10 shrink-0 items-center rounded-[10px] px-3 text-[13px] font-medium"
                           style={{ color: LINK_BLUE }}
                         >
                           Print
                         </button>
-
+                        <input
+                          type="text"
+                          value={state.itemId}
+                          onChange={(event) =>
+                            updateCheck(item.id, { itemId: event.target.value })
+                          }
+                          className="h-10 w-[118px] rounded-[8px] border border-[#E0E0DE] bg-white px-3 text-[13px] text-[#111118] outline-none"
+                        />
+                      </div>
+                      <span aria-hidden />
+                      <div className="flex items-center gap-x-2 whitespace-nowrap">
                         {state.status === "accepted" ? (
                           <>
                             <button
                               type="button"
-                              className="text-[13px] font-medium text-[#E25B5B]"
+                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#E25B5B]"
                               onClick={() =>
                                 updateCheck(item.id, {
                                   status: "pending",
@@ -592,15 +719,15 @@ function CheckOrderView({
                             >
                               Reject
                             </button>
-                            <span className="inline-flex size-6 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                              <Check size={13} strokeWidth={3} />
+                            <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                              <Check size={14} strokeWidth={3} />
                             </span>
                           </>
                         ) : state.status === "rejected" ? (
                           <>
                             <button
                               type="button"
-                              className="text-[13px] font-medium"
+                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
                               style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, {
@@ -611,15 +738,15 @@ function CheckOrderView({
                             >
                               Accept
                             </button>
-                            <span className="inline-flex size-6 items-center justify-center rounded-full bg-[#E25B5B] text-white">
-                              <X size={13} strokeWidth={3} />
+                            <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#E25B5B] text-white">
+                              <X size={14} strokeWidth={3} />
                             </span>
                           </>
                         ) : (
                           <>
                             <button
                               type="button"
-                              className="text-[13px] font-medium text-[#E25B5B]"
+                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#E25B5B]"
                               onClick={(event) => {
                                 if (rejectFor === item.id) {
                                   setRejectFor(null);
@@ -634,7 +761,7 @@ function CheckOrderView({
                             </button>
                             <button
                               type="button"
-                              className="text-[13px] font-medium"
+                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
                               style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, { status: "accepted" })
@@ -666,14 +793,23 @@ function CheckOrderView({
             setRejectFor(null);
             setRejectAnchor(null);
           }}
+          onPhoto={(file) => {
+            updateCheck(rejectFor, {
+              photoName: file.name,
+              photoUrl: URL.createObjectURL(file),
+            });
+          }}
+          hasPhoto={Boolean(
+            checks[rejectFor]?.photoName || checks[rejectFor]?.photoUrl,
+          )}
         />
       ) : null}
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
+      <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={onClose}
-          className="text-[14px] font-medium text-[#111118]"
+          className="inline-flex h-10 items-center rounded-[10px] px-4 text-[14px] font-medium text-[#111118]"
         >
           Cancel & Close
         </button>
@@ -682,7 +818,7 @@ function CheckOrderView({
             type="button"
             disabled={!allResolved}
             onClick={() => setPhase("review")}
-            className="rounded-[8px] px-5 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40"
+            className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white disabled:opacity-40"
             style={{ background: ORANGE }}
           >
             Review Order
@@ -691,7 +827,7 @@ function CheckOrderView({
           <button
             type="button"
             onClick={() => onAccepted(order.id, checks)}
-            className="rounded-[8px] px-5 py-2.5 text-[14px] font-semibold text-white"
+            className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white"
             style={{ background: ORANGE }}
           >
             Accept Order
@@ -714,13 +850,16 @@ export default function DistributorDeliveriesPage() {
   const [productFilter, setProductFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(["DP-1043"]),
+    () => new Set(["DP-1043", "DP-1038"]),
   );
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [itemResults, setItemResults] = useState<
     Record<string, Record<string, ItemCheckState>>
-  >({});
+  >(() => INITIAL_ITEM_RESULTS);
+  const [imagePreview, setImagePreview] = useState<RejectImagePreview | null>(
+    null,
+  );
 
   const checkingOrder =
     orders.find((order) => order.id === checkingId) ?? null;
@@ -847,7 +986,7 @@ export default function DistributorDeliveriesPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
 
@@ -876,64 +1015,65 @@ export default function DistributorDeliveriesPage() {
               ]}
             />
           </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {DELIVERY_CHIPS.map((chip) => {
-              const active = activeChip === chip.id;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => setActiveChip(chip.id)}
-                  className={cn(
-                    "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
-                    active
-                      ? "border-transparent text-white"
-                      : "border-[#ECECEA] bg-white text-[#111118]",
-                  )}
-                  style={active ? { background: GREEN } : undefined}
-                >
-                  <span className="text-[13px] font-semibold">{chip.label}</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      active
-                        ? "bg-[#3D5A40] text-white"
-                        : "bg-[#F3F3F1] text-[#6B6B6B]",
-                    )}
-                  >
-                    {chip.count}
-                  </span>
-                </button>
-              );
-            })}
-
-            <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-              >
-                <ChevronRight size={15} />
-              </button>
-              <button
-                type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-              >
-                <Calendar size={14} />
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-        <h2 className="mb-3 text-[20px] font-semibold text-[#111118]">
+        <div className="mb-5 flex flex-wrap items-center gap-2">
+          {DELIVERY_CHIPS.map((chip) => {
+            const active = activeChip === chip.id;
+            return (
+              <button
+                key={chip.id}
+                type="button"
+                onClick={() => setActiveChip(chip.id)}
+                className={cn(
+                  "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                  active
+                    ? "border-transparent text-white"
+                    : "border-[#ECECEA] bg-white text-[#111118]",
+                )}
+                style={active ? { background: GREEN } : undefined}
+              >
+                <span className="text-[13px] font-semibold">{chip.label}</span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                    active
+                      ? "bg-[#3D5A40] text-white"
+                      : "bg-[#F3F3F1] text-[#6B6B6B]",
+                  )}
+                >
+                  {chip.count}
+                </span>
+              </button>
+            );
+          })}
+
+          <div className="ml-auto flex items-center gap-2">
+            <button
+              type="button"
+              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <button
+              type="button"
+              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+            >
+              <ChevronRight size={16} />
+            </button>
+            <button
+              type="button"
+              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+            >
+              <Calendar size={16} />
+            </button>
+          </div>
+        </div>
+
+        <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
           Receiving Log
         </h2>
 
@@ -954,137 +1094,146 @@ export default function DistributorDeliveriesPage() {
             <div>Action</div>
           </div>
 
-          {filtered.map((order) => {
-            const open = expanded.has(order.id);
-            const results = itemResults[order.id];
+          <div className="divide-y-[5px] divide-[#F0F0EE]">
+            {filtered.map((order) => {
+              const open = expanded.has(order.id);
+              const results = itemResults[order.id];
 
-            return (
-              <div
-                key={order.id}
-                className={cn(
-                  "border-b border-[#F0F0EE] last:border-b-0",
-                  open && "bg-[#F7F7F5]",
-                )}
-              >
-                <div className={cn(ROW_GRID, "px-4 py-3.5")}>
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse" : "Expand"}
-                    onClick={() => toggleExpanded(order.id)}
-                    className="flex items-center justify-center"
-                  >
-                    <ChevronDown
-                      size={15}
-                      className={cn(
-                        "shrink-0 transition-transform",
-                        open
-                          ? "rotate-0 text-[#E25B5B]"
-                          : "-rotate-90 text-[#6A6A6A]",
-                      )}
-                    />
-                  </button>
-
-                  <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                    {order.id}
-                  </span>
-                  <span className="truncate text-[14px] font-semibold text-[#111118]">
-                    {order.distributor}
-                  </span>
-                  <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                    {order.orderDate}
-                  </span>
-                  <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                    {order.expectedDelivery}
-                  </span>
-                  <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
-                    {currency(order.totalPrice)}
-                  </span>
-                  <div aria-hidden />
-                  <div>
-                    {order.checked ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(order.id)}
-                        className="inline-flex items-center gap-1.5 text-[13px] font-medium"
-                        style={{ color: LINK_BLUE }}
-                      >
-                        View
-                        <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                          <Check size={10} strokeWidth={3} />
-                        </span>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setCheckingId(order.id)}
-                        className="text-[13px] font-medium"
-                        style={{ color: LINK_BLUE }}
-                      >
-                        Validate
-                      </button>
+              return (
+                <div key={order.id} className="bg-white">
+                  <div
+                    className={cn(
+                      ROW_GRID,
+                      "px-4 py-3.5",
+                      open && "border-b border-[#F0F0EE]",
                     )}
-                  </div>
-                </div>
+                  >
+                    <button
+                      type="button"
+                      aria-label={open ? "Collapse" : "Expand"}
+                      onClick={() => toggleExpanded(order.id)}
+                      className="flex items-center justify-center"
+                    >
+                      <ChevronDown
+                        size={15}
+                        className={cn(
+                          "shrink-0 transition-transform",
+                          open
+                            ? "rotate-0 text-[#E25B5B]"
+                            : "-rotate-90 text-[#6A6A6A]",
+                        )}
+                      />
+                    </button>
 
-                {open
-                  ? order.items.map((item) => {
-                      const result = results?.[item.id];
-                      const rejected = result?.status === "rejected";
-
-                      return (
-                        <div
-                          key={item.id}
-                          className={cn(
-                            ROW_GRID,
-                            "border-t border-[#ECECEA] px-4 py-3 text-[13px]",
-                          )}
+                    <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                      {order.id}
+                    </span>
+                    <span className="truncate text-[14px] font-semibold text-[#111118]">
+                      {order.distributor}
+                    </span>
+                    <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
+                      {order.orderDate}
+                    </span>
+                    <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
+                      {order.expectedDelivery}
+                    </span>
+                    <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
+                      {currency(order.totalPrice)}
+                    </span>
+                    <div aria-hidden />
+                    <div>
+                      {order.checked ? (
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(order.id)}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-medium"
+                          style={{ color: LINK_BLUE }}
                         >
-                          <div />
-                          <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                            {result?.itemId ?? item.itemCode}
+                          View
+                          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                            <Check size={11} strokeWidth={3} />
                           </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCheckingId(order.id)}
+                          className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
+                          style={{ color: LINK_BLUE }}
+                        >
+                          Validate
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {open
+                    ? order.items.map((item, itemIndex) => {
+                        const result = results?.[item.id];
+                        const rejected = result?.status === "rejected";
+
+                        return (
                           <div
+                            key={item.id}
                             className={cn(
-                              "min-w-0 truncate",
-                              rejected ? "text-[#E25B5B]" : "text-[#111118]",
+                              ROW_GRID,
+                              "bg-[#F9FAFB] px-4 py-3 text-[13px]",
+                              itemIndex < order.items.length - 1 &&
+                                "border-b border-[#F0F0EE]",
                             )}
                           >
-                            {item.name}
+                            <div />
+                            <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                              {result?.itemId ?? item.itemCode}
+                            </span>
+                            <div
+                              className={cn(
+                                "min-w-0 truncate",
+                                rejected ? "text-[#E25B5B]" : "text-[#111118]",
+                              )}
+                            >
+                              {item.name}
+                            </div>
+                            <div className="truncate text-[#8A8A8A]">
+                              {item.source}
+                            </div>
+                            <div />
+                            <div className="whitespace-nowrap">
+                              {rejected && result?.reason ? (
+                                <span className="font-medium text-[#E25B5B]">
+                                  Rejected · {result.reason}
+                                </span>
+                              ) : (
+                                <span className="text-[#111118]">
+                                  {item.priceLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div aria-hidden />
+                            <div>
+                              {rejected ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
+                                  style={{ color: LINK_BLUE }}
+                                  onClick={() =>
+                                    result
+                                      ? setImagePreview({ item, result })
+                                      : undefined
+                                  }
+                                >
+                                  Image
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
-                          <div className="truncate text-[#8A8A8A]">
-                            {item.source}
-                          </div>
-                          <div />
-                          <div className="whitespace-nowrap">
-                            {rejected && result?.reason ? (
-                              <span className="font-medium text-[#E25B5B]">
-                                Rejected · {result.reason}
-                              </span>
-                            ) : (
-                              <span className="text-[#111118]">
-                                {item.priceLabel}
-                              </span>
-                            )}
-                          </div>
-                          <div aria-hidden />
-                          <div>
-                            {rejected ? (
-                              <button
-                                type="button"
-                                className="text-[12px] font-medium"
-                                style={{ color: LINK_BLUE }}
-                              >
-                                Image
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      );
-                    })
-                  : null}
-              </div>
-            );
-          })}
+                        );
+                      })
+                    : null}
+                </div>
+              );
+            })}
+          </div>
 
           {!filtered.length ? (
             <div className="px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
@@ -1092,6 +1241,14 @@ export default function DistributorDeliveriesPage() {
             </div>
           ) : null}
         </ScrollTable>
+      </div>
+
+        {imagePreview ? (
+          <RejectImageDrawer
+            preview={imagePreview}
+            onClose={() => setImagePreview(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

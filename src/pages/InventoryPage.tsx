@@ -20,15 +20,15 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
-const GREEN = "#28402B";
+const GREEN = "#2B5B31";
 
 const LOCATION_OPTIONS = [
-  "Freezer 1",
-  "Freezer 2",
-  "Freezer 3",
   "Fridge 1",
   "Fridge 2",
   "Fridge 3",
+  "Freezer 1",
+  "Freezer 2",
+  "Freezer 3",
   "Dry Shelf 1",
   "Dry Shelf 2",
   "Dry Shelf 3",
@@ -85,12 +85,6 @@ type ReceivedOrder = {
   itemsCount: string;
   receivedAt: string;
   sections: StockSection[];
-};
-
-type EditLocationTarget = {
-  sectionTitle: string;
-  productId: string;
-  lotIndex: number;
 };
 
 type DistributeTarget = {
@@ -403,7 +397,7 @@ const PRODUCT_MATCH: Record<string, string> = {
 };
 
 const GRID =
-  "grid grid-cols-[28px_100px_1.15fr_1.1fr_1.25fr_100px_80px_70px_120px] items-center gap-2";
+  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3";
 
 const STOCK_GRID =
   "grid grid-cols-[104px_220px_48px_60px_148px_112px_200px_minmax(0,1fr)_100px] items-center gap-x-5";
@@ -447,7 +441,7 @@ function QtyStepper({
         type="button"
         aria-label="Decrease quantity"
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="flex size-7 items-center justify-center rounded-[6px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
+        className="flex size-10 items-center justify-center rounded-[8px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
         <Minus size={13} strokeWidth={2.5} />
       </button>
@@ -458,7 +452,7 @@ function QtyStepper({
         type="button"
         aria-label="Increase quantity"
         onClick={() => onChange(value + 1)}
-        className="flex size-7 items-center justify-center rounded-[6px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
+        className="flex size-10 items-center justify-center rounded-[8px] bg-[#E8EEE9] text-[#111118] hover:bg-[#DDE6DF]"
       >
         <Plus size={13} strokeWidth={2.5} />
       </button>
@@ -476,28 +470,122 @@ function LocationSelect({
   className?: string;
 }) {
   return (
-    <Select
+    <FlatLocationSelect
       value={value}
       onChange={onChange}
-      className={cn("w-full", className)}
-      aria-label="Location"
-      options={[
-        { value: "", label: "Select Location" },
-        ...LOCATION_OPTIONS.map((location) => ({
-          value: location,
-          label: location,
-        })),
-      ]}
+      className={className}
     />
+  );
+}
+
+function InventoryLocationCell({
+  location,
+  onChangeLocation,
+}: {
+  location: string;
+  onChangeLocation: (location: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div
+      ref={rootRef}
+      className="group/location relative flex min-w-0 items-center gap-1.5"
+    >
+      <LocationHover
+        className="min-w-0 flex-1 text-[12px] text-[#111118]"
+        fullAddress={location}
+        label="Location"
+      >
+        {location}
+      </LocationHover>
+      <button
+        type="button"
+        aria-label="Change location"
+        title="Change location"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-[8px] hover:bg-[#F0F0EE]"
+      >
+        <img
+          src="/icons/change-location.png"
+          alt=""
+          width={16}
+          height={18}
+          className="opacity-70"
+        />
+      </button>
+      {open ? (
+        <ul
+          role="listbox"
+          className="absolute top-[calc(100%+6px)] right-0 z-50 max-h-60 min-w-[168px] overflow-auto rounded-[10px] border border-[#E6E6E3] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+        >
+          {LOCATION_OPTIONS.map((option, index) => {
+            const selected = location === option;
+            return (
+              <li
+                key={option}
+                role="presentation"
+                className={cn(
+                  index < LOCATION_OPTIONS.length - 1 &&
+                    "border-b border-[#F0F0EE]",
+                )}
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    onChangeLocation(option);
+                    setOpen(false);
+                  }}
+                  className={cn(
+                    "flex w-full px-4 py-3 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]",
+                    selected && "font-medium",
+                  )}
+                >
+                  {option}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
 function FlatLocationSelect({
   value,
   onChange,
+  className,
 }: {
   value: string;
   onChange: (value: string) => void;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -525,52 +613,42 @@ function FlatLocationSelect({
   }, [open]);
 
   return (
-    <div ref={rootRef} className="relative min-w-0">
+    <div ref={rootRef} className={cn("relative min-w-0", className)}>
       <button
         type="button"
         aria-label="Location"
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex items-center gap-1.5 text-left text-[14px] text-[#111118]"
+        className="inline-flex h-10 max-w-full items-center gap-1.5 rounded-[8px] px-1 text-left text-[13px] text-[#111118]"
       >
         <ChevronDown
           size={14}
           className={cn(
-            "shrink-0 text-[#6B6B6B] transition-transform",
+            "shrink-0 text-[#111118] transition-transform",
             open && "rotate-180",
           )}
         />
-        <span className={cn(!value && "text-[#8A8A8A]")}>{label}</span>
+        <span className={cn("truncate", !value && "text-[#111118]")}>
+          {label}
+        </span>
       </button>
       {open ? (
         <ul
           role="listbox"
-          className="absolute top-[calc(100%+6px)] left-0 z-50 max-h-60 min-w-[180px] overflow-auto rounded-[8px] border border-[#E6E6E3] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          className="absolute top-[calc(100%+6px)] left-0 z-50 max-h-60 min-w-[168px] overflow-auto rounded-[10px] border border-[#E6E6E3] bg-white shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
         >
-          <li role="presentation">
-            <button
-              type="button"
-              role="option"
-              aria-selected={!value}
-              onClick={() => {
-                onChange("");
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full px-3 py-2 text-left text-[13px]",
-                !value
-                  ? "bg-[#28402B] font-medium text-white"
-                  : "text-[#111118] hover:bg-[#F5F5F3]",
-              )}
-            >
-              Select Location
-            </button>
-          </li>
-          {LOCATION_OPTIONS.map((location) => {
+          {LOCATION_OPTIONS.map((location, index) => {
             const selected = value === location;
             return (
-              <li key={location} role="presentation">
+              <li
+                key={location}
+                role="presentation"
+                className={cn(
+                  index < LOCATION_OPTIONS.length - 1 &&
+                    "border-b border-[#F0F0EE]",
+                )}
+              >
                 <button
                   type="button"
                   role="option"
@@ -580,10 +658,8 @@ function FlatLocationSelect({
                     setOpen(false);
                   }}
                   className={cn(
-                    "flex w-full px-3 py-2 text-left text-[13px]",
-                    selected
-                      ? "bg-[#28402B] font-medium text-white"
-                      : "text-[#111118] hover:bg-[#F5F5F3]",
+                    "flex w-full px-4 py-3 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]",
+                    selected && "font-medium",
                   )}
                 >
                   {location}
@@ -818,7 +894,7 @@ function StockItemsView({
                 <div
                   className={cn(
                     STOCK_GRID,
-                    "border-b border-[#E8E8E6] bg-[#F0F0EE] px-4 py-2.5",
+                    "border-b border-[#E8E8E6] bg-[#FBF9F9] px-4 py-2.5",
                   )}
                 >
                   <span className="col-span-2 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
@@ -874,7 +950,7 @@ function StockItemsView({
                           qtyAfterUnpack: event.target.value,
                         })
                       }
-                      className="h-8 w-14 rounded-[8px] border-[#E6E6E3] px-1 text-center text-[12px]"
+                      className="h-10 w-[56px] rounded-[8px] border-[#E6E6E3] px-2 text-left text-[13px] text-[#111118] focus:border-[#C8C8C6]"
                     />
                     <span className="whitespace-nowrap">{item.expDate}</span>
                     <div className="group flex min-w-0 items-center gap-1.5">
@@ -900,15 +976,15 @@ function StockItemsView({
                         type="button"
                         aria-label="Distribute item"
                         onClick={() => openDistribute(section.title, item)}
-                        className="shrink-0 rounded-md p-1.5 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F5F5F3] hover:text-[#111118]"
+                        className="inline-flex size-10 shrink-0 items-center justify-center rounded-[8px] text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
                       >
-                        <ArrowUpDown size={15} />
+                        <ArrowUpDown size={16} />
                       </button>
                     </div>
                     <span aria-hidden />
                     <button
                       type="button"
-                      className="justify-self-end whitespace-nowrap text-[13px] font-medium text-[#3B82F6] hover:underline"
+                      className="inline-flex h-10 items-center justify-self-end rounded-[10px] px-3 text-[13px] font-medium text-[#3B82F6]"
                     >
                       Print Label
                     </button>
@@ -920,18 +996,18 @@ function StockItemsView({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
+      <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={onClose}
-          className="text-[14px] font-medium text-[#111118]"
+          className="inline-flex h-10 items-center rounded-[10px] px-4 text-[14px] font-medium text-[#111118]"
         >
           Cancel & Close
         </button>
         <button
           type="button"
           onClick={() => onComplete(draft)}
-          className="rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white"
+          className="inline-flex h-10 items-center rounded-[10px] px-6 text-[14px] font-semibold text-white"
           style={{ background: ORANGE }}
         >
           Complete Storage
@@ -972,23 +1048,8 @@ export default function InventoryPage() {
   );
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
-  const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
-  const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
-
-  const editProduct =
-    editTarget == null
-      ? null
-      : (sections
-          .find((section) => section.title === editTarget.sectionTitle)
-          ?.products.find((product) => product.id === editTarget.productId) ??
-        null);
-
-  const editLot =
-    editProduct && editTarget
-      ? (editProduct.lots[editTarget.lotIndex] ?? null)
-      : null;
 
   const itemOptions = useMemo(
     () =>
@@ -1088,47 +1149,28 @@ export default function InventoryPage() {
     });
   }
 
-  function openEditLocation(
+  function changeLotLocation(
     sectionTitle: string,
-    product: InventoryProduct,
+    productId: string,
     lotIndex: number,
+    location: string,
   ) {
-    const lot = product.lots[lotIndex];
-    if (!lot) return;
-    setEditTarget({ sectionTitle, productId: product.id, lotIndex });
-    setEditSplits(defaultSplits(lot.qty || 6));
-  }
-
-  function confirmEditLocation() {
-    if (!editTarget || !editLot || !editProduct) return;
-
-    const valid = editSplits.filter(
-      (row) => row.qty > 0 && row.location.trim(),
-    );
-    if (!valid.length) return;
-
-    const replacement: InventoryLot[] = valid.map((row) => ({
-      ...editLot,
-      qty: row.qty,
-      location: row.location,
-    }));
-
     setSections((current) =>
       current.map((section) =>
-        section.title !== editTarget.sectionTitle
+        section.title !== sectionTitle
           ? section
           : {
               ...section,
               products: section.products.map((product) => {
-                if (product.id !== editTarget.productId) return product;
-                const nextLots = [...product.lots];
-                nextLots.splice(editTarget.lotIndex, 1, ...replacement);
+                if (product.id !== productId) return product;
+                const nextLots = product.lots.map((lot, index) =>
+                  index === lotIndex ? { ...lot, location } : lot,
+                );
                 return { ...product, lots: nextLots };
               }),
             },
       ),
     );
-    setEditTarget(null);
   }
 
   function completeStorage(order: ReceivedOrder) {
@@ -1218,7 +1260,7 @@ export default function InventoryPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
 
@@ -1274,20 +1316,25 @@ export default function InventoryPage() {
                 <button
                   type="button"
                   onClick={() => setStoringId(order.id)}
-                  className="grid w-full min-w-[640px] grid-cols-[150px_1.6fr_0.8fr_1.2fr_40px] items-center rounded-full px-3 py-3 text-left text-white sm:px-4"
+                  className="grid w-full min-w-[720px] grid-cols-[140px_minmax(0,1.4fr)_100px_minmax(160px,1fr)_32px] items-center gap-x-4 rounded-[12px] px-5 py-3.5 text-left text-white"
                   style={{ background: GREEN }}
                 >
-                  <span className="inline-flex w-fit items-center rounded-full bg-[#1E3222] px-3 py-1.5 text-[12px] font-medium">
+                  <span className="border-r border-white/30 pr-4 text-[13px] font-medium whitespace-nowrap">
                     Order Received
                   </span>
-                  <span className="border-l border-white/25 pl-5 text-[14px] font-semibold">
+                  <span className="truncate text-[14px] font-semibold">
                     {order.supplier}
                   </span>
-                  <span className="text-[13px]">{order.itemsCount}</span>
-                  <span className="text-[13px]">{order.receivedAt}</span>
+                  <span className="text-[13px] whitespace-nowrap">
+                    {order.itemsCount}
+                  </span>
+                  <span className="text-[13px] whitespace-nowrap">
+                    {order.receivedAt}
+                  </span>
                   <ChevronRight
-                    size={16}
-                    className="justify-self-end text-white/90"
+                    size={28}
+                    strokeWidth={2.25}
+                    className="justify-self-end text-white"
                   />
                 </button>
               </div>
@@ -1303,11 +1350,13 @@ export default function InventoryPage() {
           <div className="space-y-5">
             {filteredSections.map((section) => (
               <div key={section.title}>
-                <h3 className="mb-2 px-1 text-[15px] font-semibold text-[#111118]">
-                  {section.title}
-                </h3>
+                <ScrollTable minWidth={1100} className="rounded-[12px]">
+                  <div className="border-b border-[#E8E8E6] bg-[#FBF9F9] px-3 py-2.5">
+                    <span className="text-[14px] font-semibold text-[#111118]">
+                      {section.title}
+                    </span>
+                  </div>
 
-                <ScrollTable minWidth={980} className="rounded-[12px]">
                   <div
                     className={cn(
                       GRID,
@@ -1315,14 +1364,14 @@ export default function InventoryPage() {
                     )}
                   >
                     <div />
-                    <div>Order ID</div>
-                    <div>Distributor</div>
-                    <div>{section.sourceLabel}</div>
-                    <div>Delivery Date</div>
-                    <div>Purchased</div>
-                    <div>Qty Portion</div>
-                    <div>Unit</div>
-                    <div>Location</div>
+                    <div className="whitespace-nowrap">Order ID</div>
+                    <div className="whitespace-nowrap">Distributor</div>
+                    <div className="whitespace-nowrap">{section.sourceLabel}</div>
+                    <div className="whitespace-nowrap">Delivery Date</div>
+                    <div className="whitespace-nowrap">Purchased</div>
+                    <div className="whitespace-nowrap">Qty Portion</div>
+                    <div className="whitespace-nowrap">Unit</div>
+                    <div className="whitespace-nowrap">Location</div>
                   </div>
 
                   {section.products.map((product, index) => {
@@ -1354,81 +1403,84 @@ export default function InventoryPage() {
                               )}
                             />
                           </span>
-                          <div className="col-span-5 text-[13px] font-semibold text-[#111118]">
+                          <div className="col-span-5 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                             {product.name}
                           </div>
-                          <div className="text-[13px] font-semibold text-[#111118]">
-                            {total}
+                          <div
+                            className={cn(
+                              "text-[13px] font-semibold whitespace-nowrap",
+                              total === 0
+                                ? "text-[#E25B5B]"
+                                : "text-[#111118]",
+                            )}
+                          >
+                            {total === 0 ? "Empty" : total}
                           </div>
                           <div />
                           <div />
                         </button>
 
                         {open ? (
-                          <div className="overflow-x-auto">
-                            <div className="min-w-[980px]">
-                              {product.lots.length ? (
-                                product.lots.map((lot, lotIndex) => (
-                                  <div
-                                    key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
-                                    className={cn(
-                                      GRID,
-                                      "group bg-[#FAFAF8] px-3 py-3 text-[12px] text-[#111118]",
-                                      lotIndex < product.lots.length - 1
-                                        ? "border-b border-[#F0F0EE]"
-                                        : "",
-                                    )}
-                                  >
-                                    <div />
-                                    <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                                      {lot.orderId}
-                                    </span>
-                                    <div>{lot.distributor}</div>
-                                    <div>{lot.source}</div>
-                                    <div>{lot.deliveryDate}</div>
-                                    <div>{lot.purchased}</div>
-                                    <div className="font-semibold">{lot.qty}</div>
-                                    <div>{lot.unit}</div>
-                                    <div className="flex min-w-0 items-center gap-1">
-                                      <LocationHover
-                                        className="min-w-0 flex-1 text-[12px] text-[#111118]"
-                                        fullAddress={lot.location}
-                                        label="Location"
-                                      >
-                                        {lot.location}
-                                      </LocationHover>
-                                      <button
-                                        type="button"
-                                        aria-label="Edit location"
-                                        onClick={() =>
-                                          openEditLocation(
-                                            section.title,
-                                            product,
-                                            lotIndex,
-                                          )
-                                        }
-                                        className="shrink-0 rounded-md p-1 text-[#8A8A8A] opacity-0 transition-opacity group-hover:opacity-100 hover:bg-[#F0F0EE] hover:text-[#111118]"
-                                      >
-                                        <ArrowUpDown size={14} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ))
-                              ) : (
+                          <div>
+                            {product.lots.length ? (
+                              product.lots.map((lot, lotIndex) => (
                                 <div
+                                  key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
                                   className={cn(
                                     GRID,
-                                    "bg-[#F7F7F5] px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                    "group bg-[#F9FAFB] px-3 py-3 text-[12px] text-[#111118]",
+                                    lotIndex < product.lots.length - 1
+                                      ? "border-b border-[#F0F0EE]"
+                                      : "",
                                   )}
                                 >
                                   <div />
-                                  <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 text-center text-[11px]">
-                                    -
+                                  <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                                    {lot.orderId}
                                   </span>
-                                  <div className="col-span-7">Inventory Empty</div>
+                                  <div className="min-w-0 truncate">
+                                    {lot.distributor}
+                                  </div>
+                                  <div className="min-w-0 truncate">
+                                    {lot.source}
+                                  </div>
+                                  <div className="whitespace-nowrap">
+                                    {lot.deliveryDate}
+                                  </div>
+                                  <div className="whitespace-nowrap">
+                                    {lot.purchased}
+                                  </div>
+                                  <div className="font-semibold">{lot.qty}</div>
+                                  <div className="whitespace-nowrap">
+                                    {lot.unit}
+                                  </div>
+                                  <InventoryLocationCell
+                                    location={lot.location}
+                                    onChangeLocation={(nextLocation) =>
+                                      changeLotLocation(
+                                        section.title,
+                                        product.id,
+                                        lotIndex,
+                                        nextLocation,
+                                      )
+                                    }
+                                  />
                                 </div>
-                              )}
-                            </div>
+                              ))
+                            ) : (
+                              <div
+                                className={cn(
+                                  GRID,
+                                  "bg-[#F9FAFB] px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                )}
+                              >
+                                <div />
+                                <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 text-center text-[11px]">
+                                  -
+                                </span>
+                                <div className="col-span-7">Inventory Empty</div>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
@@ -1446,18 +1498,6 @@ export default function InventoryPage() {
           </div>
         ) : null}
       </div>
-
-      <SplitModal
-        open={editTarget != null && editLot != null && editProduct != null}
-        title="Edit Location"
-        itemName={editProduct?.name ?? ""}
-        itemCount={editLot?.qty ?? (editProduct ? stockTotal(editProduct) : 0)}
-        confirmLabel="Edit"
-        splits={editSplits}
-        onChangeSplits={setEditSplits}
-        onClose={() => setEditTarget(null)}
-        onConfirm={confirmEditLocation}
-      />
 
       {showToast ? (
         <div className="pointer-events-none fixed right-6 bottom-6 flex items-center gap-2 rounded-[10px] bg-[#12B72A] px-6 py-4 text-[14px] font-medium text-white shadow-lg">

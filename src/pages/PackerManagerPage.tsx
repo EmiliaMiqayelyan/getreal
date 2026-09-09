@@ -93,7 +93,7 @@ const INITIAL_ORDERS: ManagerOrder[] = [
 ];
 
 const ROW_GRID =
-  "grid grid-cols-[minmax(180px,max-content)_auto_130px_130px_130px_minmax(0,1fr)] items-center gap-x-4";
+  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8";
 
 const ASSIGN_PANEL_WIDTH = 300;
 
@@ -177,7 +177,7 @@ function AssignPackerMenu({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="h-8 rounded-[8px] border-[#E6E6E3] pl-8 text-[12px]"
+            className="h-10 rounded-[8px] border-[#E6E6E3] pl-8 text-[13px]"
           />
         </div>
       </div>
@@ -311,7 +311,7 @@ export default function PackerManagerPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
             <Select
@@ -360,19 +360,19 @@ export default function PackerManagerPage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronRight size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <Calendar size={14} />
               </button>
@@ -395,7 +395,6 @@ export default function PackerManagerPage() {
             <div>Packing Started</div>
             <div>Cooler Ready</div>
             <div>Loaded</div>
-            <div />
           </div>
 
           {filtered.map((order) => {
@@ -408,7 +407,7 @@ export default function PackerManagerPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "border-b border-[#F3F3F1] px-5 py-4 last:border-b-0",
+                  "h-[104px] border-b border-[#F3F3F1] px-5 last:border-b-0",
                 )}
               >
                 <div>
@@ -437,7 +436,7 @@ export default function PackerManagerPage() {
                           : { orderId: order.id, anchor },
                       );
                     }}
-                    className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+                    className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
                   >
                     <Package size={14} className="text-[#8A8A8A]" />
                     {assigned?.name ?? "Assign Packer"}
@@ -462,7 +461,6 @@ export default function PackerManagerPage() {
                 <div className="text-[13px] text-[#111118]">
                   {order.loadedAt ?? ""}
                 </div>
-                <div aria-hidden />
               </div>
             );
           })}

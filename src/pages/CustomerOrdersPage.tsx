@@ -611,10 +611,10 @@ function OrderDetailPanel({
 }) {
   return (
     <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
-        <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 py-4">
+        <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+              <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                 {order.id}
               </span>
               <span className="text-[12px] text-[#8A8A8A]">
@@ -629,7 +629,7 @@ function OrderDetailPanel({
             type="button"
             aria-label="Close"
             onClick={onClose}
-            className="rounded-md p-1 text-[#8A8A8A] hover:bg-background hover:text-[#111118]"
+            className="rounded-md p-1 text-[#A9A9A9] hover:bg-background hover:text-[#6B6B6B]"
           >
             <X size={18} />
           </button>
@@ -639,8 +639,8 @@ function OrderDetailPanel({
           <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
             Requested Items
           </h3>
-          <div className="overflow-hidden rounded-[10px] border border-[#ECECEA]">
-            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-[#FAFAF8] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
+            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-white px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               <div>Item</div>
               <div>Qty</div>
               <div>Unit Price</div>
@@ -649,21 +649,24 @@ function OrderDetailPanel({
             {order.items.map((item) => (
               <div
                 key={item.name}
-                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
+                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-white px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
               >
                 <div>{item.name}</div>
                 <div>{item.qty}</div>
-                <div>
-                  {currency(item.unitPrice)} / {item.unit}
+                <div className="whitespace-nowrap">
+                  <span>{currency(item.unitPrice)}</span>
+                  <span className="text-[#8A8A8A]"> / {item.unit}</span>
                 </div>
                 <div className="text-right font-semibold">
                   {currency(item.qty * item.unitPrice)}
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between border-t border-[#ECECEA] bg-[#FAFAF8] px-3 py-2.5 text-[13px] font-semibold text-[#111118]">
-              <span>Order Total</span>
-              <span>{currency(order.total)}</span>
+            <div className="flex items-center justify-between border-t border-[#ECECEA] bg-white px-3 py-3 text-[#111118]">
+              <span className="text-[14px] font-semibold">Order Total</span>
+              <span className="text-[18px] font-semibold tracking-tight">
+                {currency(order.total)}
+              </span>
             </div>
           </div>
 
@@ -886,7 +889,7 @@ export default function CustomerOrdersPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
 
@@ -917,9 +920,9 @@ export default function CustomerOrdersPage() {
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+                  className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
                 >
-                  <Calendar size={13} className="text-[#8A8A8A]" />
+                  <Calendar size={14} className="text-[#8A8A8A]" />
                   Select Date
                 </button>
                 <Select
@@ -958,7 +961,7 @@ export default function CustomerOrdersPage() {
                       type="button"
                       onClick={() => setActiveChip(chip.id)}
                       className={cn(
-                        "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                        "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
                         active
                           ? "border-transparent text-white"
                           : "border-[#ECECEA] bg-white text-[#111118]",
@@ -986,27 +989,27 @@ export default function CustomerOrdersPage() {
               <div className="relative flex items-center gap-2">
                 <button
                   type="button"
-                  className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                  className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
                 >
-                  <ChevronLeft size={15} />
+                  <ChevronLeft size={16} />
                 </button>
                 <button
                   type="button"
-                  className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                  className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
                 >
-                  <ChevronRight size={15} />
+                  <ChevronRight size={16} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
                   className={cn(
-                    "flex size-8 items-center justify-center rounded-[8px] border bg-white",
+                    "flex size-10 items-center justify-center rounded-[8px] border bg-white",
                     calendarOpen
                       ? "border-[#28402B] text-[#28402B]"
                       : "border-[#ECECEA] text-[#8A8A8A]",
                   )}
                 >
-                  <Calendar size={14} />
+                  <Calendar size={16} />
                 </button>
 
                 {calendarOpen ? (
@@ -1076,70 +1079,72 @@ export default function CustomerOrdersPage() {
                   ))}
                 </div>
 
-                {filteredActive.map((order) => (
-                  <div
-                    key={order.id}
-                    className="relative border-b border-[#F3F3F1] px-4 py-4 last:border-b-0 sm:px-5"
-                  >
-                    <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedOrderId(order.id)}
-                        className="text-left"
-                      >
-                        <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
-                          {order.customerName}
-                          <ChevronRight size={13} className="text-[#A9A9A9]" />
-                        </div>
-                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                          <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
-                            {order.id}
-                          </span>
-                          <span className="text-[12px] text-[#8A8A8A]">
-                            {order.itemCount} items
-                          </span>
-                        </div>
-                      </button>
+                <div className="divide-y-[5px] divide-[#F0F0EE]">
+                  {filteredActive.map((order) => (
+                    <div
+                      key={order.id}
+                      className="relative bg-white px-4 py-4 sm:px-5"
+                    >
+                      <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className="text-left"
+                        >
+                          <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
+                            {order.customerName}
+                            <ChevronRight size={13} className="text-[#A9A9A9]" />
+                          </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                              {order.id}
+                            </span>
+                            <span className="text-[12px] text-[#8A8A8A]">
+                              {order.itemCount} items
+                            </span>
+                          </div>
+                        </button>
 
-                      <OrderTimelineTrack
-                        order={order}
-                        onStatusClick={(stepKey) =>
-                          setStatusMenu(
-                            statusMenu?.orderId === order.id &&
-                              statusMenu.stepKey === stepKey
-                              ? null
-                              : { orderId: order.id, stepKey },
-                          )
-                        }
-                      />
-                    </div>
-
-                    {statusMenu?.orderId === order.id ? (
-                      <div className="absolute top-12 left-[220px] z-20 w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-                        <div className="mb-2 text-[12px] font-semibold text-[#111118]">
-                          Change Status
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
-                            onClick={() => advanceStatus(order.id, 1)}
-                          >
-                            Requested
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
-                            style={{ background: ORANGE }}
-                            onClick={() => advanceStatus(order.id, 3)}
-                          >
-                            On Route
-                          </button>
-                        </div>
+                        <OrderTimelineTrack
+                          order={order}
+                          onStatusClick={(stepKey) =>
+                            setStatusMenu(
+                              statusMenu?.orderId === order.id &&
+                                statusMenu.stepKey === stepKey
+                                ? null
+                                : { orderId: order.id, stepKey },
+                            )
+                          }
+                        />
                       </div>
-                    ) : null}
-                  </div>
-                ))}
+
+                      {statusMenu?.orderId === order.id ? (
+                        <div className="absolute top-12 left-[220px] z-20 w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+                          <div className="mb-2 text-[12px] font-semibold text-[#111118]">
+                            Change Status
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
+                              onClick={() => advanceStatus(order.id, 1)}
+                            >
+                              Requested
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
+                              style={{ background: ORANGE }}
+                              onClick={() => advanceStatus(order.id, 3)}
+                            >
+                              On Route
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </>
@@ -1160,9 +1165,14 @@ export default function CustomerOrdersPage() {
                       </span>
                     </div>
                     <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                      <div className="border-b border-[#E8E8E6] bg-[#FBF9F9] px-4 py-2.5">
+                        <span className="text-[13px] font-semibold text-[#111118]">
+                          {week}
+                        </span>
+                      </div>
                       <div className="overflow-x-auto">
                         <div className="min-w-[860px]">
-                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                             <div>Order ID</div>
                             <div>Customer</div>
                             <div>Address</div>

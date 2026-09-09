@@ -20,6 +20,7 @@ import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
 const GREEN = "#28402B";
+const PACKED_GREEN = "#3AA149";
 const LINK_BLUE = "#3B82F6";
 
 type DeliveryChip = { id: string; label: string; count: number };
@@ -287,7 +288,7 @@ function SourcePicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="h-8 rounded-[8px] border-[#E6E6E3] pl-8 text-[12px]"
+            className="h-10 rounded-[8px] border-[#E6E6E3] pl-8 text-[13px]"
           />
         </div>
       </div>
@@ -580,7 +581,7 @@ function PackingDetail({
 }
 
 const ROW_GRID =
-  "grid grid-cols-[minmax(200px,max-content)_140px_minmax(140px,max-content)_120px_minmax(0,1fr)] items-center gap-x-4";
+  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8";
 
 export default function PackingCoolersPage() {
   useDocumentTitle("Cooler Packing");
@@ -657,7 +658,7 @@ export default function PackingCoolersPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
             <Select
@@ -681,7 +682,7 @@ export default function PackingCoolersPage() {
                   type="button"
                   onClick={() => setActiveChip(chip.id)}
                   className={cn(
-                    "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                    "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
                     active
                       ? "border-transparent text-white"
                       : "border-[#ECECEA] bg-white text-[#111118]",
@@ -706,19 +707,19 @@ export default function PackingCoolersPage() {
             <div className="ml-auto flex items-center gap-2">
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronRight size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-8 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <Calendar size={14} />
               </button>
@@ -740,7 +741,6 @@ export default function PackingCoolersPage() {
             <div>Action</div>
             <div>Cooler ID</div>
             <div>Loading</div>
-            <div />
           </div>
 
           {filtered.map((order) => {
@@ -752,7 +752,7 @@ export default function PackingCoolersPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "border-b border-[#F3F3F1] px-5 py-4 last:border-b-0",
+                  "h-[104px] border-b border-[#F3F3F1] px-5 last:border-b-0",
                 )}
               >
                 <button
@@ -776,15 +776,15 @@ export default function PackingCoolersPage() {
 
                 <div>
                   {packed ? (
-                    <div className="inline-flex flex-col items-start gap-1">
+                    <div className="inline-flex items-center gap-3">
                       <span
-                        className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-white"
-                        style={{ background: GREEN }}
+                        className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                        style={{ background: PACKED_GREEN }}
                       >
                         Packed
                         <Check size={12} strokeWidth={3} />
                       </span>
-                      <span className="text-[11px] text-[#8A8A8A]">
+                      <span className="text-[12px] text-[#111118]">
                         {order.packedAt}
                       </span>
                     </div>
@@ -792,7 +792,7 @@ export default function PackingCoolersPage() {
                     <button
                       type="button"
                       onClick={() => setActiveOrderId(order.id)}
-                      className="rounded-[8px] bg-[#2A2A2A] px-4 py-2 text-[12px] font-medium text-white"
+                      className="inline-flex h-10 items-center rounded-[10px] bg-[#2A2A2A] px-4 text-[12px] font-medium text-white"
                     >
                       Start Packing
                     </button>
@@ -801,20 +801,22 @@ export default function PackingCoolersPage() {
 
                 <div>
                   {packed && order.coolerIds.length ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      {order.coolerIds.map((coolerId) => (
-                        <span
-                          key={coolerId}
-                          className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]"
-                        >
-                          {coolerId}
-                        </span>
-                      ))}
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        {order.coolerIds.map((coolerId) => (
+                          <span
+                            key={coolerId}
+                            className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-1 font-mono text-[11px] text-[#6B6B6B]"
+                          >
+                            {coolerId}
+                          </span>
+                        ))}
+                      </div>
                       {!loaded ? (
                         <button
                           type="button"
                           onClick={() => setActiveOrderId(order.id)}
-                          className="text-[12px] font-medium"
+                          className="inline-flex h-10 items-center text-[13px] font-medium"
                           style={{ color: LINK_BLUE }}
                         >
                           Edit
@@ -827,15 +829,15 @@ export default function PackingCoolersPage() {
                 <div>
                   {packed ? (
                     loaded ? (
-                      <div className="inline-flex flex-col items-start gap-1">
+                      <div className="inline-flex items-center gap-3">
                         <span
-                          className="inline-flex items-center gap-1.5 rounded-[8px] px-3 py-2 text-[12px] font-semibold text-white"
-                          style={{ background: GREEN }}
+                          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                          style={{ background: PACKED_GREEN }}
                         >
                           Loaded
                           <Check size={12} strokeWidth={3} />
                         </span>
-                        <span className="text-[11px] text-[#8A8A8A]">
+                        <span className="text-[12px] text-[#111118]">
                           {order.loadedAt}
                         </span>
                       </div>
@@ -851,14 +853,13 @@ export default function PackingCoolersPage() {
                             ),
                           )
                         }
-                        className="rounded-[8px] bg-[#2A2A2A] px-4 py-2 text-[12px] font-medium text-white"
+                        className="inline-flex h-10 items-center rounded-[10px] bg-[#2A2A2A] px-4 text-[12px] font-medium text-white"
                       >
                         Load Now
                       </button>
                     )
                   ) : null}
                 </div>
-                <div aria-hidden />
               </div>
             );
           })}

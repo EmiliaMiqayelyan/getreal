@@ -32,7 +32,7 @@ export function Select({
   className,
   buttonClassName,
   disabled = false,
-  size = "sm",
+  size = "md",
   variant = "default",
   "aria-label": ariaLabel,
 }: SelectProps) {
