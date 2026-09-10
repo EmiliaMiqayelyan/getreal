@@ -149,13 +149,21 @@ function makeSteps(doneCount: number): TimelineStep[] {
   }));
 }
 
+const EMILY_ORD_U003_01_ITEMS: OrderItem[] = [
+  { name: "Angus Chuck Ground Beef", qty: 3, unit: "lb", unitPrice: 11.25 },
+  { name: "Drumsticks", qty: 2, unit: "lb", unitPrice: 4.5 },
+  { name: "Rib-eye Steak", qty: 1, unit: "lb", unitPrice: 18.5 },
+  { name: "Beets", qty: 1, unit: "bunch", unitPrice: 3.5 },
+  { name: "A2 Cheddar", qty: 1, unit: "8oz", unitPrice: 6.5 },
+];
+
 const ACTIVE_ORDERS: CustomerOrderRow[] = [
   {
     id: "ORD-U003-01",
     customerName: "Emily Rodriguez",
-    itemCount: 6,
+    itemCount: 5,
     address: "1523 Astoria Blvd",
-    apt: "748",
+    apt: "",
     city: "Queens",
     state: "NY",
     zip: "11102",
@@ -164,7 +172,7 @@ const ACTIVE_ORDERS: CustomerOrderRow[] = [
     deliveryLabel: "Wed, Jul 20",
     paymentStatus: "Paid",
     total: 71.25,
-    items: SAMPLE_ITEMS,
+    items: EMILY_ORD_U003_01_ITEMS,
     packerAssigned: "Packer Name 1",
     coolerIds: ["BL-0012", "FR-1423"],
     steps: makeSteps(1),
@@ -419,7 +427,7 @@ function HoverCard({
               </span>
             </div>
           ))}
-          <div className="flex items-center justify-between border-t border-[#F0F0EE] pt-2 text-[12px] font-semibold text-[#111118]">
+          <div className="flex items-center justify-between border-t border-[#F0F0EE] pt-2 text-[12px] font-bold text-[#111118]">
             <span>Order Total</span>
             <span>{currency(order.total)}</span>
           </div>
@@ -548,7 +556,7 @@ function StepNode({
         ) : null}
       </button>
 
-      <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[9px] leading-tight text-[#9A948C] sm:text-[10px]">
+      <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[11px] font-medium leading-tight text-[#6B7180]">
         {step.done && step.at ? step.at : null}
       </div>
 
@@ -614,16 +622,27 @@ function OrderDetailPanel({
         <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+              <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                 {order.id}
               </span>
               <span className="text-[12px] text-[#8A8A8A]">
-                Ordered: {order.orderDate}
+                Ordered:{" "}
+                <span className="text-[#111118]">{order.orderDate}</span>
               </span>
             </div>
             <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
               {order.customerName}
             </h2>
+            <div
+              className={cn(
+                "mt-2 inline-flex rounded-[6px] px-2 py-1 text-[12px] font-medium",
+                order.paymentStatus === "Paid"
+                  ? "bg-[#E8F5EC] text-[#2F8F4E]"
+                  : "bg-[#FFF0E8] text-[#E07A4F]",
+              )}
+            >
+              Payment Status: {order.paymentStatus}
+            </div>
           </div>
           <button
             type="button"
@@ -641,7 +660,7 @@ function OrderDetailPanel({
           </h3>
           <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
             <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-white px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-              <div>Item</div>
+              <div>Item / Order ID</div>
               <div>Qty</div>
               <div>Unit Price</div>
               <div className="text-right">Total</div>
@@ -651,20 +670,25 @@ function OrderDetailPanel({
                 key={item.name}
                 className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-white px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
               >
-                <div>{item.name}</div>
+                <div className="min-w-0">
+                  <div>{item.name}</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-[#8A8A8A]">
+                    {order.id}
+                  </div>
+                </div>
                 <div>{item.qty}</div>
                 <div className="whitespace-nowrap">
                   <span>{currency(item.unitPrice)}</span>
                   <span className="text-[#8A8A8A]"> / {item.unit}</span>
                 </div>
-                <div className="text-right font-semibold">
+                <div className="text-right font-bold">
                   {currency(item.qty * item.unitPrice)}
                 </div>
               </div>
             ))}
             <div className="flex items-center justify-between border-t border-[#ECECEA] bg-white px-3 py-3 text-[#111118]">
               <span className="text-[14px] font-semibold">Order Total</span>
-              <span className="text-[18px] font-semibold tracking-tight">
+              <span className="text-[18px] font-bold tracking-tight">
                 {currency(order.total)}
               </span>
             </div>
@@ -678,25 +702,25 @@ function OrderDetailPanel({
               <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Packer Assigned
               </div>
-              <div className="mt-1 text-[13px] text-[#111118]">
+              <div className="mt-1 text-[13px] text-[#99A1AF]">
                 {order.packerAssigned ?? "—"}
               </div>
             </div>
             <div>
               <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Cooler ID
+                Cooler ID(s)
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {(order.coolerIds ?? []).map((coolerId) => (
                   <span
                     key={coolerId}
-                    className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#6B6B6B]"
+                    className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#99A1AF]"
                   >
                     {coolerId}
                   </span>
                 ))}
                 {!order.coolerIds?.length ? (
-                  <span className="text-[13px] text-[#8A8A8A]">—</span>
+                  <span className="text-[13px] text-[#99A1AF]">—</span>
                 ) : null}
               </div>
             </div>
@@ -709,36 +733,38 @@ function OrderDetailPanel({
             <Truck size={12} />
             {order.deliveryDate}
           </div>
-          <div className="grid grid-cols-2 gap-4 text-[13px]">
+          <div className="flex flex-col gap-3 bg-white text-[13px]">
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
                 Street Address
               </div>
-              <div className="mt-1 text-[#111118]">{order.address}</div>
+              <div className="mt-1 font-bold text-[#111118]">{order.address}</div>
             </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Apt / Unit
+            <div className="grid grid-cols-4 gap-4">
+              <div>
+                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                  Apt / Unit
+                </div>
+                <div className="mt-1 font-bold text-[#111118]">{order.apt || "—"}</div>
               </div>
-              <div className="mt-1 text-[#111118]">{order.apt}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                City
+              <div>
+                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                  City
+                </div>
+                <div className="mt-1 font-bold text-[#111118]">{order.city}</div>
               </div>
-              <div className="mt-1 text-[#111118]">{order.city}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                State
+              <div>
+                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                  State
+                </div>
+                <div className="mt-1 font-bold text-[#111118]">{order.state}</div>
               </div>
-              <div className="mt-1 text-[#111118]">{order.state}</div>
-            </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Zip
+              <div>
+                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                  Zip
+                </div>
+                <div className="mt-1 font-bold text-[#111118]">{order.zip}</div>
               </div>
-              <div className="mt-1 text-[#111118]">{order.zip}</div>
             </div>
           </div>
         </div>
@@ -834,7 +860,7 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
@@ -869,11 +895,8 @@ export default function CustomerOrdersPage() {
               ))}
             </div>
 
-            <div className="hidden items-center justify-end gap-3 border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+            <div className="hidden items-center justify-end border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
               <UserMenu className="items-center" />
-              <div className="text-[12px] text-[#8A8A8A]">
-                Today, Tue, Jul 16, 2026
-              </div>
             </div>
           </div>
         </div>
@@ -943,12 +966,16 @@ export default function CustomerOrdersPage() {
                 />
               </>
             )}
+
+            <div className="ml-auto text-[12px] text-[#8A8A8A]">
+              Today, Tue, Jul 16, 2026
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-white">
+      <div className="flex-1 overflow-auto bg-white px-4 py-5 md:px-7">
         {activeTab === "Orders" ? (
           <>
             <div className="mb-5 flex items-center justify-between gap-3">
@@ -1070,7 +1097,7 @@ export default function CustomerOrdersPage() {
 
             <div className="overflow-x-auto rounded-[10px] border border-[#ECECEA] bg-white">
               <div className="min-w-[900px]">
-                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
                   <div>Order ID</div>
                   {STEPS_META.map((step) => (
                     <div key={step.key} className="text-center">
@@ -1096,7 +1123,7 @@ export default function CustomerOrdersPage() {
                             <ChevronRight size={13} className="text-[#A9A9A9]" />
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                            <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                               {order.id}
                             </span>
                             <span className="text-[12px] text-[#8A8A8A]">
@@ -1172,7 +1199,7 @@ export default function CustomerOrdersPage() {
                       </div>
                       <div className="overflow-x-auto">
                         <div className="min-w-[860px]">
-                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
                             <div>Order ID</div>
                             <div>Customer</div>
                             <div>Address</div>
@@ -1187,27 +1214,27 @@ export default function CustomerOrdersPage() {
                               key={order.id}
                               className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
                             >
-                              <span className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                              <span className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                                 {order.id}
                               </span>
                               <div className="font-semibold">
                                 {order.customer}
                               </div>
                               <LocationHover
-                                className="text-[13px] text-[#6B6B6B]"
+                                className="text-[13px] text-[#111118]"
                                 fullAddress={order.address}
                               >
                                 {order.address}
                               </LocationHover>
                               <div>{order.zip}</div>
-                              <div className="text-[#6B6B6B]">
+                              <div className="text-[#111118]">
                                 {order.orderDate}
                               </div>
-                              <div className="text-[#6B6B6B]">
+                              <div className="text-[#111118]">
                                 {order.delivered}
                               </div>
                               <div>{order.items}</div>
-                              <div className="font-semibold">
+                              <div className="font-bold">
                                 {currency(order.total)}
                               </div>
                             </div>

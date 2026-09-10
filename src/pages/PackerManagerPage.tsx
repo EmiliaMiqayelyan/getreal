@@ -56,7 +56,7 @@ const INITIAL_ORDERS: ManagerOrder[] = [
     id: "o1",
     customer: "Emily Rodriguez",
     code: "ORD-U003-01",
-    itemCount: 6,
+    itemCount: 5,
     assignedPackerId: "p1",
     packingStartedAt: "7/29/26, 8:45am",
     coolerReadyAt: "8/29/26, 9:15am",

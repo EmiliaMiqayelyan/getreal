@@ -167,13 +167,13 @@ function makeItems(): PackLine[] {
 const INITIAL_ORDERS: PackOrder[] = [
   {
     id: "o1",
-    customer: "Lucas Bennett",
+    customer: "Emily Rodriguez",
     code: "ORD-U003-01",
-    itemCount: 6,
-    deliveryDate: "Wed, Jul 22, 2026",
+    itemCount: 5,
+    deliveryDate: "Wed, Jul 20, 2026",
     packedAt: "7/29/26, 8:45am",
     loadedAt: "8/29/26, 8:45am",
-    coolerIds: ["BL-02313", "FR-10034"],
+    coolerIds: ["BL-0012", "FR-1423"],
     items: makeItems(),
   },
   {

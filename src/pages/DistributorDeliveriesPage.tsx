@@ -612,7 +612,7 @@ function CheckOrderView({
     "grid-cols-[220px_48px_56px_140px_minmax(200px,auto)_minmax(0,1fr)_220px]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -935,7 +935,7 @@ export default function DistributorDeliveriesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">

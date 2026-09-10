@@ -11,7 +11,9 @@ export function CustomerSection({ title, customers }: CustomerSectionProps) {
     <section className="space-y-3">
       <h2 className="text-foreground text-[15px] font-semibold">
         {title}{" "}
-        <span className="text-muted font-normal">({customers.length})</span>
+        <span className="font-semibold text-[#6B7180]">
+          ({customers.length})
+        </span>
       </h2>
       <CustomerTable customers={customers} />
     </section>

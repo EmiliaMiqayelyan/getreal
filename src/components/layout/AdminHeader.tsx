@@ -35,7 +35,7 @@ export function Header({ title, toolbar, below, className }: HeaderProps) {
         <div
           className={cn(
             ROW,
-            "border-b border-[#ECECEA] py-2 md:py-0",
+            "border-b border-[#ECECEA] py-3.5 md:h-[64px] md:py-3",
           )}
         >
           <div className="flex w-full min-w-0 items-center">{toolbar}</div>

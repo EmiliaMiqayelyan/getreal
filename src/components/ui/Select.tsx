@@ -24,6 +24,8 @@ type SelectProps = {
   variant?: "default" | "flat";
 };
 
+const ROW_H = 36;
+
 export function Select({
   value,
   onChange,
@@ -43,7 +45,10 @@ export function Select({
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
 
-  const selected = options.find((option) => option.value === value);
+  const cleanOptions = options.filter(
+    (option) => option.label.trim().length > 0 || option.value === "",
+  );
+  const selected = cleanOptions.find((option) => option.value === value);
   const displayLabel = selected?.label || placeholder || "";
 
   useLayoutEffect(() => {
@@ -54,8 +59,13 @@ export function Select({
       if (!button) return;
       const rect = button.getBoundingClientRect();
       const gap = 6;
+      // Wide enough that filter labels (e.g. "Angus Chuck Ground Beef")
+      // stay on one line instead of wrapping into uneven multi-line rows.
+      const width = Math.min(
+        Math.max(rect.width, 240),
+        Math.max(160, window.innerWidth - 24),
+      );
       let left = rect.left;
-      const width = Math.max(rect.width, 120);
       if (left + width > window.innerWidth - 12) {
         left = Math.max(12, rect.right - width);
       }
@@ -155,17 +165,28 @@ export function Select({
               id={listId}
               role="listbox"
               aria-label={ariaLabel ?? displayLabel}
-              className="fixed z-[80] max-h-60 overflow-auto rounded-[8px] border border-[#E6E6E3] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              className={cn(
+                "ui-select-menu fixed z-[80] max-h-60 overflow-x-hidden overflow-y-auto overscroll-contain",
+                "flex flex-col gap-0 rounded-[8px] border border-[#E6E6E3] bg-white p-0",
+                "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
+              )}
               style={{ top: pos.top, left: pos.left, width: pos.width }}
             >
-              {options.map((option) => {
+              {cleanOptions.map((option, index) => {
                 const isSelected = option.value === value;
+                const label = option.label.trim() || "\u00A0";
 
                 return (
-                  <li key={option.value || "__empty"} role="presentation">
+                  <li
+                    key={`${option.value}::${option.label}::${index}`}
+                    role="presentation"
+                    className="m-0 block h-9 max-h-9 min-h-9 shrink-0 list-none overflow-hidden p-0"
+                    style={{ height: ROW_H, maxHeight: ROW_H, minHeight: ROW_H }}
+                  >
                     <button
                       type="button"
                       role="option"
+                      title={option.label}
                       aria-selected={isSelected}
                       disabled={option.disabled}
                       onClick={() => {
@@ -174,14 +195,17 @@ export function Select({
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex w-full cursor-pointer px-3 py-2 text-left text-[13px] transition-colors",
+                        "flex h-full w-full cursor-pointer items-center overflow-hidden px-3 text-left text-[13px] leading-none whitespace-nowrap transition-colors",
                         "disabled:cursor-not-allowed disabled:opacity-40",
                         isSelected
-                          ? "bg-[#28402B] font-medium text-white"
-                          : "text-[#111118] hover:bg-[#F5F5F3]",
+                          ? "bg-[#28402B] font-medium text-white hover:bg-[#28402B]"
+                          : "bg-white text-[#111118] hover:bg-[#F5F5F3]",
                       )}
+                      style={{ height: ROW_H }}
                     >
-                      {option.label || "\u00A0"}
+                      <span className="block min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap">
+                        {label}
+                      </span>
                     </button>
                   </li>
                 );
