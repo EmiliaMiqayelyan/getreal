@@ -13,19 +13,27 @@ import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER } from "@/constants/table";
+import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
 
-const GREEN = "#28402B";
+const GREEN = "#2B5B31";
+const MUTED_HEADER =
+  "text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase";
 
-type DeliveryChip = { id: string; label: string; count: number };
+type DeliveryChip = {
+  id: string;
+  label: string;
+  dateKey: string;
+  day: number;
+};
 
+/** Eligible packing-role users only (§6). */
 type Packer = {
   id: string;
   name: string;
   code: string;
-  orderCount: number;
+  role: "packer";
 };
 
 type ManagerOrder = {
@@ -33,22 +41,19 @@ type ManagerOrder = {
   customer: string;
   code: string;
   itemCount: number;
-  assignedPackerId?: string;
-  packingStartedAt?: string;
-  coolerReadyAt?: string;
-  loadedAt?: string;
+  deliveryDate: string;
 };
 
 const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-14", label: "Wed, Jul 14", count: 13 },
-  { id: "wed-20", label: "Wed, Jul 20", count: 7 },
-  { id: "wed-27", label: "Wed, Jul 27", count: 3 },
+  { id: "wed-14", label: "Wed, Jul 14", dateKey: "Jul 14", day: 14 },
+  { id: "wed-20", label: "Wed, Jul 20", dateKey: "Jul 20", day: 20 },
+  { id: "wed-27", label: "Wed, Jul 27", dateKey: "Jul 27", day: 27 },
 ];
 
-const INITIAL_PACKERS: Packer[] = [
-  { id: "p1", name: "Vahan N", code: "PCK-U003-01", orderCount: 10 },
-  { id: "p2", name: "Rachel N", code: "PCK-U003-01", orderCount: 0 },
-  { id: "p3", name: "Gevorg S", code: "PCK-U003-01", orderCount: 1 },
+const ELIGIBLE_PACKERS: Packer[] = [
+  { id: "p1", name: "Vahan N", code: "PCK-U003-01", role: "packer" },
+  { id: "p2", name: "Rachel N", code: "PCK-U003-02", role: "packer" },
+  { id: "p3", name: "Gevorg S", code: "PCK-U003-03", role: "packer" },
 ];
 
 const INITIAL_ORDERS: ManagerOrder[] = [
@@ -57,43 +62,61 @@ const INITIAL_ORDERS: ManagerOrder[] = [
     customer: "Emily Rodriguez",
     code: "ORD-U003-01",
     itemCount: 5,
-    assignedPackerId: "p1",
-    packingStartedAt: "7/29/26, 8:45am",
-    coolerReadyAt: "8/29/26, 9:15am",
-    loadedAt: "9/29/26, 9:50am",
+    deliveryDate: "Wed, Jul 20, 2026",
   },
   {
     id: "o2",
     customer: "Lucas Bennett",
     code: "ORD-U003-02",
     itemCount: 6,
-    assignedPackerId: "p1",
-    packingStartedAt: "7/29/26, 8:45am",
-    coolerReadyAt: "8/29/26, 9:15am",
-    loadedAt: "9/29/26, 9:50am",
+    deliveryDate: "Wed, Jul 20, 2026",
   },
   {
     id: "o3",
     customer: "Sophia Martinez",
     code: "ORD-U003-03",
     itemCount: 12,
+    deliveryDate: "Wed, Jul 20, 2026",
   },
   {
     id: "o4",
     customer: "Ethan Carter",
     code: "ORD-U003-04",
     itemCount: 9,
+    deliveryDate: "Wed, Jul 20, 2026",
   },
   {
     id: "o5",
     customer: "Liam Johnson",
     code: "ORD-U003-05",
     itemCount: 5,
+    deliveryDate: "Wed, Jul 20, 2026",
+  },
+  {
+    id: "o6",
+    customer: "Ava Smith",
+    code: "ORD-U003-06",
+    itemCount: 7,
+    deliveryDate: "Wed, Jul 14, 2026",
+  },
+  {
+    id: "o7",
+    customer: "Noah Brown",
+    code: "ORD-U003-07",
+    itemCount: 4,
+    deliveryDate: "Wed, Jul 14, 2026",
+  },
+  {
+    id: "o8",
+    customer: "Mia Garcia",
+    code: "ORD-U003-08",
+    itemCount: 6,
+    deliveryDate: "Wed, Jul 27, 2026",
   },
 ];
 
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8";
+  "grid grid-cols-[220px_180px_140px_140px_140px] items-center gap-x-5";
 
 const ASSIGN_PANEL_WIDTH = 300;
 
@@ -104,7 +127,7 @@ function AssignPackerMenu({
   onClose,
 }: {
   anchor: HTMLElement;
-  packers: Packer[];
+  packers: (Packer & { orderCount: number })[];
   onChoose: (packer: Packer) => void;
   onClose: () => void;
 }) {
@@ -196,7 +219,7 @@ function AssignPackerMenu({
               ? "No orders"
               : `${packer.orderCount} order${packer.orderCount === 1 ? "" : "s"}`}
           </span>
-          <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
+          <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
             {packer.code}
           </span>
         </button>
@@ -214,90 +237,116 @@ function AssignPackerMenu({
 export default function PackerManagerPage() {
   useDocumentTitle("Packer Manager");
 
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [packers, setPackers] = useState(INITIAL_PACKERS);
+  const { packingByCode, assignPacker: assignPackerHandoff } =
+    usePackingHandoff();
+
+  const [orders] = useState(INITIAL_ORDERS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [activeChip, setActiveChip] = useState("wed-20");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(20);
   const [assignMenu, setAssignMenu] = useState<{
     orderId: string;
+    code: string;
     anchor: HTMLElement;
   } | null>(null);
 
-  const filtered = useMemo(() => {
+  const activeChipIndex = DELIVERY_CHIPS.findIndex(
+    (chip) => chip.id === activeChip,
+  );
+
+  const packersWithWorkload = useMemo(() => {
+    return ELIGIBLE_PACKERS.map((packer) => ({
+      ...packer,
+      orderCount: Object.values(packingByCode).filter(
+        (entry) => entry.packerId === packer.id,
+      ).length,
+    }));
+  }, [packingByCode]);
+
+  const chipCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const chip of DELIVERY_CHIPS) {
+      counts[chip.id] = orders.filter((order) =>
+        order.deliveryDate.includes(chip.dateKey),
+      ).length;
+    }
+    return counts;
+  }, [orders]);
+
+  const rows = useMemo(() => {
+    const chip = DELIVERY_CHIPS.find((entry) => entry.id === activeChip);
     const q = search.trim().toLowerCase();
-    let next = orders.filter((order) => {
-      const packer = packers.find(
-        (entry) => entry.id === order.assignedPackerId,
-      );
-      return (
-        !q ||
-        order.customer.toLowerCase().includes(q) ||
-        order.code.toLowerCase().includes(q) ||
-        packer?.name.toLowerCase().includes(q)
-      );
-    });
+
+    let next = orders
+      .filter((order) => {
+        const handoff = packingByCode[order.code];
+        const packerName = handoff?.packerName ?? "";
+        const matchesChip =
+          !chip || order.deliveryDate.includes(chip.dateKey);
+        const matchesSearch =
+          !q ||
+          order.customer.toLowerCase().includes(q) ||
+          order.code.toLowerCase().includes(q) ||
+          packerName.toLowerCase().includes(q);
+        return matchesChip && matchesSearch;
+      })
+      .map((order) => {
+        const handoff = packingByCode[order.code];
+        return {
+          ...order,
+          packerId: handoff?.packerId,
+          packerName: handoff?.packerName,
+          packingStartedAt: handoff?.packingStartedAt,
+          coolerReadyAt: handoff?.coolerReadyAt ?? handoff?.packedAt,
+          loadedAt: handoff?.loadedAt,
+        };
+      });
 
     if (sortBy === "assigned-first") {
       next = [...next].sort(
-        (a, b) =>
-          Number(Boolean(b.assignedPackerId)) -
-          Number(Boolean(a.assignedPackerId)),
+        (a, b) => Number(Boolean(b.packerId)) - Number(Boolean(a.packerId)),
       );
     } else if (sortBy === "name") {
       next = [...next].sort((a, b) => a.customer.localeCompare(b.customer));
     }
 
     return next;
-  }, [orders, packers, search, sortBy]);
+  }, [orders, packingByCode, search, sortBy, activeChip]);
 
-  function assignPacker(orderId: string, packer: Packer) {
-    const previousId = orders.find((order) => order.id === orderId)
-      ?.assignedPackerId;
+  function cycleChip(delta: number) {
+    const index = activeChipIndex >= 0 ? activeChipIndex : 0;
+    const next =
+      (index + delta + DELIVERY_CHIPS.length) % DELIVERY_CHIPS.length;
+    const chip = DELIVERY_CHIPS[next]!;
+    setActiveChip(chip.id);
+    setSelectedDay(chip.day);
+  }
 
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId
-          ? {
-              ...order,
-              assignedPackerId: packer.id,
-              packingStartedAt: order.packingStartedAt ?? "7/29/26, 8:45am",
-            }
-          : order,
-      ),
-    );
+  function applyCalendarDay(day: number) {
+    setSelectedDay(day);
+    const match = DELIVERY_CHIPS.find((chip) => chip.day === day);
+    if (match) setActiveChip(match.id);
+  }
 
-    setPackers((current) =>
-      current.map((entry) => {
-        if (entry.id === packer.id && previousId !== packer.id) {
-          return { ...entry, orderCount: entry.orderCount + 1 };
-        }
-        if (previousId && entry.id === previousId && previousId !== packer.id) {
-          return {
-            ...entry,
-            orderCount: Math.max(0, entry.orderCount - 1),
-          };
-        }
-        return entry;
-      }),
-    );
-
+  function handleAssign(orderCode: string, packer: Packer) {
+    // Reassignment updates active packer; timestamps stay (§6, §12)
+    assignPackerHandoff(orderCode, {
+      packerId: packer.id,
+      packerName: packer.name,
+    });
     setAssignMenu(null);
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-            Cooler Packing
+            Packer Manager
           </h1>
-          <div className="flex items-center gap-3 border-l border-[#ECECEA] pl-5">
-            <UserMenu className="items-center" />
-            <div className="hidden text-[12px] text-[#8A8A8A] lg:block">
-              Today, Tue, Jun 22, 2026
-            </div>
-          </div>
+          <UserMenu className="items-center" />
         </div>
 
         <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
@@ -324,70 +373,134 @@ export default function PackerManagerPage() {
                 { value: "assigned-first", label: "Assigned first" },
               ]}
             />
+            <div className="ml-auto text-[12px] text-[#8A8A8A]">
+              Today, Tue, Jun 22, 2026
+            </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2 pb-1">
             {DELIVERY_CHIPS.map((chip) => {
               const active = activeChip === chip.id;
               return (
                 <button
                   key={chip.id}
                   type="button"
-                  onClick={() => setActiveChip(chip.id)}
+                  onClick={() => {
+                    setActiveChip(chip.id);
+                    setSelectedDay(chip.day);
+                  }}
                   className={cn(
-                    "inline-flex items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                    "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
                     active
                       ? "border-transparent text-white"
-                      : "border-[#ECECEA] bg-white text-[#111118]",
+                      : "border-transparent bg-[#F3F3F1] text-[#111118]",
                   )}
                   style={active ? { background: GREEN } : undefined}
                 >
                   <span className="text-[13px] font-semibold">{chip.label}</span>
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      "inline-flex size-6 items-center justify-center rounded-full text-[11px] font-semibold",
                       active
-                        ? "bg-[#3D5A40] text-white"
-                        : "bg-[#F3F3F1] text-[#6B6B6B]",
+                        ? "bg-[#1F4524] text-white"
+                        : "bg-[#E4E4E1] text-[#6B6B6B]",
                     )}
                   >
-                    {chip.count}
+                    {chipCounts[chip.id] ?? 0}
                   </span>
                 </button>
               );
             })}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="relative ml-auto flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => cycleChip(-1)}
                 className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
+                onClick={() => cycleChip(1)}
                 className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronRight size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                onClick={() => setCalendarOpen((open) => !open)}
+                className={cn(
+                  "flex size-10 items-center justify-center rounded-[8px] border bg-white",
+                  calendarOpen
+                    ? "border-[#2B5B31] text-[#2B5B31]"
+                    : "border-[#ECECEA] text-[#8A8A8A]",
+                )}
               >
                 <Calendar size={14} />
               </button>
+
+              {calendarOpen ? (
+                <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
+                    <span>July 2026</span>
+                    <div className="flex gap-1 text-[#8A8A8A]">
+                      <ChevronLeft size={14} />
+                      <ChevronRight size={14} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
+                    {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                      <span key={day}>{day}</span>
+                    ))}
+                  </div>
+                  <div className="mt-1 grid grid-cols-7 gap-1">
+                    {Array.from({ length: 31 }, (_, index) => {
+                      const day = index + 1;
+                      const match = DELIVERY_CHIPS.some(
+                        (chip) => chip.day === day,
+                      );
+                      const selected = selectedDay === day;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          disabled={!match}
+                          onClick={() => {
+                            applyCalendarDay(day);
+                            setCalendarOpen(false);
+                          }}
+                          className={cn(
+                            "flex size-8 items-center justify-center rounded-full text-[12px]",
+                            selected
+                              ? "bg-[#2B5B31] text-white"
+                              : match
+                                ? "text-[#111118] hover:bg-[#F3F3F1]"
+                                : "text-[#D0D0D0]",
+                          )}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-        <ScrollTable minWidth={860} className="rounded-[10px]">
+        <ScrollTable
+          minWidth={860}
+          className="rounded-[12px] border border-[#ECECEA] bg-white"
+        >
           <div
             className={cn(
               ROW_GRID,
-              TABLE_HEADER,
-              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5",
+              MUTED_HEADER,
+              "border-b border-[#F0F0EE] bg-white px-5 py-2.5",
             )}
           >
             <div>Customer Order ID</div>
@@ -397,9 +510,9 @@ export default function PackerManagerPage() {
             <div>Loaded</div>
           </div>
 
-          {filtered.map((order) => {
-            const assigned = packers.find(
-              (packer) => packer.id === order.assignedPackerId,
+          {rows.map((order) => {
+            const assigned = packersWithWorkload.find(
+              (packer) => packer.id === order.packerId,
             );
 
             return (
@@ -407,16 +520,16 @@ export default function PackerManagerPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "h-[104px] border-b border-[#F3F3F1] px-5 last:border-b-0",
+                  "min-h-[88px] border-b border-[#F0F0EE] px-5 py-4 last:border-b-0",
                 )}
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
-                    <ChevronRight size={13} className="text-[#A9A9A9]" />
+                    <ChevronRight size={14} className="text-[#A9A9A9]" />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                    <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                       {order.code}
                     </span>
                     <span className="text-[12px] text-[#8A8A8A]">
@@ -433,21 +546,27 @@ export default function PackerManagerPage() {
                       setAssignMenu((current) =>
                         current?.orderId === order.id
                           ? null
-                          : { orderId: order.id, anchor },
+                          : {
+                              orderId: order.id,
+                              code: order.code,
+                              anchor,
+                            },
                       );
                     }}
-                    className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
                   >
-                    <Package size={14} className="text-[#8A8A8A]" />
-                    {assigned?.name ?? "Assign Packer"}
-                    <ChevronDown size={13} className="text-[#8A8A8A]" />
+                    <Package size={14} className="shrink-0 text-[#8A8A8A]" />
+                    <span className="truncate">
+                      {assigned?.name ?? order.packerName ?? "Assign Packer"}
+                    </span>
+                    <ChevronDown size={13} className="shrink-0 text-[#8A8A8A]" />
                   </button>
                   {assignMenu?.orderId === order.id ? (
                     <AssignPackerMenu
                       anchor={assignMenu.anchor}
-                      packers={packers}
+                      packers={packersWithWorkload}
                       onClose={() => setAssignMenu(null)}
-                      onChoose={(packer) => assignPacker(order.id, packer)}
+                      onChoose={(packer) => handleAssign(order.code, packer)}
                     />
                   ) : null}
                 </div>
@@ -466,7 +585,7 @@ export default function PackerManagerPage() {
           })}
         </ScrollTable>
 
-        {!filtered.length ? (
+        {!rows.length ? (
           <div className="mt-4 rounded-[10px] border border-[#ECECEA] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
             No orders match your filters.
           </div>

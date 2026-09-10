@@ -2,25 +2,30 @@ import { useMemo, useState } from "react";
 import { Check, ChevronRight, Copy, Plus, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { RoleManagementModal } from "@/components/roles/RoleManagementModal";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import {
   ADMIN_ROLE_PERMISSIONS,
-  ADMIN_USERS,
   DEFAULT_ROLE_PERMISSIONS,
 } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
+import {
+  type UserFormErrors,
+  validateUserForm,
+} from "@/utils/rolesUsers";
 
-const ROLE_OPTIONS: RoleUser["type"][] = [
+const FALLBACK_ROLE_OPTIONS = [
   "Superadmin",
   "Manager",
   "Warehouse Worker",
   "Driver",
-];
+] as const;
 
 const PERMISSION_GROUPS: {
   label: string;
@@ -88,7 +93,7 @@ type DraftState = {
   email: string;
   password: string;
   phone: string;
-  type: RoleUser["type"];
+  type: string;
 };
 
 function emptyDraft(): DraftState {
@@ -145,7 +150,8 @@ function PermissionCheckbox({
 export default function RolesPage() {
   useDocumentTitle("Roles");
 
-  const [users, setUsers] = useState<RoleUser[]>(ADMIN_USERS);
+  const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles } =
+    useRolesUsers();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
   >({});
@@ -153,15 +159,20 @@ export default function RolesPage() {
   const [roleFilter, setRoleFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>("U002");
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
+  const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [modalOpen, setModalOpen] = useState(false);
+  const [roleMgmtOpen, setRoleMgmtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   useScrollLock(modalOpen);
 
-  const roleOptions = useMemo(
-    () => Array.from(new Set(users.map((user) => user.type))).sort(),
-    [users],
-  );
+  const roleOptions = useMemo(() => {
+    const fromTemplates = managedRoles.map((role) => role.name);
+    const fromUsers = users.map((user) => user.type);
+    return Array.from(
+      new Set([...FALLBACK_ROLE_OPTIONS, ...fromTemplates, ...fromUsers]),
+    );
+  }, [managedRoles, users]);
 
   const filteredUsers = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -202,11 +213,7 @@ export default function RolesPage() {
 
   function applyChanges(user: RoleUser) {
     const next = draftPermissions[user.id] ?? user.permissions;
-    setUsers((current) =>
-      current.map((entry) =>
-        entry.id === user.id ? { ...entry, permissions: next } : entry,
-      ),
-    );
+    applyPermissions(user.id, next);
     setDraftPermissions((current) => {
       const { [user.id]: _, ...rest } = current;
       return rest;
@@ -217,25 +224,37 @@ export default function RolesPage() {
 
   function openCreateModal() {
     setDraft(emptyDraft());
+    setFormErrors({});
     setModalOpen(true);
   }
 
   function openEditModal(user: RoleUser) {
     setDraft(toDraft(user));
+    setFormErrors({});
     setModalOpen(true);
   }
 
   function closeModal() {
     setModalOpen(false);
     setCopied(false);
+    setFormErrors({});
   }
 
   function saveUser() {
-    if (!draft.name.trim() || !draft.email.trim()) return;
+    const errors = validateUserForm({
+      name: draft.name,
+      email: draft.email,
+      password: draft.password,
+      phone: draft.phone,
+      type: draft.type,
+      isEdit: Boolean(draft.id),
+    });
+    setFormErrors(errors);
+    if (Object.keys(errors).length) return;
 
-    setUsers((current) => {
-      if (draft.id) {
-        return current.map((user) =>
+    if (draft.id) {
+      setUsers((current) =>
+        current.map((user) =>
           user.id === draft.id
             ? {
                 ...user,
@@ -243,26 +262,38 @@ export default function RolesPage() {
                 email: draft.email.trim(),
                 phone: draft.phone.trim(),
                 type: draft.type,
+                // §11: empty password keeps existing
+                password: draft.password
+                  ? draft.password
+                  : user.password,
               }
             : user,
-        );
-      }
-
-      return [
-        ...current,
-        {
-          id: `U${String(current.length + 1).padStart(3, "0")}`,
-          name: draft.name.trim(),
-          email: draft.email.trim(),
-          phone: draft.phone.trim(),
-          type: draft.type,
-          permissions:
-            draft.type === "Superadmin"
-              ? ADMIN_ROLE_PERMISSIONS
-              : DEFAULT_ROLE_PERMISSIONS,
-        },
-      ];
-    });
+        ),
+      );
+    } else {
+      setUsers((current) => {
+        const max = current.reduce((acc, user) => {
+          const n = Number(user.id.replace(/\D/g, ""));
+          return Number.isFinite(n) ? Math.max(acc, n) : acc;
+        }, 0);
+        return [
+          ...current,
+          {
+            id: `U${String(max + 1).padStart(3, "0")}`,
+            name: draft.name.trim(),
+            email: draft.email.trim(),
+            phone: draft.phone.trim(),
+            type: draft.type,
+            password: draft.password,
+            permissions:
+              draft.type === "Superadmin"
+                ? ADMIN_ROLE_PERMISSIONS
+                : managedRoles.find((role) => role.name === draft.type)
+                    ?.permissions ?? DEFAULT_ROLE_PERMISSIONS,
+          },
+        ];
+      });
+    }
 
     closeModal();
     setToast(draft.id ? "User updated" : "User created");
@@ -271,7 +302,8 @@ export default function RolesPage() {
 
   function deleteUser() {
     if (!draft.id) return;
-    setUsers((current) => current.filter((user) => user.id !== draft.id));
+    // Soft-delete access: remove from active users; audit history elsewhere stays
+    removeUser(draft.id);
     if (expandedId === draft.id) setExpandedId(null);
     closeModal();
     setToast("User deleted");
@@ -290,7 +322,7 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <Header
         title="Roles"
         toolbar={
@@ -303,7 +335,7 @@ export default function RolesPage() {
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search ID, supplier name"
+                placeholder="Search ID, name"
                 className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
               />
             </div>
@@ -318,27 +350,40 @@ export default function RolesPage() {
               ]}
             />
 
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#242424] px-3.5 text-[13px] font-medium text-white"
-            >
-              <Plus size={14} />
-              Add User
-            </button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#F57850] px-3.5 text-[13px] font-medium text-white"
+              >
+                <Plus size={14} />
+                Add User
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleMgmtOpen(true)}
+                className="inline-flex h-[34px] items-center rounded-[8px] bg-[#2E2E2E] px-3.5 text-[13px] font-medium text-white"
+              >
+                Role Management
+              </button>
+            </div>
           </div>
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
-        <ScrollTable minWidth={860}>
-          <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <ScrollTable
+          minWidth={820}
+          className="rounded-[12px] border border-[#ECECEA] bg-white"
+        >
+          <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
             <div />
             <div>ID</div>
             <div>Name</div>
             <div>Email</div>
             <div>Phone</div>
             <div>Role Name</div>
+            <div className="text-right" />
           </div>
 
           {filteredUsers.map((user, index) => {
@@ -351,7 +396,7 @@ export default function RolesPage() {
                 key={user.id}
                 className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
               >
-                <div className="grid grid-cols-[28px_72px_1.2fr_1.5fr_1.1fr_1.1fr] items-center gap-2 px-4 py-3.5">
+                <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 px-4 py-3.5">
                   <button
                     type="button"
                     aria-label={open ? "Collapse row" : "Expand row"}
@@ -370,34 +415,39 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={() => toggleExpand(user.id)}
-                    className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
+                    className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
                   >
                     {user.id}
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(user)}
-                    className="text-left text-[13px] font-semibold text-[#111118] hover:underline"
-                  >
+                  <div className="truncate text-[13px] font-semibold text-[#111118]">
                     {user.name}
-                  </button>
+                  </div>
 
                   <div className="truncate text-[13px] text-[#111118]">
                     {user.email}
                   </div>
                   <div className="text-[13px] text-[#111118]">{user.phone}</div>
                   <div>
-                    <span className="inline-flex rounded-[6px] bg-[#F3F3F1] px-2 py-1 text-[12px] font-medium text-[#111118]">
+                    <span className="inline-flex rounded-[6px] bg-id-pill px-2 py-1 text-[12px] font-medium text-[#111118]">
                       {user.type}
                     </span>
+                  </div>
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(user)}
+                      className="text-[13px] font-medium text-[#2165D4]"
+                    >
+                      Edit
+                    </button>
                   </div>
                 </div>
 
                 {open ? (
                   <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-4 py-5 md:px-6">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[520px] grid gap-8 md:grid-cols-2 xl:grid-cols-4">
+                      <div className="grid min-w-[520px] gap-8 md:grid-cols-2 xl:grid-cols-4">
                         {PERMISSION_GROUPS.map((group) => (
                           <div key={group.label}>
                             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#111118] uppercase">
@@ -428,7 +478,7 @@ export default function RolesPage() {
                       <button
                         type="button"
                         onClick={() => applyChanges(user)}
-                        className="h-[34px] rounded-[8px] bg-[#242424] px-4 text-[13px] font-medium text-white"
+                        className="h-[34px] rounded-[8px] bg-[#2E2E2E] px-4 text-[13px] font-medium text-white"
                       >
                         Apply Changes
                       </button>
@@ -490,6 +540,9 @@ export default function RolesPage() {
                   placeholder="e.g. Jane Doe"
                   className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
                 />
+                {formErrors.name ? (
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.name}</p>
+                ) : null}
               </div>
 
               <div>
@@ -508,6 +561,9 @@ export default function RolesPage() {
                   placeholder="e.g. jane@example.com"
                   className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
                 />
+                {formErrors.email ? (
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.email}</p>
+                ) : null}
               </div>
 
               <div>
@@ -524,7 +580,11 @@ export default function RolesPage() {
                         password: event.target.value,
                       }))
                     }
-                    placeholder="Enter password"
+                    placeholder={
+                      draft.id
+                        ? "Leave blank to keep current password"
+                        : "Enter password"
+                    }
                     className="h-[40px] rounded-[8px] border-[#E6E6E3] pr-10 text-[13px]"
                   />
                   <button
@@ -540,6 +600,11 @@ export default function RolesPage() {
                     )}
                   </button>
                 </div>
+                {formErrors.password ? (
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">
+                    {formErrors.password}
+                  </p>
+                ) : null}
               </div>
 
               <div>
@@ -557,6 +622,9 @@ export default function RolesPage() {
                   placeholder="e.g. (555) 123-4567"
                   className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
                 />
+                {formErrors.phone ? (
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.phone}</p>
+                ) : null}
               </div>
 
               <div>
@@ -574,11 +642,14 @@ export default function RolesPage() {
                   className="w-full"
                   size="md"
                   aria-label="Role Name"
-                  options={ROLE_OPTIONS.map((role) => ({
+                  options={roleOptions.map((role) => ({
                     value: role,
                     label: role,
                   }))}
                 />
+                {formErrors.type ? (
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.type}</p>
+                ) : null}
               </div>
             </div>
 
@@ -615,6 +686,17 @@ export default function RolesPage() {
           </div>
         </div>
       ) : null}
+
+      <RoleManagementModal
+        open={roleMgmtOpen}
+        roles={managedRoles}
+        onClose={() => setRoleMgmtOpen(false)}
+        onSave={(next) => {
+          setManagedRoles(next);
+          setToast("Roles saved");
+          window.setTimeout(() => setToast(null), 2000);
+        }}
+      />
 
       {toast ? (
         <div className="fixed right-6 bottom-6 z-50 rounded-[10px] bg-[#242424] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">

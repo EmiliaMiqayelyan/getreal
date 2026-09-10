@@ -19,7 +19,9 @@ import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CountBadge } from "@/components/ui/Badge";
 import { APP_NAME } from "@/constants";
 import { getNavSections, getRoleHome, type NavItem } from "@/constants/navigation";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { getRole } from "@/lib/auth";
+import { canAccessPath } from "@/utils/rolesUsers";
 import { cn } from "@/utils/cn";
 
 const ICONS = {
@@ -75,7 +77,15 @@ type SidebarProps = {
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { pathname } = useLocation();
   const role = getRole();
-  const sections = getNavSections(role);
+  const { sessionPermissions } = useRolesUsers();
+  const sections = getNavSections(role)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) =>
+        canAccessPath(sessionPermissions, item.href),
+      ),
+    }))
+    .filter((section) => section.items.length > 0);
   const home = getRoleHome(role);
 
   return (

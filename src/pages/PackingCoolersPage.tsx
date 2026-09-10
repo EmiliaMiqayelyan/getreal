@@ -15,33 +15,26 @@ import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
+import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { FRUIT_OPTIONS, MEAT_OPTIONS } from "@/data/packingInventory";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
-const GREEN = "#28402B";
+const GREEN = "#2B5B31";
 const PACKED_GREEN = "#3AA149";
-const LINK_BLUE = "#3B82F6";
+const LINK_BLUE = "#2165D4";
+const PACKER_NAME = "Packer Name 1";
+const MUTED_HEADER =
+  "text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase";
 
-type DeliveryChip = { id: string; label: string; count: number };
-
-type SourceOption = {
-  distributor: string;
-  source: string;
-  expDate: string;
-  location: string;
-  itemId: string;
-};
-
-type PackLine = {
+type DeliveryChip = {
   id: string;
-  name: string;
-  category: "Meat" | "Fruits";
-  qty: number;
-  selected?: SourceOption;
-  coolerId: string;
-  packed: boolean;
-  options: SourceOption[];
+  label: string;
+  /** Substring matched against order.deliveryDate */
+  dateKey: string;
+  day: number;
 };
 
 type PackOrder = {
@@ -53,59 +46,20 @@ type PackOrder = {
   packedAt?: string;
   loadedAt?: string;
   coolerIds: string[];
-  items: PackLine[];
+  items: PackingLine[];
 };
 
 const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-14", label: "Wed, Jul 14", count: 13 },
-  { id: "wed-20", label: "Wed, Jul 20", count: 7 },
-  { id: "wed-27", label: "Wed, Jul 27", count: 3 },
+  { id: "wed-14", label: "Wed, Jul 14", dateKey: "Jul 14", day: 14 },
+  { id: "wed-20", label: "Wed, Jul 20", dateKey: "Jul 20", day: 20 },
+  { id: "wed-27", label: "Wed, Jul 27", dateKey: "Jul 27", day: 27 },
 ];
 
 const COOLER_OPTIONS = ["BL-0008", "BL-02313", "FR-10034", "FR-1423"];
 
-const MEAT_OPTIONS: SourceOption[] = [
-  {
-    distributor: "4PF Co.",
-    source: "FreshMarket Co.",
-    expDate: "Jul 30, 2026",
-    location: "Freeze 1",
-    itemId: "OPE-10043",
-  },
-  {
-    distributor: "Rancho Protein LLC",
-    source: "Alpine Products Co.",
-    expDate: "Aug 02, 2026",
-    location: "Freeze 2",
-    itemId: "OPE-10050",
-  },
-];
+type SourceOption = PackingSourceOption;
 
-const FRUIT_OPTIONS: SourceOption[] = [
-  {
-    distributor: "4PF Co.",
-    source: "FreshMarket Co.",
-    expDate: "Aug 20, 2026",
-    location: "Dry Shelf 3",
-    itemId: "OPE-23131",
-  },
-  {
-    distributor: "4PF Co.",
-    source: "Alpine Products Co.",
-    expDate: "Aug 24, 2026",
-    location: "Dry Shelf 2",
-    itemId: "OPE-23132",
-  },
-  {
-    distributor: "Tropical Produce LLC",
-    source: "FreshMarket Co.",
-    expDate: "Jul 30, 2026",
-    location: "Dry Shelf 1",
-    itemId: "OPE-23140",
-  },
-];
-
-function makeItems(): PackLine[] {
+function makeItems(): PackingLine[] {
   return [
     {
       id: "1",
@@ -164,6 +118,7 @@ function makeItems(): PackLine[] {
   ];
 }
 
+/** Shared order identity with Packer Manager / Customer Orders. */
 const INITIAL_ORDERS: PackOrder[] = [
   {
     id: "o1",
@@ -171,42 +126,124 @@ const INITIAL_ORDERS: PackOrder[] = [
     code: "ORD-U003-01",
     itemCount: 5,
     deliveryDate: "Wed, Jul 20, 2026",
-    packedAt: "7/29/26, 8:45am",
-    loadedAt: "8/29/26, 8:45am",
+    packedAt: "8/29/26, 9:15am",
+    loadedAt: "9/29/26, 9:50am",
     coolerIds: ["BL-0012", "FR-1423"],
     items: makeItems(),
   },
   {
     id: "o2",
-    customer: "Sophia Martinez",
+    customer: "Lucas Bennett",
     code: "ORD-U003-02",
-    itemCount: 12,
-    deliveryDate: "Wed, Jul 22, 2026",
-    packedAt: "7/29/26, 8:45am",
-    coolerIds: ["BL-02313", "FR-10034"],
+    itemCount: 6,
+    deliveryDate: "Wed, Jul 20, 2026",
+    packedAt: "8/29/26, 9:15am",
+    loadedAt: "9/29/26, 9:50am",
+    coolerIds: ["BL-0012"],
     items: makeItems(),
   },
   {
     id: "o3",
-    customer: "Ethan Carter",
+    customer: "Sophia Martinez",
     code: "ORD-U003-03",
-    itemCount: 9,
-    deliveryDate: "Wed, Jul 22, 2026",
+    itemCount: 12,
+    deliveryDate: "Wed, Jul 20, 2026",
     coolerIds: [],
     items: makeItems(),
   },
   {
     id: "o4",
-    customer: "Liam Johnson",
+    customer: "Ethan Carter",
     code: "ORD-U003-04",
+    itemCount: 9,
+    deliveryDate: "Wed, Jul 20, 2026",
+    coolerIds: [],
+    items: makeItems(),
+  },
+  {
+    id: "o5",
+    customer: "Liam Johnson",
+    code: "ORD-U003-05",
     itemCount: 5,
-    deliveryDate: "Wed, Jul 22, 2026",
+    deliveryDate: "Wed, Jul 20, 2026",
+    coolerIds: [],
+    items: makeItems(),
+  },
+  {
+    id: "o6",
+    customer: "Ava Smith",
+    code: "ORD-U003-06",
+    itemCount: 7,
+    deliveryDate: "Wed, Jul 14, 2026",
+    coolerIds: [],
+    items: makeItems(),
+  },
+  {
+    id: "o7",
+    customer: "Noah Brown",
+    code: "ORD-U003-07",
+    itemCount: 4,
+    deliveryDate: "Wed, Jul 14, 2026",
+    coolerIds: [],
+    items: makeItems(),
+  },
+  {
+    id: "o8",
+    customer: "Mia Garcia",
+    code: "ORD-U003-08",
+    itemCount: 6,
+    deliveryDate: "Wed, Jul 27, 2026",
     coolerIds: [],
     items: makeItems(),
   },
 ];
 
-const SOURCE_PANEL_WIDTH = 360;
+const SOURCE_PANEL_WIDTH = 460;
+
+/** Format like `7/29/26, 8:45am` */
+function formatPackTimestamp(date = new Date()): string {
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const year = String(date.getFullYear()).slice(-2);
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const suffix = hours >= 12 ? "pm" : "am";
+  hours = hours % 12 || 12;
+  return `${month}/${day}/${year}, ${hours}:${minutes}${suffix}`;
+}
+
+function coolerAssigned(coolerId: string) {
+  return Boolean(coolerId) && coolerId !== "Cooler";
+}
+
+function itemReady(item: PackingLine) {
+  return Boolean(item.selected) && coolerAssigned(item.coolerId) && item.packed;
+}
+
+function collectCoolerIds(items: PackingLine[]): string[] {
+  return Array.from(
+    new Set(
+      items
+        .map((item) => item.coolerId)
+        .filter((value) => coolerAssigned(value)),
+    ),
+  );
+}
+
+function isDraftDirty(original: PackOrder, draft: PackOrder): boolean {
+  if (original.items.length !== draft.items.length) return true;
+  return draft.items.some((item, index) => {
+    const base = original.items[index];
+    if (!base) return true;
+    return (
+      item.packed !== base.packed ||
+      item.coolerId !== base.coolerId ||
+      item.selected?.itemId !== base.selected?.itemId ||
+      item.selected?.distributor !== base.selected?.distributor ||
+      item.selected?.source !== base.selected?.source
+    );
+  });
+}
 
 function SourcePicker({
   anchor,
@@ -275,13 +312,13 @@ function SourcePicker({
       ref={panelRef}
       role="listbox"
       aria-label="Distributor / Source"
-      className="fixed z-[80] max-h-[320px] w-[360px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      className="fixed z-[80] max-h-[320px] w-[460px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={{ top: pos.top, left: pos.left }}
     >
-      <div className="sticky top-0 border-b border-[#F0F0EE] bg-white p-2.5">
+      <div className="sticky top-0 bg-white px-3 pt-3 pb-2">
         <div className="relative">
           <Search
-            size={12}
+            size={13}
             className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
           />
           <Input
@@ -292,23 +329,25 @@ function SourcePicker({
           />
         </div>
       </div>
-      {filtered.map((option) => (
-        <button
-          key={`${option.distributor}-${option.source}-${option.itemId}`}
-          type="button"
-          onClick={() => onChoose(option)}
-          className="grid w-full grid-cols-[1.1fr_1.1fr_0.9fr] gap-2 border-b border-[#F3F3F1] px-3 py-2.5 text-left text-[12px] text-[#111118] last:border-b-0 hover:bg-[#FAFAF8]"
-        >
-          <span>{option.distributor}</span>
-          <span className="text-[#6B6B6B]">{option.source}</span>
-          <span className="text-[#6B6B6B]">{option.expDate}</span>
-        </button>
-      ))}
-      {!filtered.length ? (
-        <div className="px-3 py-4 text-center text-[12px] text-[#8A8A8A]">
-          No sources found
-        </div>
-      ) : null}
+      <div className="px-1 pb-1.5">
+        {filtered.map((option) => (
+          <button
+            key={`${option.distributor}-${option.source}-${option.itemId}`}
+            type="button"
+            onClick={() => onChoose(option)}
+            className="grid w-full grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_112px] items-center gap-x-4 rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]"
+          >
+            <span className="min-w-0 truncate">{option.distributor}</span>
+            <span className="min-w-0 truncate">{option.source}</span>
+            <span className="whitespace-nowrap">{option.expDate}</span>
+          </button>
+        ))}
+        {!filtered.length ? (
+          <div className="px-3 py-4 text-center text-[12px] text-[#8A8A8A]">
+            No sources found
+          </div>
+        ) : null}
+      </div>
     </div>,
     document.body,
   );
@@ -324,6 +363,7 @@ function PackingDetail({
   onReady: (order: PackOrder) => void;
 }) {
   const [draft, setDraft] = useState(order);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<{
     id: string;
     anchor: HTMLElement;
@@ -338,9 +378,10 @@ function PackingDetail({
     ] as const;
   }, [draft.items]);
 
-  const allPacked = draft.items.every((item) => item.packed && item.selected);
+  const allReady = draft.items.every(itemReady);
 
-  function updateItem(id: string, patch: Partial<PackLine>) {
+  function updateItem(id: string, patch: Partial<PackingLine>) {
+    setValidationError(null);
     setDraft((current) => ({
       ...current,
       items: current.items.map((item) =>
@@ -349,18 +390,36 @@ function PackingDetail({
     }));
   }
 
+  function requestClose() {
+    if (isDraftDirty(order, draft)) {
+      const leave = window.confirm(
+        "You have unsaved packing changes. Leave without completing Cooler Ready?",
+      );
+      if (!leave) return;
+    }
+    onClose();
+  }
+
   function handleReady() {
-    const coolerIds = Array.from(
-      new Set(
-        draft.items
-          .map((item) => item.coolerId)
-          .filter((value) => value && value !== "Cooler"),
-      ),
-    );
+    const incomplete = draft.items.filter((item) => !itemReady(item));
+    if (incomplete.length) {
+      const missing = incomplete[0]!;
+      const parts: string[] = [];
+      if (!missing.selected) parts.push("distributor/source");
+      if (!coolerAssigned(missing.coolerId)) parts.push("cooler ID");
+      if (!missing.packed) parts.push("Item Packed");
+      setValidationError(
+        `Complete all items before Cooler Ready. "${missing.name}" still needs ${parts.join(", ")}.`,
+      );
+      return;
+    }
+
+    const coolerIds = collectCoolerIds(draft.items);
     onReady({
       ...draft,
-      coolerIds: coolerIds.length ? coolerIds : ["BL-02313", "FR-10034"],
-      packedAt: "7/29/26, 8:45am",
+      coolerIds,
+      packedAt: formatPackTimestamp(),
+      items: draft.items,
     });
   }
 
@@ -390,6 +449,12 @@ function PackingDetail({
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        {validationError ? (
+          <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
+            {validationError}
+          </div>
+        ) : null}
+
         <div className="space-y-5">
           {groups.map(([title, items]) => (
             <section key={title}>
@@ -423,133 +488,143 @@ function PackingDetail({
                     </tr>
                   </thead>
                   <tbody>
-                    {items.map((item) => (
-                      <tr
-                        key={item.id}
-                        className="border-b border-[#ECECEA] last:border-b-0"
-                      >
-                        <td className={cn(td, "pl-5 pr-3")}>
-                          <span className="block truncate font-medium">
-                            {item.name}
-                          </span>
-                        </td>
-                        <td className={cn(td, "pr-3 font-semibold")}>
-                          {item.qty}
-                        </td>
-                        <td className={cn(td, "pr-3")}>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              const anchor = event.currentTarget;
-                              setOpenMenu((current) =>
-                                current?.id === item.id
-                                  ? null
-                                  : { id: item.id, anchor },
-                              );
-                            }}
-                            className="inline-flex max-w-full items-center gap-1 text-left text-[13px]"
-                          >
-                            <ChevronDown
-                              size={14}
-                              className="shrink-0 text-[#8A8A8A]"
-                            />
-                            <span
-                              className={cn(
-                                "truncate",
-                                item.selected
-                                  ? "text-[#111118]"
-                                  : "text-[#8A8A8A]",
-                              )}
-                            >
-                              {item.selected
-                                ? `${item.selected.distributor} / ${item.selected.source}`
-                                : "Select"}
+                    {items.map((item) => {
+                      const canPack =
+                        Boolean(item.selected) &&
+                        coolerAssigned(item.coolerId);
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className="border-b border-[#ECECEA] last:border-b-0"
+                        >
+                          <td className={cn(td, "pl-5 pr-3")}>
+                            <span className="block truncate font-medium">
+                              {item.name}
                             </span>
-                          </button>
-                          {openMenu?.id === item.id ? (
-                            <SourcePicker
-                              anchor={openMenu.anchor}
-                              options={item.options}
-                              onClose={() => setOpenMenu(null)}
-                              onChoose={(option) => {
-                                updateItem(item.id, {
-                                  selected: option,
-                                  coolerId:
-                                    item.coolerId === "Cooler"
-                                      ? "BL-0008"
-                                      : item.coolerId,
-                                });
-                                setOpenMenu(null);
-                              }}
-                            />
-                          ) : null}
-                        </td>
-                        <td className={cn(td, "pr-3")}>
-                          {item.selected?.expDate ?? ""}
-                        </td>
-                        <td className={cn(td, "pr-3")}>
-                          <span className="block truncate">
-                            {item.selected?.itemId ?? ""}
-                          </span>
-                        </td>
-                        <td className={cn(td, "pr-3")}>
-                          <LocationHover
-                            className="text-[13px] text-[#111118]"
-                            fullAddress={item.selected?.location ?? ""}
-                            label="Location"
-                          >
-                            {item.selected?.location ?? ""}
-                          </LocationHover>
-                        </td>
-                        <td className={cn(td, "pr-3")}>
-                          <Select
-                            value={item.coolerId}
-                            onChange={(value) =>
-                              updateItem(item.id, { coolerId: value })
-                            }
-                            aria-label="Cooler"
-                            variant="flat"
-                            className="w-auto"
-                            buttonClassName={
-                              item.coolerId === "Cooler"
-                                ? "text-[#8A8A8A]"
-                                : "text-[#111118]"
-                            }
-                            options={[
-                              { value: "Cooler", label: "Cooler" },
-                              ...COOLER_OPTIONS.map((cooler) => ({
-                                value: cooler,
-                                label: cooler,
-                              })),
-                            ]}
-                          />
-                        </td>
-                        <td aria-hidden className="p-0" />
-                        <td className={cn(td, "pr-5 text-right")}>
-                          {item.packed ? (
-                            <span className="inline-flex items-center justify-end gap-2">
-                              <span className="text-[13px] font-medium text-[#2F8F4E]">
-                                Packed
-                              </span>
-                              <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                                <Check size={11} strokeWidth={3} />
-                              </span>
-                            </span>
-                          ) : (
+                          </td>
+                          <td className={cn(td, "pr-3 font-semibold")}>
+                            {item.qty}
+                          </td>
+                          <td className={cn(td, "pr-3")}>
                             <button
                               type="button"
-                              disabled={!item.selected}
-                              onClick={() =>
-                                updateItem(item.id, { packed: true })
-                              }
-                              className="text-[13px] font-medium text-[#3B82F6] disabled:text-[#93C5FD]"
+                              onClick={(event) => {
+                                const anchor = event.currentTarget;
+                                setOpenMenu((current) =>
+                                  current?.id === item.id
+                                    ? null
+                                    : { id: item.id, anchor },
+                                );
+                              }}
+                              className="inline-flex max-w-full items-center gap-1 text-left text-[13px]"
                             >
-                              Item Packed
+                              <ChevronDown
+                                size={14}
+                                className="shrink-0 text-[#8A8A8A]"
+                              />
+                              <span
+                                className={cn(
+                                  "truncate",
+                                  item.selected
+                                    ? "text-[#111118]"
+                                    : "text-[#8A8A8A]",
+                                )}
+                              >
+                                {item.selected
+                                  ? `${item.selected.distributor} / ${item.selected.source}`
+                                  : "Select"}
+                              </span>
                             </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                            {openMenu?.id === item.id ? (
+                              <SourcePicker
+                                anchor={openMenu.anchor}
+                                options={item.options}
+                                onClose={() => setOpenMenu(null)}
+                                onChoose={(option) => {
+                                  // Inventory stock row → copy expDate / itemId / location via selected
+                                  updateItem(item.id, {
+                                    selected: option,
+                                    packed: false,
+                                  });
+                                  setOpenMenu(null);
+                                }}
+                              />
+                            ) : null}
+                          </td>
+                          <td className={cn(td, "pr-3")}>
+                            {item.selected?.expDate ?? ""}
+                          </td>
+                          <td className={cn(td, "pr-3")}>
+                            <span className="block truncate">
+                              {item.selected?.itemId ?? ""}
+                            </span>
+                          </td>
+                          <td className={cn(td, "pr-3")}>
+                            <LocationHover
+                              className="text-[13px] text-[#111118]"
+                              fullAddress={item.selected?.location ?? ""}
+                              label="Location"
+                            >
+                              {item.selected?.location ?? ""}
+                            </LocationHover>
+                          </td>
+                          <td className={cn(td, "pr-3")}>
+                            <Select
+                              value={item.coolerId}
+                              onChange={(value) =>
+                                updateItem(item.id, {
+                                  coolerId: value,
+                                  packed:
+                                    item.packed && coolerAssigned(value)
+                                      ? item.packed
+                                      : false,
+                                })
+                              }
+                              aria-label="Cooler ID"
+                              variant="flat"
+                              className="w-auto"
+                              buttonClassName={
+                                item.coolerId === "Cooler"
+                                  ? "text-[#8A8A8A]"
+                                  : "text-[#111118]"
+                              }
+                              options={[
+                                { value: "Cooler", label: "Cooler" },
+                                ...COOLER_OPTIONS.map((cooler) => ({
+                                  value: cooler,
+                                  label: cooler,
+                                })),
+                              ]}
+                            />
+                          </td>
+                          <td aria-hidden className="p-0" />
+                          <td className={cn(td, "pr-5 text-right")}>
+                            {item.packed ? (
+                              <span className="inline-flex items-center justify-end gap-2">
+                                <span className="text-[13px] font-medium text-[#2F8F4E]">
+                                  Packed
+                                </span>
+                                <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                                  <Check size={11} strokeWidth={3} />
+                                </span>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={!canPack}
+                                onClick={() =>
+                                  updateItem(item.id, { packed: true })
+                                }
+                                className="text-[13px] font-medium text-[#3B82F6] disabled:text-[#93C5FD]"
+                              >
+                                Item Packed
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </ScrollTable>
@@ -561,16 +636,18 @@ function PackingDetail({
       <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="text-[14px] font-medium text-[#111118]"
         >
           Cancel & Close
         </button>
         <button
           type="button"
-          disabled={!allPacked}
           onClick={handleReady}
-          className="rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white disabled:opacity-40"
+          className={cn(
+            "rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white",
+            !allReady && "opacity-40",
+          )}
           style={{ background: ORANGE }}
         >
           Cooler Ready
@@ -580,29 +657,69 @@ function PackingDetail({
   );
 }
 
+// Fixed tracks so columns stay packed left (no fr stretch gaps)
 const ROW_GRID =
-  "grid grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)] items-center gap-x-8";
+  "grid grid-cols-[220px_260px_160px_260px] items-center gap-x-5";
 
 export default function PackingCoolersPage() {
   useDocumentTitle("Cooler Packing");
+
+  const { upsertPacking, markLoaded, markPackingStarted, packingByCode } =
+    usePackingHandoff();
 
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [activeChip, setActiveChip] = useState("wed-20");
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [selectedDay, setSelectedDay] = useState(20);
+
+  const activeChipIndex = DELIVERY_CHIPS.findIndex(
+    (chip) => chip.id === activeChip,
+  );
+
+  const chipCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const chip of DELIVERY_CHIPS) {
+      counts[chip.id] = orders.filter((order) => {
+        const assigned = Boolean(packingByCode[order.code]?.packerId);
+        return assigned && order.deliveryDate.includes(chip.dateKey);
+      }).length;
+    }
+    return counts;
+  }, [orders, packingByCode]);
 
   const activeOrder =
     orders.find((order) => order.id === activeOrderId) ?? null;
 
   const filtered = useMemo(() => {
+    const chip = DELIVERY_CHIPS.find((entry) => entry.id === activeChip);
     const q = search.trim().toLowerCase();
-    let next = orders.filter(
-      (order) =>
-        !q ||
-        order.customer.toLowerCase().includes(q) ||
-        order.code.toLowerCase().includes(q),
-    );
+    let next = orders
+      .filter((order) => {
+        // §11: available in Cooler Packing after Packer Manager assignment
+        const handoff = packingByCode[order.code];
+        const assigned = Boolean(handoff?.packerId);
+        const matchesChip =
+          !chip || order.deliveryDate.includes(chip.dateKey);
+        const matchesSearch =
+          !q ||
+          order.customer.toLowerCase().includes(q) ||
+          order.code.toLowerCase().includes(q);
+        return assigned && matchesChip && matchesSearch;
+      })
+      .map((order) => {
+        const handoff = packingByCode[order.code];
+        return {
+          ...order,
+          packedAt: handoff?.coolerReadyAt ?? handoff?.packedAt ?? order.packedAt,
+          loadedAt: handoff?.loadedAt ?? order.loadedAt,
+          coolerIds: handoff?.coolerIds?.length
+            ? handoff.coolerIds
+            : order.coolerIds,
+        };
+      });
 
     if (sortBy === "packed-first") {
       next = [...next].sort(
@@ -613,7 +730,28 @@ export default function PackingCoolersPage() {
     }
 
     return next;
-  }, [orders, search, sortBy]);
+  }, [orders, search, sortBy, activeChip, packingByCode]);
+
+  function openPacking(order: PackOrder) {
+    markPackingStarted(order.code, formatPackTimestamp());
+    setActiveOrderId(order.id);
+  }
+
+  function cycleChip(delta: number) {
+    const index =
+      activeChipIndex >= 0 ? activeChipIndex : 0;
+    const next =
+      (index + delta + DELIVERY_CHIPS.length) % DELIVERY_CHIPS.length;
+    const chip = DELIVERY_CHIPS[next]!;
+    setActiveChip(chip.id);
+    setSelectedDay(chip.day);
+  }
+
+  function applyCalendarDay(day: number) {
+    setSelectedDay(day);
+    const match = DELIVERY_CHIPS.find((chip) => chip.day === day);
+    if (match) setActiveChip(match.id);
+  }
 
   if (activeOrder) {
     return (
@@ -626,6 +764,18 @@ export default function PackingCoolersPage() {
               order.id === updated.id ? updated : order,
             ),
           );
+          upsertPacking({
+            orderCode: updated.code,
+            packedAt: updated.packedAt,
+            coolerReadyAt: updated.packedAt,
+            loadedAt: updated.loadedAt,
+            coolerIds: updated.coolerIds,
+            packerName:
+              packingByCode[updated.code]?.packerName ?? PACKER_NAME,
+            packerId: packingByCode[updated.code]?.packerId,
+            packingStartedAt: packingByCode[updated.code]?.packingStartedAt,
+            items: updated.items,
+          });
           setActiveOrderId(null);
         }}
       />
@@ -633,18 +783,13 @@ export default function PackingCoolersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
             Cooler Packing
           </h1>
-          <div className="flex items-center gap-3 border-l border-[#ECECEA] pl-5">
-            <UserMenu className="items-center" />
-            <div className="hidden text-[12px] text-[#8A8A8A] lg:block">
-              Today, Tue, Jun 22, 2026
-            </div>
-          </div>
+          <UserMenu className="items-center" />
         </div>
 
         <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
@@ -671,70 +816,146 @@ export default function PackingCoolersPage() {
                 { value: "packed-first", label: "Packed first" },
               ]}
             />
+            <div className="ml-auto text-[12px] text-[#8A8A8A]">
+              Today, Tue, Jun 22, 2026
+            </div>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2 pb-1">
             {DELIVERY_CHIPS.map((chip) => {
               const active = activeChip === chip.id;
+              const count = chipCounts[chip.id] ?? 0;
               return (
                 <button
                   key={chip.id}
                   type="button"
-                  onClick={() => setActiveChip(chip.id)}
+                  onClick={() => {
+                    setActiveChip(chip.id);
+                    setSelectedDay(chip.day);
+                  }}
                   className={cn(
-                    "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                    "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
                     active
                       ? "border-transparent text-white"
-                      : "border-[#ECECEA] bg-white text-[#111118]",
+                      : "border-transparent bg-[#F3F3F1] text-[#111118]",
                   )}
                   style={active ? { background: GREEN } : undefined}
                 >
                   <span className="text-[13px] font-semibold">{chip.label}</span>
                   <span
                     className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      "inline-flex size-6 items-center justify-center rounded-full text-[11px] font-semibold",
                       active
-                        ? "bg-[#3D5A40] text-white"
-                        : "bg-[#F3F3F1] text-[#6B6B6B]",
+                        ? "bg-[#1F4524] text-white"
+                        : "bg-[#E4E4E1] text-[#6B6B6B]",
                     )}
                   >
-                    {chip.count}
+                    {count}
                   </span>
                 </button>
               );
             })}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="relative ml-auto flex items-center gap-2">
               <button
                 type="button"
+                onClick={() => cycleChip(-1)}
                 className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
                 type="button"
+                onClick={() => cycleChip(1)}
                 className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
               >
                 <ChevronRight size={15} />
               </button>
               <button
                 type="button"
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
+                onClick={() => setCalendarOpen((open) => !open)}
+                className={cn(
+                  "flex size-10 items-center justify-center rounded-[8px] border bg-white",
+                  calendarOpen
+                    ? "border-[#28402B] text-[#28402B]"
+                    : "border-[#ECECEA] text-[#8A8A8A]",
+                )}
               >
                 <Calendar size={14} />
               </button>
+
+              {calendarOpen ? (
+                <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+                  <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
+                    <span>July 2026</span>
+                    <div className="flex gap-1 text-[#8A8A8A]">
+                      <ChevronLeft size={14} />
+                      <ChevronRight size={14} />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
+                    {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                      <div key={day} className="py-1">
+                        {day}
+                      </div>
+                    ))}
+                    {Array.from({ length: 31 }, (_, index) => {
+                      const day = index + 1;
+                      const chipDay = DELIVERY_CHIPS.some(
+                        (chip) => chip.day === day,
+                      );
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => applyCalendarDay(day)}
+                          className={cn(
+                            "rounded-full py-1.5 text-[#111118]",
+                            selectedDay === day
+                              ? "bg-[#E8E5E0] font-semibold"
+                              : "hover:bg-background",
+                            chipDay && selectedDay !== day && "font-medium",
+                          )}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#F0F0EE] pt-3">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarOpen(false)}
+                      className="text-[13px] text-[#8A8A8A]"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        applyCalendarDay(selectedDay);
+                        setCalendarOpen(false);
+                      }}
+                      className="rounded-[8px] px-4 py-1.5 text-[13px] font-medium text-white"
+                      style={{ background: ORANGE }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-        <ScrollTable minWidth={780} className="rounded-[10px]">
+        <ScrollTable minWidth={860} className="rounded-[12px] border border-[#ECECEA] bg-white">
           <div
             className={cn(
               ROW_GRID,
-              TABLE_HEADER,
-              "border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5",
+              MUTED_HEADER,
+              "border-b border-[#F0F0EE] bg-white px-5 py-2.5",
             )}
           >
             <div>Customer Order ID</div>
@@ -752,20 +973,20 @@ export default function PackingCoolersPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "h-[104px] border-b border-[#F3F3F1] px-5 last:border-b-0",
+                  "min-h-[88px] border-b border-[#F0F0EE] px-5 py-4 last:border-b-0",
                 )}
               >
                 <button
                   type="button"
-                  onClick={() => setActiveOrderId(order.id)}
-                  className="text-left"
+                  onClick={() => openPacking(order)}
+                  className="max-w-[280px] text-left"
                 >
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
-                    <ChevronRight size={13} className="text-[#A9A9A9]" />
+                    <ChevronRight size={14} className="text-[#A9A9A9]" />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
+                    <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                       {order.code}
                     </span>
                     <span className="text-[12px] text-[#8A8A8A]">
@@ -776,9 +997,9 @@ export default function PackingCoolersPage() {
 
                 <div>
                   {packed ? (
-                    <div className="inline-flex items-center gap-3">
+                    <div className="inline-flex flex-wrap items-center gap-3">
                       <span
-                        className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
                         style={{ background: PACKED_GREEN }}
                       >
                         Packed
@@ -791,8 +1012,8 @@ export default function PackingCoolersPage() {
                   ) : (
                     <button
                       type="button"
-                      onClick={() => setActiveOrderId(order.id)}
-                      className="inline-flex h-10 items-center rounded-[10px] bg-[#2A2A2A] px-4 text-[12px] font-medium text-white"
+                      onClick={() => openPacking(order)}
+                      className="inline-flex h-9 items-center rounded-[10px] bg-[#2E2E2E] px-4 text-[12px] font-medium text-white"
                     >
                       Start Packing
                     </button>
@@ -806,7 +1027,7 @@ export default function PackingCoolersPage() {
                         {order.coolerIds.map((coolerId) => (
                           <span
                             key={coolerId}
-                            className="w-fit rounded-[6px] bg-[#F3F3F1] px-2 py-1 font-mono text-[11px] text-[#6B6B6B]"
+                            className="w-fit rounded-[6px] bg-id-pill px-2 py-1 font-mono text-[11px] font-medium text-[#6B6B6B]"
                           >
                             {coolerId}
                           </span>
@@ -815,8 +1036,8 @@ export default function PackingCoolersPage() {
                       {!loaded ? (
                         <button
                           type="button"
-                          onClick={() => setActiveOrderId(order.id)}
-                          className="inline-flex h-10 items-center text-[13px] font-medium"
+                          onClick={() => openPacking(order)}
+                          className="inline-flex h-9 items-center text-[13px] font-medium"
                           style={{ color: LINK_BLUE }}
                         >
                           Edit
@@ -829,9 +1050,9 @@ export default function PackingCoolersPage() {
                 <div>
                   {packed ? (
                     loaded ? (
-                      <div className="inline-flex items-center gap-3">
+                      <div className="inline-flex flex-wrap items-center gap-3">
                         <span
-                          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                          className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
                           style={{ background: PACKED_GREEN }}
                         >
                           Loaded
@@ -844,16 +1065,32 @@ export default function PackingCoolersPage() {
                     ) : (
                       <button
                         type="button"
-                        onClick={() =>
+                        onClick={() => {
+                          const loadedAt = formatPackTimestamp();
                           setOrders((current) =>
                             current.map((entry) =>
                               entry.id === order.id
-                                ? { ...entry, loadedAt: "8/29/26, 8:45am" }
+                                ? { ...entry, loadedAt }
                                 : entry,
                             ),
-                          )
-                        }
-                        className="inline-flex h-10 items-center rounded-[10px] bg-[#2A2A2A] px-4 text-[12px] font-medium text-white"
+                          );
+                          markLoaded(order.code, loadedAt);
+                          upsertPacking({
+                            orderCode: order.code,
+                            packedAt: order.packedAt,
+                            coolerReadyAt: order.packedAt,
+                            loadedAt,
+                            coolerIds: order.coolerIds,
+                            packerName:
+                              packingByCode[order.code]?.packerName ??
+                              PACKER_NAME,
+                            packerId: packingByCode[order.code]?.packerId,
+                            packingStartedAt:
+                              packingByCode[order.code]?.packingStartedAt,
+                            items: order.items,
+                          });
+                        }}
+                        className="inline-flex h-9 items-center rounded-[10px] bg-[#2E2E2E] px-4 text-[12px] font-medium text-white"
                       >
                         Load Now
                       </button>

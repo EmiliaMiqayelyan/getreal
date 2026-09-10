@@ -13,11 +13,13 @@ import { UserMenu } from "@/components/layout/UserMenu";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
-const GREEN = "#28402B";
+const GREEN = "#2B5B31";
 
 type TimelineStepKey =
   | "requested"
@@ -104,6 +106,34 @@ const SAMPLE_ITEMS: OrderItem[] = [
   { name: "Red Beets", qty: 1, unit: "bunch", unitPrice: 12 },
   { name: "A2 Cheddar", qty: 4, unit: "oz", unitPrice: 2 },
 ];
+
+function applyPackingHandoff(
+  order: CustomerOrderRow,
+  packing?: PackingHandoffUpdate,
+): CustomerOrderRow {
+  if (!packing) return order;
+
+  const readyAt = packing.coolerReadyAt ?? packing.packedAt;
+
+  const steps = order.steps.map((step) => {
+    if (step.key !== "packing" || !readyAt) return step;
+    return {
+      ...step,
+      done: true,
+      person: packing.packerName || step.person,
+      shortLabel:
+        packing.packerName?.split(" ")[0] ?? step.shortLabel ?? "Packer",
+      at: readyAt,
+    };
+  });
+
+  return {
+    ...order,
+    coolerIds: packing.coolerIds.length ? packing.coolerIds : order.coolerIds,
+    packerAssigned: packing.packerName || order.packerAssigned,
+    steps,
+  };
+}
 
 function makeSteps(doneCount: number): TimelineStep[] {
   const meta = [
@@ -610,6 +640,23 @@ function OrderTimelineTrack({
 }
 
 
+function DayHeaderIcon() {
+  const [useFallback, setUseFallback] = useState(false);
+
+  if (useFallback) {
+    return <Truck size={15} className="shrink-0 text-[#F57850]" aria-hidden />;
+  }
+
+  return (
+    <img
+      src="/icons/track-icon.png"
+      alt=""
+      className="size-[15px] shrink-0 object-contain"
+      onError={() => setUseFallback(true)}
+    />
+  );
+}
+
 function OrderDetailPanel({
   order,
   onClose,
@@ -775,6 +822,8 @@ function OrderDetailPanel({
 export default function CustomerOrdersPage() {
   useDocumentTitle("Customer Orders");
 
+  const { packingByCode } = usePackingHandoff();
+
   const [orders, setOrders] = useState(ACTIVE_ORDERS);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [activeChip, setActiveChip] = useState("wed-20");
@@ -790,9 +839,17 @@ export default function CustomerOrdersPage() {
     stepKey: TimelineStepKey;
   } | null>(null);
 
+  const ordersWithPacking = useMemo(
+    () =>
+      orders.map((order) =>
+        applyPackingHandoff(order, packingByCode[order.id]),
+      ),
+    [orders, packingByCode],
+  );
+
   const filteredActive = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return orders.filter((order) => {
+    return ordersWithPacking.filter((order) => {
       const matchesSearch =
         !q ||
         order.customerName.toLowerCase().includes(q) ||
@@ -806,7 +863,7 @@ export default function CustomerOrdersPage() {
         (statusFilter === "delivered" && doneCount >= 4);
       return matchesSearch && matchesStatus;
     });
-  }, [orders, search, statusFilter]);
+  }, [ordersWithPacking, search, statusFilter]);
 
   const filteredCompleted = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -846,7 +903,7 @@ export default function CustomerOrdersPage() {
   );
 
   const selectedOrder =
-    orders.find((order) => order.id === selectedOrderId) ?? null;
+    ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
 
   function advanceStatus(orderId: string, targetDoneCount: number) {
     setOrders((current) =>
@@ -988,7 +1045,7 @@ export default function CustomerOrdersPage() {
                       type="button"
                       onClick={() => setActiveChip(chip.id)}
                       className={cn(
-                        "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
+                        "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
                         active
                           ? "border-transparent text-white"
                           : "border-[#ECECEA] bg-white text-[#111118]",
@@ -1183,63 +1240,62 @@ export default function CustomerOrdersPage() {
                   {week}
                 </h2>
                 {Array.from(days.entries()).map(([day, dayOrders]) => (
-                  <div key={day} className="mb-6">
-                    <div className="mb-3 flex items-center gap-2 text-[14px] font-semibold text-[#111118]">
-                      <Truck size={15} className="text-[#F57850]" />
-                      {day}
-                      <span className="font-medium text-[#8A8A8A]">
-                        · {dayOrders.length} orders
+                  <div
+                    key={day}
+                    className="mb-6 overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                  >
+                    <div className="flex items-center gap-2 border-b border-[#F0F0EE] px-4 py-3.5 text-[14px] font-semibold text-[#111118]">
+                      <DayHeaderIcon />
+                      <span>
+                        {day}
+                        <span className="font-medium text-[#8A8A8A]">
+                          {" "}
+                          · {dayOrders.length} orders
+                        </span>
                       </span>
                     </div>
-                    <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                      <div className="border-b border-[#E8E8E6] bg-[#FBF9F9] px-4 py-2.5">
-                        <span className="text-[13px] font-semibold text-[#111118]">
-                          {week}
-                        </span>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <div className="min-w-[860px]">
-                          <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
-                            <div>Order ID</div>
-                            <div>Customer</div>
-                            <div>Address</div>
-                            <div>Zip Code</div>
-                            <div>Order Date</div>
-                            <div>Delivered</div>
-                            <div>Items</div>
-                            <div>Total</div>
-                          </div>
-                          {dayOrders.map((order) => (
-                            <div
-                              key={order.id}
-                              className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
-                            >
-                              <span className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                                {order.id}
-                              </span>
-                              <div className="font-semibold">
-                                {order.customer}
-                              </div>
-                              <LocationHover
-                                className="text-[13px] text-[#111118]"
-                                fullAddress={order.address}
-                              >
-                                {order.address}
-                              </LocationHover>
-                              <div>{order.zip}</div>
-                              <div className="text-[#111118]">
-                                {order.orderDate}
-                              </div>
-                              <div className="text-[#111118]">
-                                {order.delivered}
-                              </div>
-                              <div>{order.items}</div>
-                              <div className="font-bold">
-                                {currency(order.total)}
-                              </div>
-                            </div>
-                          ))}
+                    <div className="overflow-x-auto">
+                      <div className="min-w-[860px]">
+                        <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
+                          <div>Order ID</div>
+                          <div>Customer</div>
+                          <div>Address</div>
+                          <div>Zip Code</div>
+                          <div>Order Date</div>
+                          <div>Delivered</div>
+                          <div>Items</div>
+                          <div>Total</div>
                         </div>
+                        {dayOrders.map((order) => (
+                          <div
+                            key={order.id}
+                            className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
+                          >
+                            <span className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                              {order.id}
+                            </span>
+                            <div className="font-semibold">
+                              {order.customer}
+                            </div>
+                            <LocationHover
+                              className="text-[13px] text-[#111118]"
+                              fullAddress={order.address}
+                            >
+                              {order.address}
+                            </LocationHover>
+                            <div>{order.zip}</div>
+                            <div className="text-[#111118]">
+                              {order.orderDate}
+                            </div>
+                            <div className="text-[#111118]">
+                              {order.delivered}
+                            </div>
+                            <div>{order.items}</div>
+                            <div className="font-bold">
+                              {currency(order.total)}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   </div>

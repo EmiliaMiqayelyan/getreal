@@ -105,12 +105,18 @@ export type AdminCustomer = {
 export type RolePermissions = {
   sidebarDashboard: boolean;
   sidebarDistributors: boolean;
+  sidebarSource: boolean;
+  sidebarItems: boolean;
   sidebarProductsForSale: boolean;
   sidebarProductOrders: boolean;
   sidebarCustomers: boolean;
   sidebarCustomerOrders: boolean;
   sidebarInventory: boolean;
+  sidebarReceiving: boolean;
+  sidebarCoolerPacking: boolean;
+  sidebarPackerManager: boolean;
   sidebarRoles: boolean;
+  sidebarNotifications: boolean;
   productsCreate: boolean;
   productsEdit: boolean;
   productsDelete: boolean;
@@ -129,6 +135,15 @@ export type RoleUser = {
   name: string;
   email: string;
   phone: string;
-  type: "Superadmin" | "Manager" | "Warehouse Worker" | "Driver";
+  type: "Superadmin" | "Manager" | "Warehouse Worker" | "Driver" | string;
+  permissions: RolePermissions;
+  /** Demo-only stored password; empty/omit means unchanged on edit (§11). */
+  password?: string;
+};
+
+/** Named role template editable in Role Management modal. */
+export type ManagedRole = {
+  id: string;
+  name: string;
   permissions: RolePermissions;
 };

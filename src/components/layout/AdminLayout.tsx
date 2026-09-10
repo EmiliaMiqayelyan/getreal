@@ -2,6 +2,9 @@ import { Suspense } from "react";
 import { Navigate, Outlet } from "react-router";
 
 import { AppCatalogProvider } from "@/context/AppCatalogContext";
+import { PackingHandoffProvider } from "@/context/PackingHandoffContext";
+import { ReceivingHandoffProvider } from "@/context/ReceivingHandoffContext";
+import { RolesUsersProvider } from "@/context/RolesUsersContext";
 import { AdminShell } from "@/components/layout/AdminShell";
 import { ROUTES } from "@/constants";
 import { useIdleLogout } from "@/hooks/useIdleLogout";
@@ -26,7 +29,13 @@ export function AdminLayout() {
 
   return (
     <AppCatalogProvider>
-      <AuthenticatedShell />
+      <ReceivingHandoffProvider>
+        <PackingHandoffProvider>
+          <RolesUsersProvider>
+            <AuthenticatedShell />
+          </RolesUsersProvider>
+        </PackingHandoffProvider>
+      </ReceivingHandoffProvider>
     </AppCatalogProvider>
   );
 }

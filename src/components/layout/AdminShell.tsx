@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router";
+import { Link, Navigate, useLocation } from "react-router";
 import { Menu } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { APP_NAME } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { getRole } from "@/lib/auth";
+import { canAccessPath } from "@/utils/rolesUsers";
 
 type AdminShellProps = {
   children: React.ReactNode;
@@ -15,7 +17,10 @@ type AdminShellProps = {
 export function AdminShell({ children }: AdminShellProps) {
   const [navOpen, setNavOpen] = useState(false);
   const { pathname } = useLocation();
-  const home = getRoleHome(getRole());
+  const role = getRole();
+  const home = getRoleHome(role);
+  const { sessionPermissions } = useRolesUsers();
+  const allowed = canAccessPath(sessionPermissions, pathname);
 
   useEffect(() => {
     setNavOpen(false);
@@ -37,6 +42,10 @@ export function AdminShell({ children }: AdminShellProps) {
       document.body.style.overflow = previousOverflow;
     };
   }, [navOpen]);
+
+  if (!allowed) {
+    return <Navigate to={home} replace />;
+  }
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">

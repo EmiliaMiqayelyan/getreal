@@ -152,6 +152,12 @@ export default function PushNotificationsPage() {
     setDraft(emptyDraft());
   }
 
+  function removeNotification() {
+    if (!draft.id) return;
+    setItems((current) => current.filter((item) => item.id !== draft.id));
+    closeModal();
+  }
+
   function save() {
     if (!draft.trigger || !draft.scheduledFor || !draft.subject.trim()) return;
 
@@ -268,7 +274,7 @@ export default function PushNotificationsPage() {
                   className="border-b border-[#ECECEA] last:border-b-0"
                 >
                   <td className={cn(td, "pl-5 pr-3")}>
-                    <span className="inline-flex rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
+                    <span className="inline-flex rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
                       {item.id}
                     </span>
                   </td>
@@ -428,22 +434,36 @@ export default function PushNotificationsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] px-6 py-4">
-              <button
-                type="button"
-                onClick={closeModal}
-                className="text-[14px] font-medium text-[#8A8A8A]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!canSave}
-                onClick={save}
-                className="h-[36px] rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white disabled:opacity-40"
-              >
-                Save
-              </button>
+            <div className="flex items-center justify-between gap-4 px-6 pt-1 pb-5">
+              {draft.id ? (
+                <button
+                  type="button"
+                  onClick={removeNotification}
+                  className="text-[13px] font-medium text-[#E25B5B]"
+                >
+                  Remove Notification
+                </button>
+              ) : (
+                <span />
+              )}
+
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="text-[14px] font-medium text-[#8A8A8A]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={!canSave}
+                  onClick={save}
+                  className="h-[36px] rounded-[8px] bg-[#2E2E2E] px-5 text-[13px] font-medium text-white disabled:opacity-40"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
         </div>

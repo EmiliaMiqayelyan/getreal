@@ -16,9 +16,11 @@ import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
+import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
+import { handoffToStockSections } from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
 const GREEN = "#2B5B31";
@@ -37,6 +39,8 @@ const LOCATION_OPTIONS = [
 
 type InventoryLot = {
   orderId: string;
+  /** Distributor delivery ID preserved from receiving (DP-xxxx). */
+  deliveryId?: string;
   distributor: string;
   source: string;
   deliveryDate: string;
@@ -66,7 +70,10 @@ type LocationSplit = {
 type StockItem = {
   id: string;
   orderId: string;
+  deliveryId?: string;
   itemName: string;
+  source?: string;
+  purchased?: string;
   qty: number;
   unit: string;
   qtyAfterUnpack: string;
@@ -1224,6 +1231,7 @@ type EditLocationTarget = {
 
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
+  const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
 
   const [query, setQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("");
@@ -1231,7 +1239,7 @@ export default function InventoryPage() {
   const [unitFilter, setUnitFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sections, setSections] = useState(INITIAL_SECTIONS);
-  const [orders, setOrders] = useState(RECEIVED_ORDERS);
+  const [seedOrders, setSeedOrders] = useState(RECEIVED_ORDERS);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(["angus"]),
   );
@@ -1239,6 +1247,31 @@ export default function InventoryPage() {
   const [showToast, setShowToast] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
+
+  const handoffOrders = useMemo<ReceivedOrder[]>(() => {
+    return pendingHandoffs.map((handoff) => {
+      const sectionsFromHandoff = handoffToStockSections(
+        handoff.deliveryId,
+        handoff.items,
+      );
+      const itemCount = handoff.items.length;
+      return {
+        id: handoff.deliveryId,
+        supplier: handoff.distributor,
+        itemsCount: `${itemCount} item${itemCount === 1 ? "" : "s"}`,
+        receivedAt: handoff.receivedAt,
+        sections: sectionsFromHandoff,
+      };
+    });
+  }, [pendingHandoffs]);
+
+  const orders = useMemo(() => {
+    const seedIds = new Set(seedOrders.map((order) => order.id));
+    const uniqueHandoffs = handoffOrders.filter(
+      (order) => !seedIds.has(order.id),
+    );
+    return [...uniqueHandoffs, ...seedOrders];
+  }, [handoffOrders, seedOrders]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
 
@@ -1426,7 +1459,6 @@ export default function InventoryPage() {
       .replace(" · ", ", ")
       .replace(" PM", "")
       .replace(" AM", "");
-    const purchased = "$125/case";
     const storedProductIds = new Set<string>();
 
     for (const section of order.sections) {
@@ -1437,7 +1469,8 @@ export default function InventoryPage() {
       }
     }
 
-    setOrders((current) => current.filter((item) => item.id !== order.id));
+    setSeedOrders((current) => current.filter((item) => item.id !== order.id));
+    removeHandoff(order.id);
 
     setSections((current) => {
       const next = current.map((section) => ({
@@ -1474,13 +1507,13 @@ export default function InventoryPage() {
             for (const placement of placements) {
               product.lots.push({
                 orderId: item.orderId,
+                deliveryId: item.deliveryId ?? order.id,
                 distributor: order.supplier,
-                source: sectionSourceFor(
-                  inventorySection.title,
-                  item.itemName,
-                ),
+                source:
+                  item.source ??
+                  sectionSourceFor(inventorySection.title, item.itemName),
                 deliveryDate,
-                purchased,
+                purchased: item.purchased ?? "$125/case",
                 qty: placement.qty,
                 location: placement.location,
                 unit: item.unit === "Case" ? "1lb" : item.unit,

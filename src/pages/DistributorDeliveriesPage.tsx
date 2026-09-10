@@ -11,18 +11,30 @@ import {
   X,
 } from "lucide-react";
 
+import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import type { ReceivingHandoffLine } from "@/types/receiving";
 import { cn } from "@/utils/cn";
+import {
+  formatDeliveryChipLabel,
+  parseDeliveryDateId,
+  toDeliveryDateId,
+} from "@/utils/deliveryCalendar";
+import {
+  acceptedLinesOnly,
+  formatReceivedAt,
+  printItemLabel,
+} from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
 const GREEN = "#28402B";
 const LINK_BLUE = "#3B82F6";
-
-type DeliveryChip = { id: string; label: string; count: number };
+const CHIP_WINDOW_SIZE = 3;
 
 type LineItem = {
   id: string;
@@ -41,6 +53,8 @@ type DeliveryOrder = {
   distributor: string;
   orderDate: string;
   expectedDelivery: string;
+  /** ISO date id for receiving date navigation. */
+  deliveryDateId: string;
   totalPrice: number;
   checked: boolean;
   items: LineItem[];
@@ -66,12 +80,6 @@ type RejectImagePreview = {
   result: ItemCheckState;
 };
 
-const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-14", label: "Wed, Jul 14", count: 13 },
-  { id: "wed-20", label: "Wed, Jul 20", count: 7 },
-  { id: "wed-27", label: "Wed, Jul 27", count: 3 },
-];
-
 const REJECT_REASONS: RejectReason[] = [
   "Wrong Item",
   "Damaged",
@@ -80,6 +88,46 @@ const REJECT_REASONS: RejectReason[] = [
 ];
 
 const REJECT_PHOTO_SAMPLE = "/images/receiving-reject-sample.jpg";
+
+const RECEIVING_DATES = [
+  new Date(2026, 6, 14),
+  new Date(2026, 6, 20),
+  new Date(2026, 6, 27),
+  new Date(2026, 7, 3),
+  new Date(2026, 7, 10),
+];
+
+const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
+
+function toIsoDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatExpirationDate(iso: string) {
+  const date = parseIsoDate(iso);
+  if (!date) return iso;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function monthLabel(year: number, month: number) {
+  return new Date(year, month, 1).toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
 
 function RejectImageDrawer({
   preview,
@@ -140,38 +188,6 @@ function RejectImageDrawer({
   );
 }
 
-const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
-
-function toIsoDate(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function parseIsoDate(value: string) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function formatExpirationDate(iso: string) {
-  const date = parseIsoDate(iso);
-  if (!date) return iso;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
-
-function monthLabel(year: number, month: number) {
-  return new Date(year, month, 1).toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  });
-}
-
 function RejectReasonPopover({
   anchor,
   onClose,
@@ -208,7 +224,6 @@ function RejectReasonPopover({
     }
 
     place();
-    // Re-measure after paint so height-aware flip works.
     requestAnimationFrame(place);
     window.addEventListener("resize", place);
     window.addEventListener("scroll", place, true);
@@ -275,7 +290,6 @@ function RejectReasonPopover({
             if (!file) return;
             setPhotoTaken(true);
             onPhoto?.(file);
-            // Allow taking another photo of the same item.
             event.target.value = "";
           }}
         />
@@ -296,9 +310,11 @@ function RejectReasonPopover({
 function ExpirationDatePicker({
   value,
   onChange,
+  readOnly = false,
 }: {
   value: string;
   onChange: (iso: string) => void;
+  readOnly?: boolean;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -326,7 +342,6 @@ function ExpirationDatePicker({
       const rect = anchor.getBoundingClientRect();
       const width = 280;
       const gap = 8;
-      // Always open below the pill so the trigger stays visible.
       const top = rect.bottom + gap;
       let left = rect.left;
       if (left + width > window.innerWidth - 12) {
@@ -377,6 +392,18 @@ function ExpirationDatePicker({
     setViewMonth(next.getMonth());
   }
 
+  if (readOnly) {
+    return (
+      <div className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#E0E0DE] bg-[#F9FAFB] px-2.5 text-[13px] text-[#111118]">
+        <Calendar size={14} className="shrink-0 text-[#8A8A8A]" />
+        <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
+        <span className="min-w-0 truncate">
+          {value ? formatExpirationDate(value) : "—"}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <>
       <button
@@ -386,13 +413,16 @@ function ExpirationDatePicker({
         aria-expanded={open}
         aria-label="Expiration date"
         onClick={() => setOpen((current) => !current)}
-        className="relative flex h-10 w-[128px] items-center rounded-[8px] border border-[#E0E0DE] bg-white pr-3 pl-9 text-left text-[13px] text-[#111118] outline-none"
+        className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#E0E0DE] bg-white px-2.5 text-left text-[13px] outline-none"
       >
-        <Calendar
-          size={14}
-          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-        />
-        <span className="min-w-0 truncate">
+        <Calendar size={14} className="shrink-0 text-[#6A6A6A]" />
+        <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            value ? "text-[#111118]" : "text-[#8A8A8A]",
+          )}
+        >
           {value ? formatExpirationDate(value) : "Select"}
         </span>
       </button>
@@ -478,6 +508,7 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     distributor: "4PF Co.",
     orderDate: "Jul 16, 12:34 PM",
     expectedDelivery: "Jul 18, 8:00 AM",
+    deliveryDateId: "2026-07-20",
     totalPrice: 480,
     checked: false,
     items: [
@@ -494,6 +525,7 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     distributor: "Tropical Produce LLC",
     orderDate: "Jul 16, 12:34 PM",
     expectedDelivery: "Jul 18, 8:00 AM",
+    deliveryDateId: "2026-07-20",
     totalPrice: 101.25,
     checked: false,
     items: [
@@ -506,6 +538,7 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     distributor: "Rancho Protein LLC",
     orderDate: "Jul 16, 12:34 PM",
     expectedDelivery: "Jul 18, 8:00 AM",
+    deliveryDateId: "2026-07-20",
     totalPrice: 101.25,
     checked: false,
     items: [
@@ -521,12 +554,26 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     distributor: "4PF Co.",
     orderDate: "Jul 14, 10:12 AM",
     expectedDelivery: "Jul 16, 8:00 AM",
+    deliveryDateId: "2026-07-14",
     totalPrice: 355,
     checked: true,
     items: [
       { id: "li-r1", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 125, priceLabel: "$125/case" },
       { id: "li-r2", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 90, priceLabel: "$90/case" },
       { id: "li-r3", itemCode: "ID-015-04", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 50, priceLabel: "$50/case" },
+    ],
+  },
+  {
+    id: "DP-1050",
+    distributor: "Rancho Protein LLC",
+    orderDate: "Jul 24, 9:00 AM",
+    expectedDelivery: "Jul 26, 8:00 AM",
+    deliveryDateId: "2026-07-27",
+    totalPrice: 215,
+    checked: false,
+    items: [
+      { id: "li-14", itemCode: "ID-002-09", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
+      { id: "li-15", itemCode: "ID-001-22", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
     ],
   },
 ];
@@ -574,19 +621,70 @@ function emptyChecks(items: LineItem[]): Record<string, ItemCheckState> {
   );
 }
 
+function isChecksDirty(
+  items: LineItem[],
+  checks: Record<string, ItemCheckState>,
+) {
+  return items.some((item) => {
+    const state = checks[item.id];
+    if (!state) return false;
+    return (
+      state.status !== "pending" ||
+      state.expiration !== "" ||
+      state.itemId !== item.itemCode ||
+      Boolean(state.reason) ||
+      Boolean(state.photoName) ||
+      Boolean(state.photoUrl)
+    );
+  });
+}
+
+function validateChecks(
+  items: LineItem[],
+  checks: Record<string, ItemCheckState>,
+) {
+  const errors: string[] = [];
+  for (const item of items) {
+    const state = checks[item.id];
+    if (!state || state.status === "pending") {
+      errors.push(`${item.name}: accept or reject required`);
+      continue;
+    }
+    if (!state.itemId.trim()) {
+      errors.push(`${item.name}: item / order ID required`);
+    }
+    if (state.status === "accepted" && !state.expiration) {
+      errors.push(`${item.name}: expiration date required`);
+    }
+    if (state.status === "rejected" && !state.reason) {
+      errors.push(`${item.name}: rejection reason required`);
+    }
+  }
+  return errors;
+}
+
 function CheckOrderView({
   order,
+  initialChecks,
+  readOnly = false,
   onClose,
   onAccepted,
 }: {
   order: DeliveryOrder;
+  initialChecks?: Record<string, ItemCheckState>;
+  readOnly?: boolean;
   onClose: () => void;
   onAccepted: (orderId: string, checks: Record<string, ItemCheckState>) => void;
 }) {
-  const [checks, setChecks] = useState(() => emptyChecks(order.items));
+  const [checks, setChecks] = useState(
+    () => initialChecks ?? emptyChecks(order.items),
+  );
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [rejectAnchor, setRejectAnchor] = useState<HTMLElement | null>(null);
-  const [phase, setPhase] = useState<"check" | "review">("check");
+  const [phase, setPhase] = useState<"check" | "review">(
+    readOnly ? "review" : "check",
+  );
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const categories = useMemo(() => {
     const map = new Map<string, LineItem[]>();
@@ -602,14 +700,41 @@ function CheckOrderView({
   );
 
   function updateCheck(id: string, patch: Partial<ItemCheckState>) {
+    if (readOnly) return;
+    setValidationError(null);
     setChecks((current) => ({
       ...current,
       [id]: { ...current[id], ...patch },
     }));
   }
 
+  function requestClose() {
+    if (readOnly) {
+      onClose();
+      return;
+    }
+    if (isChecksDirty(order.items, checks)) {
+      const leave = window.confirm(
+        "You have unsaved receiving changes. Leave without completing Accept Order?",
+      );
+      if (!leave) return;
+    }
+    onClose();
+  }
+
+  function handleAcceptOrder() {
+    const errors = validateChecks(order.items, checks);
+    if (errors.length) {
+      setValidationError(errors[0] ?? "Complete all required receiving fields.");
+      setPhase("check");
+      return;
+    }
+    onAccepted(order.id, checks);
+  }
+
+  // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right
   const col =
-    "grid-cols-[220px_48px_56px_140px_minmax(200px,auto)_minmax(0,1fr)_220px]";
+    "grid-cols-[minmax(140px,220px)_40px_52px_148px_auto_minmax(16px,1fr)_auto]";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
@@ -617,12 +742,15 @@ function CheckOrderView({
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-              Check Order
+              {readOnly ? "View Order" : "Check Order"}
             </h1>
             <p className="mt-1 text-[13px] text-[#8A8A8A]">
-              Delivery Validation From{" "}
+              {readOnly ? "Processed Receiving From" : "Delivery Validation From"}{" "}
               <span className="font-medium text-[#111118]">
                 {order.distributor}
+              </span>
+              <span className="ml-2 font-mono text-[12px] text-[#6A6A6A]">
+                {order.id}
               </span>
             </p>
           </div>
@@ -631,16 +759,22 @@ function CheckOrderView({
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        {validationError ? (
+          <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
+            {validationError}
+          </div>
+        ) : null}
+
         <div className="space-y-6">
           {categories.map(([category, items]) => (
             <section key={category}>
               <h2 className="mb-3 text-[16px] font-semibold text-[#111118]">
                 {category}
               </h2>
-              <ScrollTable minWidth={860} className="rounded-[12px]">
+              <ScrollTable minWidth={900} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#9A9A9A] uppercase",
                     col,
                   )}
                 >
@@ -652,7 +786,7 @@ function CheckOrderView({
                     {category === "Fruits" ? "Item ID" : "Order ID"}
                   </span>
                   <span aria-hidden />
-                  <span>Actions</span>
+                  <span className="text-right">Actions</span>
                 </div>
 
                 {items.map((item) => {
@@ -661,7 +795,7 @@ function CheckOrderView({
                     <div
                       key={item.id}
                       className={cn(
-                        "relative grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-3 last:border-b-0",
+                        "relative grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-3.5 last:border-b-0",
                         col,
                         state.status === "accepted" &&
                           "border-l-[3px] border-l-[#2F8F4E]",
@@ -669,47 +803,85 @@ function CheckOrderView({
                           "border-l-[3px] border-l-[#F57850]",
                       )}
                     >
-                      <span className="min-w-0 truncate text-[13px] font-medium text-[#111118]">
+                      <span className="min-w-0 truncate text-[13px] text-[#111118]">
                         {item.name}
                       </span>
-                      <span className="text-center text-[13px] text-[#111118]">
+                      <span className="text-[13px] font-semibold text-[#111118]">
                         {item.quantity}
                       </span>
-                      <span className="text-[13px] font-medium text-[#111118]">
+                      <span className="text-[13px] font-bold text-[#111118]">
                         {item.unit}
                       </span>
-                      <div className="w-[140px]">
+                      <div className="min-w-0">
                         <ExpirationDatePicker
                           value={state.expiration}
+                          readOnly={readOnly}
                           onChange={(expiration) =>
                             updateCheck(item.id, { expiration })
                           }
                         />
                       </div>
-                      <div className="flex items-center gap-x-2.5">
+                      <div className="flex w-max items-center gap-x-3">
+                        {readOnly ? (
+                          <span className="inline-flex h-10 w-[132px] shrink-0 items-center rounded-[8px] border border-[#E0E0DE] bg-[#F9FAFB] px-3 font-mono text-[13px] text-[#111118]">
+                            {state.itemId}
+                          </span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={state.itemId}
+                            onChange={(event) =>
+                              updateCheck(item.id, {
+                                itemId: event.target.value,
+                              })
+                            }
+                            className="h-10 w-[132px] shrink-0 rounded-[8px] border border-[#E0E0DE] bg-white px-3 text-[13px] text-[#111118] outline-none"
+                          />
+                        )}
                         <button
                           type="button"
-                          className="inline-flex h-10 shrink-0 items-center rounded-[10px] px-3 text-[13px] font-medium"
+                          className="inline-flex h-10 shrink-0 items-center text-[13px] font-medium"
                           style={{ color: LINK_BLUE }}
+                          onClick={() =>
+                            printItemLabel({
+                              itemName: item.name,
+                              itemId: state.itemId || item.itemCode,
+                              deliveryId: order.id,
+                              distributor: order.distributor,
+                              expiration: state.expiration,
+                            })
+                          }
                         >
                           Print
                         </button>
-                        <input
-                          type="text"
-                          value={state.itemId}
-                          onChange={(event) =>
-                            updateCheck(item.id, { itemId: event.target.value })
-                          }
-                          className="h-10 w-[118px] rounded-[8px] border border-[#E0E0DE] bg-white px-3 text-[13px] text-[#111118] outline-none"
-                        />
                       </div>
                       <span aria-hidden />
-                      <div className="flex items-center gap-x-2 whitespace-nowrap">
-                        {state.status === "accepted" ? (
+                      <div className="flex items-center justify-end gap-x-4 whitespace-nowrap">
+                        {readOnly ? (
+                          state.status === "accepted" ? (
+                            <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                              <Check size={14} strokeWidth={3} />
+                            </span>
+                          ) : state.status === "rejected" ? (
+                            <div className="flex items-center gap-2">
+                              {state.reason ? (
+                                <span className="text-[12px] font-medium text-[#E25B5B]">
+                                  {state.reason}
+                                </span>
+                              ) : null}
+                              <span className="inline-flex size-8 items-center justify-center rounded-full bg-[#E25B5B] text-white">
+                                <X size={14} strokeWidth={3} />
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-[12px] text-[#8A8A8A]">—</span>
+                          )
+                        ) : state.status === "accepted" ? (
                           <>
                             <button
                               type="button"
-                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#E25B5B]"
+                              className="inline-flex h-10 items-center text-[13px] font-medium"
+                              style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, {
                                   status: "pending",
@@ -727,7 +899,7 @@ function CheckOrderView({
                           <>
                             <button
                               type="button"
-                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
+                              className="inline-flex h-10 items-center text-[13px] font-medium"
                               style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, {
@@ -746,7 +918,8 @@ function CheckOrderView({
                           <>
                             <button
                               type="button"
-                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#E25B5B]"
+                              className="inline-flex h-10 items-center text-[13px] font-medium"
+                              style={{ color: LINK_BLUE }}
                               onClick={(event) => {
                                 if (rejectFor === item.id) {
                                   setRejectFor(null);
@@ -761,7 +934,7 @@ function CheckOrderView({
                             </button>
                             <button
                               type="button"
-                              className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
+                              className="inline-flex h-10 items-center text-[13px] font-medium"
                               style={{ color: LINK_BLUE }}
                               onClick={() =>
                                 updateCheck(item.id, { status: "accepted" })
@@ -781,7 +954,7 @@ function CheckOrderView({
         </div>
       </div>
 
-      {rejectFor && rejectAnchor ? (
+      {!readOnly && rejectFor && rejectAnchor ? (
         <RejectReasonPopover
           anchor={rejectAnchor}
           onClose={() => {
@@ -808,12 +981,12 @@ function CheckOrderView({
       <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="inline-flex h-10 items-center rounded-[10px] px-4 text-[14px] font-medium text-[#111118]"
         >
-          Cancel & Close
+          {readOnly ? "Close" : "Cancel & Close"}
         </button>
-        {phase === "check" ? (
+        {readOnly ? null : phase === "check" ? (
           <button
             type="button"
             disabled={!allResolved}
@@ -826,7 +999,7 @@ function CheckOrderView({
         ) : (
           <button
             type="button"
-            onClick={() => onAccepted(order.id, checks)}
+            onClick={handleAcceptOrder}
             className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white"
             style={{ background: ORANGE }}
           >
@@ -843,9 +1016,12 @@ const ROW_GRID =
 
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
+  const { pushHandoff, markDeliveryReceived } = useReceivingHandoff();
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
-  const [activeChip, setActiveChip] = useState("wed-20");
+  const [activeDateId, setActiveDateId] = useState("2026-07-20");
+  const [chipWindowStart, setChipWindowStart] = useState(0);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -854,6 +1030,7 @@ export default function DistributorDeliveriesPage() {
   );
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
   const [itemResults, setItemResults] = useState<
     Record<string, Record<string, ItemCheckState>>
   >(() => INITIAL_ITEM_RESULTS);
@@ -863,6 +1040,8 @@ export default function DistributorDeliveriesPage() {
 
   const checkingOrder =
     orders.find((order) => order.id === checkingId) ?? null;
+  const viewingOrder =
+    orders.find((order) => order.id === viewingId) ?? null;
 
   const productOptions = useMemo(
     () =>
@@ -880,25 +1059,94 @@ export default function DistributorDeliveriesPage() {
     [orders],
   );
 
+  const dateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const order of orders) {
+      const matchesTab =
+        activeTab === "Orders" ? !order.checked : order.checked;
+      if (!matchesTab) continue;
+      counts.set(
+        order.deliveryDateId,
+        (counts.get(order.deliveryDateId) ?? 0) + 1,
+      );
+    }
+    return counts;
+  }, [activeTab, orders]);
+
+  const visibleChips = useMemo(() => {
+    return RECEIVING_DATES.slice(
+      chipWindowStart,
+      chipWindowStart + CHIP_WINDOW_SIZE,
+    ).map((date) => {
+      const id = toDeliveryDateId(date);
+      return {
+        id,
+        label: formatDeliveryChipLabel(date),
+        count: dateCounts.get(id) ?? 0,
+      };
+    });
+  }, [chipWindowStart, dateCounts]);
+
+  const canShiftBack = chipWindowStart > 0;
+  const canShiftForward =
+    chipWindowStart + CHIP_WINDOW_SIZE < RECEIVING_DATES.length;
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter((order) => {
       const matchesTab =
         activeTab === "Orders" ? !order.checked : order.checked;
+      const matchesDate = order.deliveryDateId === activeDateId;
       const matchesSearch =
         !q ||
         order.id.toLowerCase().includes(q) ||
-        order.distributor.toLowerCase().includes(q);
+        order.distributor.toLowerCase().includes(q) ||
+        order.items.some((item) => item.name.toLowerCase().includes(q));
       const matchesProduct =
         !productFilter ||
         order.items.some((item) => item.name === productFilter);
       const matchesDistributor =
         !distributorFilter || order.distributor === distributorFilter;
       return (
-        matchesTab && matchesSearch && matchesProduct && matchesDistributor
+        matchesTab &&
+        matchesDate &&
+        matchesSearch &&
+        matchesProduct &&
+        matchesDistributor
       );
     });
-  }, [activeTab, distributorFilter, orders, productFilter, search]);
+  }, [
+    activeDateId,
+    activeTab,
+    distributorFilter,
+    orders,
+    productFilter,
+    search,
+  ]);
+
+  function selectDeliveryDate(dateId: string) {
+    setActiveDateId(dateId);
+    const index = RECEIVING_DATES.findIndex(
+      (date) => toDeliveryDateId(date) === dateId,
+    );
+    if (index === -1) return;
+    if (index < chipWindowStart) {
+      setChipWindowStart(index);
+      return;
+    }
+    if (index >= chipWindowStart + CHIP_WINDOW_SIZE) {
+      setChipWindowStart(Math.max(0, index - CHIP_WINDOW_SIZE + 1));
+    }
+  }
+
+  function shiftChipWindow(delta: number) {
+    setChipWindowStart((current) =>
+      Math.max(
+        0,
+        Math.min(current + delta, RECEIVING_DATES.length - CHIP_WINDOW_SIZE),
+      ),
+    );
+  }
 
   function toggleExpanded(id: string) {
     setExpanded((current) => {
@@ -913,14 +1161,50 @@ export default function DistributorDeliveriesPage() {
     orderId: string,
     checks: Record<string, ItemCheckState>,
   ) {
+    const order = orders.find((entry) => entry.id === orderId);
+    if (!order) return;
+
+    const lines: ReceivingHandoffLine[] = order.items.map((item) => {
+      const result = checks[item.id];
+      return {
+        lineId: item.id,
+        itemId: result?.itemId || item.itemCode,
+        itemName: item.name,
+        category: item.category,
+        source: item.source,
+        quantity: item.quantity,
+        unit: item.unit,
+        unitPrice: item.unitPrice,
+        priceLabel: item.priceLabel,
+        expiration: result?.expiration ?? "",
+        status: result?.status === "rejected" ? "rejected" : "accepted",
+        reason: result?.reason,
+        photoUrl: result?.photoUrl,
+      };
+    });
+
+    const handoff = acceptedLinesOnly({
+      deliveryId: order.id,
+      distributor: order.distributor,
+      receivedAt: formatReceivedAt(),
+      items: lines,
+    });
+
+    if (handoff.items.length > 0) {
+      pushHandoff(handoff);
+    } else {
+      markDeliveryReceived(order.id);
+    }
+
     setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId ? { ...order, checked: true } : order,
+      current.map((entry) =>
+        entry.id === orderId ? { ...entry, checked: true } : entry,
       ),
     );
     setItemResults((current) => ({ ...current, [orderId]: checks }));
     setCheckingId(null);
     setActiveTab("Received");
+    setActiveDateId(order.deliveryDateId);
     setExpanded(new Set([orderId]));
   }
 
@@ -930,6 +1214,20 @@ export default function DistributorDeliveriesPage() {
         order={checkingOrder}
         onClose={() => setCheckingId(null)}
         onAccepted={handleAccepted}
+      />
+    );
+  }
+
+  if (viewingOrder) {
+    return (
+      <CheckOrderView
+        order={viewingOrder}
+        initialChecks={
+          itemResults[viewingOrder.id] ?? emptyChecks(viewingOrder.items)
+        }
+        readOnly
+        onClose={() => setViewingId(null)}
+        onAccepted={() => undefined}
       />
     );
   }
@@ -1019,229 +1317,257 @@ export default function DistributorDeliveriesPage() {
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          {DELIVERY_CHIPS.map((chip) => {
-            const active = activeChip === chip.id;
-            return (
-              <button
-                key={chip.id}
-                type="button"
-                onClick={() => setActiveChip(chip.id)}
-                className={cn(
-                  "inline-flex min-h-10 items-center gap-2.5 rounded-full border px-3.5 py-2 text-left",
-                  active
-                    ? "border-transparent text-white"
-                    : "border-[#ECECEA] bg-white text-[#111118]",
-                )}
-                style={active ? { background: GREEN } : undefined}
-              >
-                <span className="text-[13px] font-semibold">{chip.label}</span>
-                <span
-                  className={cn(
-                    "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                    active
-                      ? "bg-[#3D5A40] text-white"
-                      : "bg-[#F3F3F1] text-[#6B6B6B]",
-                  )}
-                >
-                  {chip.count}
-                </span>
-              </button>
-            );
-          })}
-
-          <div className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              type="button"
-              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              type="button"
-              className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-            >
-              <Calendar size={16} />
-            </button>
-          </div>
-        </div>
-
-        <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
-          Receiving Log
-        </h2>
-
-        <ScrollTable minWidth={920} className="rounded-[12px]">
-          <div
-            className={cn(
-              ROW_GRID,
-              "border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
-            )}
-          >
-            <div />
-            <div>Delivery ID</div>
-            <div>Distributor</div>
-            <div>Order Date</div>
-            <div>Expected Delivery</div>
-            <div>Total Price</div>
-            <div aria-hidden />
-            <div>Action</div>
-          </div>
-
-          <div className="divide-y-[5px] divide-[#F0F0EE]">
-            {filtered.map((order) => {
-              const open = expanded.has(order.id);
-              const results = itemResults[order.id];
-
+        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+          <div className="mb-5 flex flex-wrap items-center gap-2">
+            {visibleChips.map((chip) => {
+              const active = activeDateId === chip.id;
               return (
-                <div key={order.id} className="bg-white">
-                  <div
+                <button
+                  key={chip.id}
+                  type="button"
+                  onClick={() => selectDeliveryDate(chip.id)}
+                  className={cn(
+                    "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
+                    active
+                      ? "border-transparent text-white"
+                      : "border-[#ECECEA] bg-white text-[#111118]",
+                  )}
+                  style={active ? { background: GREEN } : undefined}
+                >
+                  <span className="text-[13px] font-semibold">{chip.label}</span>
+                  <span
                     className={cn(
-                      ROW_GRID,
-                      "px-4 py-3.5",
-                      open && "border-b border-[#F0F0EE]",
+                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
+                      active
+                        ? "bg-[#3D5A40] text-white"
+                        : "bg-[#F3F3F1] text-[#6B6B6B]",
                     )}
                   >
-                    <button
-                      type="button"
-                      aria-label={open ? "Collapse" : "Expand"}
-                      onClick={() => toggleExpanded(order.id)}
-                      className="flex items-center justify-center"
-                    >
-                      <ChevronDown
-                        size={15}
-                        className={cn(
-                          "shrink-0 transition-transform",
-                          open
-                            ? "rotate-0 text-[#E25B5B]"
-                            : "-rotate-90 text-[#6A6A6A]",
-                        )}
-                      />
-                    </button>
-
-                    <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                      {order.id}
-                    </span>
-                    <span className="truncate text-[14px] font-semibold text-[#111118]">
-                      {order.distributor}
-                    </span>
-                    <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                      {order.orderDate}
-                    </span>
-                    <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                      {order.expectedDelivery}
-                    </span>
-                    <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
-                      {currency(order.totalPrice)}
-                    </span>
-                    <div aria-hidden />
-                    <div>
-                      {order.checked ? (
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(order.id)}
-                          className="inline-flex h-10 items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-medium"
-                          style={{ color: LINK_BLUE }}
-                        >
-                          View
-                          <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                            <Check size={11} strokeWidth={3} />
-                          </span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => setCheckingId(order.id)}
-                          className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
-                          style={{ color: LINK_BLUE }}
-                        >
-                          Validate
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {open
-                    ? order.items.map((item, itemIndex) => {
-                        const result = results?.[item.id];
-                        const rejected = result?.status === "rejected";
-
-                        return (
-                          <div
-                            key={item.id}
-                            className={cn(
-                              ROW_GRID,
-                              "bg-[#F9FAFB] px-4 py-3 text-[13px]",
-                              itemIndex < order.items.length - 1 &&
-                                "border-b border-[#F0F0EE]",
-                            )}
-                          >
-                            <div />
-                            <span className="w-fit rounded-[6px] bg-[#EEEEEC] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                              {result?.itemId ?? item.itemCode}
-                            </span>
-                            <div
-                              className={cn(
-                                "min-w-0 truncate",
-                                rejected ? "text-[#E25B5B]" : "text-[#111118]",
-                              )}
-                            >
-                              {item.name}
-                            </div>
-                            <div className="truncate text-[#8A8A8A]">
-                              {item.source}
-                            </div>
-                            <div />
-                            <div className="whitespace-nowrap">
-                              {rejected && result?.reason ? (
-                                <span className="font-medium text-[#E25B5B]">
-                                  Rejected · {result.reason}
-                                </span>
-                              ) : (
-                                <span className="text-[#111118]">
-                                  {item.priceLabel}
-                                </span>
-                              )}
-                            </div>
-                            <div aria-hidden />
-                            <div>
-                              {rejected ? (
-                                <button
-                                  type="button"
-                                  className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium"
-                                  style={{ color: LINK_BLUE }}
-                                  onClick={() =>
-                                    result
-                                      ? setImagePreview({ item, result })
-                                      : undefined
-                                  }
-                                >
-                                  Image
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        );
-                      })
-                    : null}
-                </div>
+                    {chip.count}
+                  </span>
+                </button>
               );
             })}
+
+            <div className="relative ml-auto flex items-center gap-2">
+              <button
+                type="button"
+                aria-label="Previous dates"
+                disabled={!canShiftBack}
+                onClick={() => shiftChipWindow(-1)}
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A] disabled:opacity-40"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Next dates"
+                disabled={!canShiftForward}
+                onClick={() => shiftChipWindow(1)}
+                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A] disabled:opacity-40"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <button
+                type="button"
+                aria-label="Open calendar"
+                aria-expanded={calendarOpen}
+                onClick={() => setCalendarOpen((open) => !open)}
+                className={cn(
+                  "flex size-10 items-center justify-center rounded-[8px] border bg-white text-[#8A8A8A]",
+                  calendarOpen ? "border-[#28402B]" : "border-[#ECECEA]",
+                )}
+              >
+                <Calendar size={16} />
+              </button>
+              {calendarOpen ? (
+                <DeliveryDateCalendar
+                  selectedDateId={activeDateId}
+                  initialMonth={
+                    parseDeliveryDateId(activeDateId) ?? RECEIVING_DATES[0]
+                  }
+                  onSelectDate={(dateId) => {
+                    selectDeliveryDate(dateId);
+                  }}
+                  onClose={() => setCalendarOpen(false)}
+                />
+              ) : null}
+            </div>
           </div>
 
-          {!filtered.length ? (
-            <div className="px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
-              No deliveries match your filters.
+          <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+            Receiving Log
+          </h2>
+
+          <ScrollTable minWidth={920} className="rounded-[12px]">
+            <div
+              className={cn(
+                ROW_GRID,
+                "border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+              )}
+            >
+              <div />
+              <div>Delivery ID</div>
+              <div>Distributor</div>
+              <div>Order Date</div>
+              <div>Expected Delivery</div>
+              <div>Total Price</div>
+              <div aria-hidden />
+              <div>Action</div>
             </div>
-          ) : null}
-        </ScrollTable>
-      </div>
+
+            <div className="divide-y divide-[#F0F0EE]">
+              {filtered.map((order) => {
+                const open = expanded.has(order.id);
+                const results = itemResults[order.id];
+
+                return (
+                  <div key={order.id} className="bg-white">
+                    <div
+                      className={cn(
+                        ROW_GRID,
+                        "px-4 py-2.5",
+                        open && "border-b border-[#F0F0EE]",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        aria-label={open ? "Collapse" : "Expand"}
+                        onClick={() => toggleExpanded(order.id)}
+                        className="flex items-center justify-center"
+                      >
+                        <ChevronDown
+                          size={15}
+                          className={cn(
+                            "shrink-0 transition-transform",
+                            open
+                              ? "rotate-0 text-[#E25B5B]"
+                              : "-rotate-90 text-[#6A6A6A]",
+                          )}
+                        />
+                      </button>
+
+                      <span className="w-fit rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
+                        {order.id}
+                      </span>
+                      <span className="truncate text-[14px] font-semibold text-[#111118]">
+                        {order.distributor}
+                      </span>
+                      <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
+                        {order.orderDate}
+                      </span>
+                      <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
+                        {order.expectedDelivery}
+                      </span>
+                      <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
+                        {currency(order.totalPrice)}
+                      </span>
+                      <div aria-hidden />
+                      <div>
+                        {order.checked ? (
+                          <button
+                            type="button"
+                            onClick={() => setViewingId(order.id)}
+                            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2.5 text-[13px] font-medium"
+                            style={{ color: LINK_BLUE }}
+                          >
+                            View
+                            <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                              <Check size={10} strokeWidth={3} />
+                            </span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setCheckingId(order.id)}
+                            className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
+                            style={{ color: LINK_BLUE }}
+                          >
+                            Validate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {open
+                      ? order.items.map((item, itemIndex) => {
+                          const result = results?.[item.id];
+                          const rejected = result?.status === "rejected";
+                          const hasPhoto = Boolean(
+                            result?.photoUrl || result?.photoName,
+                          );
+
+                          return (
+                            <div
+                              key={item.id}
+                              className={cn(
+                                ROW_GRID,
+                                "bg-[#F9FAFB] px-4 py-2 text-[13px]",
+                                itemIndex < order.items.length - 1 &&
+                                  "border-b border-[#F0F0EE]",
+                              )}
+                            >
+                              <div />
+                              <div />
+                              <div
+                                className={cn(
+                                  "min-w-0",
+                                  rejected
+                                    ? "text-[#E25B5B]"
+                                    : "text-[#111118]",
+                                )}
+                              >
+                                <div className="truncate">{item.name}</div>
+                                <div className="truncate text-[12px] text-[#8A8A8A]">
+                                  {item.source}
+                                </div>
+                              </div>
+                              <div />
+                              <div />
+                              <div className="whitespace-nowrap">
+                                {rejected && result?.reason ? (
+                                  <span className="font-medium text-[#E25B5B]">
+                                    Rejected · {result.reason}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#111118]">
+                                    {item.priceLabel}
+                                  </span>
+                                )}
+                              </div>
+                              <div aria-hidden />
+                              <div>
+                                {rejected && hasPhoto ? (
+                                  <button
+                                    type="button"
+                                    className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
+                                    style={{ color: LINK_BLUE }}
+                                    onClick={() =>
+                                      result
+                                        ? setImagePreview({ item, result })
+                                        : undefined
+                                    }
+                                  >
+                                    Image
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                          );
+                        })
+                      : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            {!filtered.length ? (
+              <div className="px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+                No deliveries match your filters.
+              </div>
+            ) : null}
+          </ScrollTable>
+        </div>
 
         {imagePreview ? (
           <RejectImageDrawer
