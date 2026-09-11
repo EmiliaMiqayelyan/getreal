@@ -815,7 +815,7 @@ function SplitModal({
         data-scroll-lock-allow
         className="relative z-10 w-full max-w-[420px] overflow-visible rounded-[12px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
       >
-        <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-3">
+        <div className="flex items-start justify-between gap-4 border-b border-[#ECECEA] px-6 pt-5 pb-3">
           <div className="min-w-0">
             <h2 className="text-[18px] font-semibold tracking-tight text-[#111118]">
               {title}

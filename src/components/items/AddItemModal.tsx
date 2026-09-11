@@ -700,7 +700,7 @@ export function AddItemModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 px-6 py-4">
+        <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-6 py-4">
           {isEdit ? (
             <button
               type="button"

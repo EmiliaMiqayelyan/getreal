@@ -254,7 +254,7 @@ export function AddDistributorModal({
         aria-modal="true"
         className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[640px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
+        <div className="flex items-center justify-between border-b border-[#ECECEA] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Distributor" : "Add Distributor"}
           </h2>
@@ -717,7 +717,7 @@ export function AddDistributorModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-[30px] py-4">
+        <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-[30px] py-4">
           {isEdit ? (
             <button
               type="button"

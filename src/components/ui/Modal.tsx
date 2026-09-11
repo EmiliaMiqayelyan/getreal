@@ -55,7 +55,7 @@ export function Modal({
           className,
         )}
       >
-        <div className="border-border/70 flex items-center justify-between border-b px-6 py-4">
+        <div className="border-border/70 flex items-center justify-between border-b border-[#ECECEA] px-6 py-4">
           <h2
             id="modal-title"
             className="text-foreground text-lg font-semibold tracking-tight"
@@ -80,7 +80,7 @@ export function Modal({
         </div>
 
         {footer ? (
-          <div className="border-border/70 flex items-center justify-end gap-2 border-t px-6 py-4">
+          <div className="border-border/70 flex items-center justify-end gap-2 border-t border-[#ECECEA] px-6 py-4">
             {footer}
           </div>
         ) : null}

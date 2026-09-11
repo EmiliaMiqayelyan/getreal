@@ -507,7 +507,7 @@ export default function RolesPage() {
             data-scroll-lock-allow
             className="relative z-10 w-full max-w-[460px] overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
           >
-            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+            <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
               <h2
                 id="roles-modal-title"
                 className="text-[20px] font-semibold tracking-tight text-[#111118]"
@@ -524,7 +524,7 @@ export default function RolesPage() {
               </button>
             </div>
 
-            <div className="space-y-4 px-6 pb-5">
+            <div className="space-y-4 px-6 pt-5 pb-5">
               <div>
                 <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
                   Name
@@ -653,7 +653,7 @@ export default function RolesPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between px-6 pt-1 pb-5">
+            <div className="flex items-center justify-between border-t border-[#ECECEA] px-6 py-4">
               {draft.id ? (
                 <button
                   type="button"

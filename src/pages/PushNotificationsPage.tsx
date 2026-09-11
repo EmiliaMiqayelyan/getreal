@@ -331,7 +331,7 @@ export default function PushNotificationsPage() {
             aria-labelledby="pn-modal-title"
             className="relative z-10 flex w-full max-w-[480px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
           >
-            <div className="flex items-center justify-between px-6 pt-5 pb-3">
+            <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
               <h2
                 id="pn-modal-title"
                 className="text-[18px] font-semibold tracking-tight text-[#111118]"
@@ -348,7 +348,7 @@ export default function PushNotificationsPage() {
               </button>
             </div>
 
-            <div className="space-y-4 px-6 pb-5">
+            <div className="space-y-4 px-6 pt-5 pb-5">
               <div>
                 <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
                   Data Trigger
@@ -434,7 +434,7 @@ export default function PushNotificationsPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 px-6 pt-1 pb-5">
+            <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-6 py-4">
               {draft.id ? (
                 <button
                   type="button"
