@@ -40,6 +40,7 @@ type DocDraft = {
   id: string;
   name: string;
   size: string;
+  url?: string;
 };
 
 type AddDistributorModalProps = {
