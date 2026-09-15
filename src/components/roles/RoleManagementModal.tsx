@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { DEFAULT_ROLE_PERMISSIONS } from "@/data/admin";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -132,14 +133,15 @@ export function RoleManagementModal({
 
         <div className="flex min-h-0 flex-1">
           <aside className="flex w-[200px] shrink-0 flex-col border-r border-[#ECECEA] bg-white p-3">
-            <button
-              type="button"
+            <Button
+              variant="outline"
+              size="lg"
               onClick={createRole}
-              className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-[#E6E6E3] bg-white text-[13px] font-medium text-[#111118] hover:bg-[#FAFAF8]"
+              className="w-full"
             >
               <Plus size={14} />
               Create Role
-            </button>
+            </Button>
 
             <div className="mt-3 flex-1 space-y-1 overflow-y-auto">
               {draftRoles.map((role) => {
@@ -176,7 +178,7 @@ export function RoleManagementModal({
                     onChange={(event) =>
                       patchSelected({ name: event.target.value })
                     }
-                    className="h-10 rounded-[8px] border-[#E6E6E3] text-[13px]"
+                    className="w-full"
                   />
 
                   <h3 className="mt-6 mb-3 text-[11px] font-semibold tracking-[0.08em] text-[#6B7180] uppercase">
@@ -214,20 +216,12 @@ export function RoleManagementModal({
                 </div>
 
                 <div className="flex shrink-0 items-center justify-end gap-4 border-t border-[#ECECEA] px-5 py-4">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="text-[14px] font-medium text-[#8A8A8A]"
-                  >
+                  <Button variant="ghost" onClick={onClose}>
                     Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    className="h-[36px] rounded-[8px] bg-[#2E2E2E] px-5 text-[13px] font-medium text-white"
-                  >
+                  </Button>
+                  <Button variant="dark" onClick={handleSave}>
                     Save Role
-                  </button>
+                  </Button>
                 </div>
               </>
             ) : (

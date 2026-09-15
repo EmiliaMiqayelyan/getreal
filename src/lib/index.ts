@@ -10,5 +10,7 @@ export {
   login,
   logout,
   touchActivity,
+  getSessionUserName,
 } from "./auth";
 export { env } from "./env";
+export * from "./api";

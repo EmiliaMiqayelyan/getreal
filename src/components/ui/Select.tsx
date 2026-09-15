@@ -126,14 +126,14 @@ export function Select({
           isFlat
             ? "h-auto w-auto gap-1 border-0 bg-transparent p-0 text-[13px]"
             : cn(
-                "w-full justify-between rounded-[8px] border border-[#E6E6E3] bg-white",
-                "focus:border-[#C8C8C6]",
-                open && "border-[#C8C8C6]",
+                "w-full justify-between rounded-[9.38px] border border-black/8 bg-white",
+                "focus:border-black/20",
+                open && "border-black/20",
                 size === "sm"
-                  ? "h-[34px] py-0 pr-8 pl-3 text-[13px]"
-                  : "h-10 py-2 pr-9 pl-3.5 text-sm",
+                  ? "h-[33.75px] py-0 pr-8 pl-3 text-[13px]"
+                  : "h-[33.75px] py-0 pr-9 pl-3.5 text-[13px]",
               ),
-          selected || displayLabel ? "text-[#111118]" : "text-[#8A8A8A]",
+          selected || displayLabel ? "text-foreground" : "text-muted",
           buttonClassName,
         )}
       >
@@ -141,7 +141,7 @@ export function Select({
           <ChevronDown
             size={14}
             className={cn(
-              "shrink-0 text-[#8A8A8A] transition-transform",
+              "shrink-0 text-muted transition-transform",
               open && "rotate-180",
             )}
           />
@@ -149,9 +149,9 @@ export function Select({
         <span className="truncate">{displayLabel || "\u00A0"}</span>
         {!isFlat ? (
           <ChevronDown
-            size={13}
+            size={14}
             className={cn(
-              "pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[#8A8A8A] transition-transform",
+              "pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-muted transition-transform",
               open && "rotate-180",
             )}
           />

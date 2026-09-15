@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { PAGE_TITLE } from "@/constants/table";
 import { cn } from "@/utils/cn";
 
 type HeaderProps = {
@@ -17,16 +18,9 @@ const ROW =
 export function Header({ title, toolbar, below, className }: HeaderProps) {
   return (
     <div className={cn("shrink-0", className)}>
-      <header
-        className={cn(
-          ROW,
-          "justify-between gap-4 border-b border-[#ECECEA]",
-        )}
-      >
-        <h1 className="min-w-0 text-[20px] font-semibold tracking-tight text-[#111118]">
-          {title}
-        </h1>
-        <div className="flex shrink-0 items-center border-l border-[#ECECEA] pl-5">
+      <header className={cn(ROW, "justify-between gap-4 border-b border-border")}>
+        <h1 className={cn("min-w-0", PAGE_TITLE)}>{title}</h1>
+        <div className="flex shrink-0 items-center border-l border-border pl-5">
           <UserMenu className="items-center" />
         </div>
       </header>
@@ -35,7 +29,7 @@ export function Header({ title, toolbar, below, className }: HeaderProps) {
         <div
           className={cn(
             ROW,
-            "border-b border-[#ECECEA] py-3.5 md:h-[64px] md:py-3",
+            "border-b border-border py-3.5 md:h-[64px] md:py-3",
           )}
         >
           <div className="flex w-full min-w-0 items-center">{toolbar}</div>

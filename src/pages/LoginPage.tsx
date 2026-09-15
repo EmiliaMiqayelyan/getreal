@@ -26,16 +26,20 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   if (isAuthenticated()) {
     return <Navigate to={getHomeRoute()} replace />;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setSubmitting(true);
 
-    const role = login(username, password);
+    const role = await login(username, password);
+    setSubmitting(false);
+
     if (!role) {
       setError("Invalid username or password.");
       return;
@@ -97,6 +101,7 @@ export default function LoginPage() {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Enter username"
+                  className="w-full"
                   required
                 />
               </div>
@@ -111,6 +116,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
+                  className="w-full"
                   required
                 />
               </div>
@@ -121,8 +127,8 @@ export default function LoginPage() {
                 </p>
               ) : null}
 
-              <Button type="submit" className="mt-2 w-full">
-                Sign in
+              <Button type="submit" className="mt-2 w-full" disabled={submitting}>
+                {submitting ? "Signing in…" : "Sign in"}
               </Button>
             </form>
 

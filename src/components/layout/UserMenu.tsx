@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { ROUTES } from "@/constants";
-import { getRole, logout } from "@/lib/auth";
+import { getRole, getSessionUserName, logout } from "@/lib/auth";
 import { cn } from "@/utils/cn";
 
 const ROLE_LABELS = {
@@ -19,6 +19,7 @@ export function UserMenu({ className }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const roleLabel = ROLE_LABELS[getRole() ?? "superadmin"];
+  const displayName = getSessionUserName();
 
   useEffect(() => {
     if (!open) return;
@@ -58,7 +59,7 @@ export function UserMenu({ className }: UserMenuProps) {
         >
           <div className="leading-tight text-right">
             <div className="text-[13px] font-semibold text-[#111118]">
-              James Miller
+              {displayName}
             </div>
             <div className="text-[11px] text-[#8F8F8F]">{roleLabel}</div>
           </div>

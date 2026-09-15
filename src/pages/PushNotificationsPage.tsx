@@ -2,17 +2,17 @@ import { useMemo, useState } from "react";
 import { Plus, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { TABLE_HEADER } from "@/constants/table";
+import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
-const ORANGE = "#F57850";
 const LINK_BLUE = "#3B82F6";
 
 type PushNotification = {
@@ -205,15 +205,13 @@ export default function PushNotificationsPage() {
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
-              />
+              <Search size={14} className={SEARCH_ICON} />
               <Input
+                inputSize="md"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search ID, name"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className={SEARCH_INPUT}
               />
             </div>
 
@@ -231,15 +229,14 @@ export default function PushNotificationsPage() {
               ]}
             />
 
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={openCreate}
-              className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-medium text-white"
-              style={{ background: ORANGE }}
+              className="ml-auto"
             >
               <Plus size={14} />
               Add Push Notification
-            </button>
+            </Button>
           </div>
         }
       />
@@ -412,7 +409,7 @@ export default function PushNotificationsPage() {
                       subject: event.target.value,
                     }))
                   }
-                  className="h-10 rounded-[8px] border-[#E6E6E3] text-[13px]"
+                  className="w-full"
                 />
               </div>
 
@@ -436,33 +433,20 @@ export default function PushNotificationsPage() {
 
             <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-6 py-4">
               {draft.id ? (
-                <button
-                  type="button"
-                  onClick={removeNotification}
-                  className="text-[13px] font-medium text-[#E25B5B]"
-                >
+                <Button variant="dangerGhost" onClick={removeNotification}>
                   Remove Notification
-                </button>
+                </Button>
               ) : (
                 <span />
               )}
 
               <div className="flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="text-[14px] font-medium text-[#8A8A8A]"
-                >
+                <Button variant="ghost" onClick={closeModal}>
                   Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={!canSave}
-                  onClick={save}
-                  className="h-[36px] rounded-[8px] bg-[#2E2E2E] px-5 text-[13px] font-medium text-white disabled:opacity-40"
-                >
+                </Button>
+                <Button variant="dark" disabled={!canSave} onClick={save}>
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           </div>

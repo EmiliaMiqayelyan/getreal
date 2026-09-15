@@ -11,6 +11,7 @@ import {
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -325,7 +326,7 @@ function SourcePicker({
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="h-10 rounded-[8px] border-[#E6E6E3] pl-8 text-[13px]"
+            className="w-full pl-8"
           />
         </div>
       </div>
@@ -803,7 +804,7 @@ export default function PackingCoolersPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="w-full pl-8"
               />
             </div>
             <Select
@@ -1010,13 +1011,12 @@ export default function PackingCoolersPage() {
                       </span>
                     </div>
                   ) : (
-                    <button
-                      type="button"
+                    <Button
+                      variant="dark"
                       onClick={() => openPacking(order)}
-                      className="inline-flex h-9 items-center rounded-[10px] bg-[#2E2E2E] px-4 text-[12px] font-medium text-white"
                     >
                       Start Packing
-                    </button>
+                    </Button>
                   )}
                 </div>
 
@@ -1063,8 +1063,8 @@ export default function PackingCoolersPage() {
                         </span>
                       </div>
                     ) : (
-                      <button
-                        type="button"
+                      <Button
+                        variant="dark"
                         onClick={() => {
                           const loadedAt = formatPackTimestamp();
                           setOrders((current) =>
@@ -1090,10 +1090,10 @@ export default function PackingCoolersPage() {
                             items: order.items,
                           });
                         }}
-                        className="inline-flex h-9 items-center rounded-[10px] bg-[#2E2E2E] px-4 text-[12px] font-medium text-white"
+                        className="rounded-[10px] text-[12px]"
                       >
                         Load Now
-                      </button>
+                      </Button>
                     )
                   ) : null}
                 </div>

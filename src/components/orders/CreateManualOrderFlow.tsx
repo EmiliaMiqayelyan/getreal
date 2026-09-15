@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronLeft, Minus, Plus, X } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { Button } from "@/components/ui/Button";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import {
@@ -17,8 +18,6 @@ import {
   formatManualDeliveryLabel,
   getManualCatalogForDistributor,
 } from "@/utils/manualOrder";
-
-const ORANGE = "#F57850";
 
 type Step = "create" | "review";
 
@@ -399,27 +398,21 @@ export function CreateManualOrderFlow({
           <span />
         )}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setConfirmClose(true)}
-            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#000000] hover:bg-background"
-          >
+          <Button variant="ghost" onClick={() => setConfirmClose(true)}>
             Cancel & Close
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
             disabled={step === "create" && !canReview}
             onClick={() => {
               if (step === "create") setStep("review");
               else createOrder();
             }}
-            className={cn(
-              "h-10 rounded-[8px] px-5 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40",
-            )}
-            style={{ backgroundColor: ORANGE }}
+            className="font-semibold"
           >
             {step === "create" ? "Review Order" : "Create Order"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -452,20 +445,15 @@ export function CreateManualOrderFlow({
               Are you sure you want to close order request?
             </p>
             <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#111118] hover:bg-background"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-[8px] bg-[#2E2E2E] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#252525]"
-              >
+              </Button>
+              <Button variant="dark" onClick={onClose}>
                 Cancel Order
-              </button>
+              </Button>
             </div>
           </div>
         </div>

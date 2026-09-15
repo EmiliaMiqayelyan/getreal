@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
@@ -179,7 +180,7 @@ export function AddSourceModal({
                     }
                   }}
                   className={cn(
-                    "mt-1.5 h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                    "mt-1.5 w-full",
                     errors.name && INVALID_BORDER,
                   )}
                 />
@@ -200,7 +201,7 @@ export function AddSourceModal({
                     }
                   }}
                   className={cn(
-                    "mt-1.5 h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                    "mt-1.5 w-full",
                     errors.address && INVALID_BORDER,
                   )}
                 />
@@ -242,14 +243,14 @@ export function AddSourceModal({
               <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
                 Image Place
               </h3>
-              <button
-                type="button"
+              <Button
+                variant="dark"
+                size="sm"
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[8px] bg-[#242424] px-3 text-[12px] font-medium text-white"
               >
                 <Upload size={14} strokeWidth={1.75} />
                 Upload
-              </button>
+              </Button>
               <input
                 ref={fileRef}
                 type="file"
@@ -324,20 +325,12 @@ export function AddSourceModal({
             <span />
           )}
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="cursor-pointer text-[13px] font-medium text-[#8A8A8A]"
-            >
+            <Button variant="ghost" onClick={handleClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="h-[36px] cursor-pointer rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
-            >
+            </Button>
+            <Button variant="dark" onClick={handleSave}>
               Save Source
-            </button>
+            </Button>
           </div>
         </div>
       </div>

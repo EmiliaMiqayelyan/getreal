@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
@@ -42,7 +43,7 @@ const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
 const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
 /** Read-only calculated fields — solid gray, no border (matches design). */
 const READONLY_FIELD =
-  "h-[40px] rounded-[8px] border border-transparent bg-[#F3F3F1] text-[13px] text-[#6B6B6B]";
+  "h-[33.75px] rounded-[9.38px] border border-transparent bg-[#F3F3F1] text-[13px] text-[#6B6B6B]";
 
 type AddItemModalProps = {
   open: boolean;
@@ -393,7 +394,7 @@ export function AddItemModal({
                       }
                     }}
                     className={cn(
-                      "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                      "w-full",
                       errors.name && INVALID_BORDER,
                     )}
                   />
@@ -431,7 +432,7 @@ export function AddItemModal({
                     }}
                     placeholder="e.g. Wagyu Aged Tenderloin Steak"
                     className={cn(
-                      "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                      "w-full",
                       errors.merchandisingName && INVALID_BORDER,
                     )}
                   />
@@ -476,15 +477,15 @@ export function AddItemModal({
                     <span className="text-[13px] font-medium text-[#000000]">
                       {photos.length}/{ITEM_PHOTO_MAX}
                     </span>
-                    <button
-                      type="button"
+                    <Button
+                      variant="dark"
+                      size="sm"
                       disabled={photos.length >= ITEM_PHOTO_MAX}
                       onClick={() => fileRef.current?.click()}
-                      className="inline-flex h-[32px] cursor-pointer items-center gap-1.5 rounded-[8px] bg-[#242424] px-3 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <CloudUpload size={14} />
                       Upload Photo
-                    </button>
+                    </Button>
                   </div>
                   <input
                     ref={fileRef}
@@ -622,7 +623,7 @@ export function AddItemModal({
                         }
                       }}
                       className={cn(
-                        "h-[40px] rounded-[8px] border-[#E6E6E3] bg-white text-[13px]",
+                        "w-full",
                         errors.contents && INVALID_BORDER,
                       )}
                     />
@@ -713,20 +714,12 @@ export function AddItemModal({
             <span />
           )}
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="cursor-pointer text-[13px] font-medium text-[#8A8A8A]"
-            >
+            <Button variant="ghost" onClick={handleClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="h-[36px] cursor-pointer rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
-            >
+            </Button>
+            <Button variant="dark" onClick={handleSave}>
               {isEdit ? "Save Item" : "Create Item"}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -803,7 +796,7 @@ function MoneyInput({
         inputMode="decimal"
         onChange={(event) => onChange(event.target.value)}
         className={cn(
-          "h-[40px] rounded-[8px] border-[#E6E6E3] bg-white pl-7 text-[13px]",
+          "w-full pl-7",
           invalid && INVALID_BORDER,
         )}
       />

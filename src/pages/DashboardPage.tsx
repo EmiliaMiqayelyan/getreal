@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -23,10 +23,16 @@ import {
 import { useNavigate } from "react-router";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { ROUTES } from "@/constants";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  dashboardApi,
+  getQuickBooksAuthUrl,
+  isApiConfigured,
+} from "@/lib/api";
 import { cn } from "@/utils/cn";
 
 type ChartMode = "daily" | "weekly" | "monthly";
@@ -200,6 +206,111 @@ export default function DashboardPage() {
   const [ordersMode, setOrdersMode] = useState<ChartMode>("daily");
   const [revenueMode, setRevenueMode] = useState<ChartMode>("daily");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [apiStats, setApiStats] = useState<Record<string, unknown> | null>(
+    null,
+  );
+  const [ordersChartApi, setOrdersChartApi] = useState<
+    typeof ORDERS_CHART.daily | null
+  >(null);
+  const [revenueChartApi, setRevenueChartApi] = useState<
+    typeof REVENUE_CHART.daily | null
+  >(null);
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const [stats, ordersChart, revenueChart] = await Promise.all([
+          dashboardApi.getStats(),
+          dashboardApi.getChart(ordersMode),
+          dashboardApi.getChart(revenueMode),
+        ]);
+        if (cancelled) return;
+        setApiStats(stats && typeof stats === "object" ? stats : null);
+        if (Array.isArray(ordersChart) && ordersChart.length > 0) {
+          setOrdersChartApi(
+            ordersChart.map((point, index) => ({
+              name:
+                String(point.name ?? point.label ?? `P${index + 1}`),
+              value: Number(point.value ?? point.total ?? 0),
+            })),
+          );
+        }
+        if (Array.isArray(revenueChart) && revenueChart.length > 0) {
+          setRevenueChartApi(
+            revenueChart.map((point, index) => ({
+              name:
+                String(point.name ?? point.label ?? `P${index + 1}`),
+              value: Number(point.value ?? point.total ?? 0),
+            })),
+          );
+        }
+      } catch {
+        // Keep seeded dashboard data.
+      }
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [ordersMode, revenueMode]);
+
+  const ordersChartData =
+    ordersChartApi ?? ORDERS_CHART[ordersMode];
+  const revenueChartData =
+    revenueChartApi ?? REVENUE_CHART[revenueMode];
+
+  const statCards = useMemo(
+    () => [
+      {
+        title: "Total Revenue",
+        value:
+          (apiStats?.totalRevenue as string | number | undefined)?.toString() ??
+          "$5,285.30",
+        subtitle: "All time revenue",
+        icon: DollarSign,
+        iconBg: "bg-[#E8F2EA]",
+        iconColor: "text-[#28402B]",
+      },
+      {
+        title: "Total Expenses",
+        value:
+          (apiStats?.totalExpenses as string | number | undefined)?.toString() ??
+          "$3,160.50",
+        subtitle: "From product orders",
+        icon: TrendingUp,
+        iconBg: "bg-[#FDECEC]",
+        iconColor: "text-[#E25B5B]",
+        onClick: () => navigate(ROUTES.productOrders),
+      },
+      {
+        title: "Total Orders",
+        value:
+          (apiStats?.totalOrders as string | number | undefined)?.toString() ??
+          "41",
+        subtitle: "Total customer orders",
+        icon: ShoppingCart,
+        iconBg: "bg-[#FFF0E8]",
+        iconColor: "text-[#F57850]",
+        onClick: () => navigate(ROUTES.customerOrders),
+      },
+      {
+        title: "Total Customers",
+        value:
+          (apiStats?.totalCustomers as string | number | undefined)?.toString() ??
+          "6",
+        subtitle: "Active customers",
+        icon: Users,
+        iconBg: "bg-[#EAF1FB]",
+        iconColor: "text-[#4B7CC9]",
+        onClick: () => navigate(ROUTES.customers),
+      },
+    ],
+    [apiStats, navigate],
+  );
 
   const topCustomers = useMemo(
     () =>
@@ -215,14 +326,22 @@ export default function DashboardPage() {
         title="Dashboard Report"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <button
-              type="button"
-              className="inline-flex h-[34px] items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
-            >
-              <Calendar size={14} className="text-[#8A8A8A]" />
+            {isApiConfigured() ? (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  window.location.href = getQuickBooksAuthUrl();
+                }}
+              >
+                QuickBooks
+              </Button>
+            ) : null}
+
+            <Button variant="outline">
+              <Calendar size={14} className="text-muted" />
               Select Date
-              <ChevronDown size={14} className="text-[#8A8A8A]" />
-            </button>
+              <ChevronDown size={14} className="text-muted" />
+            </Button>
 
             <Select
               value={statusFilter}
@@ -241,43 +360,7 @@ export default function DashboardPage() {
 
       <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              title: "Total Revenue",
-              value: "$5,285.30",
-              subtitle: "All time revenue",
-              icon: DollarSign,
-              iconBg: "bg-[#E8F2EA]",
-              iconColor: "text-[#28402B]",
-            },
-            {
-              title: "Total Expenses",
-              value: "$3,160.50",
-              subtitle: "From product orders",
-              icon: TrendingUp,
-              iconBg: "bg-[#FDECEC]",
-              iconColor: "text-[#E25B5B]",
-              onClick: () => navigate(ROUTES.productOrders),
-            },
-            {
-              title: "Total Orders",
-              value: "41",
-              subtitle: "Total customer orders",
-              icon: ShoppingCart,
-              iconBg: "bg-[#FFF0E8]",
-              iconColor: "text-[#F57850]",
-              onClick: () => navigate(ROUTES.customerOrders),
-            },
-            {
-              title: "Total Customers",
-              value: "6",
-              subtitle: "Active customers",
-              icon: Users,
-              iconBg: "bg-[#EAF1FB]",
-              iconColor: "text-[#4B7CC9]",
-              onClick: () => navigate(ROUTES.customers),
-            },
-          ].map((card) => {
+          {statCards.map((card) => {
             const Icon = card.icon;
             return (
               <button
@@ -317,13 +400,13 @@ export default function DashboardPage() {
           <div className="space-y-4">
             <AreaChartCard
               title="Recent Orders"
-              data={ORDERS_CHART[ordersMode]}
+              data={ordersChartData}
               mode={ordersMode}
               onModeChange={setOrdersMode}
             />
             <AreaChartCard
               title="Revenue Overview"
-              data={REVENUE_CHART[revenueMode]}
+              data={revenueChartData}
               mode={revenueMode}
               onModeChange={setRevenueMode}
               yFormatter={(value) => `$${value}`}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, FileText, Plus, Trash2, Upload, X } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Distributor, DistributorContact } from "@/types/distributor";
@@ -290,7 +291,7 @@ export function AddDistributorModal({
                     }
                   }}
                   className={cn(
-                    "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                    "w-full",
                     errors.name && INVALID_BORDER,
                   )}
                 />
@@ -312,7 +313,7 @@ export function AddDistributorModal({
                     }
                   }}
                   className={cn(
-                    "h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                    "w-full",
                     errors.address && INVALID_BORDER,
                   )}
                 />
@@ -387,7 +388,7 @@ export function AddDistributorModal({
                               }
                             }}
                             className={cn(
-                              "h-[34px] !w-[110px] shrink-0 rounded-[8px] border-[#E6E6E3] px-2.5 text-[13px] [&::-webkit-calendar-picker-indicator]:hidden",
+                              "h-[33.75px] !w-[110px] shrink-0 px-2.5 [&::-webkit-calendar-picker-indicator]:hidden",
                               errors.deliveryTimeByDay?.[day] && INVALID_BORDER,
                             )}
                           />
@@ -582,7 +583,7 @@ export function AddDistributorModal({
                               }
                             }}
                             className={cn(
-                              "h-[36px] rounded-[8px] border-[#E6E6E3] text-[13px]",
+                              "w-full",
                               contactErrors?.[key] && INVALID_BORDER,
                             )}
                           />
@@ -603,15 +604,15 @@ export function AddDistributorModal({
               <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
                 Documents
               </h3>
-              <button
-                type="button"
+              <Button
+                variant="dark"
+                size="sm"
                 aria-label="Upload File"
                 onClick={() => fileRef.current?.click()}
-                className="inline-flex h-[32px] items-center gap-1.5 rounded-[8px] bg-[#242424] px-3 text-[12px] font-medium text-white"
               >
                 <Upload size={14} strokeWidth={1.75} />
                 Upload File
-              </button>
+              </Button>
               <input
                 ref={fileRef}
                 type="file"
@@ -730,20 +731,12 @@ export function AddDistributorModal({
             <span />
           )}
           <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="cursor-pointer text-[13px] font-medium text-[#8A8A8A]"
-            >
+            <Button variant="ghost" onClick={handleClose}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSave}
-              className="h-[36px] cursor-pointer rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
-            >
+            </Button>
+            <Button variant="dark" onClick={handleSave}>
               Save Distributor
-            </button>
+            </Button>
           </div>
         </div>
       </div>

@@ -3,12 +3,14 @@ import { Plus, Search } from "lucide-react";
 
 import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER } from "@/constants/table";
+import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { isApiConfigured, productsApi } from "@/lib/api";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import { cn } from "@/utils/cn";
 import {
@@ -226,16 +228,14 @@ export default function ItemsPage() {
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
-              />
+              <Search size={14} className={SEARCH_ICON} />
               <Input
+                inputSize="md"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search name"
                 aria-label="Search name"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className={SEARCH_INPUT}
               />
             </div>
 
@@ -284,14 +284,14 @@ export default function ItemsPage() {
               ]}
             />
 
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={openCreate}
-              className="inline-flex h-[34px] w-full cursor-pointer items-center justify-center gap-1.5 rounded-[8px] bg-badge px-3.5 text-[13px] font-medium text-white sm:ml-auto sm:w-auto"
+              className="w-full sm:ml-auto sm:w-auto"
             >
               <Plus size={14} />
               Add Item
-            </button>
+            </Button>
           </div>
         }
         below={
@@ -477,6 +477,19 @@ export default function ItemsPage() {
             }
             return [{ ...item, id: nextItemId(current) }, ...current];
           });
+
+          if (isApiConfigured() && !editing) {
+            void productsApi
+              .create({
+                name: item.name,
+                categoryNames: [item.category, item.subcategory].filter(Boolean),
+                type: item.category.toLowerCase(),
+                price: Math.round(item.sellingPrice * 100),
+                description: item.description,
+              })
+              .catch(() => {});
+          }
+
           closeModal();
         }}
       />

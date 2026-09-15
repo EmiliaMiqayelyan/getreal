@@ -1,6 +1,7 @@
 export { Button } from "./Button";
+export type { ButtonVariant, ButtonSize } from "./Button";
 export { Checkbox, Radio } from "./Checkbox";
-export { CountBadge, IdPill, Tag } from "./Badge";
+export { CountBadge, IdPill, Tag, StatusBadge } from "./Badge";
 export { DatePicker } from "./DatePicker";
 export { DayPicker } from "./DayPicker";
 export { EmptyStateBox } from "./EmptyStateBox";

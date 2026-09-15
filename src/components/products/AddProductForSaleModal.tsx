@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
+import { Button } from "@/components/ui/Button";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
@@ -272,32 +273,23 @@ export function AddProductForSaleModal({
             <p className="mt-2 text-[12px] text-[#D64545]">{itemError}</p>
           ) : null}
           {isEdit ? (
-            <button
-              type="button"
+            <Button
+              variant="dangerGhost"
               onClick={handleRemove}
-              className="mt-3 cursor-pointer text-[14px] font-medium text-[#D64545] hover:underline"
+              className="mt-3 hover:underline"
             >
               Remove
-            </button>
+            </Button>
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="cursor-pointer rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#5A5A5A] hover:bg-[#F5F5F3]"
-          >
+        <div className="flex items-center justify-end gap-3 border-t border-border px-6 py-4">
+          <Button variant="ghost" onClick={handleClose}>
             Cancel
-          </button>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            onClick={handleSubmit}
-            className="cursor-pointer rounded-[8px] bg-[#111118] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#1A1A1A] disabled:cursor-not-allowed disabled:opacity-40"
-          >
+          </Button>
+          <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
             {isEdit ? "Edit" : "Add to List"}
-          </button>
+          </Button>
         </div>
       </div>
 

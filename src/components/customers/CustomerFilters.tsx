@@ -20,7 +20,7 @@ export function CustomerFilters({
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder="Customer name or email"
-        className="max-w-[280px]"
+        className="w-full max-w-[280px]"
         aria-label="Search customers"
       />
       <Select

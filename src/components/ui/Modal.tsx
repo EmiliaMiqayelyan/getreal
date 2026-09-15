@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 
 import { CloseIcon } from "@/components/icons";
+import { MODAL_TITLE } from "@/constants/table";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
@@ -55,18 +56,15 @@ export function Modal({
           className,
         )}
       >
-        <div className="border-border/70 flex items-center justify-between border-b border-[#ECECEA] px-6 py-4">
-          <h2
-            id="modal-title"
-            className="text-foreground text-lg font-semibold tracking-tight"
-          >
+        <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <h2 id="modal-title" className={MODAL_TITLE}>
             {title}
           </h2>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="text-muted-strong hover:bg-background hover:text-foreground rounded-md p-1 transition-colors"
+            className="rounded-md p-1 text-muted-strong transition-colors hover:bg-surface-hover hover:text-foreground"
           >
             <CloseIcon />
           </button>
@@ -80,7 +78,7 @@ export function Modal({
         </div>
 
         {footer ? (
-          <div className="border-border/70 flex items-center justify-end gap-2 border-t border-[#ECECEA] px-6 py-4">
+          <div className="flex items-center justify-end gap-2 border-t border-border px-6 py-4">
             {footer}
           </div>
         ) : null}

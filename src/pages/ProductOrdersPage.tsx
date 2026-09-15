@@ -14,9 +14,11 @@ import {
 import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow";
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
 import {
   DELIVERED_ORDERS,
   DELIVERED_SORT_OPTIONS,
@@ -30,6 +32,8 @@ import {
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isApiConfigured, normalizeOrdersList, ordersApi } from "@/lib/api";
+import { syncReviewGroupOrder } from "@/lib/api/orderSync";
 import type {
   ManualOrderDraft,
   OrderCategory,
@@ -294,7 +298,7 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors } = useAppCatalog();
+  const { distributors, items } = useAppCatalog();
 
   const [view, setView] = useState<View>("list");
   const [tab, setTab] = useState<Tab>("Orders");
@@ -517,6 +521,17 @@ export default function ProductOrdersPage() {
     return Array.from(names).sort();
   }, [inProgress]);
 
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    void ordersApi
+      .list({ page: 1, limit: 50 })
+      .then((payload) => {
+        normalizeOrdersList(payload);
+        // Remote orders are kept on the server; local UI still uses seeded flows.
+      })
+      .catch(() => {});
+  }, []);
+
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
     setToast(true);
@@ -587,6 +602,7 @@ export default function ProductOrdersPage() {
     setInProgress((prev) =>
       appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
     );
+    syncReviewGroupOrder(group, distributors, items);
     setOrderedDistributors((prev) => new Set(prev).add(distributor));
     setExpandedId(order.id);
     showToast("Order submitted");
@@ -613,6 +629,9 @@ export default function ProductOrdersPage() {
     setInProgress((prev) =>
       appendInProgressOrders(prev, created, SEED_IN_PROGRESS),
     );
+    for (const group of remaining) {
+      syncReviewGroupOrder(group, distributors, items);
+    }
     setOrderedDistributors(new Set(reviewGroups.map((group) => group.distributor)));
     setExpandedId(created[0]?.id ?? null);
     showToast("Orders created successfully");
@@ -676,12 +695,13 @@ export default function ProductOrdersPage() {
 
           <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#ECECEA] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-[#A9A9A9]" />
+              <Search size={14} className={SEARCH_ICON} />
               <Input
+                inputSize="md"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className={SEARCH_INPUT}
               />
             </div>
             {tab === "Orders" ? (
@@ -713,15 +733,14 @@ export default function ProductOrdersPage() {
                     ]}
                   />
                 ) : null}
-                <button
-                  type="button"
+                <Button
+                  variant="primary"
                   onClick={openManualFlow}
-                  className="ml-auto inline-flex h-[34px] items-center gap-1.5 rounded-[8px] px-3.5 text-[13px] font-semibold text-white"
-                  style={{ backgroundColor: ORANGE }}
+                  className="ml-auto"
                 >
                   <Plus className="size-3.5" />
                   Create Order
-                </button>
+                </Button>
               </>
             ) : (
               <>
@@ -888,14 +907,14 @@ export default function ProductOrdersPage() {
                   <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                     Order List
                   </h2>
-                  <button
-                    type="button"
+                  <Button
+                    variant="dark"
                     onClick={openOrderFlow}
                     disabled={filteredPreview.length === 0}
-                    className="h-[32px] rounded-[8px] bg-[#242424] px-4 text-[14px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    size="sm"
                   >
                     Order now
-                  </button>
+                  </Button>
                 </div>
                 <ScrollTable minWidth={860}>
                   <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
@@ -1184,16 +1203,16 @@ export default function ProductOrdersPage() {
                           </div>
                         ) : (
                           <>
-                            <button
-                              type="button"
+                            <Button
+                              variant="primary"
+                              size="sm"
                               onClick={() =>
                                 submitDistributorOrder(group.distributor)
                               }
-                              className="h-[32px] rounded-[8px] px-3.5 text-[12px] font-semibold text-white"
-                              style={{ backgroundColor: ORANGE }}
+                              className="text-[12px] font-semibold"
                             >
                               Order now
-                            </button>
+                            </Button>
                             <span className="text-[12px] text-[#8A8A8A]">
                               Expected delivery{" "}
                               <span className="font-semibold text-[#111118]">
@@ -1286,25 +1305,21 @@ export default function ProductOrdersPage() {
           <span />
         )}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setConfirmClose(true)}
-            className="rounded-[8px] px-3 py-2 text-[14px] font-medium text-[#000000] hover:bg-background"
-          >
+          <Button variant="ghost" onClick={() => setConfirmClose(true)}>
             Cancel & Close
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="primary"
+            size="lg"
             disabled={view === "orderList" ? !canReview : !canOrderAll}
             onClick={() => {
               if (view === "review") orderAll();
               else setView("review");
             }}
-            className="h-[40px] rounded-[8px] px-5 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-            style={{ backgroundColor: ORANGE }}
+            className="font-semibold"
           >
             {view === "review" ? "Order All" : "Review Order"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -1337,20 +1352,15 @@ export default function ProductOrdersPage() {
               Are you sure you want to close order request?
             </p>
             <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => setConfirmClose(false)}
-                className="rounded-[8px] px-4 py-2.5 text-[14px] font-medium text-[#111118] hover:bg-background"
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                onClick={cancelOrderRequest}
-                className="rounded-[8px] bg-[#2E2E2E] px-5 py-2.5 text-[14px] font-medium text-white hover:bg-[#252525]"
-              >
+              </Button>
+              <Button variant="dark" onClick={cancelOrderRequest}>
                 Cancel Order
-              </button>
+              </Button>
             </div>
           </div>
         </div>

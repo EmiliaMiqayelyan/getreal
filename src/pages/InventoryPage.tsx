@@ -12,6 +12,7 @@ import {
 
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -863,21 +864,18 @@ function SplitModal({
         </div>
 
         <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-[14px] font-medium text-[#8A8A8A]"
-          >
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            variant="dark"
             onClick={onConfirm}
             disabled={!canConfirm}
-            className="inline-flex h-[32px] items-center justify-center rounded-[10px] bg-[#2E2E2E] px-5 py-0 text-[14px] font-semibold leading-none text-white disabled:opacity-40"
+            size="sm"
+            className="rounded-[10px] px-5 text-[14px] font-semibold"
           >
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -1111,7 +1109,7 @@ function StockItemsView({
                                     splits: [],
                                   })
                                 }
-                                className="h-10 w-[72px] max-w-[72px] shrink-0 rounded-[8px] border-[#E6E6E3] px-2 text-left text-[13px] text-[#111118] focus:border-[#C8C8C6]"
+                                className="w-[72px] max-w-[72px] shrink-0 px-2 text-left"
                               />
                             </div>
                             <span className="min-w-0 truncate whitespace-nowrap">
@@ -1561,7 +1559,7 @@ export default function InventoryPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search"
-                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="w-full pl-8"
               />
             </div>
 

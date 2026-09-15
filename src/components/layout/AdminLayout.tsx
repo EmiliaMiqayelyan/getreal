@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Navigate, Outlet } from "react-router";
 
+import { ApiBootstrap } from "@/components/api/ApiBootstrap";
 import { AppCatalogProvider } from "@/context/AppCatalogContext";
 import { PackingHandoffProvider } from "@/context/PackingHandoffContext";
 import { ReceivingHandoffProvider } from "@/context/ReceivingHandoffContext";
@@ -32,6 +33,7 @@ export function AdminLayout() {
       <ReceivingHandoffProvider>
         <PackingHandoffProvider>
           <RolesUsersProvider>
+            <ApiBootstrap />
             <AuthenticatedShell />
           </RolesUsersProvider>
         </PackingHandoffProvider>

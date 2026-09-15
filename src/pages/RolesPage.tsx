@@ -3,9 +3,11 @@ import { Check, ChevronRight, Copy, Plus, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { RoleManagementModal } from "@/components/roles/RoleManagementModal";
+import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import {
   ADMIN_ROLE_PERMISSIONS,
@@ -13,6 +15,12 @@ import {
 } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import {
+  isApiConfigured,
+  mapRoleUserTypeToApiRole,
+  rolesApi,
+  usersApi,
+} from "@/lib/api";
 import type { RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
 import {
@@ -240,7 +248,7 @@ export default function RolesPage() {
     setFormErrors({});
   }
 
-  function saveUser() {
+  async function saveUser() {
     const errors = validateUserForm({
       name: draft.name,
       email: draft.email,
@@ -262,15 +270,38 @@ export default function RolesPage() {
                 email: draft.email.trim(),
                 phone: draft.phone.trim(),
                 type: draft.type,
-                // §11: empty password keeps existing
-                password: draft.password
-                  ? draft.password
-                  : user.password,
+                password: draft.password ? draft.password : user.password,
               }
             : user,
         ),
       );
+
+      if (isApiConfigured()) {
+        void usersApi
+          .update(draft.id, {
+            name: draft.name.trim(),
+            email: draft.email.trim(),
+            role: mapRoleUserTypeToApiRole(draft.type),
+            ...(draft.password ? { password: draft.password } : {}),
+          })
+          .catch(() => {});
+      }
     } else {
+      let createdId: string | undefined;
+      if (isApiConfigured()) {
+        try {
+          const created = await usersApi.create({
+            email: draft.email.trim(),
+            password: draft.password,
+            name: draft.name.trim(),
+            role: mapRoleUserTypeToApiRole(draft.type),
+          });
+          createdId = created.id;
+        } catch {
+          // Fall through to local create.
+        }
+      }
+
       setUsers((current) => {
         const max = current.reduce((acc, user) => {
           const n = Number(user.id.replace(/\D/g, ""));
@@ -279,7 +310,7 @@ export default function RolesPage() {
         return [
           ...current,
           {
-            id: `U${String(max + 1).padStart(3, "0")}`,
+            id: createdId ?? `U${String(max + 1).padStart(3, "0")}`,
             name: draft.name.trim(),
             email: draft.email.trim(),
             phone: draft.phone.trim(),
@@ -302,6 +333,11 @@ export default function RolesPage() {
 
   function deleteUser() {
     if (!draft.id) return;
+    if (isApiConfigured()) {
+      void usersApi
+        .update(draft.id, { isBlocked: true })
+        .catch(() => {});
+    }
     // Soft-delete access: remove from active users; audit history elsewhere stays
     removeUser(draft.id);
     if (expandedId === draft.id) setExpandedId(null);
@@ -328,15 +364,13 @@ export default function RolesPage() {
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
-              />
+              <Search size={14} className={SEARCH_ICON} />
               <Input
+                inputSize="md"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search ID, name"
-                className="h-[34px] rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className={SEARCH_INPUT}
               />
             </div>
 
@@ -351,21 +385,13 @@ export default function RolesPage() {
             />
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={openCreateModal}
-                className="inline-flex h-[34px] items-center gap-1.5 rounded-[8px] bg-[#F57850] px-3.5 text-[13px] font-medium text-white"
-              >
+              <Button variant="primary" onClick={openCreateModal}>
                 <Plus size={14} />
                 Add User
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleMgmtOpen(true)}
-                className="inline-flex h-[34px] items-center rounded-[8px] bg-[#2E2E2E] px-3.5 text-[13px] font-medium text-white"
-              >
+              </Button>
+              <Button variant="dark" onClick={() => setRoleMgmtOpen(true)}>
                 Role Management
-              </button>
+              </Button>
             </div>
           </div>
         }
@@ -475,13 +501,12 @@ export default function RolesPage() {
                     </div>
 
                     <div className="mt-5 flex justify-end">
-                      <button
-                        type="button"
+                      <Button
+                        variant="dark"
                         onClick={() => applyChanges(user)}
-                        className="h-[34px] rounded-[8px] bg-[#2E2E2E] px-4 text-[13px] font-medium text-white"
                       >
                         Apply Changes
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : null}
@@ -538,7 +563,7 @@ export default function RolesPage() {
                     }))
                   }
                   placeholder="e.g. Jane Doe"
-                  className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
+                  className="w-full"
                 />
                 {formErrors.name ? (
                   <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.name}</p>
@@ -559,7 +584,7 @@ export default function RolesPage() {
                     }))
                   }
                   placeholder="e.g. jane@example.com"
-                  className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
+                  className="w-full"
                 />
                 {formErrors.email ? (
                   <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.email}</p>
@@ -585,7 +610,7 @@ export default function RolesPage() {
                         ? "Leave blank to keep current password"
                         : "Enter password"
                     }
-                    className="h-[40px] rounded-[8px] border-[#E6E6E3] pr-10 text-[13px]"
+                    className="w-full pr-10"
                   />
                   <button
                     type="button"
@@ -620,7 +645,7 @@ export default function RolesPage() {
                     }))
                   }
                   placeholder="e.g. (555) 123-4567"
-                  className="h-[40px] rounded-[8px] border-[#E6E6E3] text-[13px]"
+                  className="w-full"
                 />
                 {formErrors.phone ? (
                   <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.phone}</p>
@@ -655,32 +680,20 @@ export default function RolesPage() {
 
             <div className="flex items-center justify-between border-t border-[#ECECEA] px-6 py-4">
               {draft.id ? (
-                <button
-                  type="button"
-                  onClick={deleteUser}
-                  className="text-[13px] font-medium text-[#E25B5B]"
-                >
+                <Button variant="dangerGhost" onClick={deleteUser}>
                   Delete User
-                </button>
+                </Button>
               ) : (
                 <span />
               )}
 
               <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={closeModal}
-                  className="text-[13px] font-medium text-[#8A8A8A]"
-                >
+                <Button variant="ghost" onClick={closeModal}>
                   Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={saveUser}
-                  className="h-[36px] rounded-[8px] bg-[#242424] px-5 text-[13px] font-medium text-white"
-                >
+                </Button>
+                <Button variant="dark" onClick={saveUser}>
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -693,6 +706,23 @@ export default function RolesPage() {
         onClose={() => setRoleMgmtOpen(false)}
         onSave={(next) => {
           setManagedRoles(next);
+          if (isApiConfigured()) {
+            for (const role of next) {
+              const isLocal = role.id.startsWith("role-");
+              if (isLocal) {
+                void rolesApi
+                  .create({
+                    name: role.name,
+                    permissions: [],
+                  })
+                  .catch(() => {});
+              } else {
+                void rolesApi
+                  .update(role.id, { name: role.name })
+                  .catch(() => {});
+              }
+            }
+          }
           setToast("Roles saved");
           window.setTimeout(() => setToast(null), 2000);
         }}

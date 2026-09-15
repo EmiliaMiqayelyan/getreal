@@ -7,6 +7,16 @@ type BadgeProps = {
   className?: string;
 };
 
+type StatusVariant = "success" | "warning" | "danger" | "info" | "neutral";
+
+const statusClasses: Record<StatusVariant, string> = {
+  success: "bg-success-soft text-success",
+  warning: "bg-[#FFF1EB] text-warning",
+  danger: "bg-danger-soft text-danger",
+  info: "bg-[#EAF1FC] text-info",
+  neutral: "bg-id-pill text-muted-strong",
+};
+
 export function CountBadge({ children, className }: BadgeProps) {
   return (
     <span
@@ -24,7 +34,7 @@ export function IdPill({ children, className }: BadgeProps) {
   return (
     <span
       className={cn(
-        "bg-id-pill text-muted-strong inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium",
+        "bg-id-pill inline-flex items-center rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-strong",
         className,
       )}
     >
@@ -37,7 +47,25 @@ export function Tag({ children, className }: BadgeProps) {
   return (
     <span
       className={cn(
-        "bg-id-pill text-muted-strong inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+        "bg-id-pill text-muted-strong inline-flex items-center rounded-[6px] px-2 py-1 text-[12px] font-medium",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+export function StatusBadge({
+  children,
+  variant = "neutral",
+  className,
+}: BadgeProps & { variant?: StatusVariant }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-[6px] px-2 py-0.5 text-[12px] font-medium",
+        statusClasses[variant],
         className,
       )}
     >

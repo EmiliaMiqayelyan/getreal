@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Flag, MessageCircle, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
@@ -8,6 +8,12 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  isApiConfigured,
+  mapApiUserToAdminCustomer,
+  normalizeUsersList,
+  usersApi,
+} from "@/lib/api";
 import type {
   AdminCustomer,
   AdminCustomerOrder,
@@ -630,23 +636,46 @@ function CustomerTable({
 export default function CustomersPage() {
   useDocumentTitle("Customers");
 
+  const [customers, setCustomers] = useState(ADMIN_CUSTOMERS);
   const [query, setQuery] = useState("");
   const [zipFilter, setZipFilter] = useState("");
   const [orderCountFilter, setOrderCountFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>("U001");
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
 
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+
+    void usersApi
+      .list({ page: 1, limit: 100, role: "customer" })
+      .then((payload) => {
+        if (cancelled) return;
+        const apiUsers = normalizeUsersList(payload);
+        if (apiUsers.length > 0) {
+          setCustomers(apiUsers.map(mapApiUserToAdminCustomer));
+        }
+      })
+      .catch(() => {
+        // Keep ADMIN_CUSTOMERS seed.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const zipOptions = useMemo(
     () =>
       Array.from(
-        new Set(ADMIN_CUSTOMERS.map((customer) => customer.zip).filter(Boolean)),
+        new Set(customers.map((customer) => customer.zip).filter(Boolean)),
       ).sort() as string[],
-    [],
+    [customers],
   );
 
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return ADMIN_CUSTOMERS.filter((customer) => {
+    return customers.filter((customer) => {
       const matchesQuery =
         !normalized ||
         customer.id.toLowerCase().includes(normalized) ||
@@ -666,7 +695,7 @@ export default function CustomersPage() {
 
       return matchesQuery && matchesZip && matchesOrders;
     });
-  }, [orderCountFilter, query, zipFilter]);
+  }, [customers, orderCountFilter, query, zipFilter]);
 
   const active = filtered.filter((customer) => !customer.blocked);
   const inactive = filtered.filter((customer) => customer.blocked);
@@ -686,7 +715,7 @@ export default function CustomersPage() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search ID, customer name"
-                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="w-full pl-8"
               />
             </div>
 

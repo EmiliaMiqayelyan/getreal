@@ -1284,7 +1284,7 @@ export default function DistributorDeliveriesPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search"
-                className="h-10 rounded-[8px] border-[#E6E6E3] bg-white pl-8 text-[13px]"
+                className="w-full pl-8"
               />
             </div>
 
