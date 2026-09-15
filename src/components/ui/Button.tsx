@@ -42,7 +42,7 @@ export function Button({
       type={type}
       className={cn(
         "inline-flex w-fit items-center justify-center transition-colors",
-        "text-[12px] leading-4 font-semibold tracking-normal",
+        "leading-4 font-semibold tracking-normal",
         "focus-visible:ring-2 focus-visible:ring-[#2E2E2E]/20 focus-visible:outline-none",
         "disabled:pointer-events-none disabled:opacity-40",
         textOnly && "gap-[5.63px] px-0",
@@ -67,6 +67,8 @@ export function Button({
         variant === "icon" &&
           "border border-border bg-white text-muted hover:bg-surface-hover hover:text-foreground",
         className,
+        /* Force consistent label size — wins over call-site text-* overrides */
+        "!text-[12px]",
       )}
       {...props}
     >

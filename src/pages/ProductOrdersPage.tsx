@@ -1209,7 +1209,7 @@ export default function ProductOrdersPage() {
                               onClick={() =>
                                 submitDistributorOrder(group.distributor)
                               }
-                              className="text-[12px] font-semibold"
+                              className="font-semibold"
                             >
                               Order now
                             </Button>
