@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   Calendar,
   Check,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -344,15 +346,55 @@ function StepNode({
 }: {
   step: TimelineStep;
   order: CustomerOrderRow;
-  onStatusClick: () => void;
+  onStatusClick: (anchor: DOMRect) => void;
 }) {
   const [hover, setHover] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, placeAbove: false });
+  const nodeRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef(0);
+
+  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
+
+  function place() {
+    const rect = nodeRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const cardWidth = 260;
+    const estimatedHeight = 160;
+    const gap = 8;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const placeAbove = spaceBelow < estimatedHeight + gap;
+
+    setPos({
+      top: placeAbove ? rect.top - gap : rect.bottom + gap,
+      left: Math.max(
+        12,
+        Math.min(
+          rect.left + rect.width / 2 - cardWidth / 2,
+          window.innerWidth - cardWidth - 12,
+        ),
+      ),
+      placeAbove,
+    });
+  }
+
+  function show() {
+    if (!step.done) return;
+    window.clearTimeout(hideTimer.current);
+    place();
+    setHover(true);
+  }
+
+  function hide() {
+    hideTimer.current = window.setTimeout(() => setHover(false), 140);
+  }
 
   return (
     <div
+      ref={nodeRef}
       className="relative flex min-w-0 flex-col items-center px-0.5"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
     >
       <div className="mb-1.5 flex h-[14px] w-full items-end justify-center truncate text-center text-[10px] font-medium text-[#111118] sm:text-[11px]">
         {step.done && step.shortLabel ? step.shortLabel : null}
@@ -360,9 +402,10 @@ function StepNode({
 
       <button
         type="button"
+        data-status-node
         onClick={(event) => {
           event.stopPropagation();
-          onStatusClick();
+          onStatusClick(event.currentTarget.getBoundingClientRect());
         }}
         className={cn(
           "z-[1] flex size-[18px] shrink-0 items-center justify-center rounded-full",
@@ -382,11 +425,24 @@ function StepNode({
         {step.done && step.at ? step.at : null}
       </div>
 
-      {hover && step.done ? (
-        <div className="absolute top-[52px] left-1/2 z-30 hidden -translate-x-1/2 sm:block">
-          <HoverCard step={step} order={order} />
-        </div>
-      ) : null}
+      {hover && step.done
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="pointer-events-auto fixed z-[80] hidden sm:block"
+              style={{
+                top: pos.top,
+                left: pos.left,
+                transform: pos.placeAbove ? "translateY(-100%)" : undefined,
+              }}
+              onMouseEnter={show}
+              onMouseLeave={hide}
+            >
+              <HoverCard step={step} order={order} />
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -396,7 +452,7 @@ function OrderTimelineTrack({
   onStatusClick,
 }: {
   order: CustomerOrderRow;
-  onStatusClick: (stepKey: TimelineStepKey) => void;
+  onStatusClick: (stepKey: TimelineStepKey, anchor: DOMRect) => void;
 }) {
   return (
     <div className="relative">
@@ -423,7 +479,7 @@ function OrderTimelineTrack({
             key={step.key}
             step={step}
             order={order}
-            onStatusClick={() => onStatusClick(step.key)}
+            onStatusClick={(anchor) => onStatusClick(step.key, anchor)}
           />
         ))}
       </div>
@@ -629,7 +685,38 @@ export default function CustomerOrdersPage() {
   const [statusMenu, setStatusMenu] = useState<{
     orderId: string;
     stepKey: TimelineStepKey;
+    top: number;
+    left: number;
+    placeAbove: boolean;
   } | null>(null);
+
+  useEffect(() => {
+    if (!statusMenu) return;
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest("[data-status-menu]") ||
+        target?.closest("[data-status-node]")
+      ) {
+        return;
+      }
+      setStatusMenu(null);
+    }
+
+    function onRepositionClose() {
+      setStatusMenu(null);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("resize", onRepositionClose);
+    window.addEventListener("scroll", onRepositionClose, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("resize", onRepositionClose);
+      window.removeEventListener("scroll", onRepositionClose, true);
+    };
+  }, [statusMenu]);
 
   const ordersWithPacking = useMemo(
     () =>
@@ -696,6 +783,13 @@ export default function CustomerOrdersPage() {
 
   const selectedOrder =
     ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
+
+  const exportCount =
+    activeTab === "Orders" ? filteredActive.length : filteredCompleted.length;
+  const exportFiltersActive =
+    activeTab === "Orders"
+      ? Boolean(search.trim() || statusFilter)
+      : Boolean(search.trim() || zipFilter || statusFilter || sortBy);
 
   function advanceStatus(orderId: string, targetDoneCount: number) {
     setOrders((current) =>
@@ -816,18 +910,25 @@ export default function CustomerOrdersPage() {
               </>
             )}
 
-            <div className="ml-auto text-[12px] text-[#8A8A8A]">
-              Today, Tue, Jul 16, 2026
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+              <ExportButton
+                entityLabel="orders"
+                recordCount={exportCount}
+                filtersActive={exportFiltersActive}
+              />
+              <div className="text-[12px] text-[#8A8A8A]">
+                Today, Tue, Jul 16, 2026
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-white">
-      <div className="flex-1 overflow-auto bg-white px-4 py-5 md:px-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 py-5 md:px-7">
         {activeTab === "Orders" ? (
-          <>
-            <div className="mb-5 flex items-center justify-between gap-3">
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="mb-5 flex shrink-0 items-center justify-between gap-3">
               <div className="flex flex-wrap gap-2">
                 {DELIVERY_CHIPS.map((chip) => {
                   const active = chip.id === activeChip;
@@ -944,7 +1045,7 @@ export default function CustomerOrdersPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-[10px] border border-[#ECECEA] bg-white">
+            <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#ECECEA] bg-white">
               <div className="min-w-[900px]">
                 <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
                   <div>Order ID</div>
@@ -983,49 +1084,46 @@ export default function CustomerOrdersPage() {
 
                         <OrderTimelineTrack
                           order={order}
-                          onStatusClick={(stepKey) =>
+                          onStatusClick={(stepKey, anchor) => {
+                            const menuWidth = 220;
+                            const menuHeight = 88;
+                            const gap = 8;
+                            const placeAbove =
+                              window.innerHeight - anchor.bottom <
+                              menuHeight + gap;
                             setStatusMenu(
                               statusMenu?.orderId === order.id &&
                                 statusMenu.stepKey === stepKey
                                 ? null
-                                : { orderId: order.id, stepKey },
-                            )
-                          }
+                                : {
+                                    orderId: order.id,
+                                    stepKey,
+                                    placeAbove,
+                                    top: placeAbove
+                                      ? anchor.top - gap
+                                      : anchor.bottom + gap,
+                                    left: Math.max(
+                                      12,
+                                      Math.min(
+                                        anchor.left +
+                                          anchor.width / 2 -
+                                          menuWidth / 2,
+                                        window.innerWidth - menuWidth - 12,
+                                      ),
+                                    ),
+                                  },
+                            );
+                          }}
                         />
                       </div>
-
-                      {statusMenu?.orderId === order.id ? (
-                        <div className="absolute top-12 left-[220px] z-20 w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
-                          <div className="mb-2 text-[12px] font-semibold text-[#111118]">
-                            Change Status
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
-                              onClick={() => advanceStatus(order.id, 1)}
-                            >
-                              Requested
-                            </button>
-                            <button
-                              type="button"
-                              className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
-                              style={{ background: ORANGE }}
-                              onClick={() => advanceStatus(order.id, 3)}
-                            >
-                              On Route
-                            </button>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   ))}
                 </div>
               </div>
             </div>
-          </>
+          </div>
         ) : (
-          <div className="space-y-8">
+          <div className="min-h-0 flex-1 space-y-8 overflow-auto">
             {completedGroups.map(([week, days]) => (
               <section key={week}>
                 <h2 className="mb-5 text-[22px] font-semibold tracking-tight text-[#111118]">
@@ -1097,6 +1195,44 @@ export default function CustomerOrdersPage() {
           </div>
         )}
       </div>
+
+      {statusMenu
+        ? createPortal(
+            <div
+              data-status-menu
+              className="fixed z-[80] w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl"
+              style={{
+                top: statusMenu.top,
+                left: statusMenu.left,
+                transform: statusMenu.placeAbove
+                  ? "translateY(-100%)"
+                  : undefined,
+              }}
+            >
+              <div className="mb-2 text-[12px] font-semibold text-[#111118]">
+                Change Status
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
+                  onClick={() => advanceStatus(statusMenu.orderId, 1)}
+                >
+                  Requested
+                </button>
+                <button
+                  type="button"
+                  className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
+                  style={{ background: ORANGE }}
+                  onClick={() => advanceStatus(statusMenu.orderId, 3)}
+                >
+                  On Route
+                </button>
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {selectedOrder ? (
         <OrderDetailPanel

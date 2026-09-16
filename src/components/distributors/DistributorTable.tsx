@@ -34,9 +34,7 @@ const PRODUCT_COLUMNS = [
 ] as const;
 
 export function DistributorTable({ distributors }: DistributorTableProps) {
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    () => new Set(distributors[0] ? [distributors[0].id] : []),
-  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
 
   function toggleRow(id: string) {
     setExpandedIds((current) => {

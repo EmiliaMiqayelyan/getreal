@@ -1,11 +1,15 @@
 import {
-  BUYING_UNITS,
+  CASE_BY_OPTIONS,
   ITEM_CATEGORIES,
-  ITEM_SUBCATEGORIES,
+  PIECE_WEIGHT_OPTIONS,
   SINGLE_ITEM_UNITS,
+  SOURCE_PER_OPTIONS,
+  type CaseBy,
+  type SourcePer,
 } from "@/types/item";
 import {
   isValidMoneyInput,
+  isValidPositiveDecimalInput,
   parseContentsInput,
 } from "@/utils/itemPricing";
 
@@ -21,13 +25,17 @@ export type ItemFormInput = {
   subcategory: string;
   description: string;
   photosCount: number;
-  buyingUnit: string;
+  sourcePer: string;
+  caseBy: string;
+  pieceWeightOz: string;
+  caseWeightLbs: string;
   buyingPrice: string;
   contents: string;
   singleItemUnit: string;
   sellingPrice: string;
   distributorOptions: string[];
   sourceOptions: string[];
+  subcategoryOptions: string[];
 };
 
 export type ItemFormErrors = {
@@ -39,17 +47,21 @@ export type ItemFormErrors = {
   subcategory?: string;
   description?: string;
   photos?: string;
-  buyingUnit?: string;
+  sourcePer?: string;
+  caseBy?: string;
+  pieceWeightOz?: string;
+  caseWeightLbs?: string;
   buyingPrice?: string;
   contents?: string;
   singleItemUnit?: string;
   sellingPrice?: string;
 };
 
-function subcategoryBelongsToCategory(category: string, subcategory: string) {
+function subcategoryBelongsToCategory(
+  subcategory: string,
+  options: string[],
+) {
   if (!subcategory.trim()) return true;
-
-  const options = ITEM_SUBCATEGORIES[category] ?? [];
   return options.includes(subcategory);
 }
 
@@ -85,7 +97,9 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.category = "Select a category.";
   } else if (!(ITEM_CATEGORIES as readonly string[]).includes(input.category)) {
     errors.category = "Select a valid category.";
-  } else if (!subcategoryBelongsToCategory(input.category, input.subcategory)) {
+  } else if (
+    !subcategoryBelongsToCategory(input.subcategory, input.subcategoryOptions)
+  ) {
     errors.subcategory = "Select a subcategory for the selected category.";
   }
 
@@ -97,27 +111,51 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.photos = `No more than ${ITEM_PHOTO_MAX} photos can be uploaded.`;
   }
 
-  if (!input.buyingUnit) {
-    errors.buyingUnit = "Select a buying unit.";
-  } else if (!(BUYING_UNITS as readonly string[]).includes(input.buyingUnit)) {
-    errors.buyingUnit = "Select a valid buying unit.";
+  const sourcePer = input.sourcePer as SourcePer | "";
+  if (!sourcePer) {
+    errors.sourcePer = "Select how this item is sourced.";
+  } else if (!(SOURCE_PER_OPTIONS as readonly string[]).includes(sourcePer)) {
+    errors.sourcePer = "Select a valid source type.";
   }
 
   if (!isValidMoneyInput(input.buyingPrice)) {
     errors.buyingPrice = "Enter a valid monetary value.";
   }
 
-  const contents = parseContentsInput(input.contents);
-  if (!input.contents.trim() || contents <= 0) {
-    errors.contents = "Contents must be greater than zero.";
+  if (sourcePer === "Unit") {
+    const oz = Number(input.pieceWeightOz);
+    const validOz = PIECE_WEIGHT_OPTIONS.some((entry) => entry.oz === oz);
+    if (!validOz) {
+      errors.pieceWeightOz = "Select a piece weight.";
+    }
   }
 
-  if (!input.singleItemUnit) {
-    errors.singleItemUnit = "Select a single item unit.";
-  } else if (
-    !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
-  ) {
-    errors.singleItemUnit = "Select a valid single item unit.";
+  if (sourcePer === "Case") {
+    const caseBy = input.caseBy as CaseBy | "";
+    if (!caseBy) {
+      errors.caseBy = "Select how the case is measured.";
+    } else if (!(CASE_BY_OPTIONS as readonly string[]).includes(caseBy)) {
+      errors.caseBy = "Select a valid case measure.";
+    }
+
+    if (caseBy === "Lbs / case") {
+      if (!isValidPositiveDecimalInput(input.caseWeightLbs)) {
+        errors.caseWeightLbs = "Enter total case weight in lbs.";
+      }
+    }
+
+    const contents = parseContentsInput(input.contents);
+    if (!input.contents.trim() || contents <= 0) {
+      errors.contents = "Pieces per case must be greater than zero.";
+    }
+
+    if (!input.singleItemUnit) {
+      errors.singleItemUnit = "Select a single item unit.";
+    } else if (
+      !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
+    ) {
+      errors.singleItemUnit = "Select a valid single item unit.";
+    }
   }
 
   if (!isValidMoneyInput(input.sellingPrice)) {
@@ -141,8 +179,11 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "subcategory",
     "description",
     "photos",
-    "buyingUnit",
+    "sourcePer",
+    "caseBy",
     "buyingPrice",
+    "pieceWeightOz",
+    "caseWeightLbs",
     "contents",
     "singleItemUnit",
     "sellingPrice",

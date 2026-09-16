@@ -319,6 +319,7 @@ export default function DistributorsPage() {
             location={locationFilter}
             weekday={weekdayFilter}
             locationOptions={locationOptions}
+            recordCount={filtered.length}
             onQueryChange={setQuery}
             onLocationChange={setLocationFilter}
             onWeekdayChange={setWeekdayFilter}

@@ -1,8 +1,12 @@
-import { ITEM_CATEGORIES, ITEM_SUBCATEGORIES } from "@/types/item";
-import type { ItemPhoto } from "@/types/item";
-import type { Item } from "@/types/item";
+import {
+  ITEM_CATEGORIES,
+  ITEM_SUBCATEGORIES,
+  type Item,
+  type ItemPhoto,
+} from "@/types/item";
 import type { ProductForSale, ProductTab } from "@/types/productForSale";
 import { getItemDisplayName } from "@/utils/items";
+import type { SubcategoryMap } from "@/utils/subcategories";
 
 export type ProductTableDisplay = {
   merchandisingName: string;
@@ -184,8 +188,12 @@ export function filterProductsForSale(
   });
 }
 
-function sortSubcategories(category: string, subcategories: string[]) {
-  const order = ITEM_SUBCATEGORIES[category] ?? [];
+function sortSubcategories(
+  category: string,
+  subcategories: string[],
+  orderMap?: SubcategoryMap,
+) {
+  const order = orderMap?.[category] ?? ITEM_SUBCATEGORIES[category] ?? [];
 
   return [...subcategories].sort((a, b) => {
     if (!a && b) return 1;
@@ -204,6 +212,7 @@ function sortSubcategories(category: string, subcategories: string[]) {
 export function groupProductsForSale(
   products: ProductForSale[],
   items: Item[] = [],
+  subcategoryOrder?: SubcategoryMap,
 ): ProductGroup[] {
   const byCategory = new Map<string, Map<string, ProductForSale[]>>();
 
@@ -236,6 +245,7 @@ export function groupProductsForSale(
         subcategories: sortSubcategories(
           category,
           Array.from(subcategories.keys()),
+          subcategoryOrder,
         )
           .map((subcategory) => ({
             subcategory,

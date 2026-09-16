@@ -14,6 +14,7 @@ import {
 import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow";
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -23,7 +24,6 @@ import {
   DELIVERED_ORDERS,
   DELIVERED_SORT_OPTIONS,
   DELIVERED_ORDER_STATUSES,
-  DELIVERY_CHIP_COUNTS,
   DISTRIBUTOR_EMAILS,
   ORDER_CATEGORIES,
   ORDER_LIST_ITEMS,
@@ -52,6 +52,7 @@ import {
   filterDeliveredOrders,
   filterOrderDemandRows,
   getDeliveredEmptyMessage,
+  getOrderDemandCountForDate,
   getOrderDemandEmptyMessage,
   getOrderDemandForDate,
   groupDeliveredOrders,
@@ -320,7 +321,7 @@ export default function ProductOrdersPage() {
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
-    DELIVERED_ORDERS[0]?.id ?? null,
+    null,
   );
 
   const [rows, setRows] = useState<WorkingOrderRow[]>(() =>
@@ -353,7 +354,7 @@ export default function ProductOrdersPage() {
         return {
           id,
           label: formatDeliveryChipLabel(date),
-          count: DELIVERY_CHIP_COUNTS[id] ?? 0,
+          count: getOrderDemandCountForDate(id),
         };
       });
   }, [chipWindowStart, deliveryDates]);
@@ -483,6 +484,34 @@ export default function ProductOrdersPage() {
     const sorted = sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
     return groupDeliveredOrders(sorted);
   }, [deliveredFilterCriteria]);
+
+  const deliveredCount = useMemo(
+    () =>
+      deliveredGroups.reduce(
+        (sum, group) =>
+          sum +
+          group.days.reduce((daySum, day) => daySum + day.orders.length, 0),
+        0,
+      ),
+    [deliveredGroups],
+  );
+
+  const exportCount =
+    tab === "Orders"
+      ? inProgress.length > 0
+        ? filteredInProgress.length
+        : filteredPreview.length
+      : deliveredCount;
+  const exportFiltersActive =
+    tab === "Orders"
+      ? Boolean(search.trim() || productFilter || distributorFilter)
+      : Boolean(
+          search.trim() ||
+            deliveredZipFilter ||
+            deliveredDateFilter ||
+            deliveredStatusFilter ||
+            deliveredSort,
+        );
 
   const groupedRows = useMemo(() => {
     const groups: Record<OrderCategory, WorkingOrderRow[]> = {
@@ -733,14 +762,17 @@ export default function ProductOrdersPage() {
                     ]}
                   />
                 ) : null}
-                <Button
-                  variant="primary"
-                  onClick={openManualFlow}
-                  className="ml-auto"
-                >
-                  <Plus className="size-3.5" />
-                  Create Order
-                </Button>
+                <div className="ml-auto flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                  <ExportButton
+                    entityLabel="orders"
+                    recordCount={exportCount}
+                    filtersActive={exportFiltersActive}
+                  />
+                  <Button variant="primary" onClick={openManualFlow}>
+                    <Plus className="size-3.5" />
+                    Create Order
+                  </Button>
+                </div>
               </>
             ) : (
               <>
@@ -800,6 +832,12 @@ export default function ProductOrdersPage() {
                     value: option.value,
                     label: option.label,
                   }))}
+                />
+                <ExportButton
+                  entityLabel="orders"
+                  recordCount={exportCount}
+                  filtersActive={exportFiltersActive}
+                  className="w-full sm:ml-auto sm:w-auto"
                 />
               </>
             )}

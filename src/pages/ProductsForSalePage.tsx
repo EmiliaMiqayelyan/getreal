@@ -325,7 +325,13 @@ function SubcategoryTable({
 export default function ProductsForSalePage() {
   useDocumentTitle("Products For Sale");
 
-  const { products, setProducts, items: catalog, sources } = useAppCatalog();
+  const {
+    products,
+    setProducts,
+    items: catalog,
+    sources,
+    subcategoriesByCategory,
+  } = useAppCatalog();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -361,8 +367,8 @@ export default function ProductsForSalePage() {
   );
 
   const grouped = useMemo(
-    () => groupProductsForSale(filtered, catalog),
-    [catalog, filtered],
+    () => groupProductsForSale(filtered, catalog, subcategoriesByCategory),
+    [catalog, filtered, subcategoriesByCategory],
   );
 
   const viewingProduct = useMemo(() => {
@@ -535,7 +541,7 @@ export default function ProductsForSalePage() {
           </div>
         }
         below={
-          <div className="flex gap-5 overflow-x-auto border-b border-[#ECECEA] bg-white px-4 md:px-7">
+          <div className="flex gap-5 overflow-x-auto overflow-y-hidden border-b border-[#ECECEA] bg-white px-4 md:px-7">
             {PRODUCT_TABS.map((entry) => {
               const active = tab === entry;
               return (

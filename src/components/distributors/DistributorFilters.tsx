@@ -1,5 +1,6 @@
 import { Plus, Search } from "lucide-react";
 
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -11,6 +12,7 @@ type DistributorFiltersProps = {
   location: string;
   weekday: string;
   locationOptions: string[];
+  recordCount?: number;
   onQueryChange: (value: string) => void;
   onLocationChange: (value: string) => void;
   onWeekdayChange: (value: string) => void;
@@ -22,11 +24,14 @@ export function DistributorFilters({
   location,
   weekday,
   locationOptions,
+  recordCount,
   onQueryChange,
   onLocationChange,
   onWeekdayChange,
   onAdd,
 }: DistributorFiltersProps) {
+  const filtersActive = Boolean(query.trim() || location || weekday);
+
   return (
     <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
       <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
@@ -68,14 +73,22 @@ export function DistributorFilters({
         ]}
       />
 
-      <Button
-        variant="primary"
-        onClick={onAdd}
-        className="w-full sm:ml-auto sm:w-auto"
-      >
-        <Plus size={14} />
-        Add Distributor
-      </Button>
+      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+        <ExportButton
+          entityLabel="distributors"
+          recordCount={recordCount}
+          filtersActive={filtersActive}
+          className="w-full sm:w-auto"
+        />
+        <Button
+          variant="primary"
+          onClick={onAdd}
+          className="w-full sm:w-auto"
+        >
+          <Plus size={14} />
+          Add Distributor
+        </Button>
+      </div>
     </div>
   );
 }

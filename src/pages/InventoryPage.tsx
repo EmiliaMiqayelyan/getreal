@@ -1018,9 +1018,7 @@ export default function InventoryPage() {
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sections, setSections] = useState(INITIAL_SECTIONS);
   const [seedOrders, setSeedOrders] = useState(RECEIVED_ORDERS);
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(["angus"]),
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);

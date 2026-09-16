@@ -124,6 +124,19 @@ export function getOrderDemandForDate(dateId: string): PreviewRow[] {
   return ORDER_DEMAND_BY_DATE[dateId] ?? [];
 }
 
+/** Products needing a distributor order for a delivery date (sidebar chips). */
+export function getOrderDemandCountForDate(dateId: string): number {
+  return getOrderDemandForDate(dateId).length;
+}
+
+/** Total products awaiting distributor orders across all delivery dates. */
+export function getTotalOrderDemandCount(): number {
+  return Object.values(ORDER_DEMAND_BY_DATE).reduce(
+    (sum, rows) => sum + rows.length,
+    0,
+  );
+}
+
 export function filterOrderDemandRows(
   rows: PreviewRow[],
   criteria: OrderDemandFilterCriteria,

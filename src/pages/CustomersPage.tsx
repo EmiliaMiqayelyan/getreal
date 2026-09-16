@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Flag, MessageCircle, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -640,7 +641,7 @@ export default function CustomersPage() {
   const [query, setQuery] = useState("");
   const [zipFilter, setZipFilter] = useState("");
   const [orderCountFilter, setOrderCountFilter] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>("U001");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
 
   useEffect(() => {
@@ -748,6 +749,15 @@ export default function CustomersPage() {
                 { value: "11-20", label: "11–20 orders" },
                 { value: "21+", label: "21+ orders" },
               ]}
+            />
+
+            <ExportButton
+              entityLabel="customers"
+              recordCount={filtered.length}
+              filtersActive={Boolean(
+                query.trim() || zipFilter || orderCountFilter,
+              )}
+              className="w-full sm:ml-auto sm:w-auto"
             />
           </div>
         }

@@ -3,21 +3,13 @@ import { Check, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
-import { DEFAULT_ROLE_PERMISSIONS } from "@/data/admin";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { ManagedRole, RolePermissions } from "@/types/admin";
+import {
+  DEFAULT_ROLE_PERMISSIONS,
+  ROLE_PERMISSION_GROUPS,
+} from "@/utils/rolePermissions";
 import { cn } from "@/utils/cn";
-
-const PAGE_PERMISSIONS: { key: keyof RolePermissions; label: string }[] = [
-  { key: "sidebarDashboard", label: "Dashboard" },
-  { key: "sidebarDistributors", label: "Distributors" },
-  { key: "sidebarProductsForSale", label: "Products For Sale" },
-  { key: "sidebarProductOrders", label: "Distributor Orders" },
-  { key: "sidebarCustomers", label: "Customers" },
-  { key: "sidebarCustomerOrders", label: "Customer Orders" },
-  { key: "sidebarInventory", label: "Inventory" },
-  { key: "sidebarRoles", label: "Roles" },
-];
 
 const SELECTED_BG = "#E7EFE8";
 
@@ -112,7 +104,7 @@ export function RoleManagementModal({
         aria-modal="true"
         aria-labelledby="role-mgmt-title"
         data-scroll-lock-allow
-        className="relative z-10 flex h-[min(640px,90vh)] w-full max-w-[720px] flex-col overflow-hidden rounded-[14px] bg-white shadow-2xl"
+        className="relative z-10 flex h-[min(720px,92vh)] w-full max-w-[860px] flex-col overflow-hidden rounded-[14px] bg-white shadow-2xl"
       >
         <div className="flex shrink-0 items-center justify-between border-b border-[#ECECEA] px-5 py-4">
           <h2
@@ -184,32 +176,38 @@ export function RoleManagementModal({
                   <h3 className="mt-6 mb-3 text-[11px] font-semibold tracking-[0.08em] text-[#6B7180] uppercase">
                     Role Permissions
                   </h3>
-                  <div className="space-y-2.5">
-                    {PAGE_PERMISSIONS.map((item) => {
-                      const checked = Boolean(selected.permissions[item.key]);
+                  <div className="space-y-5">
+                    {ROLE_PERMISSION_GROUPS.map((group) => {
+                      const accessChecked = Boolean(
+                        selected.permissions[group.accessKey],
+                      );
                       return (
-                        <label
-                          key={item.key}
-                          className="flex cursor-pointer items-center gap-2.5 text-[13px] text-[#111118]"
-                        >
-                          <button
-                            type="button"
-                            role="checkbox"
-                            aria-checked={checked}
-                            onClick={() => togglePermission(item.key)}
-                            className={cn(
-                              "flex size-[16px] shrink-0 items-center justify-center rounded-[3px] border transition-colors",
-                              checked
-                                ? "border-[#111118] bg-[#111118] text-white"
-                                : "border-[#C9C9C6] bg-white",
-                            )}
-                          >
-                            {checked ? (
-                              <Check size={11} strokeWidth={3} />
-                            ) : null}
-                          </button>
-                          <span>{item.label}</span>
-                        </label>
+                        <div key={group.label}>
+                          <p className="mb-2 text-[12px] font-semibold text-[#111118]">
+                            {group.label}
+                          </p>
+                          <div className="space-y-2">
+                            <PermissionRow
+                              checked={accessChecked}
+                              label={group.accessLabel}
+                              onToggle={() =>
+                                togglePermission(group.accessKey)
+                              }
+                            />
+                            <div className="space-y-2 border-l border-[#ECECEA] pl-4">
+                              {group.actions.map((action) => (
+                                <PermissionRow
+                                  key={action.key}
+                                  checked={Boolean(
+                                    selected.permissions[action.key],
+                                  )}
+                                  label={action.label}
+                                  onToggle={() => togglePermission(action.key)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -233,5 +231,35 @@ export function RoleManagementModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function PermissionRow({
+  checked,
+  label,
+  onToggle,
+}: {
+  checked: boolean;
+  label: string;
+  onToggle: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-[#111118]">
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={checked}
+        onClick={onToggle}
+        className={cn(
+          "flex size-[16px] shrink-0 items-center justify-center rounded-[3px] border transition-colors",
+          checked
+            ? "border-[#111118] bg-[#111118] text-white"
+            : "border-[#C9C9C6] bg-white",
+        )}
+      >
+        {checked ? <Check size={11} strokeWidth={3} /> : null}
+      </button>
+      <span>{label}</span>
+    </label>
   );
 }

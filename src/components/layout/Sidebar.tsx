@@ -17,12 +17,21 @@ import {
 } from "@/components/icons";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CountBadge } from "@/components/ui/Badge";
-import { APP_NAME } from "@/constants";
+import { APP_NAME, ROUTES } from "@/constants";
 import { getNavSections, getRoleHome, type NavItem } from "@/constants/navigation";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { getRole } from "@/lib/auth";
+import { getTotalOrderDemandCount } from "@/utils/distributorOrdersPage";
 import { canAccessPath } from "@/utils/rolesUsers";
 import { cn } from "@/utils/cn";
+
+function resolveNavBadge(item: NavItem): number | undefined {
+  if (item.href === ROUTES.productOrders) {
+    const count = getTotalOrderDemandCount();
+    return count > 0 ? count : undefined;
+  }
+  return item.badge;
+}
 
 const ICONS = {
   dashboard: DashboardIcon,
@@ -50,6 +59,7 @@ function SidebarItem({
   onNavigate?: () => void;
 }) {
   const Icon = ICONS[item.icon];
+  const badge = resolveNavBadge(item);
 
   return (
     <Link
@@ -64,7 +74,7 @@ function SidebarItem({
     >
       <Icon className="size-[17px] shrink-0" />
       <span className="flex-1 truncate">{item.label}</span>
-      {item.badge != null ? <CountBadge>{item.badge}</CountBadge> : null}
+      {badge != null ? <CountBadge>{badge}</CountBadge> : null}
     </Link>
   );
 }

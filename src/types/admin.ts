@@ -103,31 +103,69 @@ export type AdminCustomer = {
 };
 
 export type RolePermissions = {
+  /** Route/home access; not shown in Role Management checklist. */
   sidebarDashboard: boolean;
-  sidebarDistributors: boolean;
-  sidebarSource: boolean;
-  sidebarItems: boolean;
-  sidebarProductsForSale: boolean;
-  sidebarProductOrders: boolean;
-  sidebarCustomers: boolean;
-  sidebarCustomerOrders: boolean;
-  sidebarInventory: boolean;
-  sidebarReceiving: boolean;
-  sidebarCoolerPacking: boolean;
-  sidebarPackerManager: boolean;
-  sidebarRoles: boolean;
-  sidebarNotifications: boolean;
-  productsCreate: boolean;
-  productsEdit: boolean;
-  productsDelete: boolean;
+
+  accessDistributors: boolean;
+  distributorsCreate: boolean;
+  distributorsEdit: boolean;
+  distributorsDelete: boolean;
+
+  accessSource: boolean;
+  sourceCreate: boolean;
+  sourceEdit: boolean;
+  sourceRemove: boolean;
+
+  accessItemSetup: boolean;
+  itemsCreate: boolean;
+  itemsEdit: boolean;
+  itemsRemove: boolean;
+  itemsEditPricing: boolean;
+
+  accessProductsForSale: boolean;
+  productsAddItem: boolean;
+  productsRemove: boolean;
   productsToggleLive: boolean;
-  customersCreate: boolean;
-  customersEdit: boolean;
-  customersDelete: boolean;
-  ordersCreate: boolean;
-  ordersEdit: boolean;
-  ordersDelete: boolean;
-  ordersMarkDelivered: boolean;
+  productsChangePlacement: boolean;
+  productsView: boolean;
+
+  accessDistributorOrders: boolean;
+  distributorOrdersFromCustomerList: boolean;
+  distributorOrdersCreateCustom: boolean;
+  distributorOrdersAccessDelivered: boolean;
+
+  accessInventory: boolean;
+  inventoryStockItems: boolean;
+  inventoryChangeLocation: boolean;
+
+  accessCustomers: boolean;
+  customersViewDetails: boolean;
+
+  accessCustomerOrders: boolean;
+  customerOrdersViewDetails: boolean;
+  customerOrdersChangeStatuses: boolean;
+  customerOrdersStatusHover: boolean;
+  customerOrdersAccessCompleted: boolean;
+
+  accessReceiving: boolean;
+  receivingValidate: boolean;
+  receivingEdit: boolean;
+
+  accessCoolerPacking: boolean;
+  coolerPackingMakeActions: boolean;
+
+  accessPackerManager: boolean;
+  packerManagerViewCustomerDetails: boolean;
+  packerManagerAssignPacker: boolean;
+
+  accessRoles: boolean;
+  rolesAddUser: boolean;
+  rolesAccessManagement: boolean;
+
+  accessNotifications: boolean;
+  notificationsCreate: boolean;
+  notificationsEdit: boolean;
+  notificationsDelete: boolean;
 };
 
 export type RoleUser = {

@@ -42,7 +42,6 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
         label: "Distributors Orders",
         href: ROUTES.productOrders,
         icon: "cart",
-        badge: 8,
       },
       { label: "Inventory", href: ROUTES.inventory, icon: "inventory" },
     ],

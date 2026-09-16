@@ -2,41 +2,16 @@ import type {
   AdminCustomer,
   AdminItem,
   AdminProductOrder,
-  RolePermissions,
   RoleUser,
 } from "@/types/admin";
+import { ADMIN_ROLE_PERMISSIONS } from "@/utils/rolePermissions";
 
-export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
-  sidebarDashboard: true,
-  sidebarDistributors: true,
-  sidebarSource: true,
-  sidebarItems: true,
-  sidebarProductsForSale: true,
-  sidebarProductOrders: true,
-  sidebarCustomers: true,
-  sidebarCustomerOrders: true,
-  sidebarInventory: true,
-  sidebarReceiving: true,
-  sidebarCoolerPacking: true,
-  sidebarPackerManager: false,
-  sidebarRoles: false,
-  sidebarNotifications: false,
-  productsCreate: false,
-  productsEdit: false,
-  productsDelete: false,
-  productsToggleLive: false,
-  customersCreate: false,
-  customersEdit: false,
-  customersDelete: false,
-  ordersCreate: false,
-  ordersEdit: false,
-  ordersDelete: false,
-  ordersMarkDelivered: false,
-};
-
-export const ADMIN_ROLE_PERMISSIONS: RolePermissions = Object.fromEntries(
-  Object.keys(DEFAULT_ROLE_PERMISSIONS).map((key) => [key, true]),
-) as RolePermissions;
+export {
+  ADMIN_ROLE_PERMISSIONS,
+  DEFAULT_ROLE_PERMISSIONS,
+  MANAGER_ROLE_PERMISSIONS,
+  WAREHOUSE_ROLE_PERMISSIONS,
+} from "@/utils/rolePermissions";
 
 /** Temporary seed - one sample until Items API owns this list. */
 export const ADMIN_ITEMS: AdminItem[] = [

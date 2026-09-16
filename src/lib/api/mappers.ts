@@ -1,7 +1,4 @@
-import {
-  ADMIN_ROLE_PERMISSIONS,
-  DEFAULT_ROLE_PERMISSIONS,
-} from "@/data/admin";
+import { permissionsForRoleType } from "@/utils/rolePermissions";
 import type { AdminCustomer, ManagedRole, RoleUser } from "@/types/admin";
 import type { Item } from "@/types/item";
 
@@ -12,23 +9,22 @@ export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
   const displayRole =
     roleName.charAt(0).toUpperCase() + roleName.slice(1).replace(/_/g, " ");
 
+  const type = displayRole.includes("Admin")
+    ? "Superadmin"
+    : displayRole.includes("Warehouse")
+      ? "Warehouse Worker"
+      : displayRole.includes("Driver")
+        ? "Driver"
+        : displayRole;
+
   return {
     id: user.id ?? `U${String(index + 1).padStart(3, "0")}`,
     name: user.name ?? user.email ?? "User",
     email: user.email ?? "",
     phone: user.phone ?? "",
-    type: displayRole.includes("Admin")
-      ? "Superadmin"
-      : displayRole.includes("Warehouse")
-        ? "Warehouse Worker"
-        : displayRole.includes("Driver")
-          ? "Driver"
-          : displayRole,
+    type,
     password: "",
-    permissions:
-      displayRole === "Superadmin"
-        ? ADMIN_ROLE_PERMISSIONS
-        : DEFAULT_ROLE_PERMISSIONS,
+    permissions: permissionsForRoleType(type),
   };
 }
 
@@ -45,7 +41,7 @@ export function mapApiRoleToManagedRole(role: ApiRole, index: number): ManagedRo
   return {
     id: role.id ?? `role-${index}`,
     name: role.name ?? "Role",
-    permissions: DEFAULT_ROLE_PERMISSIONS,
+    permissions: permissionsForRoleType(role.name ?? "Role"),
   };
 }
 
@@ -90,7 +86,10 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
     subcategory: product.categoryNames?.[1] ?? "",
     distributor: "",
     source: "",
-    buyingUnit: "Case/Box",
+    sourcePer: "Case",
+    caseBy: "Units / case",
+    pieceWeightOz: 0,
+    caseWeightLbs: 0,
     buyingPrice: sellingPrice,
     contents: 1,
     singleItemUnit: "Each",

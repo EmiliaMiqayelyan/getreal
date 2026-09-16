@@ -1,20 +1,67 @@
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
-import { ADMIN_USERS, DEFAULT_ROLE_PERMISSIONS } from "@/data/admin";
+import { ADMIN_USERS } from "@/data/admin";
+import {
+  ADMIN_ROLE_PERMISSIONS,
+  MANAGER_ROLE_PERMISSIONS,
+  WAREHOUSE_ROLE_PERMISSIONS,
+  normalizePermissions,
+} from "@/utils/rolePermissions";
 
 const USERS_STORAGE_KEY = "getreal.roles.users";
 const ROLES_STORAGE_KEY = "getreal.roles.templates";
 
+function hasNewPermissionShape(
+  permissions: Partial<RolePermissions> | null | undefined,
+): boolean {
+  return Boolean(permissions && "accessDistributors" in permissions);
+}
+
+function normalizeUser(user: RoleUser): RoleUser {
+  const type = user.type?.toLowerCase() ?? "";
+  if (type.includes("super")) {
+    return { ...user, permissions: { ...ADMIN_ROLE_PERMISSIONS } };
+  }
+  if (!hasNewPermissionShape(user.permissions)) {
+    if (type.includes("manager")) {
+      return { ...user, permissions: { ...MANAGER_ROLE_PERMISSIONS } };
+    }
+    if (type.includes("warehouse")) {
+      return { ...user, permissions: { ...WAREHOUSE_ROLE_PERMISSIONS } };
+    }
+  }
+  return {
+    ...user,
+    permissions: normalizePermissions(user.permissions),
+  };
+}
+
+function normalizeManagedRole(role: ManagedRole): ManagedRole {
+  const name = role.name?.toLowerCase() ?? "";
+  if (!hasNewPermissionShape(role.permissions)) {
+    if (name.includes("manager")) {
+      return { ...role, permissions: { ...MANAGER_ROLE_PERMISSIONS } };
+    }
+    if (name.includes("warehouse")) {
+      return { ...role, permissions: { ...WAREHOUSE_ROLE_PERMISSIONS } };
+    }
+  }
+  return {
+    ...role,
+    permissions: normalizePermissions(role.permissions),
+  };
+}
+
 export function loadRoleUsers(): RoleUser[] {
   try {
     const raw = localStorage.getItem(USERS_STORAGE_KEY);
-    if (!raw) return structuredClone(ADMIN_USERS);
+    if (!raw) return structuredClone(ADMIN_USERS).map(normalizeUser);
     const parsed = JSON.parse(raw) as RoleUser[];
     if (!Array.isArray(parsed) || !parsed.length) {
-      return structuredClone(ADMIN_USERS);
+      return structuredClone(ADMIN_USERS).map(normalizeUser);
     }
-    return parsed;
+    return parsed.map(normalizeUser);
   } catch {
-    return structuredClone(ADMIN_USERS);
+    return structuredClone(ADMIN_USERS).map(normalizeUser);
   }
 }
 
@@ -26,40 +73,31 @@ export function saveRoleUsers(users: RoleUser[]): void {
   }
 }
 
-/** Temporary seed - one role template until Roles API owns this list. */
+/** Seed role templates until Roles API owns this list. */
 export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [
   {
     id: "role-manager",
     name: "Manager",
-    permissions: {
-      ...DEFAULT_ROLE_PERMISSIONS,
-      sidebarDashboard: true,
-      sidebarDistributors: true,
-      sidebarProductsForSale: true,
-      sidebarProductOrders: true,
-      sidebarCustomers: true,
-      sidebarCustomerOrders: true,
-      sidebarInventory: true,
-      sidebarRoles: false,
-      productsCreate: true,
-      productsEdit: true,
-      customersCreate: true,
-      customersEdit: true,
-      ordersCreate: true,
-      ordersEdit: true,
-    },
+    permissions: { ...MANAGER_ROLE_PERMISSIONS },
+  },
+  {
+    id: "role-warehouse",
+    name: "Warehouse Worker",
+    permissions: { ...WAREHOUSE_ROLE_PERMISSIONS },
   },
 ];
 
 export function loadManagedRoles(): ManagedRole[] {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_MANAGED_ROLES);
+    if (!raw) return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);
     const parsed = JSON.parse(raw) as ManagedRole[];
-    if (!Array.isArray(parsed)) return structuredClone(DEFAULT_MANAGED_ROLES);
-    return parsed;
+    if (!Array.isArray(parsed)) {
+      return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);
+    }
+    return parsed.map(normalizeManagedRole);
   } catch {
-    return structuredClone(DEFAULT_MANAGED_ROLES);
+    return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);
   }
 }
 
@@ -125,22 +163,22 @@ export function validateUserForm(input: {
   return errors;
 }
 
-/** Map route path → sidebar permission key for UI enforcement. */
+/** Map route path → page-access permission key for UI enforcement. */
 export const ROUTE_PERMISSION_KEY: Record<string, keyof RolePermissions> = {
   "/dashboard": "sidebarDashboard",
-  "/distributors": "sidebarDistributors",
-  "/source": "sidebarSource",
-  "/items": "sidebarItems",
-  "/products-for-sale": "sidebarProductsForSale",
-  "/product-orders": "sidebarProductOrders",
-  "/customers": "sidebarCustomers",
-  "/customer-orders": "sidebarCustomerOrders",
-  "/inventory": "sidebarInventory",
-  "/distributor-deliveries": "sidebarReceiving",
-  "/packing-coolers": "sidebarCoolerPacking",
-  "/packer-manager": "sidebarPackerManager",
-  "/roles": "sidebarRoles",
-  "/notifications": "sidebarNotifications",
+  "/distributors": "accessDistributors",
+  "/source": "accessSource",
+  "/items": "accessItemSetup",
+  "/products-for-sale": "accessProductsForSale",
+  "/product-orders": "accessDistributorOrders",
+  "/customers": "accessCustomers",
+  "/customer-orders": "accessCustomerOrders",
+  "/inventory": "accessInventory",
+  "/distributor-deliveries": "accessReceiving",
+  "/packing-coolers": "accessCoolerPacking",
+  "/packer-manager": "accessPackerManager",
+  "/roles": "accessRoles",
+  "/notifications": "accessNotifications",
 };
 
 export function canAccessPath(

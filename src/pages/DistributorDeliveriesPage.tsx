@@ -952,9 +952,7 @@ export default function DistributorDeliveriesPage() {
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(["DP-1043", "DP-1038"]),
-  );
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);

@@ -1,18 +1,23 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
+import { ManageSubcategoriesModal } from "@/components/items/ManageSubcategoriesModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
-  BUYING_UNITS,
+  CASE_BY_OPTIONS,
   ITEM_CATEGORIES,
-  ITEM_SUBCATEGORIES,
+  PIECE_WEIGHT_OPTIONS,
   SINGLE_ITEM_UNITS,
+  SOURCE_PER_OPTIONS,
+  pieceWeightLabel,
+  type CaseBy,
   type Item,
   type ItemPhoto,
+  type SourcePer,
 } from "@/types/item";
 import { resolveDistributorId } from "@/utils/distributorSync";
 import {
@@ -29,19 +34,22 @@ import {
   type ItemFormErrors,
 } from "@/utils/itemForm";
 import {
-  calcCostPerUnit,
   calcFinalMarginPercent,
-  calcSuggestedPrice,
+  calcPricingBreakdown,
   formatCalculatedMoney,
   formatFinalMarginPercent,
   formatMoneyInput,
   parseContentsInput,
+  parseDecimalInput,
   parseMoneyInput,
+  type PricingCaseBy,
+  type PricingSourcePer,
 } from "@/utils/itemPricing";
+import { subcategoriesForCategory } from "@/utils/subcategories";
 
 const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
 const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
-/** Read-only calculated fields — solid gray, no border (matches design). */
+/** Read-only calculated fields - solid gray, no border (matches design). */
 const READONLY_FIELD =
   "h-[33.75px] rounded-[9.38px] border border-transparent bg-[#F3F3F1] text-[13px] text-[#6B6B6B]";
 
@@ -73,7 +81,11 @@ export function AddItemModal({
   const fileRef = useRef<HTMLInputElement>(null);
   const isEdit = Boolean(item);
   useScrollLock(open);
-  const { distributors, sources: catalogSources } = useAppCatalog();
+  const {
+    distributors,
+    sources: catalogSources,
+    subcategoriesByCategory,
+  } = useAppCatalog();
 
   const [distributor, setDistributor] = useState("");
   const [source, setSource] = useState("");
@@ -84,12 +96,16 @@ export function AddItemModal({
   const [merchandisingName, setMerchandisingName] = useState("");
   const [description, setDescription] = useState("");
   const [photos, setPhotos] = useState<ItemPhoto[]>([]);
-  const [buyingUnit, setBuyingUnit] = useState("");
+  const [sourcePer, setSourcePer] = useState<SourcePer | "">("");
+  const [caseBy, setCaseBy] = useState<CaseBy | "">("");
+  const [pieceWeightOz, setPieceWeightOz] = useState("");
+  const [caseWeightLbs, setCaseWeightLbs] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [contents, setContents] = useState("");
   const [singleItemUnit, setSingleItemUnit] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [errors, setErrors] = useState<ItemFormErrors>({});
+  const [manageSubcategoriesOpen, setManageSubcategoriesOpen] = useState(false);
 
   const distributorOptions = useMemo(
     () => distributors.map((entry) => entry.name).sort(),
@@ -101,9 +117,10 @@ export function AddItemModal({
     return sourceNamesForDistributor(catalogSources, distributor);
   }, [catalogSources, distributor]);
 
-  const subcategoryOptions = category
-    ? (ITEM_SUBCATEGORIES[category] ?? [])
-    : [];
+  const subcategoryOptions = useMemo(
+    () => subcategoriesForCategory(subcategoriesByCategory, category),
+    [category, subcategoriesByCategory],
+  );
 
   function handleDistributorChange(value: string) {
     setDistributor(value);
@@ -123,10 +140,18 @@ export function AddItemModal({
 
   const buying = parseMoneyInput(buyingPrice);
   const qty = parseContentsInput(contents);
-  const costPerUnit = calcCostPerUnit(buying, qty);
-  const suggested = calcSuggestedPrice(costPerUnit);
+  const weightOz = Number(pieceWeightOz) || 0;
+  const caseLbs = parseDecimalInput(caseWeightLbs);
+  const pricing = calcPricingBreakdown({
+    sourcePer: sourcePer as PricingSourcePer | "",
+    caseBy: caseBy as PricingCaseBy | "",
+    buyingPrice: buying,
+    pieceWeightOz: weightOz,
+    caseWeightLbs: caseLbs,
+    piecesPerCase: qty,
+  });
   const sell = parseMoneyInput(sellingPrice);
-  const finalMargin = calcFinalMarginPercent(sell, costPerUnit);
+  const finalMargin = calcFinalMarginPercent(sell, pricing.costPerPiece);
 
   useEffect(() => {
     if (!open) return;
@@ -137,17 +162,24 @@ export function AddItemModal({
       setDistributor(item.distributor);
       setSource(item.source);
       setCategory(item.category);
-      setSubcategory(
-        (ITEM_SUBCATEGORIES[item.category] ?? []).includes(item.subcategory)
-          ? item.subcategory
-          : "",
-      );
+      setSubcategory(item.subcategory || "");
       setName(item.name);
       setPreorderInfo(item.preorderInfo);
       setMerchandisingName(item.merchandisingName);
       setDescription(item.description);
       setPhotos(item.photos.map((photo) => ({ ...photo })));
-      setBuyingUnit(item.buyingUnit);
+      setSourcePer(item.sourcePer);
+      setCaseBy(item.caseBy);
+      setPieceWeightOz(
+        item.pieceWeightOz > 0 ? String(item.pieceWeightOz) : "",
+      );
+      setCaseWeightLbs(
+        item.caseWeightLbs > 0
+          ? item.caseWeightLbs % 1 === 0
+            ? String(item.caseWeightLbs)
+            : item.caseWeightLbs.toFixed(2)
+          : "",
+      );
       setBuyingPrice(formatMoneyInput(item.buyingPrice));
       setContents(item.contents > 0 ? String(item.contents) : "");
       setSingleItemUnit(item.singleItemUnit);
@@ -164,17 +196,22 @@ export function AddItemModal({
     setMerchandisingName("");
     setDescription("");
     setPhotos([]);
-    setBuyingUnit("");
+    setSourcePer("");
+    setCaseBy("");
+    setPieceWeightOz("");
+    setCaseWeightLbs("");
     setBuyingPrice("");
     setContents("");
     setSingleItemUnit("");
     setSellingPrice("");
+    setManageSubcategoriesOpen(false);
   }, [item, open]);
 
   if (!open) return null;
 
   function handleClose() {
     setErrors({});
+    setManageSubcategoriesOpen(false);
     onClose();
   }
 
@@ -193,13 +230,17 @@ export function AddItemModal({
       subcategory,
       description,
       photosCount: photos.length,
-      buyingUnit,
+      sourcePer,
+      caseBy,
+      pieceWeightOz,
+      caseWeightLbs,
       buyingPrice,
       contents,
       singleItemUnit,
       sellingPrice,
       distributorOptions,
       sourceOptions,
+      subcategoryOptions,
     });
 
     if (hasItemFormErrors(nextErrors)) {
@@ -217,6 +258,21 @@ export function AddItemModal({
 
     setErrors({});
 
+    const resolvedSourcePer = sourcePer as SourcePer;
+    const resolvedPieceOz =
+      resolvedSourcePer === "Unit" ? weightOz : 0;
+    const resolvedCaseBy =
+      resolvedSourcePer === "Case" ? (caseBy as CaseBy) : "";
+    const resolvedCaseLbs =
+      resolvedSourcePer === "Case" && resolvedCaseBy === "Lbs / case"
+        ? caseLbs
+        : 0;
+    const resolvedContents = resolvedSourcePer === "Case" ? qty : 1;
+    const resolvedSingleUnit =
+      resolvedSourcePer === "Unit"
+        ? pieceWeightLabel(resolvedPieceOz) || "Each"
+        : singleItemUnit;
+
     onSave({
       id: item?.id ?? "IT-TEMP",
       name: name.trim(),
@@ -229,10 +285,13 @@ export function AddItemModal({
       distributorId: resolveDistributorId(distributor, distributors),
       source,
       sourceId: resolveSourceId(source, catalogSources) ?? item?.sourceId,
-      buyingUnit,
+      sourcePer: resolvedSourcePer,
+      caseBy: resolvedCaseBy,
+      pieceWeightOz: resolvedPieceOz,
+      caseWeightLbs: resolvedCaseLbs,
       buyingPrice: buying,
-      contents: qty,
-      singleItemUnit,
+      contents: resolvedContents,
+      singleItemUnit: resolvedSingleUnit,
       sellingPrice: sell,
       photos,
     });
@@ -354,32 +413,47 @@ export function AddItemModal({
                   <FieldError message={errors.category} />
                 </div>
                 <div data-field="subcategory">
-                  <Field label="Subcategory">
-                    <Select
-                      value={subcategory}
-                      onChange={(value) => {
-                        setSubcategory(value);
-                        if (errors.subcategory) {
-                          setErrors((current) => ({
-                            ...current,
-                            subcategory: undefined,
-                          }));
-                        }
-                      }}
-                      disabled={!category || subcategoryOptions.length === 0}
-                      className="w-full"
-                      aria-label="Subcategory"
-                      placeholder="Select"
-                      buttonClassName={cn(errors.subcategory && INVALID_BORDER)}
-                      options={[
-                        { value: "", label: "Select" },
-                        ...subcategoryOptions.map((entry) => ({
-                          value: entry,
-                          label: entry,
-                        })),
-                      ]}
-                    />
-                  </Field>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className={FIELD_LABEL}>Subcategory</label>
+                    <button
+                      type="button"
+                      disabled={!category}
+                      onClick={() => setManageSubcategoriesOpen(true)}
+                      className="cursor-pointer text-[12px] font-medium text-[#2165D4] hover:underline disabled:cursor-not-allowed disabled:text-[#B0B0B0] disabled:no-underline"
+                    >
+                      Manage
+                    </button>
+                  </div>
+                  <Select
+                    value={subcategory}
+                    onChange={(value) => {
+                      setSubcategory(value);
+                      if (errors.subcategory) {
+                        setErrors((current) => ({
+                          ...current,
+                          subcategory: undefined,
+                        }));
+                      }
+                    }}
+                    disabled={!category}
+                    className="w-full"
+                    aria-label="Subcategory"
+                    placeholder={
+                      category
+                        ? subcategoryOptions.length
+                          ? "Select"
+                          : "Add via Manage"
+                        : "Select category first"
+                    }
+                    buttonClassName={cn(errors.subcategory && INVALID_BORDER)}
+                    options={[
+                      { value: "", label: "Select" },
+                      ...subcategoryOptions.map((entry) => ({
+                        value: entry,
+                        label: entry,
+                      })),
+                    ]}
+                  />
                   <FieldError message={errors.subcategory} />
                 </div>
               </div>
@@ -560,36 +634,90 @@ export function AddItemModal({
             </h3>
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-3">
-                <div data-field="buyingUnit">
-                  <Field label="Buying Unit">
+                <div data-field="sourcePer">
+                  <Field label="Source Per">
                     <Select
-                      value={buyingUnit}
+                      value={sourcePer}
                       onChange={(value) => {
-                        setBuyingUnit(value);
-                        if (errors.buyingUnit) {
+                        const next = value as SourcePer | "";
+                        setSourcePer(next);
+                        if (next === "Unit") {
+                          setCaseBy("");
+                          setCaseWeightLbs("");
+                          setContents("");
+                        } else if (next === "Case" && !caseBy) {
+                          setCaseBy("Units / case");
+                        }
+                        if (errors.sourcePer || errors.caseBy) {
                           setErrors((current) => ({
                             ...current,
-                            buyingUnit: undefined,
+                            sourcePer: undefined,
+                            caseBy: undefined,
                           }));
                         }
                       }}
                       className="w-full"
-                      aria-label="Buying Unit"
+                      aria-label="Source Per"
                       placeholder="Select"
-                      buttonClassName={cn(errors.buyingUnit && INVALID_BORDER)}
+                      buttonClassName={cn(errors.sourcePer && INVALID_BORDER)}
                       options={[
                         { value: "", label: "Select" },
-                        ...BUYING_UNITS.map((entry) => ({
+                        ...SOURCE_PER_OPTIONS.map((entry) => ({
                           value: entry,
                           label: entry,
                         })),
                       ]}
                     />
                   </Field>
-                  <FieldError message={errors.buyingUnit} />
+                  <FieldError message={errors.sourcePer} />
                 </div>
+
+                {sourcePer === "Case" ? (
+                  <div data-field="caseBy">
+                    <Field label="Case by">
+                      <Select
+                        value={caseBy}
+                        onChange={(value) => {
+                          const next = value as CaseBy | "";
+                          setCaseBy(next);
+                          if (next !== "Lbs / case") {
+                            setCaseWeightLbs("");
+                          }
+                          if (errors.caseBy || errors.caseWeightLbs) {
+                            setErrors((current) => ({
+                              ...current,
+                              caseBy: undefined,
+                              caseWeightLbs: undefined,
+                            }));
+                          }
+                        }}
+                        className="w-full"
+                        aria-label="Case by"
+                        placeholder="Select"
+                        buttonClassName={cn(errors.caseBy && INVALID_BORDER)}
+                        options={[
+                          { value: "", label: "Select" },
+                          ...CASE_BY_OPTIONS.map((entry) => ({
+                            value: entry,
+                            label: entry,
+                          })),
+                        ]}
+                      />
+                    </Field>
+                    <FieldError message={errors.caseBy} />
+                  </div>
+                ) : null}
+
                 <div data-field="buyingPrice">
-                  <Field label="Buying Price">
+                  <Field
+                    label={
+                      sourcePer === "Unit"
+                        ? "Price per lb"
+                        : sourcePer === "Case"
+                          ? "Case price"
+                          : "Buying Price"
+                    }
+                  >
                     <MoneyInput
                       value={buyingPrice}
                       placeholder="0.00"
@@ -607,67 +735,199 @@ export function AddItemModal({
                   </Field>
                   <FieldError message={errors.buyingPrice} />
                 </div>
-                <div data-field="contents">
-                  <Field label="Contents">
-                    <Input
-                      value={contents}
-                      inputMode="numeric"
-                      placeholder="0"
-                      onChange={(event) => {
-                        setContents(event.target.value.replace(/\D/g, ""));
-                        if (errors.contents) {
-                          setErrors((current) => ({
-                            ...current,
-                            contents: undefined,
-                          }));
-                        }
-                      }}
-                      className={cn(
-                        "w-full",
-                        errors.contents && INVALID_BORDER,
-                      )}
-                    />
-                  </Field>
-                  <FieldError message={errors.contents} />
-                </div>
+
+                {sourcePer === "Unit" ? (
+                  <div data-field="pieceWeightOz">
+                    <Field label="Piece weight">
+                      <Select
+                        value={pieceWeightOz}
+                        onChange={(value) => {
+                          setPieceWeightOz(value);
+                          if (errors.pieceWeightOz) {
+                            setErrors((current) => ({
+                              ...current,
+                              pieceWeightOz: undefined,
+                            }));
+                          }
+                        }}
+                        className="w-full"
+                        aria-label="Piece weight"
+                        placeholder="Select"
+                        buttonClassName={cn(
+                          errors.pieceWeightOz && INVALID_BORDER,
+                        )}
+                        options={[
+                          { value: "", label: "Select" },
+                          ...PIECE_WEIGHT_OPTIONS.map((entry) => ({
+                            value: String(entry.oz),
+                            label: entry.label,
+                          })),
+                        ]}
+                      />
+                    </Field>
+                    <FieldError message={errors.pieceWeightOz} />
+                  </div>
+                ) : null}
               </div>
 
+              {sourcePer === "Case" && caseBy === "Lbs / case" ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div data-field="caseWeightLbs">
+                    <Field label="Total case weight (lbs)">
+                      <Input
+                        value={caseWeightLbs}
+                        inputMode="decimal"
+                        placeholder="0"
+                        onChange={(event) => {
+                          setCaseWeightLbs(
+                            sanitizeMoneyTyping(event.target.value),
+                          );
+                          if (errors.caseWeightLbs) {
+                            setErrors((current) => ({
+                              ...current,
+                              caseWeightLbs: undefined,
+                            }));
+                          }
+                        }}
+                        className={cn(
+                          "w-full",
+                          errors.caseWeightLbs && INVALID_BORDER,
+                        )}
+                      />
+                    </Field>
+                    <FieldError message={errors.caseWeightLbs} />
+                  </div>
+                  <div data-field="contents">
+                    <Field label="Pieces per case">
+                      <Input
+                        value={contents}
+                        inputMode="numeric"
+                        placeholder="0"
+                        onChange={(event) => {
+                          setContents(event.target.value.replace(/\D/g, ""));
+                          if (errors.contents) {
+                            setErrors((current) => ({
+                              ...current,
+                              contents: undefined,
+                            }));
+                          }
+                        }}
+                        className={cn(
+                          "w-full",
+                          errors.contents && INVALID_BORDER,
+                        )}
+                      />
+                    </Field>
+                    <FieldError message={errors.contents} />
+                  </div>
+                  <div data-field="singleItemUnit">
+                    <Field label="Single Item Unit">
+                      <Select
+                        value={singleItemUnit}
+                        onChange={(value) => {
+                          setSingleItemUnit(value);
+                          if (errors.singleItemUnit) {
+                            setErrors((current) => ({
+                              ...current,
+                              singleItemUnit: undefined,
+                            }));
+                          }
+                        }}
+                        className="w-full"
+                        aria-label="Single Item Unit"
+                        placeholder="Select"
+                        buttonClassName={cn(
+                          errors.singleItemUnit && INVALID_BORDER,
+                        )}
+                        options={[
+                          { value: "", label: "Select" },
+                          ...SINGLE_ITEM_UNITS.map((entry) => ({
+                            value: entry,
+                            label: entry,
+                          })),
+                        ]}
+                      />
+                    </Field>
+                    <FieldError message={errors.singleItemUnit} />
+                  </div>
+                </div>
+              ) : null}
+
+              {sourcePer === "Case" && caseBy === "Units / case" ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div data-field="contents">
+                    <Field label="Pieces per case">
+                      <Input
+                        value={contents}
+                        inputMode="numeric"
+                        placeholder="0"
+                        onChange={(event) => {
+                          setContents(event.target.value.replace(/\D/g, ""));
+                          if (errors.contents) {
+                            setErrors((current) => ({
+                              ...current,
+                              contents: undefined,
+                            }));
+                          }
+                        }}
+                        className={cn(
+                          "w-full",
+                          errors.contents && INVALID_BORDER,
+                        )}
+                      />
+                    </Field>
+                    <FieldError message={errors.contents} />
+                  </div>
+                  <div data-field="singleItemUnit">
+                    <Field label="Single Item Unit">
+                      <Select
+                        value={singleItemUnit}
+                        onChange={(value) => {
+                          setSingleItemUnit(value);
+                          if (errors.singleItemUnit) {
+                            setErrors((current) => ({
+                              ...current,
+                              singleItemUnit: undefined,
+                            }));
+                          }
+                        }}
+                        className="w-full"
+                        aria-label="Single Item Unit"
+                        placeholder="Select"
+                        buttonClassName={cn(
+                          errors.singleItemUnit && INVALID_BORDER,
+                        )}
+                        options={[
+                          { value: "", label: "Select" },
+                          ...SINGLE_ITEM_UNITS.map((entry) => ({
+                            value: entry,
+                            label: entry,
+                          })),
+                        ]}
+                      />
+                    </Field>
+                    <FieldError message={errors.singleItemUnit} />
+                  </div>
+                </div>
+              ) : null}
+
               <div className="grid gap-3 sm:grid-cols-3">
-                <div data-field="singleItemUnit">
-                  <Field label="Single Item Unit">
-                    <Select
-                      value={singleItemUnit}
-                      onChange={(value) => {
-                        setSingleItemUnit(value);
-                        if (errors.singleItemUnit) {
-                          setErrors((current) => ({
-                            ...current,
-                            singleItemUnit: undefined,
-                          }));
-                        }
-                      }}
-                      className="w-full"
-                      aria-label="Single Item Unit"
-                      placeholder="Select"
-                      buttonClassName={cn(
-                        errors.singleItemUnit && INVALID_BORDER,
-                      )}
-                      options={[
-                        { value: "", label: "Select" },
-                        ...SINGLE_ITEM_UNITS.map((entry) => ({
-                          value: entry,
-                          label: entry,
-                        })),
-                      ]}
+                {sourcePer === "Case" && caseBy === "Lbs / case" ? (
+                  <Field label="Cost per lb">
+                    <CalculatedMoney
+                      value={formatCalculatedMoney(pricing.costPerLb)}
                     />
                   </Field>
-                  <FieldError message={errors.singleItemUnit} />
-                </div>
-                <Field label="Cost per Unit">
-                  <CalculatedMoney value={formatCalculatedMoney(costPerUnit)} />
+                ) : null}
+                <Field label="Cost per piece">
+                  <CalculatedMoney
+                    value={formatCalculatedMoney(pricing.costPerPiece)}
+                  />
                 </Field>
                 <Field label="40% Margin Suggested Price">
-                  <CalculatedMoney value={formatCalculatedMoney(suggested)} />
+                  <CalculatedMoney
+                    value={formatCalculatedMoney(pricing.suggestedPrice)}
+                  />
                 </Field>
               </div>
 
@@ -723,6 +983,22 @@ export function AddItemModal({
           </div>
         </div>
       </div>
+
+      <ManageSubcategoriesModal
+        open={manageSubcategoriesOpen}
+        category={category}
+        selectedSubcategory={subcategory}
+        onClose={() => setManageSubcategoriesOpen(false)}
+        onSubcategoryChange={(value) => {
+          setSubcategory(value);
+          if (errors.subcategory) {
+            setErrors((current) => ({
+              ...current,
+              subcategory: undefined,
+            }));
+          }
+        }}
+      />
     </div>
   );
 }

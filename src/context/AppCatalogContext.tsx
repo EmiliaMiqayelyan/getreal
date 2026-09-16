@@ -31,6 +31,14 @@ import {
   normalizeSourceDistributor,
   resolveSourceId,
 } from "@/utils/sources";
+import {
+  addSubcategoryToMap,
+  loadSubcategories,
+  removeSubcategoryFromMap,
+  renameSubcategoryInMap,
+  saveSubcategories,
+  type SubcategoryMap,
+} from "@/utils/subcategories";
 
 type SaveDistributorMode = "create" | "update";
 
@@ -39,6 +47,7 @@ type AppCatalogContextValue = {
   items: Item[];
   sources: Source[];
   products: ProductForSale[];
+  subcategoriesByCategory: SubcategoryMap;
   setItems: (updater: Item[] | ((current: Item[]) => Item[])) => void;
   setSources: (updater: Source[] | ((current: Source[]) => Source[])) => void;
   setProducts: (
@@ -51,6 +60,13 @@ type AppCatalogContextValue = {
   ) => void;
   removeDistributor: (id: string) => void;
   getDistributorById: (id: string) => Distributor | undefined;
+  addSubcategory: (category: string, name: string) => string | null;
+  renameSubcategory: (
+    category: string,
+    previous: string,
+    nextName: string,
+  ) => string | null;
+  removeSubcategory: (category: string, name: string) => string | null;
 };
 
 const AppCatalogContext = createContext<AppCatalogContextValue | null>(null);
@@ -66,8 +82,52 @@ function bootstrapCatalog() {
   return { distributors, items, sources, products };
 }
 
+function applySubcategoryRename(
+  items: Item[],
+  products: ProductForSale[],
+  category: string,
+  previous: string,
+  nextName: string,
+) {
+  return {
+    items: items.map((item) =>
+      item.category === category && item.subcategory === previous
+        ? { ...item, subcategory: nextName }
+        : item,
+    ),
+    products: products.map((product) =>
+      product.category === category && product.subcategory === previous
+        ? { ...product, subcategory: nextName }
+        : product,
+    ),
+  };
+}
+
+function applySubcategoryRemoval(
+  items: Item[],
+  products: ProductForSale[],
+  category: string,
+  name: string,
+) {
+  return {
+    items: items.map((item) =>
+      item.category === category && item.subcategory === name
+        ? { ...item, subcategory: "" }
+        : item,
+    ),
+    products: products.map((product) =>
+      product.category === category && product.subcategory === name
+        ? { ...product, subcategory: "" }
+        : product,
+    ),
+  };
+}
+
 export function AppCatalogProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState(bootstrapCatalog);
+  const [subcategoriesByCategory, setSubcategoriesByCategory] = useState(
+    loadSubcategories,
+  );
 
   const saveDistributor = useCallback(
     (
@@ -203,27 +263,100 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
     [catalog.distributors],
   );
 
+  const addSubcategory = useCallback((category: string, name: string) => {
+    const result = addSubcategoryToMap(
+      subcategoriesByCategory,
+      category,
+      name,
+    );
+    if (!result.ok) return result.error;
+    saveSubcategories(result.map);
+    setSubcategoriesByCategory(result.map);
+    return null;
+  }, [subcategoriesByCategory]);
+
+  const renameSubcategory = useCallback(
+    (category: string, previous: string, nextName: string) => {
+      const result = renameSubcategoryInMap(
+        subcategoriesByCategory,
+        category,
+        previous,
+        nextName,
+      );
+      if (!result.ok) return result.error;
+
+      const trimmed = nextName.trim();
+      saveSubcategories(result.map);
+      setSubcategoriesByCategory(result.map);
+      setCatalog((current) => ({
+        ...current,
+        ...applySubcategoryRename(
+          current.items,
+          current.products,
+          category,
+          previous,
+          trimmed,
+        ),
+      }));
+      return null;
+    },
+    [subcategoriesByCategory],
+  );
+
+  const removeSubcategory = useCallback(
+    (category: string, name: string) => {
+      const result = removeSubcategoryFromMap(
+        subcategoriesByCategory,
+        category,
+        name,
+      );
+      if (!result.ok) return result.error;
+
+      saveSubcategories(result.map);
+      setSubcategoriesByCategory(result.map);
+      setCatalog((current) => ({
+        ...current,
+        ...applySubcategoryRemoval(
+          current.items,
+          current.products,
+          category,
+          name,
+        ),
+      }));
+      return null;
+    },
+    [subcategoriesByCategory],
+  );
+
   const value = useMemo(
     () => ({
       distributors: catalog.distributors,
       items: catalog.items,
       sources: catalog.sources,
       products: catalog.products,
+      subcategoriesByCategory,
       setItems,
       setSources,
       setProducts,
       saveDistributor,
       removeDistributor,
       getDistributorById,
+      addSubcategory,
+      renameSubcategory,
+      removeSubcategory,
     }),
     [
+      addSubcategory,
       catalog,
       getDistributorById,
       removeDistributor,
+      removeSubcategory,
+      renameSubcategory,
       saveDistributor,
       setItems,
       setProducts,
       setSources,
+      subcategoriesByCategory,
     ],
   );
 

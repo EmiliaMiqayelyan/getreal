@@ -1,5 +1,6 @@
 import { Plus, Search } from "lucide-react";
 
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -11,6 +12,7 @@ type SourceFiltersProps = {
   distributor: string;
   locationOptions: string[];
   distributorOptions: string[];
+  recordCount?: number;
   onQueryChange: (value: string) => void;
   onLocationChange: (value: string) => void;
   onDistributorChange: (value: string) => void;
@@ -23,11 +25,14 @@ export function SourceFilters({
   distributor,
   locationOptions,
   distributorOptions,
+  recordCount,
   onQueryChange,
   onLocationChange,
   onDistributorChange,
   onAdd,
 }: SourceFiltersProps) {
+  const filtersActive = Boolean(query.trim() || location || distributor);
+
   return (
     <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
       <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
@@ -72,14 +77,22 @@ export function SourceFilters({
         ]}
       />
 
-      <Button
-        variant="primary"
-        onClick={onAdd}
-        className="w-full sm:ml-auto sm:w-auto"
-      >
-        <Plus size={14} />
-        Add Source
-      </Button>
+      <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+        <ExportButton
+          entityLabel="sources"
+          recordCount={recordCount}
+          filtersActive={filtersActive}
+          className="w-full sm:w-auto"
+        />
+        <Button
+          variant="primary"
+          onClick={onAdd}
+          className="w-full sm:w-auto"
+        >
+          <Plus size={14} />
+          Add Source
+        </Button>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import type {
   DeliveredOrder,
-  DeliveryChip,
   ManualCatalogItem,
   OrderListItem,
   PlacedOrder,
@@ -8,14 +7,6 @@ import type {
 } from "@/types/distributorOrder";
 
 export const ORDER_CATEGORIES = ["Meat", "Fruits", "Grains"] as const;
-
-export const DELIVERY_CHIP_COUNTS: Record<string, number> = {
-  "2026-07-14": 1,
-};
-
-export const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "jul-14", label: "Wed, Jul 14", count: 1 },
-];
 
 /** Temporary seed - one sample row until Product Orders API is wired. */
 export const ORDER_LIST_ITEMS: OrderListItem[] = [

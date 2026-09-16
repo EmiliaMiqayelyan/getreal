@@ -9,10 +9,6 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
 import { useRolesUsers } from "@/context/RolesUsersContext";
-import {
-  ADMIN_ROLE_PERMISSIONS,
-  DEFAULT_ROLE_PERMISSIONS,
-} from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
@@ -24,6 +20,10 @@ import {
 import type { RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
 import {
+  ROLE_PERMISSION_GROUPS,
+  permissionsForRoleType,
+} from "@/utils/rolePermissions";
+import {
   type UserFormErrors,
   validateUserForm,
 } from "@/utils/rolesUsers";
@@ -34,66 +34,6 @@ const FALLBACK_ROLE_OPTIONS = [
   "Warehouse Worker",
   "Driver",
 ] as const;
-
-const PERMISSION_GROUPS: {
-  label: string;
-  keys: (keyof RolePermissions)[];
-  labels: string[];
-}[] = [
-  {
-    label: "Sidebar Pages",
-    keys: [
-      "sidebarDashboard",
-      "sidebarDistributors",
-      "sidebarProductsForSale",
-      "sidebarProductOrders",
-      "sidebarCustomers",
-      "sidebarCustomerOrders",
-      "sidebarInventory",
-      "sidebarRoles",
-    ],
-    labels: [
-      "Dashboard",
-      "Distributors",
-      "Products For Sale",
-      "Distributor Orders",
-      "Customers",
-      "Customer Orders",
-      "Inventory",
-      "Roles",
-    ],
-  },
-  {
-    label: "Products For Sale",
-    keys: [
-      "productsCreate",
-      "productsEdit",
-      "productsDelete",
-      "productsToggleLive",
-    ],
-    labels: [
-      "Create Item",
-      "Edit Item",
-      "Delete Item",
-      "Toggle Live / App Visibility",
-    ],
-  },
-  {
-    label: "Customers",
-    keys: ["customersCreate", "customersEdit", "customersDelete"],
-    labels: ["Create Customer", "Edit Customer", "Delete Customer"],
-  },
-  {
-    label: "Orders",
-    keys: ["ordersCreate", "ordersEdit", "ordersDelete", "ordersMarkDelivered"],
-    labels: [
-      "Create Order",
-      "Edit Order",
-      "Delete Order",
-      "Mark as Delivered",
-    ],
-  },
-];
 
 type DraftState = {
   id?: string;
@@ -158,14 +98,14 @@ function PermissionCheckbox({
 export default function RolesPage() {
   useDocumentTitle("Roles");
 
-  const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles } =
+  const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles, sessionPermissions } =
     useRolesUsers();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
   >({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>("U001");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -317,10 +257,8 @@ export default function RolesPage() {
             type: draft.type,
             password: draft.password,
             permissions:
-              draft.type === "Superadmin"
-                ? ADMIN_ROLE_PERMISSIONS
-                : managedRoles.find((role) => role.name === draft.type)
-                    ?.permissions ?? DEFAULT_ROLE_PERMISSIONS,
+              managedRoles.find((role) => role.name === draft.type)
+                ?.permissions ?? permissionsForRoleType(draft.type),
           },
         ];
       });
@@ -385,13 +323,17 @@ export default function RolesPage() {
             />
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              <Button variant="primary" onClick={openCreateModal}>
-                <Plus size={14} />
-                Add User
-              </Button>
-              <Button variant="dark" onClick={() => setRoleMgmtOpen(true)}>
-                Role Management
-              </Button>
+              {sessionPermissions.rolesAddUser ? (
+                <Button variant="primary" onClick={openCreateModal}>
+                  <Plus size={14} />
+                  Add User
+                </Button>
+              ) : null}
+              {sessionPermissions.rolesAccessManagement ? (
+                <Button variant="dark" onClick={() => setRoleMgmtOpen(true)}>
+                  Role Management
+                </Button>
+              ) : null}
             </div>
           </div>
         }
@@ -473,27 +415,40 @@ export default function RolesPage() {
                 {open ? (
                   <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-4 py-5 md:px-6">
                     <div className="overflow-x-auto">
-                      <div className="grid min-w-[520px] gap-8 md:grid-cols-2 xl:grid-cols-4">
-                        {PERMISSION_GROUPS.map((group) => (
+                      <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
+                        {ROLE_PERMISSION_GROUPS.map((group) => (
                           <div key={group.label}>
                             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#111118] uppercase">
                               {group.label}
                             </h3>
                             <div className="space-y-2.5">
-                              {group.keys.map((key, permissionIndex) => (
-                                <PermissionCheckbox
-                                  key={key}
-                                  checked={permissions[key]}
-                                  label={group.labels[permissionIndex]}
-                                  onChange={() =>
-                                    patchPermission(
-                                      user,
-                                      key,
-                                      !permissions[key],
-                                    )
-                                  }
-                                />
-                              ))}
+                              <PermissionCheckbox
+                                checked={permissions[group.accessKey]}
+                                label={group.accessLabel}
+                                onChange={() =>
+                                  patchPermission(
+                                    user,
+                                    group.accessKey,
+                                    !permissions[group.accessKey],
+                                  )
+                                }
+                              />
+                              <div className="space-y-2.5 border-l border-[#E4E4E0] pl-3">
+                                {group.actions.map((action) => (
+                                  <PermissionCheckbox
+                                    key={action.key}
+                                    checked={permissions[action.key]}
+                                    label={action.label}
+                                    onChange={() =>
+                                      patchPermission(
+                                        user,
+                                        action.key,
+                                        !permissions[action.key],
+                                      )
+                                    }
+                                  />
+                                ))}
+                              </div>
                             </div>
                           </div>
                         ))}

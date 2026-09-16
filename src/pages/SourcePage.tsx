@@ -172,6 +172,7 @@ export default function SourcePage() {
             distributor={distributorFilter}
             locationOptions={locationOptions}
             distributorOptions={distributorOptions}
+            recordCount={filtered.length}
             onQueryChange={setQuery}
             onLocationChange={setLocationFilter}
             onDistributorChange={setDistributorFilter}

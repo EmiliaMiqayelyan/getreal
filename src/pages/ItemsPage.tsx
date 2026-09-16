@@ -3,6 +3,7 @@ import { Plus, Search } from "lucide-react";
 
 import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -284,18 +285,32 @@ export default function ItemsPage() {
               ]}
             />
 
-            <Button
-              variant="primary"
-              onClick={openCreate}
-              className="w-full sm:ml-auto sm:w-auto"
-            >
-              <Plus size={14} />
-              Add Item
-            </Button>
+            <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+              <ExportButton
+                entityLabel="items"
+                recordCount={filtered.length}
+                filtersActive={Boolean(
+                  query.trim() ||
+                    categoryFilter ||
+                    distributorFilter ||
+                    sourceFilter ||
+                    tab !== "All",
+                )}
+                className="w-full sm:w-auto"
+              />
+              <Button
+                variant="primary"
+                onClick={openCreate}
+                className="w-full sm:w-auto"
+              >
+                <Plus size={14} />
+                Add Item
+              </Button>
+            </div>
           </div>
         }
         below={
-          <div className="flex gap-5 overflow-x-auto border-b border-[#ECECEA] bg-white px-4 md:px-7">
+          <div className="flex gap-5 overflow-x-auto overflow-y-hidden border-b border-[#ECECEA] bg-white px-4 md:px-7">
             {TABS.map((entry) => {
               const active = tab === entry;
               return (
