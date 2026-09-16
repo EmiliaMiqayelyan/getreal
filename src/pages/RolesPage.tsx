@@ -165,7 +165,7 @@ export default function RolesPage() {
   >({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
-  const [expandedId, setExpandedId] = useState<string | null>("U002");
+  const [expandedId, setExpandedId] = useState<string | null>("U001");
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [modalOpen, setModalOpen] = useState(false);

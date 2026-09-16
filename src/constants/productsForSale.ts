@@ -33,14 +33,9 @@ function requireItem(id: string) {
   return item;
 }
 
-/** Seeded list matching Figma Products For Sale protein tables. */
+/** Temporary seed - keep one sample until API covers this list. */
 export const PRODUCTS_FOR_SALE: ProductForSale[] = [
   fromItem(requireItem("IT-000009"), "PR-001", 0),
-  fromItem(requireItem("IT-000003"), "PR-002", 1),
-  fromItem(requireItem("IT-000011"), "PR-003", 2),
-  fromItem(requireItem("IT-000012"), "PR-004", 3),
-  fromItem(requireItem("IT-000014"), "PR-005", 4),
-  fromItem(requireItem("IT-000015"), "PR-006", 5),
 ];
 
 export function productFromItem(

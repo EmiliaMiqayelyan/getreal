@@ -26,31 +26,8 @@ export function saveRoleUsers(users: RoleUser[]): void {
   }
 }
 
+/** Temporary seed - one role template until Roles API owns this list. */
 export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [
-  {
-    id: "role-warehouse-manager",
-    name: "Warehouse Manager",
-    permissions: {
-      ...DEFAULT_ROLE_PERMISSIONS,
-      sidebarInventory: true,
-      sidebarReceiving: true,
-      sidebarCoolerPacking: true,
-      sidebarPackerManager: true,
-      sidebarProductsForSale: true,
-      productsEdit: true,
-      productsToggleLive: true,
-    },
-  },
-  {
-    id: "role-packer-manager",
-    name: "Packer Manager",
-    permissions: {
-      ...DEFAULT_ROLE_PERMISSIONS,
-      sidebarCoolerPacking: true,
-      sidebarPackerManager: true,
-      sidebarCustomerOrders: true,
-    },
-  },
   {
     id: "role-manager",
     name: "Manager",
@@ -70,22 +47,6 @@ export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [
       customersEdit: true,
       ordersCreate: true,
       ordersEdit: true,
-    },
-  },
-  {
-    id: "role-item-receiver",
-    name: "Item Reciever",
-    permissions: {
-      ...DEFAULT_ROLE_PERMISSIONS,
-      sidebarDashboard: true,
-      sidebarDistributors: true,
-      sidebarProductsForSale: true,
-      sidebarProductOrders: true,
-      sidebarCustomers: true,
-      sidebarCustomerOrders: true,
-      sidebarInventory: true,
-      sidebarReceiving: true,
-      sidebarRoles: false,
     },
   },
 ];

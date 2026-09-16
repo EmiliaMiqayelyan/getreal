@@ -8,6 +8,7 @@ function logo(label: string, bg: string, fg = "#FFFFFF") {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+/** Temporary seed - keep one sample until API covers this list. */
 export const SOURCES: Source[] = [
   {
     id: "SOR-00001",
@@ -18,55 +19,5 @@ export const SOURCES: Source[] = [
     description: DESC,
     logoUrl: logo("FM", "#2F6B4F"),
     logoName: "freshmarket-logo.png",
-  },
-  {
-    id: "SOR-00002",
-    name: "MeatFactory Co",
-    location: "Los Angeles, CA",
-    fullAddress: "2200 Industrial Ave, Los Angeles, CA 90021",
-    distributor: "4PF",
-    description: DESC,
-    logoUrl: logo("MF", "#C45C3A"),
-    logoName: "meatfactory-logo.png",
-  },
-  {
-    id: "SOR-00003",
-    name: "Alpine Products Co.",
-    location: "Los Angeles, CA",
-    fullAddress: "910 Mountain View Rd, Los Angeles, CA 90042",
-    distributor: "FreshFood LLC",
-    description: DESC,
-    logoUrl: logo("AP", "#3B6EA5"),
-    logoName: "alpine-logo.png",
-  },
-  {
-    id: "SOR-00004",
-    name: "NanasFruits",
-    location: "Los Angeles, CA",
-    fullAddress: "441 Fruit St, Los Angeles, CA 90013",
-    distributor: "4PF",
-    description: DESC,
-    logoUrl: logo("NF", "#E8A83A", "#111118"),
-    logoName: "nanas-logo.png",
-  },
-  {
-    id: "SOR-00005",
-    name: "SIberianMeat Co",
-    location: "Los Angeles, CA",
-    fullAddress: "78 Cold Storage Way, Los Angeles, CA 90058",
-    distributor: "FreshFood LLC",
-    description: DESC,
-    logoUrl: logo("SM", "#5B4A8A"),
-    logoName: "siberian-logo.png",
-  },
-  {
-    id: "SOR-00006",
-    name: "MeatWorld",
-    location: "Los Angeles, CA",
-    fullAddress: "1500 Packing Plant Blvd, Los Angeles, CA 90023",
-    distributor: "Rancho Protein LLC",
-    description: DESC,
-    logoUrl: logo("MW", "#8B3A3A"),
-    logoName: "meatworld-logo.png",
   },
 ];

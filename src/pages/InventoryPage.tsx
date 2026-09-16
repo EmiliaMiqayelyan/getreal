@@ -101,6 +101,7 @@ type DistributeTarget = {
   itemId: string;
 };
 
+/** Temporary seed - one product per inventory section. */
 const INITIAL_SECTIONS: InventorySection[] = [
   {
     title: "Meat",
@@ -109,53 +110,16 @@ const INITIAL_SECTIONS: InventorySection[] = [
       {
         id: "angus",
         name: "Angus Chuck Ground Beef",
-        lots: [],
-      },
-      {
-        id: "wagyu",
-        name: "Wagyu Aged Tenderloin Steak",
-        lots: [
-          {
-            orderId: "OPE-10044",
-            distributor: "Rancho Protein LLC",
-            source: "FreshAlley Meat Co",
-            deliveryDate: "Jul 17, 2026, 07:30",
-            purchased: "$18.50/ea",
-            qty: 5,
-            unit: "8oz ea",
-            location: "Freezer 1",
-          },
-        ],
-      },
-      {
-        id: "ribeye",
-        name: "Rib-eye Steak",
         lots: [
           {
             orderId: "OPE-10045",
             distributor: "4PF Co.",
             source: "FreshAlley Meat Co",
             deliveryDate: "Jul 16, 2026, 08:00",
-            purchased: "$90/case",
+            purchased: "$125/case",
             qty: 5,
-            unit: "16oz ea",
-            location: "Freezer 2",
-          },
-        ],
-      },
-      {
-        id: "nystrip",
-        name: "NY Strip Steak",
-        lots: [
-          {
-            orderId: "OPE-10050",
-            distributor: "4PF Co.",
-            source: "FreshAlley Meat Co",
-            deliveryDate: "Jul 16, 2026, 08:00",
-            purchased: "$14.00/ea",
-            qty: 3,
-            unit: "16oz ea",
-            location: "Freezer 2",
+            unit: "1lb",
+            location: "Freezer 1",
           },
         ],
       },
@@ -165,11 +129,6 @@ const INITIAL_SECTIONS: InventorySection[] = [
     title: "Poultry",
     sourceLabel: "FARMER",
     products: [
-      {
-        id: "whole-chicken",
-        name: "Whole Chicken",
-        lots: [],
-      },
       {
         id: "drumsticks",
         name: "Drumsticks",
@@ -186,37 +145,12 @@ const INITIAL_SECTIONS: InventorySection[] = [
           },
         ],
       },
-      {
-        id: "thighs",
-        name: "Thighs",
-        lots: [
-          {
-            orderId: "OPE-10061",
-            distributor: "Greenfield Farms",
-            source: "Sofia Reyes",
-            deliveryDate: "Jul 19, 2026, 06:00",
-            purchased: "$8.25/lb",
-            qty: 2,
-            unit: "1lb",
-            location: "Fridge 1",
-          },
-        ],
-      },
-      {
-        id: "breasts",
-        name: "Breasts",
-        lots: [],
-      },
     ],
   },
   {
     title: "Fruits",
     sourceLabel: "SOURCE",
-    products: [
-      { id: "blueberries", name: "Blueberries", lots: [] },
-      { id: "strawberries", name: "Strawberries", lots: [] },
-      { id: "lemons", name: "Lemons", lots: [] },
-    ],
+    products: [{ id: "blueberries", name: "Blueberries", lots: [] }],
   },
 ];
 
@@ -225,95 +159,12 @@ const CATEGORY_GROUPS: { title: string; sections: string[] }[] = [
   { title: "Produce", sections: ["Fruits"] },
 ];
 
+/** Temporary seed - one received order sample. */
 const RECEIVED_ORDERS: ReceivedOrder[] = [
-  {
-    id: "r-rancho",
-    supplier: "Rancho Protein LLC",
-    itemsCount: "6 items",
-    receivedAt: "Jul 20, 2026 · 12:35 PM",
-    sections: [
-      {
-        title: "Meat",
-        items: [
-          {
-            id: "rancho-1",
-            orderId: "ID-002-08",
-            itemName: "Angus Chuck Ground Beef",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "4",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "rancho-2",
-            orderId: "ID-001-20",
-            itemName: "Rib-eye Steak",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "2",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "rancho-3",
-            orderId: "ID-001-21",
-            itemName: "NY Strip Steak",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "2",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-        ],
-      },
-      {
-        title: "Fruits",
-        items: [
-          {
-            id: "rancho-4",
-            orderId: "ID-115-01",
-            itemName: "Blueberries",
-            qty: 2,
-            unit: "Box",
-            qtyAfterUnpack: "2",
-            expDate: "Jul 25, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "rancho-5",
-            orderId: "ID-116-02",
-            itemName: "Strawberries",
-            qty: 1,
-            unit: "Box",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 24, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "rancho-6",
-            orderId: "ID-117-03",
-            itemName: "Lemons",
-            qty: 1,
-            unit: "Pack",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 30, 2026",
-            location: "",
-            splits: [],
-          },
-        ],
-      },
-    ],
-  },
   {
     id: "r-4pf",
     supplier: "4PF Co.",
-    itemsCount: "14 items",
+    itemsCount: "1 item",
     receivedAt: "Jul 20, 2026 · 12:35 PM",
     sections: [
       {
@@ -326,77 +177,6 @@ const RECEIVED_ORDERS: ReceivedOrder[] = [
             qty: 1,
             unit: "Case",
             qtyAfterUnpack: "6",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "4pf-ribeye-1",
-            orderId: "ID-001-10",
-            itemName: "Rib-eye Steak",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "4pf-ribeye-2",
-            orderId: "ID-001-11",
-            itemName: "Rib-eye Steak",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "4pf-ribeye-3",
-            orderId: "ID-001-12",
-            itemName: "Rib-eye Steak",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "4pf-chicken-1",
-            orderId: "ID-015-03",
-            itemName: "Legion Fields Whole Chicken",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-          {
-            id: "4pf-chicken-2",
-            orderId: "ID-015-04",
-            itemName: "Legion Fields Whole Chicken",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "1",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-        ],
-      },
-      {
-        title: "Fruits",
-        items: [
-          {
-            id: "4pf-blue-1",
-            orderId: "ID-115-04",
-            itemName: "Blueberries",
-            qty: 2,
-            unit: "Box",
-            qtyAfterUnpack: "2",
             expDate: "Jul 28, 2026",
             location: "",
             splits: [],

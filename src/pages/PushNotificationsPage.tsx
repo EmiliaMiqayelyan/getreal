@@ -39,6 +39,7 @@ const SCHEDULE_OPTIONS = [
   "When cooler is ready",
 ];
 
+/** Temporary seed - one notification sample until Push API is wired. */
 const INITIAL: PushNotification[] = [
   {
     id: "PN-001",
@@ -46,34 +47,6 @@ const INITIAL: PushNotification[] = [
     scheduledFor: "After Order Confirmed",
     subject: "Your Rachel's Habit Box is Scheduled!",
     body: "Your order for [Date] is confirmed. We'll deliver to [Address] during [Time Window].",
-  },
-  {
-    id: "PN-002",
-    trigger: "Delivery Alert",
-    scheduledFor: "1 day before order lock",
-    subject: "Truck is out for Delivery",
-    body: "Your Rachel's Habit delivery is on the way. Expected window: [Time Window].",
-  },
-  {
-    id: "PN-003",
-    trigger: "Delivery Alert",
-    scheduledFor: "3 hrs after order arrived",
-    subject: "Your box has arrived",
-    body: "Your cooler was delivered to [Address]. Please bring it in when you can.",
-  },
-  {
-    id: "PN-004",
-    trigger: "Order Locked",
-    scheduledFor: "On delivery day morning",
-    subject: "Order lock reminder",
-    body: "Last chance to edit your order for [Date] before we lock it tonight.",
-  },
-  {
-    id: "PN-005",
-    trigger: "Cooler Ready",
-    scheduledFor: "When cooler is ready",
-    subject: "Cooler packed and ready",
-    body: "Your cooler for [Date] is packed and ready for loading.",
   },
 ];
 

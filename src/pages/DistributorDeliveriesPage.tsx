@@ -87,8 +87,6 @@ const REJECT_REASONS: RejectReason[] = [
   "Missing Exp Date",
 ];
 
-const REJECT_PHOTO_SAMPLE = "/images/receiving-reject-sample.jpg";
-
 const RECEIVING_DATES = [
   new Date(2026, 6, 14),
   new Date(2026, 6, 20),
@@ -502,6 +500,7 @@ function ExpirationDatePicker({
   );
 }
 
+/** Temporary seed - one delivery order sample. */
 const INITIAL_ORDERS: DeliveryOrder[] = [
   {
     id: "DP-1043",
@@ -509,97 +508,25 @@ const INITIAL_ORDERS: DeliveryOrder[] = [
     orderDate: "Jul 16, 12:34 PM",
     expectedDelivery: "Jul 18, 8:00 AM",
     deliveryDateId: "2026-07-20",
-    totalPrice: 480,
+    totalPrice: 125,
     checked: false,
     items: [
-      { id: "li-1", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
-      { id: "li-2", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
-      { id: "li-3", itemCode: "ID-001-11", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
-      { id: "li-4", itemCode: "ID-001-12", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
-      { id: "li-5", itemCode: "ID-015-03", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
-      { id: "li-6", itemCode: "ID-015-04", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
-    ],
-  },
-  {
-    id: "DP-1044",
-    distributor: "Tropical Produce LLC",
-    orderDate: "Jul 16, 12:34 PM",
-    expectedDelivery: "Jul 18, 8:00 AM",
-    deliveryDateId: "2026-07-20",
-    totalPrice: 101.25,
-    checked: false,
-    items: [
-      { id: "li-7", itemCode: "ID-020-01", name: "Lemons", category: "Fruits", quantity: 4, unit: "Box", source: "Omara Okafor", unitPrice: 6, priceLabel: "$6/box" },
-      { id: "li-8", itemCode: "ID-020-02", name: "Blueberries", category: "Fruits", quantity: 2, unit: "Box", source: "Omara Okafor", unitPrice: 32, priceLabel: "$32/box" },
-    ],
-  },
-  {
-    id: "DP-1045",
-    distributor: "Rancho Protein LLC",
-    orderDate: "Jul 16, 12:34 PM",
-    expectedDelivery: "Jul 18, 8:00 AM",
-    deliveryDateId: "2026-07-20",
-    totalPrice: 101.25,
-    checked: false,
-    items: [
-      { id: "li-9", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
-      { id: "li-10", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
-      { id: "li-11", itemCode: "ID-015-03", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 50, priceLabel: "$50/case" },
-      { id: "li-12", itemCode: "ID-021-01", name: "Blueberries", category: "Fruits", quantity: 1, unit: "Box", source: "FreshMarket Co.", unitPrice: 12.5, priceLabel: "$12.50/box" },
-      { id: "li-13", itemCode: "ID-021-02", name: "Blueberries", category: "Fruits", quantity: 1, unit: "Box", source: "FreshMarket Co.", unitPrice: 12.5, priceLabel: "$12.50/box" },
-    ],
-  },
-  {
-    id: "DP-1038",
-    distributor: "4PF Co.",
-    orderDate: "Jul 14, 10:12 AM",
-    expectedDelivery: "Jul 16, 8:00 AM",
-    deliveryDateId: "2026-07-14",
-    totalPrice: 355,
-    checked: true,
-    items: [
-      { id: "li-r1", itemCode: "ID-002-02", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 125, priceLabel: "$125/case" },
-      { id: "li-r2", itemCode: "ID-001-10", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 90, priceLabel: "$90/case" },
-      { id: "li-r3", itemCode: "ID-015-04", name: "Legion Fields Whole Chicken", category: "Meat", quantity: 1, unit: "Case", source: "FreshMarket Co", unitPrice: 50, priceLabel: "$50/case" },
-    ],
-  },
-  {
-    id: "DP-1050",
-    distributor: "Rancho Protein LLC",
-    orderDate: "Jul 24, 9:00 AM",
-    expectedDelivery: "Jul 26, 8:00 AM",
-    deliveryDateId: "2026-07-27",
-    totalPrice: 215,
-    checked: false,
-    items: [
-      { id: "li-14", itemCode: "ID-002-09", name: "Angus Chuck Ground Beef", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 125, priceLabel: "$125/case" },
-      { id: "li-15", itemCode: "ID-001-22", name: "Rib-eye Steak", category: "Meat", quantity: 1, unit: "Case", source: "Lena Hoffman", unitPrice: 90, priceLabel: "$90/case" },
+      {
+        id: "li-1",
+        itemCode: "ID-002-02",
+        name: "Angus Chuck Ground Beef",
+        category: "Meat",
+        quantity: 1,
+        unit: "Case",
+        source: "FreshMarket Co",
+        unitPrice: 125,
+        priceLabel: "$125/case",
+      },
     ],
   },
 ];
 
-const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {
-  "DP-1038": {
-    "li-r1": {
-      status: "accepted",
-      expiration: "2026-08-01",
-      itemId: "ID-002-02",
-    },
-    "li-r2": {
-      status: "accepted",
-      expiration: "2026-08-01",
-      itemId: "ID-001-10",
-    },
-    "li-r3": {
-      status: "rejected",
-      expiration: "",
-      itemId: "ID-015-04",
-      reason: "Missing Exp Date",
-      photoName: "problem.jpg",
-      photoUrl: REJECT_PHOTO_SAMPLE,
-    },
-  },
-};
+const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {};
 
 function currency(value: number) {
   return `$${value.toLocaleString(undefined, {

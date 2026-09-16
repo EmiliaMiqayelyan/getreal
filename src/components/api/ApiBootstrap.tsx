@@ -15,8 +15,17 @@ import {
   usersApi,
 } from "@/lib/api";
 
+function mergeById<T extends { id: string }>(seed: T[], api: T[]): T[] {
+  const byId = new Map(seed.map((entry) => [entry.id, entry]));
+  for (const entry of api) {
+    byId.set(entry.id, entry);
+  }
+  return Array.from(byId.values());
+}
+
 /**
  * Loads remote catalog, users, and roles when VITE_API_URL is set.
+ * Merges API rows with temporary mock seeds (API wins on same id).
  * Falls back silently to seeded mock data on failure.
  */
 export function ApiBootstrap() {
@@ -41,23 +50,21 @@ export function ApiBootstrap() {
         const products = normalizeProductsList(productsPayload);
         if (products.length > 0) {
           const mapped = products.map(mapApiProductToItem);
-          setItems((current) => {
-            const byId = new Map(current.map((item) => [item.id, item]));
-            for (const item of mapped) {
-              if (!byId.has(item.id)) byId.set(item.id, item);
-            }
-            return Array.from(byId.values());
-          });
+          setItems((current) => mergeById(current, mapped));
         }
 
         const apiUsers = normalizeUsersList(usersPayload);
         if (apiUsers.length > 0) {
-          setUsers(apiUsers.map(mapApiUserToRoleUser));
+          setUsers((current) =>
+            mergeById(current, apiUsers.map(mapApiUserToRoleUser)),
+          );
         }
 
         const apiRoles = normalizeRolesList(rolesPayload);
         if (apiRoles.length > 0) {
-          setManagedRoles(apiRoles.map(mapApiRoleToManagedRole));
+          setManagedRoles((current) =>
+            mergeById(current, apiRoles.map(mapApiRoleToManagedRole)),
+          );
         }
       } catch {
         // Keep mock seeds when API is unavailable or returns errors.

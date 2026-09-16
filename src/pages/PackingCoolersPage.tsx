@@ -17,7 +17,7 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
-import { FRUIT_OPTIONS, MEAT_OPTIONS } from "@/data/packingInventory";
+import { MEAT_OPTIONS } from "@/data/packingInventory";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -51,15 +51,14 @@ type PackOrder = {
 };
 
 const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-14", label: "Wed, Jul 14", dateKey: "Jul 14", day: 14 },
   { id: "wed-20", label: "Wed, Jul 20", dateKey: "Jul 20", day: 20 },
-  { id: "wed-27", label: "Wed, Jul 27", dateKey: "Jul 27", day: 27 },
 ];
 
 const COOLER_OPTIONS = ["BL-0008", "BL-02313", "FR-10034", "FR-1423"];
 
 type SourceOption = PackingSourceOption;
 
+/** Temporary seed - one packing line so SourcePicker still demos. */
 function makeItems(): PackingLine[] {
   return [
     {
@@ -71,130 +70,20 @@ function makeItems(): PackingLine[] {
       packed: false,
       options: MEAT_OPTIONS,
     },
-    {
-      id: "2",
-      name: "Rib-eye Steak",
-      category: "Meat",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: MEAT_OPTIONS,
-    },
-    {
-      id: "3",
-      name: "Legion Fields Whole Chicken",
-      category: "Meat",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: MEAT_OPTIONS,
-    },
-    {
-      id: "4",
-      name: "Blueberries",
-      category: "Fruits",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: FRUIT_OPTIONS,
-    },
-    {
-      id: "5",
-      name: "Lemons",
-      category: "Fruits",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: FRUIT_OPTIONS,
-    },
-    {
-      id: "6",
-      name: "Gala Apples",
-      category: "Fruits",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: FRUIT_OPTIONS,
-    },
   ];
 }
 
-/** Shared order identity with Packer Manager / Customer Orders. */
+/** Temporary seed - one order shared with Packer Manager / Customer Orders. */
 const INITIAL_ORDERS: PackOrder[] = [
   {
     id: "o1",
     customer: "Emily Rodriguez",
     code: "ORD-U003-01",
-    itemCount: 5,
+    itemCount: 1,
     deliveryDate: "Wed, Jul 20, 2026",
     packedAt: "8/29/26, 9:15am",
     loadedAt: "9/29/26, 9:50am",
     coolerIds: ["BL-0012", "FR-1423"],
-    items: makeItems(),
-  },
-  {
-    id: "o2",
-    customer: "Lucas Bennett",
-    code: "ORD-U003-02",
-    itemCount: 6,
-    deliveryDate: "Wed, Jul 20, 2026",
-    packedAt: "8/29/26, 9:15am",
-    loadedAt: "9/29/26, 9:50am",
-    coolerIds: ["BL-0012"],
-    items: makeItems(),
-  },
-  {
-    id: "o3",
-    customer: "Sophia Martinez",
-    code: "ORD-U003-03",
-    itemCount: 12,
-    deliveryDate: "Wed, Jul 20, 2026",
-    coolerIds: [],
-    items: makeItems(),
-  },
-  {
-    id: "o4",
-    customer: "Ethan Carter",
-    code: "ORD-U003-04",
-    itemCount: 9,
-    deliveryDate: "Wed, Jul 20, 2026",
-    coolerIds: [],
-    items: makeItems(),
-  },
-  {
-    id: "o5",
-    customer: "Liam Johnson",
-    code: "ORD-U003-05",
-    itemCount: 5,
-    deliveryDate: "Wed, Jul 20, 2026",
-    coolerIds: [],
-    items: makeItems(),
-  },
-  {
-    id: "o6",
-    customer: "Ava Smith",
-    code: "ORD-U003-06",
-    itemCount: 7,
-    deliveryDate: "Wed, Jul 14, 2026",
-    coolerIds: [],
-    items: makeItems(),
-  },
-  {
-    id: "o7",
-    customer: "Noah Brown",
-    code: "ORD-U003-07",
-    itemCount: 4,
-    deliveryDate: "Wed, Jul 14, 2026",
-    coolerIds: [],
-    items: makeItems(),
-  },
-  {
-    id: "o8",
-    customer: "Mia Garcia",
-    code: "ORD-U003-08",
-    itemCount: 6,
-    deliveryDate: "Wed, Jul 27, 2026",
-    coolerIds: [],
     items: makeItems(),
   },
 ];

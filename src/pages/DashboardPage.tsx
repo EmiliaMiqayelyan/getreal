@@ -37,52 +37,17 @@ import { cn } from "@/utils/cn";
 
 type ChartMode = "daily" | "weekly" | "monthly";
 
+/** Temporary seed chart points until Dashboard API owns these series. */
 const ORDERS_CHART = {
-  daily: [
-    { name: "Jun 24", value: 12 },
-    { name: "Jun 25", value: 28 },
-    { name: "Jun 26", value: 18 },
-    { name: "Jun 27", value: 32 },
-    { name: "Jun 28", value: 22 },
-    { name: "Jun 29", value: 30 },
-    { name: "Jun 30", value: 16 },
-  ],
-  weekly: [
-    { name: "W1", value: 48 },
-    { name: "W2", value: 62 },
-    { name: "W3", value: 41 },
-    { name: "W4", value: 55 },
-  ],
-  monthly: [
-    { name: "Apr", value: 120 },
-    { name: "May", value: 145 },
-    { name: "Jun", value: 168 },
-    { name: "Jul", value: 152 },
-  ],
+  daily: [{ name: "Jun 30", value: 16 }],
+  weekly: [{ name: "W4", value: 55 }],
+  monthly: [{ name: "Jul", value: 152 }],
 };
 
 const REVENUE_CHART = {
-  daily: [
-    { name: "Jun 24", value: 140 },
-    { name: "Jun 25", value: 255 },
-    { name: "Jun 26", value: 180 },
-    { name: "Jun 27", value: 310 },
-    { name: "Jun 28", value: 220 },
-    { name: "Jun 29", value: 290 },
-    { name: "Jun 30", value: 170 },
-  ],
-  weekly: [
-    { name: "W1", value: 920 },
-    { name: "W2", value: 1140 },
-    { name: "W3", value: 880 },
-    { name: "W4", value: 1020 },
-  ],
-  monthly: [
-    { name: "Apr", value: 3200 },
-    { name: "May", value: 4100 },
-    { name: "Jun", value: 4800 },
-    { name: "Jul", value: 5285 },
-  ],
+  daily: [{ name: "Jun 30", value: 170 }],
+  weekly: [{ name: "W4", value: 1020 }],
+  monthly: [{ name: "Jul", value: 5285 }],
 };
 
 function ChartToggle({
