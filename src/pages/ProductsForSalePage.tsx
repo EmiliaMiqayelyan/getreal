@@ -468,6 +468,7 @@ export default function ProductsForSalePage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <Header
         title="Products For Sale"
+        toolbarBorder={false}
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full min-w-0 sm:w-[160px] sm:shrink-0 sm:flex-none">
@@ -541,7 +542,7 @@ export default function ProductsForSalePage() {
           </div>
         }
         below={
-          <div className="flex gap-5 overflow-x-auto overflow-y-hidden border-b border-[#ECECEA] bg-white px-4 md:px-7">
+          <div className="flex overflow-x-auto overflow-y-hidden border-b border-[#ECECEA] bg-white px-4 md:px-7">
             {PRODUCT_TABS.map((entry) => {
               const active = tab === entry;
               return (
@@ -550,7 +551,7 @@ export default function ProductsForSalePage() {
                   type="button"
                   onClick={() => selectTab(entry)}
                   className={cn(
-                    "relative shrink-0 cursor-pointer px-0 pt-3 pb-3 text-[13px] font-medium transition-colors",
+                    "relative flex h-7 min-w-[77px] shrink-0 cursor-pointer items-center justify-center px-4 text-[13px] font-medium transition-colors",
                     active
                       ? "text-[#111118]"
                       : "text-[#8A8A8A] hover:text-[#111118]",
@@ -559,7 +560,7 @@ export default function ProductsForSalePage() {
                   {entry}
                   {active ? (
                     <span
-                      className="absolute -bottom-px -left-1 -right-1 h-[3px] bg-badge"
+                      className="absolute inset-x-0 -bottom-px h-[3px] bg-badge"
                       aria-hidden
                     />
                   ) : null}

@@ -11,6 +11,12 @@ import {
 } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DeliveryDateChip,
+  DATE_CHIP_ROW,
+  DATE_CHIP_SCROLL,
+} from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { Input } from "@/components/ui/Input";
@@ -21,7 +27,6 @@ import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
 const ORANGE = "#F57850";
-const GREEN = "#2B5B31";
 
 type TimelineStepKey =
   | "requested"
@@ -630,32 +635,32 @@ function OrderDetailPanel({
           </div>
           <div className="flex flex-col gap-3 bg-white text-[13px]">
             <div>
-              <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Street Address
               </div>
               <div className="mt-1 font-bold text-[#111118]">{order.address}</div>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Apt / Unit
                 </div>
                 <div className="mt-1 font-bold text-[#111118]">{order.apt || "—"}</div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   City
                 </div>
                 <div className="mt-1 font-bold text-[#111118]">{order.city}</div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   State
                 </div>
                 <div className="mt-1 font-bold text-[#111118]">{order.state}</div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Zip
                 </div>
                 <div className="mt-1 font-bold text-[#111118]">{order.zip}</div>
@@ -849,7 +854,7 @@ export default function CustomerOrdersPage() {
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search
                 size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
               />
               <Input
                 value={search}
@@ -864,6 +869,7 @@ export default function CustomerOrdersPage() {
                 value={statusFilter}
                 onChange={setStatusFilter}
                 aria-label="All Statuses"
+                className="w-full sm:w-[150px]"
                 options={[
                   { value: "", label: "All Statuses" },
                   { value: "requested", label: "Requested" },
@@ -878,6 +884,7 @@ export default function CustomerOrdersPage() {
                   value={zipFilter}
                   onChange={setZipFilter}
                   aria-label="All Zip Codes"
+                  className="w-full sm:w-[150px]"
                   options={[
                     { value: "", label: "All Zip Codes" },
                     ...zipOptions.map((zip) => ({ value: zip, label: zip })),
@@ -886,7 +893,7 @@ export default function CustomerOrdersPage() {
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118] sm:w-auto"
                 >
                   <Calendar size={14} className="text-[#8A8A8A]" />
                   Select Date
@@ -895,12 +902,14 @@ export default function CustomerOrdersPage() {
                   value={statusFilter}
                   onChange={setStatusFilter}
                   aria-label="All Statuses"
+                  className="w-full sm:w-[150px]"
                   options={[{ value: "", label: "All Statuses" }]}
                 />
                 <Select
                   value={sortBy}
                   onChange={setSortBy}
                   aria-label="Sort by"
+                  className="w-full sm:w-[140px]"
                   options={[
                     { value: "", label: "Sort by" },
                     { value: "customer", label: "Customer" },
@@ -910,11 +919,12 @@ export default function CustomerOrdersPage() {
               </>
             )}
 
-            <div className="ml-auto flex flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
               <ExportButton
                 entityLabel="orders"
                 recordCount={exportCount}
                 filtersActive={exportFiltersActive}
+                className="w-full sm:w-auto"
               />
               <div className="text-[12px] text-[#8A8A8A]">
                 Today, Tue, Jul 16, 2026
@@ -928,66 +938,36 @@ export default function CustomerOrdersPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 py-5 md:px-7">
         {activeTab === "Orders" ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="mb-5 flex shrink-0 items-center justify-between gap-3">
-              <div className="flex flex-wrap gap-2">
+            <div className={DATE_CHIP_ROW}>
+              <div className={DATE_CHIP_SCROLL}>
                 {DELIVERY_CHIPS.map((chip) => {
                   const active = chip.id === activeChip;
                   return (
-                    <button
+                    <DeliveryDateChip
                       key={chip.id}
-                      type="button"
+                      label={chip.label}
+                      count={chip.count}
+                      active={active}
                       onClick={() => setActiveChip(chip.id)}
-                      className={cn(
-                        "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
-                        active
-                          ? "border-transparent text-white"
-                          : "border-[#ECECEA] bg-white text-[#111118]",
-                      )}
-                      style={active ? { background: GREEN } : undefined}
-                    >
-                      <span className="text-[13px] font-semibold">
-                        {chip.label}
-                      </span>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                          active
-                            ? "bg-[#3D5A40] text-white"
-                            : "bg-[#F3F3F1] text-[#6B6B6B]",
-                        )}
-                      >
-                        {chip.count}
-                      </span>
-                    </button>
+                    />
                   );
                 })}
               </div>
 
-              <div className="relative flex items-center gap-2">
-                <button
-                  type="button"
-                  className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  type="button"
-                  className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  type="button"
+              <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+                <DateNavButton aria-label="Previous dates">
+                  <ChevronLeft size={14} />
+                </DateNavButton>
+                <DateNavButton aria-label="Next dates">
+                  <ChevronRight size={14} />
+                </DateNavButton>
+                <DateNavButton
+                  aria-label="Calendar"
+                  aria-expanded={calendarOpen}
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className={cn(
-                    "flex size-10 items-center justify-center rounded-[8px] border bg-white",
-                    calendarOpen
-                      ? "border-[#28402B] text-[#28402B]"
-                      : "border-[#ECECEA] text-[#8A8A8A]",
-                  )}
                 >
-                  <Calendar size={16} />
-                </button>
+                  <CalendarIcon />
+                </DateNavButton>
 
                 {calendarOpen ? (
                   <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
@@ -1047,7 +1027,7 @@ export default function CustomerOrdersPage() {
 
             <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#ECECEA] bg-white">
               <div className="min-w-[900px]">
-                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
+                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   <div>Order ID</div>
                   {STEPS_META.map((step) => (
                     <div key={step.key} className="text-center">
@@ -1146,7 +1126,7 @@ export default function CustomerOrdersPage() {
                     </div>
                     <div className="overflow-x-auto">
                       <div className="min-w-[860px]">
-                        <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
+                        <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                           <div>Order ID</div>
                           <div>Customer</div>
                           <div>Address</div>

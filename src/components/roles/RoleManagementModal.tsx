@@ -162,7 +162,7 @@ export function RoleManagementModal({
             {selected ? (
               <>
                 <div className="flex-1 overflow-y-auto px-5 py-4">
-                  <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                  <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                     Role Name
                   </label>
                   <Input
@@ -173,7 +173,7 @@ export function RoleManagementModal({
                     className="w-full"
                   />
 
-                  <h3 className="mt-6 mb-3 text-[11px] font-semibold tracking-[0.08em] text-[#6B7180] uppercase">
+                  <h3 className="mt-6 mb-3 text-[11px] font-semibold tracking-[0.08em] text-[#2E2E2E] uppercase">
                     Role Permissions
                   </h3>
                   <div className="space-y-5">

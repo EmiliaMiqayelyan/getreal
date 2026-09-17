@@ -1331,7 +1331,7 @@ export default function InventoryPage() {
             <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
               />
               <Input
                 value={query}

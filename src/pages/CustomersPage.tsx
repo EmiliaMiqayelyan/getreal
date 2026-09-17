@@ -245,7 +245,7 @@ function OrderDetailDrawer({
           </div>
           <div className="flex flex-col gap-3 bg-white">
             <div>
-              <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Street Address
               </div>
               <div className="mt-1 text-[13px] font-bold text-[#111118]">
@@ -254,7 +254,7 @@ function OrderDetailDrawer({
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Apt / Unit
                 </div>
                 <div className="mt-1 text-[13px] font-bold text-[#111118]">
@@ -262,7 +262,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   City
                 </div>
                 <div className="mt-1 text-[13px] font-bold text-[#111118]">
@@ -270,7 +270,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   State
                 </div>
                 <div className="mt-1 text-[13px] font-bold text-[#111118]">
@@ -278,7 +278,7 @@ function OrderDetailDrawer({
                 </div>
               </div>
               <div>
-                <div className="text-[11px] font-medium tracking-[0.06em] text-[#99A1AF] uppercase">
+                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   Zip
                 </div>
                 <div className="mt-1 text-[13px] font-bold text-[#111118]">
@@ -349,7 +349,7 @@ function CustomerOrdersPanel({
       {/* Desktop: table — spacer after Status so Total + View sit together on the right */}
       <div className="hidden md:block">
         <ScrollTable minWidth={720} bare>
-          <div className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
+          <div className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div>Order ID</div>
             <div>Order Date</div>
             <div>Delivery</div>
@@ -717,7 +717,7 @@ export default function CustomersPage() {
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search
                 size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
               />
               <Input
                 value={query}

@@ -1,6 +1,6 @@
 /** Shared column header typography for admin data tables. */
 export const TABLE_HEADER =
-  "text-[11px] font-medium tracking-[0.06em] text-muted-strong uppercase";
+  "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
 /** Page title — matches AdminHeader h1 */
 export const PAGE_TITLE =
@@ -14,7 +14,8 @@ export const MODAL_TITLE =
   "text-[18px] font-semibold tracking-tight text-foreground";
 
 /** Form field label */
-export const FIELD_LABEL = "mb-1.5 block text-[13px] font-medium text-foreground";
+export const FIELD_LABEL =
+  "mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]";
 
 /** Modal chrome */
 export const MODAL_HEADER =
@@ -28,5 +29,5 @@ export const MODAL_PANEL =
 
 /** Toolbar search field with leading icon */
 export const SEARCH_ICON =
-  "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-placeholder";
+  "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]";
 export const SEARCH_INPUT = "w-full pl-8";

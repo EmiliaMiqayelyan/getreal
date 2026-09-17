@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
-  Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -10,6 +9,12 @@ import {
 } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DeliveryDateChip,
+  DATE_CHIP_ROW,
+  DATE_CHIP_SCROLL,
+} from "@/components/shared/DeliveryDateChip";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -17,9 +22,8 @@ import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { cn } from "@/utils/cn";
 
-const GREEN = "#2B5B31";
 const MUTED_HEADER =
-  "text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase";
+  "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
 type DeliveryChip = {
   id: string;
@@ -143,7 +147,7 @@ function AssignPackerMenu({
         <div className="relative">
           <Search
             size={12}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
           />
           <Input
             value={query}
@@ -303,7 +307,7 @@ export default function PackerManagerPage() {
             <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
               />
               <Input
                 value={search}
@@ -316,6 +320,7 @@ export default function PackerManagerPage() {
               value={sortBy}
               onChange={setSortBy}
               aria-label="Sort by"
+              className="w-full sm:w-[140px]"
               options={[
                 { value: "", label: "Sort by" },
                 { value: "name", label: "Customer" },
@@ -326,121 +331,99 @@ export default function PackerManagerPage() {
               Today, Tue, Jun 22, 2026
             </div>
           </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-2 pb-1">
-            {DELIVERY_CHIPS.map((chip) => {
-              const active = activeChip === chip.id;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveChip(chip.id);
-                    setSelectedDay(chip.day);
-                  }}
-                  className={cn(
-                    "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
-                    active
-                      ? "border-transparent text-white"
-                      : "border-transparent bg-[#F3F3F1] text-[#111118]",
-                  )}
-                  style={active ? { background: GREEN } : undefined}
-                >
-                  <span className="text-[13px] font-semibold">{chip.label}</span>
-                  <span
-                    className={cn(
-                      "inline-flex size-6 items-center justify-center rounded-full text-[11px] font-semibold",
-                      active
-                        ? "bg-[#1F4524] text-white"
-                        : "bg-[#E4E4E1] text-[#6B6B6B]",
-                    )}
-                  >
-                    {chipCounts[chip.id] ?? 0}
-                  </span>
-                </button>
-              );
-            })}
-
-            <div className="relative ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => cycleChip(-1)}
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-              >
-                <ChevronLeft size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => cycleChip(1)}
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A]"
-              >
-                <ChevronRight size={15} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setCalendarOpen((open) => !open)}
-                className={cn(
-                  "flex size-10 items-center justify-center rounded-[8px] border bg-white",
-                  calendarOpen
-                    ? "border-[#2B5B31] text-[#2B5B31]"
-                    : "border-[#ECECEA] text-[#8A8A8A]",
-                )}
-              >
-                <Calendar size={14} />
-              </button>
-
-              {calendarOpen ? (
-                <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
-                  <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
-                    <span>July 2026</span>
-                    <div className="flex gap-1 text-[#8A8A8A]">
-                      <ChevronLeft size={14} />
-                      <ChevronRight size={14} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
-                    {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
-                      <span key={day}>{day}</span>
-                    ))}
-                  </div>
-                  <div className="mt-1 grid grid-cols-7 gap-1">
-                    {Array.from({ length: 31 }, (_, index) => {
-                      const day = index + 1;
-                      const match = DELIVERY_CHIPS.some(
-                        (chip) => chip.day === day,
-                      );
-                      const selected = selectedDay === day;
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          disabled={!match}
-                          onClick={() => {
-                            applyCalendarDay(day);
-                            setCalendarOpen(false);
-                          }}
-                          className={cn(
-                            "flex size-8 items-center justify-center rounded-full text-[12px]",
-                            selected
-                              ? "bg-[#2B5B31] text-white"
-                              : match
-                                ? "text-[#111118] hover:bg-[#F3F3F1]"
-                                : "text-[#D0D0D0]",
-                          )}
-                        >
-                          {day}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <div className={DATE_CHIP_ROW}>
+          <div className={DATE_CHIP_SCROLL}>
+            {DELIVERY_CHIPS.map((chip) => {
+              const active = activeChip === chip.id;
+              return (
+                <DeliveryDateChip
+                  key={chip.id}
+                  label={chip.label}
+                  count={chipCounts[chip.id] ?? 0}
+                  active={active}
+                  onClick={() => {
+                    setActiveChip(chip.id);
+                    setSelectedDay(chip.day);
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+            <DateNavButton
+              aria-label="Previous dates"
+              onClick={() => cycleChip(-1)}
+            >
+              <ChevronLeft size={14} />
+            </DateNavButton>
+            <DateNavButton
+              aria-label="Next dates"
+              onClick={() => cycleChip(1)}
+            >
+              <ChevronRight size={14} />
+            </DateNavButton>
+            <DateNavButton
+              aria-label="Calendar"
+              aria-expanded={calendarOpen}
+              onClick={() => setCalendarOpen((open) => !open)}
+            >
+              <CalendarIcon />
+            </DateNavButton>
+
+            {calendarOpen ? (
+              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+                <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
+                  <span>July 2026</span>
+                  <div className="flex gap-1 text-[#8A8A8A]">
+                    <ChevronLeft size={14} />
+                    <ChevronRight size={14} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
+                  {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
+                    <span key={day}>{day}</span>
+                  ))}
+                </div>
+                <div className="mt-1 grid grid-cols-7 gap-1">
+                  {Array.from({ length: 31 }, (_, index) => {
+                    const day = index + 1;
+                    const match = DELIVERY_CHIPS.some(
+                      (chip) => chip.day === day,
+                    );
+                    const selected = selectedDay === day;
+                    return (
+                      <button
+                        key={day}
+                        type="button"
+                        disabled={!match}
+                        onClick={() => {
+                          applyCalendarDay(day);
+                          setCalendarOpen(false);
+                        }}
+                        className={cn(
+                          "flex size-8 items-center justify-center rounded-full text-[12px]",
+                          selected
+                            ? "bg-[#2B5B31] text-white"
+                            : match
+                              ? "text-[#111118] hover:bg-[#F3F3F1]"
+                              : "text-[#D0D0D0]",
+                        )}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
         <ScrollTable
           minWidth={860}
           className="rounded-[12px] border border-[#ECECEA] bg-white"

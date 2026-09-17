@@ -197,7 +197,7 @@ export function AddProductForSaleModal({
         </div>
 
         <div className="px-6 py-5">
-          <label className="mb-2 block text-[13px] font-medium text-[#111118]">
+          <label className="mb-2 block text-[11px] font-semibold text-[#2E2E2E]">
             Item Merchandise Name
           </label>
 
@@ -306,7 +306,7 @@ export function AddProductForSaleModal({
         >
           <div className="border-b border-[#ECECEA] p-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-[#9A9A96]" />
+              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-[#111118]" />
               <input
                 ref={searchRef}
                 value={query}

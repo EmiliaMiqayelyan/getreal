@@ -13,6 +13,12 @@ import {
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DeliveryDateChip,
+  DATE_CHIP_ROW,
+  DATE_CHIP_SCROLL,
+} from "@/components/shared/DeliveryDateChip";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -32,7 +38,6 @@ import {
 } from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
-const GREEN = "#28402B";
 const LINK_BLUE = "#3B82F6";
 const CHIP_WINDOW_SIZE = 3;
 
@@ -158,7 +163,7 @@ function RejectImageDrawer({
           <div className="text-[15px] font-medium text-[#111118]">
             {item.source}
           </div>
-          <div className="mt-0.5 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+          <div className="mt-0.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             Source
           </div>
         </div>
@@ -701,7 +706,7 @@ function CheckOrderView({
               <ScrollTable minWidth={900} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#9A9A9A] uppercase",
+                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                     col,
                   )}
                 >
@@ -1203,7 +1208,7 @@ export default function DistributorDeliveriesPage() {
             <div className="relative w-full sm:w-[220px]">
               <Search
                 size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#A9A9A9]"
+                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
               />
               <Input
                 value={search}
@@ -1217,6 +1222,7 @@ export default function DistributorDeliveriesPage() {
               value={productFilter}
               onChange={setProductFilter}
               aria-label="All products"
+              className="w-full sm:w-[140px]"
               options={[
                 { value: "", label: "All products" },
                 ...productOptions.map((name) => ({
@@ -1229,6 +1235,7 @@ export default function DistributorDeliveriesPage() {
               value={distributorFilter}
               onChange={setDistributorFilter}
               aria-label="All Distributors"
+              className="w-full sm:w-[160px]"
               options={[
                 { value: "", label: "All Distributors" },
                 ...distributorOptions.map((name) => ({
@@ -1243,68 +1250,44 @@ export default function DistributorDeliveriesPage() {
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            {visibleChips.map((chip) => {
-              const active = activeDateId === chip.id;
-              return (
-                <button
-                  key={chip.id}
-                  type="button"
-                  onClick={() => selectDeliveryDate(chip.id)}
-                  className={cn(
-                    "inline-flex min-h-10 items-center gap-2.5 rounded-[12px] border px-3.5 py-2 text-left",
-                    active
-                      ? "border-transparent text-white"
-                      : "border-[#ECECEA] bg-white text-[#111118]",
-                  )}
-                  style={active ? { background: GREEN } : undefined}
-                >
-                  <span className="text-[13px] font-semibold">{chip.label}</span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      active
-                        ? "bg-[#3D5A40] text-white"
-                        : "bg-[#F3F3F1] text-[#6B6B6B]",
-                    )}
-                  >
-                    {chip.count}
-                  </span>
-                </button>
-              );
-            })}
+          <div className={DATE_CHIP_ROW}>
+            <div className={DATE_CHIP_SCROLL}>
+              {visibleChips.map((chip) => {
+                const active = activeDateId === chip.id;
+                return (
+                  <DeliveryDateChip
+                    key={chip.id}
+                    label={chip.label}
+                    count={chip.count}
+                    active={active}
+                    onClick={() => selectDeliveryDate(chip.id)}
+                  />
+                );
+              })}
+            </div>
 
-            <div className="relative ml-auto flex items-center gap-2">
-              <button
-                type="button"
+            <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+              <DateNavButton
                 aria-label="Previous dates"
                 disabled={!canShiftBack}
                 onClick={() => shiftChipWindow(-1)}
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A] disabled:opacity-40"
               >
-                <ChevronLeft size={16} />
-              </button>
-              <button
-                type="button"
+                <ChevronLeft size={14} />
+              </DateNavButton>
+              <DateNavButton
                 aria-label="Next dates"
                 disabled={!canShiftForward}
                 onClick={() => shiftChipWindow(1)}
-                className="flex size-10 items-center justify-center rounded-[8px] border border-[#ECECEA] bg-white text-[#8A8A8A] disabled:opacity-40"
               >
-                <ChevronRight size={16} />
-              </button>
-              <button
-                type="button"
+                <ChevronRight size={14} />
+              </DateNavButton>
+              <DateNavButton
                 aria-label="Open calendar"
                 aria-expanded={calendarOpen}
                 onClick={() => setCalendarOpen((open) => !open)}
-                className={cn(
-                  "flex size-10 items-center justify-center rounded-[8px] border bg-white text-[#8A8A8A]",
-                  calendarOpen ? "border-[#28402B]" : "border-[#ECECEA]",
-                )}
               >
-                <Calendar size={16} />
-              </button>
+                <CalendarIcon />
+              </DateNavButton>
               {calendarOpen ? (
                 <DeliveryDateCalendar
                   selectedDateId={activeDateId}

@@ -320,7 +320,7 @@ export default function PushNotificationsPage() {
 
             <div className="space-y-4 px-6 pt-5 pb-5">
               <div>
-                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
                   Data Trigger
                 </Label>
                 <Select
@@ -342,7 +342,7 @@ export default function PushNotificationsPage() {
               </div>
 
               <div>
-                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
                   Scheduled for
                 </Label>
                 <Select
@@ -371,7 +371,7 @@ export default function PushNotificationsPage() {
               </div>
 
               <div>
-                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
                   Header / Subject Line
                 </Label>
                 <Input
@@ -387,7 +387,7 @@ export default function PushNotificationsPage() {
               </div>
 
               <div>
-                <Label className="mb-1.5 text-[13px] font-medium text-[#111118]">
+                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
                   Content Body
                 </Label>
                 <Textarea

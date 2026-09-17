@@ -10,12 +10,19 @@ type HeaderProps = {
   /** Optional content below the filter subheader (e.g. tabs). */
   below?: ReactNode;
   className?: string;
+  toolbarBorder?: boolean;
 };
 
 const ROW =
   "flex min-h-[52px] items-center bg-white px-4 md:h-[52px] md:px-7";
 
-export function Header({ title, toolbar, below, className }: HeaderProps) {
+export function Header({
+  title,
+  toolbar,
+  below,
+  className,
+  toolbarBorder = true,
+}: HeaderProps) {
   return (
     <div className={cn("shrink-0", className)}>
       <header className={cn(ROW, "justify-between gap-4 border-b border-border")}>
@@ -29,7 +36,8 @@ export function Header({ title, toolbar, below, className }: HeaderProps) {
         <div
           className={cn(
             ROW,
-            "border-b border-border py-3.5 md:h-[64px] md:py-3",
+            "py-3.5 md:h-[64px] md:py-3",
+            toolbarBorder && "border-b border-border",
           )}
         >
           <div className="flex w-full min-w-0 items-center">{toolbar}</div>

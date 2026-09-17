@@ -344,7 +344,7 @@ export default function RolesPage() {
           minWidth={820}
           className="rounded-[12px] border border-[#ECECEA] bg-white"
         >
-          <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-medium tracking-[0.06em] text-[#6B7180] uppercase">
+          <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div />
             <div>ID</div>
             <div>Name</div>
@@ -418,7 +418,7 @@ export default function RolesPage() {
                       <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                         {ROLE_PERMISSION_GROUPS.map((group) => (
                           <div key={group.label}>
-                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#111118] uppercase">
+                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                               {group.label}
                             </h3>
                             <div className="space-y-2.5">
@@ -506,7 +506,7 @@ export default function RolesPage() {
 
             <div className="space-y-4 px-6 pt-5 pb-5">
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Name
                 </label>
                 <Input
@@ -526,7 +526,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Email
                 </label>
                 <Input
@@ -547,7 +547,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   {draft.id ? "Set a New Password" : "Set Password"}
                 </label>
                 <div className="relative">
@@ -588,7 +588,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Phone
                 </label>
                 <Input
@@ -608,7 +608,7 @@ export default function RolesPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-[13px] font-medium text-[#111118]">
+                <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Role Name
                 </label>
                 <Select

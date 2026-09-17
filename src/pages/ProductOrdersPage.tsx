@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  Calendar,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -14,6 +13,12 @@ import {
 import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow";
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { UserMenu } from "@/components/layout/UserMenu";
+import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DeliveryDateChip,
+  DATE_CHIP_ROW,
+  DATE_CHIP_SCROLL,
+} from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -72,7 +77,6 @@ import {
 } from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
-const GREEN = "#2B5B31";
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
 const DEFAULT_DELIVERY_DATE_ID = "2026-07-14";
 const CHIP_WINDOW_SIZE = 3;
@@ -690,9 +694,14 @@ export default function ProductOrdersPage() {
         <div className="shrink-0 border-b border-[#ECECEA] bg-white">
           <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
             <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
-              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-                Distributor Orders
-              </h1>
+              <div className="flex items-center justify-between gap-3">
+                <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
+                  Distributor Orders
+                </h1>
+                <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+                  <UserMenu className="items-center" />
+                </div>
+              </div>
               <div className="flex h-full items-center gap-6 sm:gap-8">
                 {(["Orders", "Delivered"] as const).map((name) => (
                   <button
@@ -716,7 +725,7 @@ export default function ProductOrdersPage() {
                   </button>
                 ))}
               </div>
-              <div className="flex justify-end border-l border-[#ECECEA] pl-5 lg:justify-self-end">
+              <div className="hidden justify-end border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
                 <UserMenu className="items-center" />
               </div>
             </div>
@@ -740,7 +749,7 @@ export default function ProductOrdersPage() {
                   onChange={setProductFilter}
                   placeholder="All products"
                   aria-label="All products"
-                  className="w-[140px]"
+                  className="w-full sm:w-[140px]"
                   options={[
                     { value: "", label: "All products" },
                     ...productOptions,
@@ -752,7 +761,7 @@ export default function ProductOrdersPage() {
                     onChange={setDistributorFilter}
                     placeholder="All Distributors"
                     aria-label="All Distributors"
-                    className="w-[160px]"
+                    className="w-full sm:w-[160px]"
                     options={[
                       { value: "", label: "All Distributors" },
                       ...distributorOptions.map((name) => ({
@@ -762,13 +771,18 @@ export default function ProductOrdersPage() {
                     ]}
                   />
                 ) : null}
-                <div className="ml-auto flex flex-wrap items-center gap-2 sm:flex-nowrap">
+                <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
                   <ExportButton
                     entityLabel="orders"
                     recordCount={exportCount}
                     filtersActive={exportFiltersActive}
+                    className="w-full sm:w-auto"
                   />
-                  <Button variant="primary" onClick={openManualFlow}>
+                  <Button
+                    variant="primary"
+                    onClick={openManualFlow}
+                    className="w-full sm:w-auto"
+                  >
                     <Plus className="size-3.5" />
                     Create Order
                   </Button>
@@ -781,7 +795,7 @@ export default function ProductOrdersPage() {
                   onChange={setDeliveredZipFilter}
                   placeholder="ZIP Code"
                   aria-label="ZIP Code"
-                  className="w-[130px]"
+                  className="w-full sm:w-[130px]"
                   options={[
                     { value: "", label: "ZIP Code" },
                     ...deliveredZipOptions.map((zip) => ({
@@ -795,7 +809,7 @@ export default function ProductOrdersPage() {
                   onChange={setDeliveredDateFilter}
                   placeholder="Select Date"
                   aria-label="Select Date"
-                  className="w-[190px]"
+                  className="w-full sm:w-[190px]"
                   options={[
                     { value: "", label: "Select Date" },
                     ...deliveredDateOptions.map((day) => ({
@@ -809,7 +823,7 @@ export default function ProductOrdersPage() {
                   onChange={setDeliveredStatusFilter}
                   placeholder="Status"
                   aria-label="Status"
-                  className="w-[130px]"
+                  className="w-full sm:w-[130px]"
                   options={[
                     { value: "", label: "Status" },
                     ...DELIVERED_ORDER_STATUSES.map((status) => ({
@@ -827,7 +841,7 @@ export default function ProductOrdersPage() {
                   }
                   placeholder="Sort by"
                   aria-label="Sort by"
-                  className="w-[140px]"
+                  className="w-full sm:w-[140px]"
                   options={DELIVERED_SORT_OPTIONS.map((option) => ({
                     value: option.value,
                     label: option.label,
@@ -847,72 +861,43 @@ export default function ProductOrdersPage() {
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-7">
           {tab === "Orders" ? (
             <>
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+              <div className={DATE_CHIP_ROW}>
+                <div className={DATE_CHIP_SCROLL}>
                   {visibleDeliveryChips.map((chip) => {
                     const active = chip.id === activeDeliveryDateId;
                     return (
-                      <button
+                      <DeliveryDateChip
                         key={chip.id}
-                        type="button"
+                        label={chip.label}
+                        count={chip.count}
+                        active={active}
                         onClick={() => selectDeliveryDate(chip.id)}
-                        className={cn(
-                          "inline-flex min-w-[128px] items-center justify-between gap-3 rounded-[12px] border px-4 py-3",
-                          active
-                            ? "border-transparent text-white"
-                            : "border-[#ECECEA] bg-white text-[#111118]",
-                        )}
-                        style={active ? { backgroundColor: GREEN } : undefined}
-                      >
-                        <span className="text-[13px] font-semibold">
-                          {chip.label}
-                        </span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                            active
-                              ? "bg-white/20 text-white"
-                              : "bg-[#F3F3F1] text-[#6B6B6B]",
-                          )}
-                        >
-                          {chip.count}
-                        </span>
-                      </button>
+                      />
                     );
                   })}
                 </div>
-                <div className="relative z-20 flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#D8D8D4] bg-white text-[#5A5A5A] shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
+                  <DateNavButton
                     aria-label="Previous dates"
                     disabled={!canShiftChipsBack}
                     onClick={() => shiftChipWindow(-1)}
                   >
-                    <ChevronLeft className="size-4" strokeWidth={2} />
-                  </button>
-                  <button
-                    type="button"
-                    className="flex size-9 shrink-0 items-center justify-center rounded-full border border-[#D8D8D4] bg-white text-[#5A5A5A] shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                    <ChevronLeft size={14} />
+                  </DateNavButton>
+                  <DateNavButton
                     aria-label="Next dates"
                     disabled={!canShiftChipsForward}
                     onClick={() => shiftChipWindow(1)}
                   >
-                    <ChevronRight className="size-4" strokeWidth={2} />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCalendarOpen((v) => !v)}
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-full border bg-white shadow-sm",
-                      calendarOpen
-                        ? "border-[#242424] bg-[#242424] text-white"
-                        : "border-[#D8D8D4] text-[#5A5A5A]",
-                    )}
+                    <ChevronRight size={14} />
+                  </DateNavButton>
+                  <DateNavButton
                     aria-label="Calendar"
+                    aria-expanded={calendarOpen}
+                    onClick={() => setCalendarOpen((v) => !v)}
                   >
-                    <Calendar className="size-4" strokeWidth={2} />
-                  </button>
+                    <CalendarIcon />
+                  </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
                       deliveryWeekdays={deliveryWeekdays}

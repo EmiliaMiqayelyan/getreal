@@ -146,7 +146,7 @@ export function ManageSubcategoriesModal({
 
         <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div>
-            <label className="mb-1.5 block text-[12px] font-medium text-[#000000]">
+            <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
               Add subcategory
             </label>
             <div className="flex gap-2">
@@ -183,7 +183,7 @@ export function ManageSubcategoriesModal({
           ) : null}
 
           <div>
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Existing
             </p>
             {options.length === 0 ? (

@@ -20,7 +20,7 @@ import {
 
 const PAYMENT_TERMS = ["NET-15", "NET-30", "NET-35"] as const;
 const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
-const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
+const FIELD_LABEL = "text-[11px] font-semibold text-[#2E2E2E]";
 
 function AccentRadio({ checked }: { checked: boolean }) {
   return (
@@ -274,7 +274,7 @@ export function AddDistributorModal({
           className="flex-1 space-y-0 overflow-auto overscroll-contain px-[30px] pt-6 pb-5"
         >
           <section>
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Company Information
             </h3>
             <div className="space-y-3">
@@ -405,7 +405,7 @@ export function AddDistributorModal({
           </section>
 
           <section data-field="payment" className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Payment Terms
             </h3>
             <div
@@ -446,7 +446,7 @@ export function AddDistributorModal({
 
           <section data-field="contacts" className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Contact Information
               </h3>
               <button
@@ -601,7 +601,7 @@ export function AddDistributorModal({
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Documents
               </h3>
               <Button
@@ -705,7 +705,7 @@ export function AddDistributorModal({
           </section>
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Notes
             </h3>
             <textarea

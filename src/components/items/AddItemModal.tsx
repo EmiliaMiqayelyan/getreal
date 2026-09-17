@@ -47,7 +47,7 @@ import {
 } from "@/utils/itemPricing";
 import { subcategoriesForCategory } from "@/utils/subcategories";
 
-const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
+const FIELD_LABEL = "text-[11px] font-semibold text-[#2E2E2E]";
 const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
 /** Read-only calculated fields - solid gray, no border (matches design). */
 const READONLY_FIELD =
@@ -328,7 +328,7 @@ export function AddItemModal({
 
         <div className="flex-1 space-y-6 overflow-auto px-6 pt-4 pb-5">
           <section>
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Basic Info
             </h3>
             <div className="space-y-3">
@@ -487,7 +487,7 @@ export function AddItemModal({
           </section>
 
           <section className="border-t border-[#ECECEA] pt-5">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Merchandising
             </h3>
             <div className="space-y-3">
@@ -544,7 +544,7 @@ export function AddItemModal({
 
               <div data-field="photos">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#000000] uppercase">
+                  <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                     Upload Item Photos
                   </h4>
                   <div className="flex items-center gap-3">
@@ -629,7 +629,7 @@ export function AddItemModal({
           </section>
 
           <section className="border-t border-[#ECECEA] pt-5">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Pricing
             </h3>
             <div className="space-y-3">

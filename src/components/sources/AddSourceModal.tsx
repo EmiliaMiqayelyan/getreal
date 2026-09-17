@@ -19,7 +19,7 @@ import {
 } from "@/utils/sourceForm";
 import { getSourceDistributorSelection } from "@/utils/sources";
 
-const FIELD_LABEL = "text-[12px] font-medium text-[#000000]";
+const FIELD_LABEL = "text-[11px] font-semibold text-[#2E2E2E]";
 const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
 
 type AddSourceModalProps = {
@@ -240,7 +240,7 @@ export function AddSourceModal({
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 Image Place
               </h3>
               <Button
@@ -299,7 +299,7 @@ export function AddSourceModal({
           </section>
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Description
             </h3>
             <textarea

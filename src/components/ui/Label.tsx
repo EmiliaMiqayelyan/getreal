@@ -10,7 +10,7 @@ export function Label({ children, className, ...props }: LabelProps) {
   return (
     <label
       className={cn(
-        "text-foreground mb-1.5 block text-sm font-medium",
+        "mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]",
         className,
       )}
       {...props}
@@ -33,7 +33,7 @@ export function SectionTitle({
 }: SectionTitleProps) {
   return (
     <div className={cn("mb-3 flex items-center justify-between", className)}>
-      <h3 className="text-muted text-[11px] font-semibold tracking-[0.08em] uppercase">
+      <h3 className="text-[11px] font-semibold tracking-[0.08em] text-[#2E2E2E] uppercase">
         {children}
       </h3>
       {action}

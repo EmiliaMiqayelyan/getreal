@@ -158,7 +158,7 @@ export function ExportButton({
             className="absolute top-[calc(100%+6px)] right-0 z-50 w-[220px] rounded-[10px] border border-[#ECECEA] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           >
             <div className="border-b border-[#F0F0EE] px-3 py-2">
-              <div className="text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <div className="text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
                 Export format
               </div>
               {typeof recordCount === "number" ? (
@@ -210,7 +210,7 @@ export function ExportButton({
             </div>
 
             <fieldset className="mb-3 space-y-1.5">
-              <legend className="mb-1.5 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase">
+              <legend className="mb-1.5 text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
                 Include
               </legend>
               <ScopeOption
