@@ -74,6 +74,10 @@ export const productsApi = {
     });
   },
 
+  remove(id: string) {
+    return apiRequest<void>(`/products/${id}`, { method: "DELETE" });
+  },
+
   listAllSuppliersHistory() {
     return apiRequest<unknown>("/products/suppliers");
   },

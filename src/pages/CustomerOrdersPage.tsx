@@ -23,6 +23,7 @@ import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   isApiConfigured,
@@ -673,6 +674,7 @@ export default function CustomerOrdersPage() {
   useDocumentTitle("Customer Orders");
 
   const { packingByCode } = usePackingHandoff();
+  const { notifyApiError } = useApiFeedback();
 
   const [orders, setOrders] = useState(ACTIVE_ORDERS);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
@@ -755,12 +757,15 @@ export default function CustomerOrdersPage() {
           return Array.from(byId.values());
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load customer orders.");
+      });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [notifyApiError]);
 
   useEffect(() => {
     if (!statusMenu) return;

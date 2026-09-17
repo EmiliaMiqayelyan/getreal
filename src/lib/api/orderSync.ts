@@ -3,7 +3,9 @@ import type { ProductForSale } from "@/types/productForSale";
 import type { ReviewGroup } from "@/types/distributorOrder";
 
 import { isApiConfigured } from "./client";
+import { formatApiError } from "./errors";
 import { ordersApi } from "./orders";
+import { toastFromApi } from "@/lib/toastBridge";
 
 /**
  * Push a distributor review group to POST /orders.
@@ -17,9 +19,16 @@ export function syncReviewGroupOrder(
   if (!isApiConfigured()) return;
 
   const distributor = distributors.find(
-    (entry) => entry.name === group.distributor || entry.id === group.distributor,
+    (entry) =>
+      entry.name === group.distributor || entry.id === group.distributor,
   );
-  if (!distributor?.id) return;
+  if (!distributor?.id) {
+    toastFromApi(
+      `Could not sync order: distributor "${group.distributor}" has no API id.`,
+      "error",
+    );
+    return;
+  }
 
   const items = group.items
     .map((line) => {
@@ -28,7 +37,7 @@ export function syncReviewGroupOrder(
           (entry) =>
             entry.merchandisingName === line.itemName ||
             entry.id === line.itemName,
-        ) ?? products[0];
+        ) ?? null;
       if (!product?.id) return null;
       return {
         productId: product.id,
@@ -46,7 +55,13 @@ export function syncReviewGroupOrder(
       } => Boolean(entry),
     );
 
-  if (items.length === 0) return;
+  if (items.length === 0) {
+    toastFromApi(
+      "Could not sync order: no matching products for sale were found.",
+      "error",
+    );
+    return;
+  }
 
   void ordersApi
     .create({
@@ -55,7 +70,7 @@ export function syncReviewGroupOrder(
       communicationChannel: "quickbooks",
       items,
     })
-    .catch(() => {
-      // UI keeps local order state if API fails.
+    .catch((error) => {
+      toastFromApi(formatApiError(error, "Failed to sync distributor order."), "error");
     });
 }

@@ -1,5 +1,7 @@
 import {
+  ApiError,
   authApi,
+  getAuthToken,
   isApiConfigured,
   setAuthToken,
 } from "@/lib/api";
@@ -18,7 +20,7 @@ export const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
 
 export type AppRole = "superadmin" | "warehouse";
 
-/** Demo credentials when VITE_API_URL is empty. */
+/** Demo credentials when VITE_API_URL is empty (offline / local-only mode). */
 export const DEMO_ACCOUNTS = {
   superadmin: {
     username: "admin",
@@ -31,6 +33,18 @@ export const DEMO_ACCOUNTS = {
     password: "getreal",
     role: "warehouse" as const,
     home: "/distributor-deliveries",
+  },
+} as const;
+
+/** Backend accounts used when the API is configured. */
+export const API_LOGIN_HINTS = {
+  superadmin: {
+    email: "admin@example.com",
+    password: "password123",
+  },
+  warehouse: {
+    email: "warehouse@example.com",
+    password: "password123",
   },
 } as const;
 
@@ -64,9 +78,28 @@ export function isIdleExpired(): boolean {
   return Date.now() - last > IDLE_TIMEOUT_MS;
 }
 
+function clearSessionStorage(): void {
+  try {
+    localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(ROLE_STORAGE_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
+    localStorage.removeItem(USER_NAME_KEY);
+    setAuthToken(null);
+  } catch {
+    // no-op
+  }
+}
+
 export function isAuthenticated(): boolean {
   try {
     if (localStorage.getItem(AUTH_STORAGE_KEY) !== "1") return false;
+
+    // When API is configured, a Bearer token is required for authorized calls.
+    if (isApiConfigured() && !getAuthToken()) {
+      clearSessionStorage();
+      return false;
+    }
+
     const last = readLastActive();
     if (!last) {
       touchActivity();
@@ -127,61 +160,105 @@ function loginLocal(username: string, password: string): AppRole | null {
   return account.role;
 }
 
+function extractLoginToken(response: unknown): string {
+  if (!response || typeof response !== "object") return "";
+  const record = response as Record<string, unknown>;
+  if (typeof record.token === "string" && record.token) return record.token;
+  if (typeof record.accessToken === "string" && record.accessToken) {
+    return record.accessToken;
+  }
+  return "";
+}
+
+function extractLoginUser(response: unknown): {
+  role?: string;
+  name?: string;
+  email?: string;
+} {
+  if (!response || typeof response !== "object") return {};
+  const user = (response as { user?: Record<string, unknown> }).user;
+  if (!user || typeof user !== "object") return {};
+  return {
+    role: typeof user.role === "string" ? user.role : undefined,
+    name: typeof user.name === "string" ? user.name : undefined,
+    email: typeof user.email === "string" ? user.email : undefined,
+  };
+}
+
+export type LoginResult =
+  | { ok: true; role: AppRole }
+  | { ok: false; message: string };
+
+/**
+ * Authenticate against the backend when VITE_API_URL is set.
+ * Stores the JWT and uses it for subsequent Authorization headers.
+ * Demo local login is only used when the API is not configured.
+ */
 export async function login(
   username: string,
   password: string,
-): Promise<AppRole | null> {
+): Promise<LoginResult> {
   if (!isApiConfigured()) {
-    return loginLocal(username, password);
+    const role = loginLocal(username, password);
+    if (!role) {
+      return { ok: false, message: "Invalid username or password." };
+    }
+    return { ok: true, role };
   }
 
   const email = usernameToLoginEmail(username);
 
   try {
     const response = await authApi.login({ email, password });
-    const token =
-      typeof response === "object" && response && "token" in response
-        ? String((response as { token: string }).token)
-        : "";
+    const token = extractLoginToken(response);
 
-    if (!token) return null;
+    if (!token) {
+      return {
+        ok: false,
+        message: "Login succeeded but no auth token was returned.",
+      };
+    }
 
     setAuthToken(token);
     localStorage.setItem(AUTH_STORAGE_KEY, "1");
 
-    const apiRole =
-      typeof response === "object" && response && "user" in response
-        ? (response as { user?: { role?: string; name?: string } }).user?.role
-        : undefined;
-    const displayName =
-      typeof response === "object" && response && "user" in response
-        ? (response as { user?: { name?: string } }).user?.name
-        : undefined;
-
-    const role = mapApiRoleToAppRole(apiRole);
+    const user = extractLoginUser(response);
+    const role = mapApiRoleToAppRole(user.role);
     localStorage.setItem(ROLE_STORAGE_KEY, role);
-    if (displayName) localStorage.setItem(USER_NAME_KEY, displayName);
+    localStorage.setItem(
+      USER_NAME_KEY,
+      user.name || user.email || email,
+    );
     touchActivity();
-    return role;
-  } catch {
-    return loginLocal(username, password);
+    return { ok: true, role };
+  } catch (error) {
+    clearSessionStorage();
+    if (error instanceof ApiError) {
+      return {
+        ok: false,
+        message: error.message || "Invalid email or password.",
+      };
+    }
+    return {
+      ok: false,
+      message: "Unable to reach the server. Please try again.",
+    };
   }
 }
 
+/** Clear local session after a 401 from an authenticated API call. */
+export function clearAuthOnUnauthorized(): void {
+  clearSessionStorage();
+}
+
 export function logout(): void {
-  if (isApiConfigured()) {
+  const hadToken = Boolean(getAuthToken());
+
+  if (isApiConfigured() && hadToken) {
     void authApi.logout().catch(() => {
       // ignore network errors on logout
     });
   }
 
-  try {
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(ROLE_STORAGE_KEY);
-    localStorage.removeItem(LAST_ACTIVE_KEY);
-    localStorage.removeItem(USER_NAME_KEY);
-    setAuthToken(null);
-  } catch {
-    // no-op
-  }
+  clearSessionStorage();
 }

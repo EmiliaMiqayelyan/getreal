@@ -11,6 +11,7 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { isApiConfigured, itemsApi, categoriesApi } from "@/lib/api";
 import { mapApiItemToItem } from "@/lib/api/mappers";
@@ -144,6 +145,7 @@ export default function ItemsPage() {
   useDocumentTitle("Items");
 
   const { items: rows, setItems } = useAppCatalog();
+  const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -221,9 +223,13 @@ export default function ItemsPage() {
   function handleRemoveItem() {
     if (!editing) return;
     const id = editing.id;
+    const previous = rows;
     setItems((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void itemsApi.remove(id).catch(() => {});
+      void itemsApi.remove(id).catch((error) => {
+        setItems(previous);
+        notifyApiError(error, "Failed to delete item.");
+      });
     }
   }
 
@@ -552,11 +558,12 @@ export default function ItemsPage() {
                     ...current,
                   ]);
                 }
+                showSuccess(editing ? "Item updated." : "Item created.");
                 closeModal();
                 return;
-              } catch {
-                // Fall through to local-only save when Items API fails
-                // (currently 500 on backend: missing sub_category column).
+              } catch (error) {
+                notifyApiError(error, "Failed to save item.");
+                return;
               }
             }
 

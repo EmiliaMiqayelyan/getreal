@@ -10,6 +10,7 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import {
   isApiConfigured,
   mapApiUserToAdminCustomer,
@@ -608,6 +609,7 @@ function CustomerTable({
 export default function CustomersPage() {
   useDocumentTitle("Customers");
 
+  const { notifyApiError } = useApiFeedback();
   const [customers, setCustomers] = useState(ADMIN_CUSTOMERS);
   const [query, setQuery] = useState("");
   const [zipFilter, setZipFilter] = useState("");
@@ -630,14 +632,15 @@ export default function CustomersPage() {
         // Prefer live API customers over local mock seeds.
         setCustomers(mapped);
       })
-      .catch(() => {
-        // Keep ADMIN_CUSTOMERS seed.
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load customers.");
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [notifyApiError]);
 
   const zipOptions = useMemo(
     () =>

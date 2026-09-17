@@ -8,7 +8,9 @@ import { BrandLogo } from "@/components/layout/BrandLogo";
 import { APP_NAME } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { isApiConfigured } from "@/lib/api";
 import {
+  API_LOGIN_HINTS,
   DEMO_ACCOUNTS,
   getHomeRoute,
   isAuthenticated,
@@ -22,6 +24,7 @@ export default function LoginPage() {
   const formId = useId();
   const usernameId = `${formId}-username`;
   const passwordId = `${formId}-password`;
+  const apiMode = isApiConfigured();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -37,15 +40,15 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
 
-    const role = await login(username, password);
+    const result = await login(username, password);
     setSubmitting(false);
 
-    if (!role) {
-      setError("Invalid username or password.");
+    if (!result.ok) {
+      setError(result.message);
       return;
     }
 
-    navigate(getRoleHome(role), { replace: true });
+    navigate(getRoleHome(result.role), { replace: true });
   }
 
   return (
@@ -87,20 +90,27 @@ export default function LoginPage() {
                 Sign in
               </h2>
               <p className="text-muted mt-1.5 text-sm">
-                Enter your credentials to continue
+                {apiMode
+                  ? "Use your backend account email and password"
+                  : "Enter your credentials to continue"}
               </p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>
-                <Label htmlFor={usernameId}>Username</Label>
+                <Label htmlFor={usernameId}>
+                  {apiMode ? "Email" : "Username"}
+                </Label>
                 <Input
                   id={usernameId}
                   name="username"
+                  type={apiMode ? "email" : "text"}
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="Enter username"
+                  placeholder={
+                    apiMode ? "admin@example.com" : "Enter username"
+                  }
                   className="w-full"
                   required
                 />
@@ -133,26 +143,53 @@ export default function LoginPage() {
             </form>
 
             <div className="text-muted mt-6 space-y-1.5 text-center text-xs leading-relaxed">
-              <p>
-                Super Admin:{" "}
-                <span className="text-muted-strong font-medium">
-                  {DEMO_ACCOUNTS.superadmin.username}
-                </span>{" "}
-                /{" "}
-                <span className="text-muted-strong font-medium">
-                  {DEMO_ACCOUNTS.superadmin.password}
-                </span>
-              </p>
-              <p>
-                Warehouse:{" "}
-                <span className="text-muted-strong font-medium">
-                  {DEMO_ACCOUNTS.warehouse.username}
-                </span>{" "}
-                /{" "}
-                <span className="text-muted-strong font-medium">
-                  {DEMO_ACCOUNTS.warehouse.password}
-                </span>
-              </p>
+              {apiMode ? (
+                <>
+                  <p>
+                    Admin:{" "}
+                    <span className="text-muted-strong font-medium">
+                      {API_LOGIN_HINTS.superadmin.email}
+                    </span>{" "}
+                    /{" "}
+                    <span className="text-muted-strong font-medium">
+                      {API_LOGIN_HINTS.superadmin.password}
+                    </span>
+                  </p>
+                  <p>
+                    Warehouse:{" "}
+                    <span className="text-muted-strong font-medium">
+                      {API_LOGIN_HINTS.warehouse.email}
+                    </span>{" "}
+                    /{" "}
+                    <span className="text-muted-strong font-medium">
+                      {API_LOGIN_HINTS.warehouse.password}
+                    </span>
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p>
+                    Super Admin:{" "}
+                    <span className="text-muted-strong font-medium">
+                      {DEMO_ACCOUNTS.superadmin.username}
+                    </span>{" "}
+                    /{" "}
+                    <span className="text-muted-strong font-medium">
+                      {DEMO_ACCOUNTS.superadmin.password}
+                    </span>
+                  </p>
+                  <p>
+                    Warehouse:{" "}
+                    <span className="text-muted-strong font-medium">
+                      {DEMO_ACCOUNTS.warehouse.username}
+                    </span>{" "}
+                    /{" "}
+                    <span className="text-muted-strong font-medium">
+                      {DEMO_ACCOUNTS.warehouse.password}
+                    </span>
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>

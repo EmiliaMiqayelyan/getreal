@@ -16,6 +16,7 @@ import {
   relinkProductToItem,
 } from "@/constants/productsForSale";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   isApiConfigured,
@@ -327,6 +328,7 @@ export default function ProductsForSalePage() {
     sources,
     subcategoriesByCategory,
   } = useAppCatalog();
+  const { notifyApiError, showSuccess } = useApiFeedback();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -401,7 +403,15 @@ export default function ProductsForSalePage() {
       current?.id === id ? { ...current, live } : current,
     );
     if (isApiConfigured()) {
-      void productsApi.update(id, { isLive: live }).catch(() => {});
+      void productsApi.update(id, { isLive: live }).catch((error) => {
+        setProducts((current) =>
+          current.map((row) => (row.id === id ? { ...row, live: !live } : row)),
+        );
+        setViewing((current) =>
+          current?.id === id ? { ...current, live: !live } : current,
+        );
+        notifyApiError(error, "Failed to update live status.");
+      });
     }
   }
 
@@ -413,6 +423,7 @@ export default function ProductsForSalePage() {
     visibleIds: string[],
   ) {
     setProducts((current) => {
+      const previous = current;
       const next = reorderProductsInSubcategory(
         current,
         category,
@@ -427,7 +438,10 @@ export default function ProductsForSalePage() {
           id: product.id,
           position: product.sortOrder ?? index,
         }));
-        void productsApi.reorder(positions).catch(() => {});
+        void productsApi.reorder(positions).catch((error) => {
+          setProducts(previous);
+          notifyApiError(error, "Failed to reorder products.");
+        });
       }
       return next;
     });
@@ -458,9 +472,11 @@ export default function ProductsForSalePage() {
             );
             setEditTarget(null);
             if (viewing?.id === editTarget.id) setViewing(merged);
+            showSuccess("Product updated.");
             return;
-          } catch {
-            // Fall through to local update.
+          } catch (error) {
+            notifyApiError(error, "Failed to update product.");
+            return;
           }
         }
         setProducts((current) =>
@@ -484,9 +500,11 @@ export default function ProductsForSalePage() {
           );
           const mapped = mapApiProductToProductForSale(created, 0, catalog);
           setProducts((current) => [...current, { ...draft, ...mapped }]);
+          showSuccess("Product added.");
           return;
-        } catch {
-          // Fall through to local create.
+        } catch (error) {
+          notifyApiError(error, "Failed to add product.");
+          return;
         }
       }
 
@@ -497,9 +515,19 @@ export default function ProductsForSalePage() {
   function handleRemoveProduct() {
     if (!editTarget) return;
     const id = editTarget.id;
+    const snapshot = editTarget;
     setProducts((current) => current.filter((row) => row.id !== id));
     setViewing((current) => (current?.id === id ? null : current));
-    // Backend collection has no DELETE /products; local remove only.
+    setEditTarget(null);
+    if (isApiConfigured()) {
+      void productsApi
+        .remove(id)
+        .then(() => showSuccess("Product removed."))
+        .catch((error) => {
+          setProducts((current) => [snapshot, ...current]);
+          notifyApiError(error, "Failed to remove product.");
+        });
+    }
   }
 
   return (

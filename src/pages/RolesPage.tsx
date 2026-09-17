@@ -10,6 +10,7 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
 import { useRolesUsers } from "@/context/RolesUsersContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
@@ -101,6 +102,7 @@ export default function RolesPage() {
 
   const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles, sessionPermissions } =
     useRolesUsers();
+  const { notifyApiError, showSuccess } = useApiFeedback();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
   >({});
@@ -225,7 +227,9 @@ export default function RolesPage() {
             role: mapRoleUserTypeToApiRole(draft.type),
             ...(draft.password ? { password: draft.password } : {}),
           })
-          .catch(() => {});
+          .catch((error) => {
+            notifyApiError(error, "Failed to update user on server.");
+          });
       }
     } else {
       let createdId: string | undefined;
@@ -238,8 +242,8 @@ export default function RolesPage() {
             role: mapRoleUserTypeToApiRole(draft.type),
           });
           createdId = created.id;
-        } catch {
-          // Fall through to local create.
+        } catch (error) {
+          notifyApiError(error, "Failed to create user on server.");
         }
       }
 
@@ -275,7 +279,9 @@ export default function RolesPage() {
     if (isApiConfigured()) {
       void usersApi
         .update(draft.id, { isBlocked: true })
-        .catch(() => {});
+        .catch((error) => {
+          notifyApiError(error, "Failed to delete user on server.");
+        });
     }
     // Soft-delete access: remove from active users; audit history elsewhere stays
     removeUser(draft.id);
@@ -671,14 +677,19 @@ export default function RolesPage() {
                     name: role.name,
                     permissions: [],
                   })
-                  .catch(() => {});
+                  .catch((error) => {
+                    notifyApiError(error, `Failed to create role "${role.name}".`);
+                  });
               } else {
                 void rolesApi
                   .update(role.id, { name: role.name })
-                  .catch(() => {});
+                  .catch((error) => {
+                    notifyApiError(error, `Failed to update role "${role.name}".`);
+                  });
               }
             }
           }
+          showSuccess("Roles saved");
           setToast("Roles saved");
           window.setTimeout(() => setToast(null), 2000);
         }}

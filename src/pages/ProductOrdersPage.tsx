@@ -36,6 +36,7 @@ import {
   SEED_IN_PROGRESS,
 } from "@/constants/distributorOrders";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { isApiConfigured, normalizeOrdersList, ordersApi } from "@/lib/api";
@@ -301,6 +302,7 @@ function ExpandableOrders({
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
   const { distributors, products } = useAppCatalog();
+  const { notifyApiError } = useApiFeedback();
 
   const [view, setView] = useState<View>("list");
   const [tab, setTab] = useState<Tab>("Orders");
@@ -601,8 +603,10 @@ export default function ProductOrdersPage() {
           appendInProgressOrders(prev, mapped, SEED_IN_PROGRESS),
         );
       })
-      .catch(() => {});
-  }, [distributors, products]);
+      .catch((error) => {
+        notifyApiError(error, "Failed to load distributor orders.");
+      });
+  }, [distributors, notifyApiError, products]);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);

@@ -18,10 +18,11 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
+import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { inventoryApi, isApiConfigured } from "@/lib/api";
-import { useAppCatalog } from "@/context/AppCatalogContext";
 import { cn } from "@/utils/cn";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 
@@ -1014,6 +1015,7 @@ export default function InventoryPage() {
   useDocumentTitle("Inventory");
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
   const { items: catalogItems } = useAppCatalog();
+  const { notifyApiError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("");
@@ -1073,12 +1075,15 @@ export default function InventoryPage() {
           ];
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load inventory.");
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [catalogItems]);
+  }, [catalogItems, notifyApiError]);
 
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {

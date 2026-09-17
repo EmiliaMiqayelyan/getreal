@@ -12,6 +12,12 @@ export { sourcesApi } from "./sources";
 export { inventoryApi } from "./inventory";
 export { getQuickBooksAuthUrl, getQuickBooksCallbackUrl } from "./quickbooks";
 export { mapApiRoleToAppRole, usernameToLoginEmail } from "./session";
+export {
+  formatApiError,
+  getApiFieldErrors,
+  isUnauthorizedError,
+} from "./errors";
+export type { ApiFieldErrors } from "./errors";
 export * from "./types";
 export * from "./mappers";
 export { normalizeNamedList, pickNamedEntity } from "./normalize";

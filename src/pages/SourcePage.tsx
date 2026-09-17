@@ -8,6 +8,7 @@ import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   isApiConfigured,
@@ -116,6 +117,7 @@ export default function SourcePage() {
   useDocumentTitle("Source");
 
   const { sources: rows, distributors, setSources } = useAppCatalog();
+  const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -163,9 +165,13 @@ export default function SourcePage() {
   function handleRemoveSource() {
     if (!editing) return;
     const id = editing.id;
+    const snapshot = editing;
     setSources((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void sourcesApi.remove(id).catch(() => {});
+      void sourcesApi.remove(id).catch((error) => {
+        setSources((current) => [snapshot, ...current]);
+        notifyApiError(error, "Failed to delete source.");
+      });
     }
   }
 
@@ -305,7 +311,13 @@ export default function SourcePage() {
         onRemove={handleRemoveSource}
         onSave={(source) => {
           void (async () => {
-            if (isApiConfigured() && source.distributorId) {
+            if (isApiConfigured()) {
+              if (!source.distributorId) {
+                notifyApiError(
+                  new Error("Select a distributor before saving to the server."),
+                );
+                return;
+              }
               try {
                 const payload = toCreateSourcePayload(source);
                 if (editing) {
@@ -345,10 +357,12 @@ export default function SourcePage() {
                     ...current,
                   ]);
                 }
+                showSuccess(editing ? "Source updated." : "Source created.");
                 closeModal();
                 return;
-              } catch {
-                // Fall through to local save.
+              } catch (error) {
+                notifyApiError(error, "Failed to save source.");
+                return;
               }
             }
 

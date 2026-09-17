@@ -71,13 +71,29 @@ export async function apiRequest<T>(
   const useAuth = options.auth !== false;
   if (useAuth) {
     const token = getAuthToken();
-    if (token) headers.set("Authorization", `Bearer ${token}`);
+    if (!token) {
+      throw new ApiError(
+        "You must be signed in to continue.",
+        401,
+        null,
+      );
+    }
+    headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(buildUrl(path), {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new ApiError(
+      "Unable to reach the server. Check your connection.",
+      0,
+      null,
+    );
+  }
 
   const text = await response.text();
   let json: unknown = null;
@@ -89,11 +105,46 @@ export async function apiRequest<T>(
     }
   }
 
+  if (response.status === 401 && useAuth) {
+    setAuthToken(null);
+    try {
+      localStorage.removeItem("getreal.auth");
+      localStorage.removeItem("getreal.role");
+      localStorage.removeItem("getreal.lastActive");
+      localStorage.removeItem("getreal.userName");
+    } catch {
+      // no-op
+    }
+  }
+
   if (!response.ok) {
-    const message =
+    let message =
       (json && typeof json === "object" && "message" in json
         ? String((json as { message?: string }).message)
         : null) ?? response.statusText;
+
+    // Prefer first validation detail when message is generic.
+    if (json && typeof json === "object" && "errors" in json) {
+      const errors = (json as { errors?: unknown }).errors;
+      if (Array.isArray(errors) && errors[0] && typeof errors[0] === "object") {
+        const first = errors[0] as { message?: string; field?: string };
+        if (first.message) {
+          message = first.field
+            ? `${first.field}: ${first.message}`
+            : first.message;
+        }
+      } else if (errors && typeof errors === "object") {
+        const firstEntry = Object.entries(errors as Record<string, unknown>)[0];
+        if (firstEntry) {
+          const [field, value] = firstEntry;
+          const detail = Array.isArray(value) ? value[0] : value;
+          if (typeof detail === "string" && detail) {
+            message = `${field}: ${detail}`;
+          }
+        }
+      }
+    }
+
     throw new ApiError(message || "Request failed", response.status, json);
   }
 

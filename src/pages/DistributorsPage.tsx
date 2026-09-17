@@ -8,6 +8,7 @@ import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   distributorsApi,
@@ -273,6 +274,7 @@ export default function DistributorsPage() {
 
   const { distributors: rows, saveDistributor, removeDistributor } =
     useAppCatalog();
+  const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
   const [weekdayFilter, setWeekdayFilter] = useState("");
@@ -312,9 +314,13 @@ export default function DistributorsPage() {
   function handleRemoveDistributor() {
     if (!editing) return;
     const id = editing.id;
+    const snapshot = editing;
     removeDistributor(id);
     if (isApiConfigured()) {
-      void distributorsApi.remove(id).catch(() => {});
+      void distributorsApi.remove(id).catch((error) => {
+        saveDistributor(snapshot, "create");
+        notifyApiError(error, "Failed to delete distributor.");
+      });
     }
   }
 
@@ -509,10 +515,14 @@ export default function DistributorsPage() {
                     "create",
                   );
                 }
+                showSuccess(
+                  editing ? "Distributor updated." : "Distributor created.",
+                );
                 closeModal();
                 return;
-              } catch {
-                // Fall through to local save.
+              } catch (error) {
+                notifyApiError(error, "Failed to save distributor.");
+                return;
               }
             }
 
