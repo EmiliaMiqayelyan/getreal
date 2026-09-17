@@ -1,5 +1,6 @@
 import { apiRequest } from "./client";
 import type { ApiRole } from "./types";
+import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type CreateRolePayload = {
   name: string;
@@ -15,25 +16,36 @@ export type UpdateRolePayload = {
 
 export const rolesApi = {
   list() {
-    return apiRequest<ApiRole[]>("/roles");
+    return apiRequest<unknown>("/roles").then((payload) =>
+      normalizeNamedList<ApiRole>(payload, ["roles", "items", "data", "results"]),
+    );
   },
 
   getById(id: string) {
-    return apiRequest<ApiRole>(`/roles/${id}`);
+    return apiRequest<unknown>(`/roles/${id}`).then(
+      (payload) =>
+        pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
+    );
   },
 
   create(body: CreateRolePayload) {
-    return apiRequest<ApiRole>("/roles", {
+    return apiRequest<unknown>("/roles", {
       method: "POST",
       body: JSON.stringify(body),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
+    );
   },
 
   update(id: string, body: UpdateRolePayload) {
-    return apiRequest<ApiRole>(`/roles/${id}`, {
+    return apiRequest<unknown>(`/roles/${id}`, {
       method: "PUT",
       body: JSON.stringify(body),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
+    );
   },
 
   remove(id: string) {

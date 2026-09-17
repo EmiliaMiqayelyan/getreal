@@ -8,6 +8,12 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  distributorsApi,
+  isApiConfigured,
+  mapApiDistributorToDistributor,
+} from "@/lib/api";
+import { toCreateDistributorPayload } from "@/lib/api/payloads";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
 import {
@@ -306,7 +312,11 @@ export default function DistributorsPage() {
 
   function handleRemoveDistributor() {
     if (!editing) return;
-    removeDistributor(editing.id);
+    const id = editing.id;
+    removeDistributor(id);
+    if (isApiConfigured()) {
+      void distributorsApi.remove(id).catch(() => {});
+    }
   }
 
   return (
@@ -472,16 +482,63 @@ export default function DistributorsPage() {
         onClose={closeModal}
         onRemove={handleRemoveDistributor}
         onSave={(distributor) => {
-          if (editing) {
-            saveDistributor(
-              { ...distributor, id: editing.id },
-              "update",
-              editing,
-            );
-            return;
-          }
-          const id = nextDistributorId(rows);
-          saveDistributor({ ...distributor, id }, "create");
+          void (async () => {
+            if (isApiConfigured()) {
+              try {
+                const payload = toCreateDistributorPayload(distributor);
+                if (editing) {
+                  const updated = await distributorsApi.update(
+                    editing.id,
+                    payload,
+                  );
+                  const mapped = mapApiDistributorToDistributor(updated, 0);
+                  saveDistributor(
+                    {
+                      ...distributor,
+                      ...mapped,
+                      id: editing.id,
+                      deliveryDays: distributor.deliveryDays,
+                      documents: distributor.documents,
+                      categories: distributor.categories,
+                      products: distributor.products,
+                    },
+                    "update",
+                    editing,
+                  );
+                } else {
+                  const created = await distributorsApi.create(payload);
+                  const mapped = mapApiDistributorToDistributor(created, 0);
+                  saveDistributor(
+                    {
+                      ...distributor,
+                      ...mapped,
+                      deliveryDays: distributor.deliveryDays,
+                      documents: distributor.documents,
+                      categories: distributor.categories,
+                      products: distributor.products,
+                    },
+                    "create",
+                  );
+                }
+                closeModal();
+                return;
+              } catch {
+                // Fall through to local save.
+              }
+            }
+
+            if (editing) {
+              saveDistributor(
+                { ...distributor, id: editing.id },
+                "update",
+                editing,
+              );
+            } else {
+              const id = nextDistributorId(rows);
+              saveDistributor({ ...distributor, id }, "create");
+            }
+            closeModal();
+          })();
         }}
       />
     </div>

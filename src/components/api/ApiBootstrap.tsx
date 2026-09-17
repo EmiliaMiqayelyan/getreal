@@ -3,15 +3,21 @@ import { useEffect } from "react";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import {
+  categoriesApi,
+  distributorsApi,
   isApiConfigured,
-  mapApiProductToItem,
+  itemsApi,
+  mapApiDistributorToDistributor,
+  mapApiItemToItem,
+  mapApiProductToProductForSale,
   mapApiRoleToManagedRole,
+  mapApiSourceToSource,
   mapApiUserToRoleUser,
-  normalizeProductsList,
   normalizeRolesList,
   normalizeUsersList,
   productsApi,
   rolesApi,
+  sourcesApi,
   usersApi,
 } from "@/lib/api";
 
@@ -29,7 +35,7 @@ function mergeById<T extends { id: string }>(seed: T[], api: T[]): T[] {
  * Falls back silently to seeded mock data on failure.
  */
 export function ApiBootstrap() {
-  const { setItems } = useAppCatalog();
+  const { setDistributors, setItems, setProducts, setSources } = useAppCatalog();
   const { setUsers, setManagedRoles } = useRolesUsers();
 
   useEffect(() => {
@@ -39,18 +45,66 @@ export function ApiBootstrap() {
 
     async function load() {
       try {
-        const [productsPayload, usersPayload, rolesPayload] = await Promise.all([
-          productsApi.list(),
-          usersApi.list({ page: 1, limit: 100 }),
-          rolesApi.list(),
+        const [
+          distributorsPayload,
+          sourcesPayload,
+          itemsPayload,
+          productsPayload,
+          categoriesPayload,
+          usersPayload,
+          rolesPayload,
+        ] = await Promise.all([
+          distributorsApi.list().catch(() => []),
+          sourcesApi.list().catch(() => []),
+          itemsApi.list().catch(() => []),
+          productsApi.list().catch(() => []),
+          categoriesApi.list().catch(() => []),
+          usersApi.list({ page: 1, limit: 100 }).catch(() => []),
+          rolesApi.list().catch(() => []),
         ]);
 
         if (cancelled) return;
 
-        const products = normalizeProductsList(productsPayload);
+        const apiDistributors = distributorsPayload.map(
+          mapApiDistributorToDistributor,
+        );
+        if (apiDistributors.length > 0) {
+          setDistributors((current) => mergeById(current, apiDistributors));
+        }
+
+        const distributorsById = new Map(
+          apiDistributors.map((entry) => [entry.id, entry.name] as const),
+        );
+
+        const apiSources = sourcesPayload.map((source, index) =>
+          mapApiSourceToSource(source, index, distributorsById),
+        );
+        if (apiSources.length > 0) {
+          setSources((current) => mergeById(current, apiSources));
+        }
+
+        const categoriesById = new Map(
+          categoriesPayload
+            .filter((category) => category.id && category.name)
+            .map((category) => [category.id as string, category.name as string]),
+        );
+
+        const apiItems = itemsPayload.map((item, index) =>
+          mapApiItemToItem(item, index, {
+            categoriesById,
+            distributorsById,
+          }),
+        );
+
+        if (apiItems.length > 0) {
+          setItems((current) => mergeById(current, apiItems));
+        }
+
+        const products = productsPayload.map((product, index) =>
+          mapApiProductToProductForSale(product, index, apiItems),
+        );
         if (products.length > 0) {
-          const mapped = products.map(mapApiProductToItem);
-          setItems((current) => mergeById(current, mapped));
+          setProducts((current) => mergeById(current, products));
         }
 
         const apiUsers = normalizeUsersList(usersPayload);
@@ -76,7 +130,9 @@ export function ApiBootstrap() {
     return () => {
       cancelled = true;
     };
-  }, [setItems, setManagedRoles, setUsers]);
+    // Run once on mount when API is configured.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return null;
 }

@@ -8,6 +8,12 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  isApiConfigured,
+  mapApiSourceToSource,
+  sourcesApi,
+} from "@/lib/api";
+import { toCreateSourcePayload } from "@/lib/api/payloads";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import {
@@ -159,6 +165,9 @@ export default function SourcePage() {
     if (!editing) return;
     const id = editing.id;
     setSources((current) => current.filter((row) => row.id !== id));
+    if (isApiConfigured()) {
+      void sourcesApi.remove(id).catch(() => {});
+    }
   }
 
   return (
@@ -306,15 +315,64 @@ export default function SourcePage() {
         onClose={closeModal}
         onRemove={handleRemoveSource}
         onSave={(source) => {
-          setSources((current) => {
-            if (editing) {
-              return current.map((row) =>
-                row.id === editing.id ? { ...source, id: editing.id } : row,
-              );
+          void (async () => {
+            if (isApiConfigured() && source.distributorId) {
+              try {
+                const payload = toCreateSourcePayload(source);
+                if (editing) {
+                  const updated = await sourcesApi.update(editing.id, payload);
+                  const mapped = mapApiSourceToSource(
+                    updated,
+                    0,
+                    new Map([[source.distributorId, source.distributor]]),
+                  );
+                  setSources((current) =>
+                    current.map((row) =>
+                      row.id === editing.id
+                        ? {
+                            ...source,
+                            ...mapped,
+                            id: editing.id,
+                            logoUrl: source.logoUrl,
+                            logoName: source.logoName,
+                          }
+                        : row,
+                    ),
+                  );
+                } else {
+                  const created = await sourcesApi.create(payload);
+                  const mapped = mapApiSourceToSource(
+                    created,
+                    0,
+                    new Map([[source.distributorId, source.distributor]]),
+                  );
+                  setSources((current) => [
+                    {
+                      ...source,
+                      ...mapped,
+                      logoUrl: source.logoUrl,
+                      logoName: source.logoName,
+                    },
+                    ...current,
+                  ]);
+                }
+                closeModal();
+                return;
+              } catch {
+                // Fall through to local save.
+              }
             }
-            return [{ ...source, id: nextSourceId(current) }, ...current];
-          });
-          closeModal();
+
+            setSources((current) => {
+              if (editing) {
+                return current.map((row) =>
+                  row.id === editing.id ? { ...source, id: editing.id } : row,
+                );
+              }
+              return [{ ...source, id: nextSourceId(current) }, ...current];
+            });
+            closeModal();
+          })();
         }}
       />
     </div>

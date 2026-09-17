@@ -23,6 +23,11 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  isApiConfigured,
+  normalizeOrdersList,
+  ordersApi,
+} from "@/lib/api";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
@@ -694,6 +699,76 @@ export default function CustomerOrdersPage() {
     left: number;
     placeAbove: boolean;
   } | null>(null);
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+
+    void ordersApi
+      .list({ page: 1, limit: 50, type: "standard" })
+      .then((payload) => {
+        if (cancelled) return;
+        const remote = normalizeOrdersList(payload);
+        if (remote.length === 0) return;
+
+        const statusToDone: Record<string, number> = {
+          requested: 1,
+          packing: 2,
+          cooler_ready: 2,
+          loaded: 2,
+          on_route: 3,
+          delivered: 4,
+          cancelled: 0,
+        };
+
+        const mapped: CustomerOrderRow[] = remote.map((order, index) => {
+          const doneCount = statusToDone[order.status ?? "requested"] ?? 1;
+          const itemCount = (order.items ?? []).reduce(
+            (sum, line) => sum + (line.quantity ?? 0),
+            0,
+          );
+          return {
+            id: order.id ?? `API-CO-${index + 1}`,
+            customerName: order.customerId ?? "Customer",
+            itemCount: itemCount || (order.items?.length ?? 0),
+            address: "",
+            apt: "",
+            city: "",
+            state: "",
+            zip: "",
+            orderDate: order.createdAt
+              ? new Date(order.createdAt).toLocaleDateString()
+              : "",
+            deliveryDate: order.deliveryDate
+              ? new Date(order.deliveryDate).toLocaleDateString()
+              : "",
+            deliveryLabel: order.deliveryDate
+              ? new Date(order.deliveryDate).toLocaleDateString()
+              : "",
+            paymentStatus: "Pending",
+            total: 0,
+            items: (order.items ?? []).map((line) => ({
+              name: line.productId ?? "Item",
+              qty: line.quantity ?? 0,
+              unit: "Each",
+              unitPrice: 0,
+            })),
+            steps: makeSteps(doneCount),
+          };
+        });
+
+        setOrders((current) => {
+          const byId = new Map(current.map((row) => [row.id, row]));
+          for (const row of mapped) byId.set(row.id, row);
+          return Array.from(byId.values());
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!statusMenu) return;

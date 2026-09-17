@@ -11,7 +11,10 @@ import { Select } from "@/components/ui/Select";
 import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { isApiConfigured, productsApi } from "@/lib/api";
+import { isApiConfigured, itemsApi, categoriesApi } from "@/lib/api";
+import { mapApiItemToItem } from "@/lib/api/mappers";
+import { toCreateItemPayload } from "@/lib/api/payloads";
+import type { ApiCategory } from "@/lib/api/types";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import { cn } from "@/utils/cn";
 import {
@@ -220,6 +223,9 @@ export default function ItemsPage() {
     if (!editing) return;
     const id = editing.id;
     setItems((current) => current.filter((row) => row.id !== id));
+    if (isApiConfigured()) {
+      void itemsApi.remove(id).catch(() => {});
+    }
   }
 
   return (
@@ -478,35 +484,111 @@ export default function ItemsPage() {
         onClose={closeModal}
         onRemove={handleRemoveItem}
         onSave={(item) => {
-          setItems((current) => {
-            if (editing) {
-              return current.map((row) =>
-                row.id === editing.id
-                  ? {
+          void (async () => {
+            if (isApiConfigured()) {
+              try {
+                const categories: ApiCategory[] = await categoriesApi.list();
+                const payload = toCreateItemPayload(item, categories);
+                if (editing) {
+                  const updated = await itemsApi.update(editing.id, payload);
+                  const mapped = mapApiItemToItem(updated, 0, {
+                    categoriesById: new Map(
+                      categories
+                        .filter((c) => c.id && c.name)
+                        .map((c) => [c.id as string, c.name as string]),
+                    ),
+                    distributorsById: new Map(
+                      item.distributorId
+                        ? [[item.distributorId, item.distributor]]
+                        : [],
+                    ),
+                  });
+                  setItems((current) =>
+                    current.map((row) =>
+                      row.id === editing.id
+                        ? {
+                            ...item,
+                            ...mapped,
+                            id: editing.id,
+                            // Keep rich UI fields the API does not store yet.
+                            merchandisingName: item.merchandisingName,
+                            description: item.description,
+                            subcategory: item.subcategory,
+                            source: item.source,
+                            sourceId: item.sourceId,
+                            sourcePer: item.sourcePer,
+                            caseBy: item.caseBy,
+                            pieceWeightOz: item.pieceWeightOz,
+                            caseWeightLbs: item.caseWeightLbs,
+                            singleItemUnit: item.singleItemUnit,
+                            sellingPrice: item.sellingPrice,
+                            photos: item.photos,
+                            preorderInfo: item.preorderInfo,
+                          }
+                        : row,
+                    ),
+                  );
+                } else {
+                  const created = await itemsApi.create(payload);
+                  const mapped = mapApiItemToItem(created, 0, {
+                    categoriesById: new Map(
+                      categories
+                        .filter((c) => c.id && c.name)
+                        .map((c) => [c.id as string, c.name as string]),
+                    ),
+                    distributorsById: new Map(
+                      item.distributorId
+                        ? [[item.distributorId, item.distributor]]
+                        : [],
+                    ),
+                  });
+                  setItems((current) => [
+                    {
                       ...item,
-                      id: editing.id,
-                      sourceId: item.sourceId ?? editing.sourceId,
-                      distributorId: item.distributorId ?? editing.distributorId,
-                    }
-                  : row,
-              );
+                      ...mapped,
+                      merchandisingName: item.merchandisingName,
+                      description: item.description,
+                      subcategory: item.subcategory,
+                      source: item.source,
+                      sourceId: item.sourceId,
+                      sourcePer: item.sourcePer,
+                      caseBy: item.caseBy,
+                      pieceWeightOz: item.pieceWeightOz,
+                      caseWeightLbs: item.caseWeightLbs,
+                      singleItemUnit: item.singleItemUnit,
+                      sellingPrice: item.sellingPrice,
+                      photos: item.photos,
+                      preorderInfo: item.preorderInfo,
+                    },
+                    ...current,
+                  ]);
+                }
+                closeModal();
+                return;
+              } catch {
+                // Fall through to local-only save when Items API fails
+                // (currently 500 on backend: missing sub_category column).
+              }
             }
-            return [{ ...item, id: nextItemId(current) }, ...current];
-          });
 
-          if (isApiConfigured() && !editing) {
-            void productsApi
-              .create({
-                name: item.name,
-                categoryNames: [item.category, item.subcategory].filter(Boolean),
-                type: item.category.toLowerCase(),
-                price: Math.round(item.sellingPrice * 100),
-                description: item.description,
-              })
-              .catch(() => {});
-          }
-
-          closeModal();
+            setItems((current) => {
+              if (editing) {
+                return current.map((row) =>
+                  row.id === editing.id
+                    ? {
+                        ...item,
+                        id: editing.id,
+                        sourceId: item.sourceId ?? editing.sourceId,
+                        distributorId:
+                          item.distributorId ?? editing.distributorId,
+                      }
+                    : row,
+                );
+              }
+              return [{ ...item, id: nextItemId(current) }, ...current];
+            });
+            closeModal();
+          })();
         }}
       />
     </div>

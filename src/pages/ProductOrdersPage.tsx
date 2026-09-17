@@ -303,7 +303,7 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors, items } = useAppCatalog();
+  const { distributors, products } = useAppCatalog();
 
   const [view, setView] = useState<View>("list");
   const [tab, setTab] = useState<Tab>("Orders");
@@ -557,13 +557,55 @@ export default function ProductOrdersPage() {
   useEffect(() => {
     if (!isApiConfigured()) return;
     void ordersApi
-      .list({ page: 1, limit: 50 })
+      .list({ page: 1, limit: 50, type: "distributor" })
       .then((payload) => {
-        normalizeOrdersList(payload);
-        // Remote orders are kept on the server; local UI still uses seeded flows.
+        const remote = normalizeOrdersList(payload);
+        if (remote.length === 0) return;
+
+        const mapped: PlacedOrder[] = remote.map((order, index) => {
+          const distributorName =
+            distributors.find((entry) => entry.id === order.distributorId)
+              ?.name ??
+            order.distributorId ??
+            "Distributor";
+          const lines = (order.items ?? []).map((line) => {
+            const product = products.find(
+              (entry) => entry.id === line.productId,
+            );
+            return {
+              sku: line.productId ?? "",
+              itemName: product?.merchandisingName ?? line.productId ?? "Item",
+              source: product?.source ?? "",
+              quantity: line.quantity ?? 0,
+              price: product?.salesPrice ?? 0,
+              unit: product?.unitOfSales ?? "Each",
+            };
+          });
+          const totalPrice = lines.reduce(
+            (sum, line) => sum + line.price * line.quantity,
+            0,
+          );
+          return {
+            id: order.id ?? `API-DO-${index + 1}`,
+            deliveryId: order.id ?? `API-DO-${index + 1}`,
+            distributor: distributorName,
+            orderDate: order.createdAt
+              ? new Date(order.createdAt).toLocaleDateString()
+              : "",
+            deliveryDate: order.deliveryDate
+              ? new Date(order.deliveryDate).toLocaleDateString()
+              : "",
+            totalPrice,
+            items: lines,
+          };
+        });
+
+        setInProgress((prev) =>
+          appendInProgressOrders(prev, mapped, SEED_IN_PROGRESS),
+        );
       })
       .catch(() => {});
-  }, []);
+  }, [distributors, products]);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -635,7 +677,7 @@ export default function ProductOrdersPage() {
     setInProgress((prev) =>
       appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
     );
-    syncReviewGroupOrder(group, distributors, items);
+    syncReviewGroupOrder(group, distributors, products);
     setOrderedDistributors((prev) => new Set(prev).add(distributor));
     setExpandedId(order.id);
     showToast("Order submitted");
@@ -663,7 +705,7 @@ export default function ProductOrdersPage() {
       appendInProgressOrders(prev, created, SEED_IN_PROGRESS),
     );
     for (const group of remaining) {
-      syncReviewGroupOrder(group, distributors, items);
+      syncReviewGroupOrder(group, distributors, products);
     }
     setOrderedDistributors(new Set(reviewGroups.map((group) => group.distributor)));
     setExpandedId(created[0]?.id ?? null);

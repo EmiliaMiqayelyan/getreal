@@ -20,6 +20,8 @@ import { TABLE_HEADER } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { inventoryApi, isApiConfigured } from "@/lib/api";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { cn } from "@/utils/cn";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 
@@ -59,7 +61,7 @@ type InventoryProduct = {
 
 type InventorySection = {
   title: string;
-  sourceLabel: "FARMER" | "SOURCE";
+  sourceLabel: "FARMER" | "SOURCE" | "API";
   products: InventoryProduct[];
 };
 
@@ -155,6 +157,7 @@ const INITIAL_SECTIONS: InventorySection[] = [
 ];
 
 const CATEGORY_GROUPS: { title: string; sections: string[] }[] = [
+  { title: "API", sections: ["API Stock"] },
   { title: "Protein", sections: ["Meat", "Poultry"] },
   { title: "Produce", sections: ["Fruits"] },
 ];
@@ -1010,6 +1013,7 @@ type EditLocationTarget = {
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
+  const { items: catalogItems } = useAppCatalog();
 
   const [query, setQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("");
@@ -1023,6 +1027,58 @@ export default function InventoryPage() {
   const [showToast, setShowToast] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+
+    void inventoryApi
+      .list()
+      .then((rows) => {
+        if (cancelled || rows.length === 0) return;
+
+        const products: InventoryProduct[] = rows.map((row, index) => {
+          const item = catalogItems.find((entry) => entry.id === row.itemId);
+          return {
+            id: row.id ?? `inv-${index}`,
+            name: item?.merchandisingName || item?.name || row.itemId || "Item",
+            lots: [
+              {
+                orderId: row.id ?? `INV-${index}`,
+                distributor: item?.distributor || "—",
+                source: item?.source || "—",
+                deliveryDate: row.updatedAt
+                  ? new Date(row.updatedAt).toLocaleString()
+                  : "",
+                purchased: item
+                  ? `$${item.buyingPrice.toFixed(2)}`
+                  : "—",
+                qty: row.quantity ?? 0,
+                unit: item?.singleItemUnit || "Each",
+                location: row.location || "Unassigned",
+              },
+            ],
+          };
+        });
+
+        setSections((current) => {
+          const withoutApi = current.filter((section) => section.title !== "API Stock");
+          return [
+            {
+              title: "API Stock",
+              sourceLabel: "API",
+              products,
+            },
+            ...withoutApi,
+          ];
+        });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogItems]);
 
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {

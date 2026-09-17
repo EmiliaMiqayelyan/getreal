@@ -17,678 +17,3223 @@
   ],
   "item": [
     {
-      "name": "Auth",
+      "name": "📱 Mobile App (Customer)",
+      "description": "Endpoints used by the mobile application for clients/customers.",
       "item": [
         {
-          "name": "Register",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/auth/register",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"Test User\",\n  \"role\": \"admin\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Login",
-          "event": [
+          "name": "Auth",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "exec": [
-                  "// Parse the JSON response from your login route",
-                  "const response = pm.response.json();",
-                  "",
-                  "// Save the token to a Global Variable",
-                  "if (response.data.token) {",
-                  "    pm.environment.set(\"authToken\", response.data.token);",
-                  "    console.log(\"Global token saved successfully!\");",
-                  "} else {",
-                  "    console.log(\"No token found in response.\");",
-                  "}"
+              "name": "Social Login",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
                 ],
-                "type": "text/javascript"
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/auth/login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Social Login",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/auth/social-login",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"test@example.com\",\n  \"name\": \"Test User\",\n  \"provider\": \"google\",\n  \"providerId\": \"google-oauth2-id123\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Logout",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/auth/logout"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Products",
-      "item": [
-        {
-          "name": "Get Products",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/products?category=Protein"
-          }
-        },
-        {
-          "name": "Create Product",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/products",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"New Steak\",\n  \"categoryNames\": [\"Protein\", \"Meat\"],\n  \"type\": \"meat\",\n  \"price\": 3599,\n  \"description\": \"Awesome steak\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Get All Suppliers History",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/products/suppliers"
-          }
-        },
-        {
-          "name": "Get Product Suppliers",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/products/:id/suppliers",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "products",
-                ":id",
-                "suppliers"
-              ],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                "url": "{{baseUrl}}/auth/social-login",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"test@example.com\", // (Required) Valid email address\n  \"name\": \"Test User\", // (Required) String\n  \"provider\": \"google\", // (Required) String\n  \"providerId\": \"google-oauth2-id123\" // (Required) Valid UUID\n}"
                 }
-              ]
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Categories",
-      "item": [
-        {
-          "name": "Get Categories",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/categories"
-          }
-        },
-        {
-          "name": "Create Category",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/categories",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Snacks\"\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Orders",
-      "item": [
-        {
-          "name": "Create Order",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/orders",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"distributor\",\n  \"distributorId\": \"replace-with-uuid\",\n  \"communicationChannel\": \"quickbooks\",\n  \"items\": [\n    {\n      \"productId\": \"replace-with-uuid\",\n      \"quantity\": 2\n    }\n  ]\n}"
-            }
-          }
-        },
-        {
-          "name": "Get Orders",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/orders?category=Meat&page=1&limit=10&status=pending"
-          }
-        },
-        {
-          "name": "Get Order Details",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/orders/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "orders",
-                ":id"
-              ],
-              "variable": [
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "name": "Assign Order",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/orders/:id/assign",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "orders",
-                ":id",
-                "assign"
-              ],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test(\"Save auth token\", function () {",
+                      "    const response = pm.response.json();",
+                      "    if (response.data && response.data.token) {",
+                      "        pm.environment.set(\"authToken\", response.data.token);",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"assignedStaffId\": \"replace-with-uuid\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Update Order Status",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/auth/logout"
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/orders/:id/status",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "orders",
-                ":id",
-                "status"
-              ],
-              "variable": [
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"status\": \"processing\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Edit Order",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+            {
+              "name": "Register",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/auth/register",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\", // (Required) Valid email address\n  \"password\": \"Password123!\", // (Required) Minimum 8 characters\n  \"firstName\": \"John\", // (Required) String\n  \"lastName\": \"Doe\", // (Required) String\n  \"phoneNumber\": \"+15551234567\", // (Required) String\n  \"address\": \"123 Main St\", // (Required) String\n  \"city\": \"Anytown\", // (Required) String\n  \"state\": \"CA\", // (Required) String\n  \"zipCode\": \"90210\", // (Required) String\n  \"role\": \"customer\", // (Required) Enum (e.g. customer, admin)\n  \"heardFrom\": \"Social Media\" // (Optional) String\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/orders/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "orders",
-                ":id"
-              ],
-              "variable": [
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"distributorId\": \"replace-with-uuid\",\n  \"communicationChannel\": \"quickbooks\",\n  \"status\": \"processing\",\n  \"items\": [\n    {\n      \"productId\": \"replace-with-uuid\",\n      \"quantity\": 5\n    }\n  ]\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Dashboard",
-      "item": [
-        {
-          "name": "Get Stats",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/dashboard/stats"
-          }
-        },
-        {
-          "name": "Get Chart Data",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/dashboard/chart?interval=daily"
-          }
-        }
-      ]
-    },
-    {
-      "name": "QuickBooks",
-      "item": [
-        {
-          "name": "Auth Redirect",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/quickbooks/auth"
-          }
-        },
-        {
-          "name": "Callback (Internal use)",
-          "request": {
-            "method": "GET",
-            "url": "{{baseUrl}}/quickbooks/callback"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Stripe",
-      "item": [
-        {
-          "name": "Webhook Listener",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
+            {
+              "name": "Send Signup Verification",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"customer@example.com\" // (Required) Valid email address\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/auth/send-signup-verification",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "send-signup-verification"
+                  ]
+                }
               },
-              {
-                "key": "stripe-signature",
-                "value": "t=123,v1=abc"
-              }
-            ],
-            "url": "{{baseUrl}}/stripe/webhook",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"id\": \"evt_123\",\n  \"type\": \"payment_intent.succeeded\"\n}"
+              "response": []
+            },
+            {
+              "name": "Verify Auth Code",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"customer@example.com\", // (Required) Valid email address\n  \"code\": \"12345\", // (Required) String\n  \"type\": \"signup\" // (Required) Valid type enum\n}"
+                },
+                "url": {
+                  "raw": "{{base_url}}/api/v1/auth/verify-auth-code",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "auth",
+                    "verify-auth-code"
+                  ]
+                }
+              },
+              "response": []
             }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Users",
-      "item": [
-        {
-          "name": "Get Users",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/users?page=1&limit=10&role=customer"
-          }
+          ]
         },
         {
-          "name": "Get User Details",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ],
-              "variable": [
+          "name": "Products",
+          "item": [
+            {
+              "name": "Get Products",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/products?category=Protein"
+              },
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             }
-          }
+          ]
         },
         {
-          "name": "Create User",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+          "name": "Orders",
+          "item": [
+            {
+              "name": "Create Standard Order (Customer)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/orders",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"standard\", // (Required) Valid type enum\n  \"items\": [{\"productId\":\"replace-with-uuid\",\"quantity\":2}] // (Required) String\n}"
+                }
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/users",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"newuser@example.com\",\n  \"password\": \"password123\",\n  \"name\": \"New Admin\",\n  \"role\": \"admin\",\n  \"status\": \"vip\"\n}"
-            }
-          }
-        },
-        {
-          "name": "Update User",
-          "request": {
-            "method": "PATCH",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/users/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "users",
-                ":id"
-              ],
-              "variable": [
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"isBlocked\": true,\n  \"status\": \"regular\",\n  \"role\": \"warehouse\"\n}"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "name": "Roles",
-      "item": [
-        {
-          "name": "Get Roles",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": "{{baseUrl}}/roles"
-          }
-        },
-        {
-          "name": "Get Role Details",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "roles",
-                ":id"
-              ],
-              "variable": [
-                {
-                  "key": "id",
-                  "value": "replace-with-uuid"
-                }
-              ]
-            }
-          }
-        },
-        {
-          "name": "Create Role",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
+            {
+              "name": "Get Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/orders?category=Meat&page=1&limit=10&status=pending"
               },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": "{{baseUrl}}/roles",
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"editor\",\n  \"description\": \"Content editor\",\n  \"permissions\": [\"read:content\", \"write:content\"]\n}"
-            }
-          }
-        },
-        {
-          "name": "Update Role",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "roles",
-                ":id"
-              ],
-              "variable": [
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             },
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"permissions\": [\"read:content\", \"write:content\", \"delete:content\"]\n}"
-            }
-          }
-        },
-        {
-          "name": "Delete Role",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{authToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/roles/:id",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "roles",
-                ":id"
-              ],
-              "variable": [
+            {
+              "name": "Get Order Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
                 {
-                  "key": "id",
-                  "value": "replace-with-uuid"
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Edit Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"distributorId\": \"replace-with-uuid\", // (Optional) Valid UUID\n  \"communicationChannel\": \"quickbooks\", // (Optional) String\n  \"status\": \"processing\", // (Optional) Valid status enum\n  \"items\": [{\"productId\":\"replace-with-uuid\",\"quantity\":5}] // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Order Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"processing\" // (Optional) Valid status enum\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
                 }
               ]
             }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{authToken}}",
+            "type": "string"
           }
+        ]
+      }
+    },
+    {
+      "name": "💻 Web App (Admin/Staff/Distributor)",
+      "description": "Endpoints used by the internal web dashboard and distributors.",
+      "item": [
+        {
+          "name": "Auth",
+          "item": [
+            {
+              "name": "Login",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});",
+                      "",
+                      "pm.test(\"Save auth token\", function () {",
+                      "    const response = pm.response.json();",
+                      "    if (response.data && response.data.token) {",
+                      "        pm.environment.set(\"authToken\", response.data.token);",
+                      "    }",
+                      "});"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/auth/login",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"test@example.com\", // (Required) Valid email address\n  \"password\": \"password123\" // (Required) Minimum 8 characters\n}"
+                }
+              }
+            },
+            {
+              "name": "Logout",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/auth/logout"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Forgot Password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\" // (Required) Valid email address\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/forgot-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "forgot-password"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reset Password",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"customer@example.com\", // (Required) Valid email address\n  \"newPassword\": \"NewPassword123!\" // (Required) Minimum 8 characters\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/auth/reset-password",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "auth",
+                    "reset-password"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Products",
+          "item": [
+            {
+              "name": "Get Products",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/products?category=Protein"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Reorder Products",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/reorder",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"products\": [{\"id\":\"replace-with-uuid-1\",\"position\":1},{\"id\":\"replace-with-uuid-2\",\"position\":2}] // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create Product",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/products",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"itemId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"merchandisingName\": \"Premium Cut Steak\", // (Required) String\n  \"sellingPrice\": 2599, // (Required) Non-negative integer (cents)\n  \"description\": \"Awesome steak\" // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get All Suppliers History",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/products/suppliers"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Product Suppliers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/products/:id/suppliers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "products",
+                    ":id",
+                    "suppliers"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Upload Image",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{token}}",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "src": []
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/upload",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "upload"
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Categories",
+          "item": [
+            {
+              "name": "Get Categories",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/categories"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create Category",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/categories",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Snacks\" // (Required) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Orders",
+          "item": [
+            {
+              "name": "Create Distributor Order",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/orders",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"distributor\", // (Required) Valid type enum\n  \"distributorId\": \"replace-with-uuid\", // (Required) Valid UUID\n  \"communicationChannel\": \"quickbooks\", // (Optional) String\n  \"items\": [{\"productId\":\"replace-with-uuid\",\"quantity\":2}] // (Required) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create Standard Order (Admin)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/orders",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"standard\", // (Required) Valid type enum\n  \"customerId\": \"replace-with-uuid\", // (Required) Valid UUID\n  \"items\": [{\"productId\":\"replace-with-uuid\",\"quantity\":2}] // (Required) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Orders",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/orders?category=Meat&page=1&limit=10&status=pending"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Order Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Assign Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/assign",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "assign"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assignedStaffId\": \"replace-with-uuid\" // (Optional) Valid UUID\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Order Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/status",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "status"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"processing\" // (Optional) Valid status enum\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Edit Order",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"distributorId\": \"replace-with-uuid\", // (Optional) Valid UUID\n  \"communicationChannel\": \"quickbooks\", // (Optional) String\n  \"status\": \"processing\", // (Optional) Valid status enum\n  \"items\": [{\"productId\":\"replace-with-uuid\",\"quantity\":5}] // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Assign Packer",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/assign-packer",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "assign-packer"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"packerId\": \"user-id-here\" // (Required) Valid UUID\n}"
+                }
+              }
+            },
+            {
+              "name": "Assign Cooler",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/assign-cooler",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "assign-cooler"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"coolerId\": \"cooler-id-here\" // (Required) Valid UUID\n}"
+                }
+              }
+            },
+            {
+              "name": "Start Packing",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/start-packing",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "start-packing"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Set Cooler Ready",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/cooler-ready",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "cooler-ready"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Set Order Loaded",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/:id/loaded",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "orders",
+                    ":id",
+                    "loaded"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Dashboard",
+          "item": [
+            {
+              "name": "Get Stats",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/dashboard/stats"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Chart Data",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/dashboard/chart?interval=daily"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "QuickBooks",
+          "item": [
+            {
+              "name": "Auth Redirect",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/quickbooks/auth"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Callback (Internal use)",
+              "request": {
+                "method": "GET",
+                "url": "{{baseUrl}}/quickbooks/callback"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Users",
+          "item": [
+            {
+              "name": "Get Users",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/users?page=1&limit=10&role=customer"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Users by Role ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/users?page=1&limit=10&roleId=replace-with-uuid"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get User Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create User",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/users",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"newuser@example.com\", // (Required) Valid email address\n  \"password\": \"password123\", // (Required) Minimum 8 characters\n  \"name\": \"New Admin\", // (Required) String\n  \"role\": \"admin\", // (Required) Enum (e.g. customer, admin)\n  \"status\": \"vip\", // (Required) Valid status enum\n  \"heardFrom\": \"Word of Mouth\" // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update User",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"isBlocked\": true, // (Optional) Boolean (true/false)\n  \"status\": \"regular\", // (Optional) Valid status enum\n  \"role\": \"warehouse\", // (Optional) Enum (e.g. customer, admin)\n  \"heardFrom\": \"Advertisement\" // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Block User",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/:id/block",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    ":id",
+                    "block"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reason\": \"Violation\" // (Required) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Unblock User",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{authToken}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/users/:id/unblock",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "users",
+                    ":id",
+                    "unblock"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Roles",
+          "item": [
+            {
+              "name": "Get Roles",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": "{{baseUrl}}/roles"
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get Role Details",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/roles/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "roles",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Create Role",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": "{{baseUrl}}/roles",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"editor\", // (Required) String\n  \"description\": \"Content editor\", // (Optional) String\n  \"permissions\": [\"read:content\",\"write:content\"] // (Required) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update Role",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/roles/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "roles",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"permissions\": [\"read:content\",\"write:content\",\"delete:content\"] // (Optional) String\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete Role",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{authToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/roles/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "roles",
+                    ":id"
+                  ],
+                  "variable": [
+                    {
+                      "key": "id",
+                      "value": "replace-with-uuid"
+                    }
+                  ]
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "Items",
+          "item": [
+            {
+              "name": "Get All Items",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/items",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "items"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Items By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/items/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "items",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Items",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/items",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "items"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Required) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"buyingPrice\": 1500, // (Required) Non-negative integer (cents)\n  \"contents\": 1 // (Required) Numeric value\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Items",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/items/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "items",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Optional) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"buyingPrice\": 1500, // (Optional) Non-negative integer (cents)\n  \"contents\": 1 // (Optional) Numeric value\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Items",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/items/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "items",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Distributors",
+          "item": [
+            {
+              "name": "Get All Distributors",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/distributors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "distributors"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Distributors By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/distributors/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "distributors",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Distributors",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/distributors",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "distributors"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Sysco\", // (Required) String\n  \"distributorCode\": \"DIS-10001\", // (Required) String\n  \"contacts\": [{\"firstName\":\"John\",\"email\":\"john@sysco.com\"}] // (Required) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Distributors",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/distributors/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "distributors",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Sysco\", // (Optional) String\n  \"distributorCode\": \"DIS-10001\", // (Optional) String\n  \"contacts\": [{\"firstName\":\"John\",\"email\":\"john@sysco.com\"}] // (Optional) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Distributors",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/distributors/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "distributors",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sources",
+          "item": [
+            {
+              "name": "Get All Sources",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sources",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sources"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Sources By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sources/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sources",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Sources",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sources",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sources"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Local Farms Co\", // (Required) String\n  \"sourceCode\": \"SRC-10001\", // (Required) String\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\" // (Required) Valid UUID\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Sources",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sources/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sources",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Local Farms Co\", // (Optional) String\n  \"sourceCode\": \"SRC-10001\", // (Optional) String\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\" // (Optional) Valid UUID\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Sources",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/sources/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "sources",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Inventory",
+          "item": [
+            {
+              "name": "Get All Inventory",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Inventory By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Inventory",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"itemId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"quantity\": 50, // (Required) Integer, minimum 1\n  \"location\": \"A1-Bin1\" // (Optional) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Inventory",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"itemId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"quantity\": 50, // (Optional) Integer, minimum 1\n  \"location\": \"A1-Bin1\" // (Optional) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Inventory",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/inventory/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "inventory",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Receiving",
+          "item": [
+            {
+              "name": "Get Deliveries",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/receiving/deliveries",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "receiving",
+                    "deliveries"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Validate Delivery",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/receiving/:orderId/validate",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "receiving",
+                    ":orderId",
+                    "validate"
+                  ],
+                  "variable": [
+                    {
+                      "key": "orderId",
+                      "value": "uuid-here"
+                    }
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"items\": [{\"productId\":\"uuid-here\",\"status\":\"accepted\"},{\"productId\":\"uuid-here\",\"status\":\"rejected\",\"reason\":\"Damaged\",\"evidenceUrl\":\"http://example.com/photo.jpg\"}] // Required string\n}"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Coolers",
+          "item": [
+            {
+              "name": "Get All Coolers",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/coolers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "coolers"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Coolers By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/coolers/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "coolers",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Coolers",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/coolers",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "coolers"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Cooler A\", // (Required) String\n  \"status\": \"available\" // (Required) Valid status enum\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Coolers",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/coolers/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "coolers",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Cooler A\", // (Optional) String\n  \"status\": \"available\" // (Optional) Valid status enum\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Coolers",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/coolers/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "coolers",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Notification Rules",
+          "item": [
+            {
+              "name": "Get All Notification Rules",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/notification-rules",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "notification-rules"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Notification Rules By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/notification-rules/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "notification-rules",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Notification Rules",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/notification-rules",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "notification-rules"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Order Received SMS\", // (Required) String\n  \"channel\": \"sms\", // (Required) String\n  \"actionEndpoint\": \"/api/v1/orders\", // (Required) String\n  \"triggerMethod\": \"POST\", // (Required) String\n  \"title\": \"Order Received\", // (Required) String\n  \"subtext\": \"Your order {{id}} has been received\", // (Required) String\n  \"scheduleDelay\": 0, // (Required) Numeric value\n  \"scheduleUnit\": \"minutes\" // (Required) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Notification Rules",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/notification-rules/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "notification-rules",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Order Received SMS\", // (Optional) String\n  \"channel\": \"sms\", // (Optional) String\n  \"actionEndpoint\": \"/api/v1/orders\", // (Optional) String\n  \"triggerMethod\": \"POST\", // (Optional) String\n  \"title\": \"Order Received\", // (Optional) String\n  \"subtext\": \"Your order {{id}} has been received\", // (Optional) String\n  \"scheduleDelay\": 0, // (Optional) Numeric value\n  \"scheduleUnit\": \"minutes\" // (Optional) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Notification Rules",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/notification-rules/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "notification-rules",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Scheduled Notifications",
+          "item": [
+            {
+              "name": "Get All Scheduled Notifications",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/scheduled-notifications",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "scheduled-notifications"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Scheduled Notifications By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/scheduled-notifications/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "scheduled-notifications",
+                    ":id"
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Create Scheduled Notifications",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/scheduled-notifications",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "scheduled-notifications"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Reminder\", // (Required) String\n  \"body\": \"Don't forget!\", // (Required) String\n  \"scheduledFor\": \"2026-10-01T10:00:00Z\", // (Required) String\n  \"data\": {} // (Required) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Update Scheduled Notifications",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/scheduled-notifications/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "scheduled-notifications",
+                    ":id"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Reminder\", // (Optional) String\n  \"body\": \"Don't forget!\", // (Optional) String\n  \"scheduledFor\": \"2026-10-01T10:00:00Z\", // (Optional) String\n  \"data\": {} // (Optional) String\n}"
+                }
+              }
+            },
+            {
+              "name": "Delete Scheduled Notifications",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/scheduled-notifications/:id",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "scheduled-notifications",
+                    ":id"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{authToken}}",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "🔌 Webhooks",
+      "item": [
+        {
+          "name": "Stripe",
+          "item": [
+            {
+              "name": "Webhook Listener",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  },
+                  {
+                    "key": "stripe-signature",
+                    "value": "t=123,v1=abc"
+                  }
+                ],
+                "url": "{{baseUrl}}/stripe/webhook",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"id\": \"evt_123\", // (Required) Valid UUID\n  \"type\": \"payment_intent.succeeded\" // (Required) Valid type enum\n}"
+                }
+              },
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "pm.test(\"Response is successful (status 200/201)\", function () {",
+                      "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 204]);",
+                      "});",
+                      "",
+                      "pm.test(\"Response time is less than 1000ms\", function () {",
+                      "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                      "});",
+                      "",
+                      "pm.test(\"Response has JSON body\", function () {",
+                      "    if (pm.response.code !== 204) {",
+                      "        pm.response.to.be.json;",
+                      "    }",
+                      "});"
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
         }
       ]
     }

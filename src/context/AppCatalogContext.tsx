@@ -48,6 +48,9 @@ type AppCatalogContextValue = {
   sources: Source[];
   products: ProductForSale[];
   subcategoriesByCategory: SubcategoryMap;
+  setDistributors: (
+    updater: Distributor[] | ((current: Distributor[]) => Distributor[]),
+  ) => void;
   setItems: (updater: Item[] | ((current: Item[]) => Item[])) => void;
   setSources: (updater: Source[] | ((current: Source[]) => Source[])) => void;
   setProducts: (
@@ -127,6 +130,23 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState(bootstrapCatalog);
   const [subcategoriesByCategory, setSubcategoriesByCategory] = useState(
     loadSubcategories,
+  );
+
+  const setDistributors = useCallback(
+    (
+      updater:
+        | Distributor[]
+        | ((current: Distributor[]) => Distributor[]),
+    ) => {
+      setCatalog((current) => {
+        const distributors =
+          typeof updater === "function"
+            ? updater(current.distributors)
+            : updater;
+        return { ...current, distributors };
+      });
+    },
+    [],
   );
 
   const saveDistributor = useCallback(
@@ -335,6 +355,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       sources: catalog.sources,
       products: catalog.products,
       subcategoriesByCategory,
+      setDistributors,
       setItems,
       setSources,
       setProducts,
@@ -353,6 +374,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       removeSubcategory,
       renameSubcategory,
       saveDistributor,
+      setDistributors,
       setItems,
       setProducts,
       setSources,

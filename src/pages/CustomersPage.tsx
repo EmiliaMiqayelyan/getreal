@@ -656,13 +656,8 @@ export default function CustomersPage() {
         if (apiUsers.length === 0) return;
 
         const mapped = apiUsers.map(mapApiUserToAdminCustomer);
-        setCustomers((current) => {
-          const byId = new Map(current.map((customer) => [customer.id, customer]));
-          for (const customer of mapped) {
-            byId.set(customer.id, customer);
-          }
-          return Array.from(byId.values());
-        });
+        // Prefer live API customers over local mock seeds.
+        setCustomers(mapped);
       })
       .catch(() => {
         // Keep ADMIN_CUSTOMERS seed.

@@ -16,6 +16,12 @@ import {
 } from "@/constants/productsForSale";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import {
+  isApiConfigured,
+  mapApiProductToProductForSale,
+  productsApi,
+} from "@/lib/api";
+import { toCreateProductPayload } from "@/lib/api/payloads";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import type { Source } from "@/types/source";
 import {
@@ -405,6 +411,9 @@ export default function ProductsForSalePage() {
     setViewing((current) =>
       current?.id === id ? { ...current, live } : current,
     );
+    if (isApiConfigured()) {
+      void productsApi.update(id, { isLive: live }).catch(() => {});
+    }
   }
 
   function handleReorder(
@@ -414,8 +423,8 @@ export default function ProductsForSalePage() {
     targetId: string,
     visibleIds: string[],
   ) {
-    setProducts((current) =>
-      reorderProductsInSubcategory(
+    setProducts((current) => {
+      const next = reorderProductsInSubcategory(
         current,
         category,
         subcategory,
@@ -423,8 +432,16 @@ export default function ProductsForSalePage() {
         targetId,
         visibleIds,
         catalog,
-      ),
-    );
+      );
+      if (isApiConfigured()) {
+        const positions = next.map((product, index) => ({
+          id: product.id,
+          position: product.sortOrder ?? index,
+        }));
+        void productsApi.reorder(positions).catch(() => {});
+      }
+      return next;
+    });
   }
 
   function handleAdd(item: Item) {
@@ -436,25 +453,56 @@ export default function ProductsForSalePage() {
     });
     if (errors.item) return;
 
-    if (editTarget) {
-      const updated = relinkProductToItem(editTarget, item);
-      setProducts((current) =>
-        current.map((row) => (row.id === editTarget.id ? updated : row)),
-      );
-      setEditTarget(null);
-      if (viewing?.id === editTarget.id) {
-        setViewing(updated);
+    void (async () => {
+      if (editTarget) {
+        const updated = relinkProductToItem(editTarget, item);
+        if (isApiConfigured()) {
+          try {
+            const saved = await productsApi.update(
+              editTarget.id,
+              toCreateProductPayload(updated),
+            );
+            const mapped = mapApiProductToProductForSale(saved, 0, catalog);
+            const merged = { ...updated, ...mapped, id: editTarget.id };
+            setProducts((current) =>
+              current.map((row) => (row.id === editTarget.id ? merged : row)),
+            );
+            setEditTarget(null);
+            if (viewing?.id === editTarget.id) setViewing(merged);
+            return;
+          } catch {
+            // Fall through to local update.
+          }
+        }
+        setProducts((current) =>
+          current.map((row) => (row.id === editTarget.id ? updated : row)),
+        );
+        setEditTarget(null);
+        if (viewing?.id === editTarget.id) setViewing(updated);
+        return;
       }
-      return;
-    }
-    setProducts((current) => [
-      ...current,
-      productFromItem(
+
+      const draft = productFromItem(
         item,
-        nextProductId(current),
-        nextProductSortOrder(current),
-      ),
-    ]);
+        nextProductId(products),
+        nextProductSortOrder(products),
+      );
+
+      if (isApiConfigured()) {
+        try {
+          const created = await productsApi.create(
+            toCreateProductPayload(draft),
+          );
+          const mapped = mapApiProductToProductForSale(created, 0, catalog);
+          setProducts((current) => [...current, { ...draft, ...mapped }]);
+          return;
+        } catch {
+          // Fall through to local create.
+        }
+      }
+
+      setProducts((current) => [...current, draft]);
+    })();
   }
 
   function handleRemoveProduct() {
@@ -462,6 +510,7 @@ export default function ProductsForSalePage() {
     const id = editTarget.id;
     setProducts((current) => current.filter((row) => row.id !== id));
     setViewing((current) => (current?.id === id ? null : current));
+    // Backend collection has no DELETE /products; local remove only.
   }
 
   return (

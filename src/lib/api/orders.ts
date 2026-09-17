@@ -1,18 +1,39 @@
 import { apiRequest } from "./client";
 import type { ApiOrder } from "./types";
+import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
-export type CreateOrderPayload = {
-  type: string;
-  distributorId: string;
-  communicationChannel: string;
-  items: Array<{ productId: string; quantity: number }>;
+export type CreateOrderItemPayload = {
+  productId: string;
+  quantity: number;
+  frequency?: "one_time" | "weekly";
 };
+
+export type CreateDistributorOrderPayload = {
+  type: "distributor";
+  distributorId: string;
+  communicationChannel?: string;
+  deliveryDate?: string;
+  items: CreateOrderItemPayload[];
+};
+
+export type CreateStandardOrderPayload = {
+  type: "standard";
+  customerId: string;
+  deliveryDate?: string;
+  items: CreateOrderItemPayload[];
+};
+
+export type CreateOrderPayload =
+  | CreateDistributorOrderPayload
+  | CreateStandardOrderPayload;
 
 export type UpdateOrderPayload = {
   distributorId?: string;
+  customerId?: string;
   communicationChannel?: string;
   status?: string;
-  items?: Array<{ productId: string; quantity: number }>;
+  deliveryDate?: string;
+  items?: CreateOrderItemPayload[];
 };
 
 export type OrdersListParams = {
@@ -20,14 +41,18 @@ export type OrdersListParams = {
   page?: number;
   limit?: number;
   status?: string;
+  type?: string;
 };
 
 export const ordersApi = {
   create(body: CreateOrderPayload) {
-    return apiRequest<ApiOrder>("/orders", {
+    return apiRequest<unknown>("/orders", {
       method: "POST",
       body: JSON.stringify(body),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
   },
 
   list(params: OrdersListParams = {}) {
@@ -36,32 +61,53 @@ export const ordersApi = {
     if (params.page != null) search.set("page", String(params.page));
     if (params.limit != null) search.set("limit", String(params.limit));
     if (params.status) search.set("status", params.status);
+    if (params.type) search.set("type", params.type);
     const qs = search.toString();
-    return apiRequest<ApiOrder[]>(`/orders${qs ? `?${qs}` : ""}`);
+    return apiRequest<unknown>(`/orders${qs ? `?${qs}` : ""}`).then(
+      (payload) =>
+        normalizeNamedList<ApiOrder>(payload, [
+          "orders",
+          "items",
+          "data",
+          "results",
+        ]),
+    );
   },
 
   getById(id: string) {
-    return apiRequest<ApiOrder>(`/orders/${id}`);
+    return apiRequest<unknown>(`/orders/${id}`).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
   },
 
   assign(id: string, assignedStaffId: string) {
-    return apiRequest<ApiOrder>(`/orders/${id}/assign`, {
+    return apiRequest<unknown>(`/orders/${id}/assign`, {
       method: "PATCH",
       body: JSON.stringify({ assignedStaffId }),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
   },
 
   updateStatus(id: string, status: string) {
-    return apiRequest<ApiOrder>(`/orders/${id}/status`, {
+    return apiRequest<unknown>(`/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
   },
 
   edit(id: string, body: UpdateOrderPayload) {
-    return apiRequest<ApiOrder>(`/orders/${id}`, {
+    return apiRequest<unknown>(`/orders/${id}`, {
       method: "PATCH",
       body: JSON.stringify(body),
-    });
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
   },
 };
