@@ -19,6 +19,7 @@ import {
   DATE_CHIP_ROW,
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
+import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -669,7 +670,7 @@ function CheckOrderView({
     "grid-cols-[minmax(140px,220px)_40px_52px_148px_auto_minmax(16px,1fr)_auto]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -690,7 +691,7 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -1163,7 +1164,7 @@ export default function DistributorDeliveriesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
@@ -1248,8 +1249,8 @@ export default function DistributorDeliveriesPage() {
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
+        <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
           <div className={DATE_CHIP_ROW}>
             <div className={DATE_CHIP_SCROLL}>
               {visibleChips.map((chip) => {
@@ -1355,9 +1356,7 @@ export default function DistributorDeliveriesPage() {
                         />
                       </button>
 
-                      <span className="w-fit rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                        {order.id}
-                      </span>
+                      <IdPill>{order.id}</IdPill>
                       <span className="truncate text-[14px] font-semibold text-[#111118]">
                         {order.distributor}
                       </span>
@@ -1410,7 +1409,7 @@ export default function DistributorDeliveriesPage() {
                               key={item.id}
                               className={cn(
                                 ROW_GRID,
-                                "bg-[#F9FAFB] px-4 py-2 text-[13px]",
+                                "bg-[#FBF9F9] px-4 py-2 text-[13px]",
                                 itemIndex < order.items.length - 1 &&
                                   "border-b border-[#F0F0EE]",
                               )}

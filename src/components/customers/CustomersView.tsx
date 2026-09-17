@@ -34,7 +34,7 @@ export function CustomersView({ customers }: CustomersViewProps) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Customers"
         toolbar={
@@ -47,7 +47,7 @@ export function CustomersView({ customers }: CustomersViewProps) {
         }
       />
 
-      <div className="flex flex-1 flex-col gap-6 overflow-auto px-8 py-6">
+      <div className="flex flex-1 flex-col gap-6 overflow-auto bg-[#FAFAFA] px-8 py-6">
         <CustomerSection title="Active" customers={active} />
         <CustomerSection title="Inactive" customers={inactive} />
       </div>

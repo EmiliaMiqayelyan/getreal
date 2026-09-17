@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/AdminHeader";
 import { RoleManagementModal } from "@/components/roles/RoleManagementModal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
@@ -296,7 +297,7 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Roles"
         toolbar={
@@ -339,7 +340,7 @@ export default function RolesPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <ScrollTable
           minWidth={820}
           className="rounded-[12px] border border-[#ECECEA] bg-white"
@@ -383,9 +384,9 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={() => toggleExpand(user.id)}
-                    className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
+                    className="cursor-pointer"
                   >
-                    {user.id}
+                    <IdPill>{user.id}</IdPill>
                   </button>
 
                   <div className="truncate text-[13px] font-semibold text-[#111118]">
@@ -413,7 +414,7 @@ export default function RolesPage() {
                 </div>
 
                 {open ? (
-                  <div className="border-t border-[#F0F0EE] bg-[#FAFAF8] px-4 py-5 md:px-6">
+                  <div className="border-t border-black/8 bg-[#FBF9F9] px-[22.5px] py-[15px] md:px-6">
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                         {ROLE_PERMISSION_GROUPS.map((group) => (

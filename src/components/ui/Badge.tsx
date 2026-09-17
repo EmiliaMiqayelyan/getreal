@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { ID_PILL } from "@/constants/table";
 import { cn } from "@/utils/cn";
 
 type BadgeProps = {
@@ -31,14 +32,14 @@ export function CountBadge({ children, className }: BadgeProps) {
 }
 
 export function IdPill({ children, className }: BadgeProps) {
+  const title =
+    typeof children === "string" || typeof children === "number"
+      ? String(children)
+      : undefined;
+
   return (
-    <span
-      className={cn(
-        "bg-id-pill inline-flex items-center rounded-[6px] px-1.5 py-0.5 font-mono text-[11px] font-medium text-muted-strong",
-        className,
-      )}
-    >
-      {children}
+    <span className={cn(ID_PILL, className)} title={title}>
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

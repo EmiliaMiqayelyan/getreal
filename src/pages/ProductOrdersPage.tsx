@@ -20,6 +20,7 @@ import {
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -235,9 +236,7 @@ function ExpandableOrders({
                   </button>
                 </td>
                 <td className="py-3.5 pr-10 align-middle">
-                  <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                    {order.deliveryId}
-                  </span>
+                  <IdPill>{order.deliveryId}</IdPill>
                 </td>
                 <td className="truncate py-3.5 pr-10 text-[13px] font-semibold text-[#111118] align-middle">
                   {order.distributor}
@@ -271,9 +270,7 @@ function ExpandableOrders({
                     >
                       <td className="px-4 py-2.5" />
                       <td className="py-2.5 pr-10 align-middle">
-                        <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6A6A6A]">
-                          {item.sku}
-                        </span>
+                        <IdPill>{item.sku}</IdPill>
                       </td>
                       <td className="truncate py-2.5 pr-10 text-[13px] text-[#111118] align-middle">
                         {item.itemName}
@@ -732,7 +729,7 @@ export default function ProductOrdersPage() {
 
   if (view === "list") {
     return (
-      <div className="relative flex h-full min-h-0 flex-col bg-background">
+      <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
         <div className="shrink-0 border-b border-[#ECECEA] bg-white">
           <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
             <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
@@ -900,7 +897,7 @@ export default function ProductOrdersPage() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-7">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
           {tab === "Orders" ? (
             <>
               <div className={DATE_CHIP_ROW}>
@@ -1061,7 +1058,7 @@ export default function ProductOrdersPage() {
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-background">
+    <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -1080,7 +1077,7 @@ export default function ProductOrdersPage() {
       </div>
 
       {view === "orderList" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           {ORDER_CATEGORIES.map((section) => {
             const sectionRows = groupedRows[section];
             if (sectionRows.length === 0) return null;
@@ -1175,7 +1172,7 @@ export default function ProductOrdersPage() {
           })}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
             <div className="min-w-0 space-y-3">
               {reviewGroups.map((group) => {

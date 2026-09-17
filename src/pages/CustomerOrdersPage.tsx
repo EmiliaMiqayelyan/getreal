@@ -19,6 +19,7 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
@@ -280,9 +281,7 @@ function HoverCard({
           {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
         </div>
         <div className="mt-2">
-          <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#6B6B6B]">
-            {order.coolerIds?.[0] ?? "BS-402-27"}
-          </span>
+          <IdPill>{order.coolerIds?.[0] ?? "BS-402-27"}</IdPill>
         </div>
       </div>
     );
@@ -527,9 +526,7 @@ function OrderDetailPanel({
         <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-[6px] bg-id-pill px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                {order.id}
-              </span>
+              <IdPill>{order.id}</IdPill>
               <span className="text-[12px] text-[#8A8A8A]">
                 Ordered:{" "}
                 <span className="text-[#111118]">{order.orderDate}</span>
@@ -563,8 +560,8 @@ function OrderDetailPanel({
           <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
             Requested Items
           </h3>
-          <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-white px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div className="overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-[#FBF9F9]">
+            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               <div>Item / Order ID</div>
               <div>Qty</div>
               <div>Unit Price</div>
@@ -573,7 +570,7 @@ function OrderDetailPanel({
             {order.items.map((item) => (
               <div
                 key={item.name}
-                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-white px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
+                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-[#FBF9F9] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
               >
                 <div className="min-w-0">
                   <div>{item.name}</div>
@@ -591,7 +588,7 @@ function OrderDetailPanel({
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between border-t border-[#ECECEA] bg-white px-3 py-3 text-[#111118]">
+            <div className="flex items-center justify-between border-t border-[#EBEBEB] bg-[#FBF9F9] px-3 py-3 text-[#111118]">
               <span className="text-[14px] font-semibold">Order Total</span>
               <span className="text-[18px] font-bold tracking-tight">
                 {currency(order.total)}
@@ -617,12 +614,7 @@ function OrderDetailPanel({
               </div>
               <div className="mt-1 flex flex-wrap gap-1.5">
                 {(order.coolerIds ?? []).map((coolerId) => (
-                  <span
-                    key={coolerId}
-                    className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#99A1AF]"
-                  >
-                    {coolerId}
-                  </span>
+                  <IdPill key={coolerId}>{coolerId}</IdPill>
                 ))}
                 {!order.coolerIds?.length ? (
                   <span className="text-[13px] text-[#99A1AF]">—</span>
@@ -883,7 +875,7 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
@@ -1009,8 +1001,8 @@ export default function CustomerOrdersPage() {
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col bg-white">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white px-4 py-5 md:px-7">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7">
         {activeTab === "Orders" ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className={DATE_CHIP_ROW}>
@@ -1128,9 +1120,7 @@ export default function CustomerOrdersPage() {
                             <ChevronRight size={13} className="text-[#A9A9A9]" />
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                              {order.id}
-                            </span>
+                            <IdPill>{order.id}</IdPill>
                             <span className="text-[12px] text-[#8A8A8A]">
                               {order.itemCount} items
                             </span>
@@ -1189,7 +1179,7 @@ export default function CustomerOrdersPage() {
                     key={day}
                     className="mb-6 overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
                   >
-                    <div className="flex items-center gap-2 border-b border-[#F0F0EE] px-4 py-3.5 text-[14px] font-semibold text-[#111118]">
+                    <div className="flex h-10 items-center gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-4 text-[14px] font-semibold text-[#111118]">
                       <DayHeaderIcon />
                       <span>
                         {day}
@@ -1216,9 +1206,7 @@ export default function CustomerOrdersPage() {
                             key={order.id}
                             className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
                           >
-                            <span className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                              {order.id}
-                            </span>
+                            <IdPill>{order.id}</IdPill>
                             <div className="font-semibold">
                               {order.customer}
                             </div>

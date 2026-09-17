@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER } from "@/constants/table";
+import { TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -204,9 +204,6 @@ const PRODUCT_MATCH: Record<string, string> = {
   Strawberries: "strawberries",
   Lemons: "lemons",
 };
-
-const ID_PILL =
-  "w-fit rounded-[6px] bg-[#EEF0F4] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]";
 
 function sectionSourceFor(title: string, itemName: string) {
   if (title === "Poultry") return "Legion Fields";
@@ -798,10 +795,10 @@ function StockItemsView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header title="Stock Items" />
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-8">
           {groupedSections.map((group) => (
             <div key={group.title}>
@@ -816,7 +813,7 @@ function StockItemsView({
                       <div
                         className={cn(
                           STOCK_GRID,
-                          "border-b border-[#E8E8E6] bg-[#FBF9F9] px-4 py-2.5",
+                          "h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4",
                         )}
                       >
                         <span className="col-span-2 min-w-0 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
@@ -875,8 +872,11 @@ function StockItemsView({
                               storageError && !rowReady && "bg-[#FFF8F6]",
                             )}
                           >
-                            <span className={cn(ID_PILL, "min-w-0 justify-self-start")}>
-                              {item.orderId}
+                            <span
+                              className={cn(ID_PILL, "justify-self-start")}
+                              title={item.orderId}
+                            >
+                              <span className="min-w-0 truncate">{item.orderId}</span>
                             </span>
                             <span className="min-w-0 truncate font-semibold">
                               {item.itemName}
@@ -1379,7 +1379,7 @@ export default function InventoryPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Inventory"
         toolbar={
@@ -1447,7 +1447,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 pt-8 pb-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 pt-8 pb-5 md:px-7">
         {orders.length ? (
           <div className="mb-5 space-y-2.5">
             {orders.map((order) => (
@@ -1496,7 +1496,7 @@ export default function InventoryPage() {
                 {group.sections.map((section) => (
                   <div key={section.title}>
                     <ScrollTable minWidth={1100} className="rounded-[12px]">
-                      <div className="border-b border-[#E8E8E6] bg-[#FBF9F9] px-3 py-2.5">
+                      <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-3">
                         <span className="text-[14px] font-semibold text-[#111118]">
                           {section.title}
                         </span>
@@ -1580,15 +1580,17 @@ export default function InventoryPage() {
                                       key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
                                       className={cn(
                                         GRID,
-                                        "group bg-[#F9FAFB] px-3 py-3 text-[12px] text-[#111118]",
+                                        "group bg-[#FBF9F9] px-3 py-3 text-[12px] text-[#111118]",
                                         lotIndex < product.lots.length - 1
                                           ? "border-b border-[#F0F0EE]"
                                           : "",
                                       )}
                                     >
                                       <div />
-                                      <span className={ID_PILL}>
-                                        {lot.orderId}
+                                      <span className={ID_PILL} title={lot.orderId}>
+                                        <span className="min-w-0 truncate">
+                                          {lot.orderId}
+                                        </span>
                                       </span>
                                       <div className="min-w-0 truncate">
                                         {lot.distributor}
@@ -1624,13 +1626,11 @@ export default function InventoryPage() {
                                   <div
                                     className={cn(
                                       GRID,
-                                      "bg-[#F9FAFB] px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                      "bg-[#FBF9F9] px-3 py-3 text-[12px] text-[#8A8A8A]",
                                     )}
                                   >
                                     <div />
-                                    <span className="w-fit rounded-[6px] bg-[#EEF0F4] px-2 py-0.5 text-center text-[11px]">
-                                      -
-                                    </span>
+                                    <span className={ID_PILL}>-</span>
                                     <div className="col-span-7">
                                       Inventory Empty
                                     </div>

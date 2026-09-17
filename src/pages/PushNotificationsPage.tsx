@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/AdminHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
+import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
@@ -172,7 +173,7 @@ export default function PushNotificationsPage() {
   const td = "px-0 py-[18px] align-middle text-[13px] leading-5 text-[#111118]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Push Notifications"
         toolbar={
@@ -214,7 +215,7 @@ export default function PushNotificationsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <ScrollTable minWidth={1100} className="rounded-[10px]">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
@@ -244,9 +245,7 @@ export default function PushNotificationsPage() {
                   className="border-b border-[#ECECEA] last:border-b-0"
                 >
                   <td className={cn(td, "pl-5 pr-3")}>
-                    <span className="inline-flex rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                      {item.id}
-                    </span>
+                    <IdPill>{item.id}</IdPill>
                   </td>
                   <td className={cn(td, "pr-3 font-semibold")}>{item.trigger}</td>
                   <td className={cn(td, "pr-3")}>{item.scheduledFor}</td>

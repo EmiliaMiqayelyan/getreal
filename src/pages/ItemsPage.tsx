@@ -4,6 +4,7 @@ import { Plus, Search } from "lucide-react";
 import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
+import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -30,13 +31,11 @@ const SECONDARY =
 const VIEW_DESCRIPTION_LINK =
   "cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] font-medium italic underline leading-[18px] text-[#6B718099] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
-const ID_MONO =
-  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 const TABS = ["All", ...ITEM_CATEGORIES] as const;
 type ItemTab = (typeof TABS)[number];
 
 const GRID =
-  "grid grid-cols-[100px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
+  "grid grid-cols-[90px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
 
 function formatSalePrice(value: number) {
   if (Number.isInteger(value)) return `$${value}`;
@@ -229,7 +228,7 @@ export default function ItemsPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Items"
         toolbarBorder={false}
@@ -346,7 +345,7 @@ export default function ItemsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
@@ -362,12 +361,7 @@ export default function ItemsPage() {
                 <div className="flex min-w-0 items-start gap-3">
                   <PhotoThumb item={row} />
                   <div className="min-w-0">
-                    <span
-                      className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
-                      style={{ fontFamily: ID_MONO }}
-                    >
-                      {row.id}
-                    </span>
+                    <IdPill>{row.id}</IdPill>
                     <div className={cn(BODY, "mt-2 font-semibold")}>
                       {getItemDisplayName(row)}
                     </div>
@@ -432,12 +426,7 @@ export default function ItemsPage() {
                     !isLast && "border-b border-[#F0F0EE]",
                   )}
                 >
-                  <span
-                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
-                    style={{ fontFamily: ID_MONO }}
-                  >
-                    {row.id}
-                  </span>
+                  <IdPill>{row.id}</IdPill>
                   <PhotoThumb item={row} />
                   <div className="min-w-0">
                     <div className={cn(BODY, "truncate font-semibold")}>

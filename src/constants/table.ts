@@ -2,6 +2,10 @@
 export const TABLE_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
+/** Fixed-size ID chip (90×20) for tables and lists. */
+export const ID_PILL =
+  "inline-flex h-5 w-[90px] shrink-0 items-center justify-center overflow-hidden rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none text-[#6B6B6B]";
+
 /** Page title — matches AdminHeader h1 */
 export const PAGE_TITLE =
   "text-[20px] font-semibold tracking-tight text-foreground";

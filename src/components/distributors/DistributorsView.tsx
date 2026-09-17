@@ -31,7 +31,7 @@ export function DistributorsView({ distributors }: DistributorsViewProps) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Distributors"
         toolbar={
@@ -48,7 +48,7 @@ export function DistributorsView({ distributors }: DistributorsViewProps) {
         }
       />
 
-      <div className="flex-1 overflow-auto px-8 py-6">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-8 py-6">
         <DistributorTable distributors={filtered} />
       </div>
 

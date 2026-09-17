@@ -16,6 +16,7 @@ import {
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -321,7 +322,7 @@ function PackingDetail({
   const td = "px-0 py-3.5 align-middle text-[13px] text-[#111118]";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -342,7 +343,7 @@ function PackingDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -352,10 +353,12 @@ function PackingDetail({
         <div className="space-y-5">
           {groups.map(([title, items]) => (
             <section key={title}>
-              <h2 className="mb-3 text-[16px] font-semibold text-[#111118]">
-                {title}
-              </h2>
               <ScrollTable minWidth={960} className="rounded-[10px]">
+                <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4">
+                  <span className="text-[14px] font-semibold text-[#111118]">
+                    {title}
+                  </span>
+                </div>
                 <table className="w-full table-fixed border-collapse">
                   <colgroup>
                     <col style={{ width: "22%" }} />
@@ -677,7 +680,7 @@ export default function PackingCoolersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
@@ -718,7 +721,7 @@ export default function PackingCoolersPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {
@@ -859,9 +862,7 @@ export default function PackingCoolersPage() {
                     <ChevronRight size={14} className="text-[#A9A9A9]" />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                      {order.code}
-                    </span>
+                    <IdPill>{order.code}</IdPill>
                     <span className="text-[12px] text-[#8A8A8A]">
                       {order.itemCount} items
                     </span>
@@ -897,12 +898,7 @@ export default function PackingCoolersPage() {
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col gap-1.5">
                         {order.coolerIds.map((coolerId) => (
-                          <span
-                            key={coolerId}
-                            className="w-fit rounded-[6px] bg-id-pill px-2 py-1 font-mono text-[11px] font-medium text-[#6B6B6B]"
-                          >
-                            {coolerId}
-                          </span>
+                          <IdPill key={coolerId}>{coolerId}</IdPill>
                         ))}
                       </div>
                       {!loaded ? (

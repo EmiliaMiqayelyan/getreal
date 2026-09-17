@@ -3,6 +3,7 @@ import { Plus, Search, X } from "lucide-react";
 
 import { AddProductForSaleModal } from "@/components/products/AddProductForSaleModal";
 import { Header } from "@/components/layout/AdminHeader";
+import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -47,11 +48,9 @@ import {
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
-const ID_MONO =
-  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 const GRID =
-  "grid grid-cols-[24px_76px_56px_minmax(0,260px)_minmax(0,140px)_96px_minmax(0,130px)_auto] items-center gap-2";
+  "grid grid-cols-[24px_90px_56px_minmax(0,260px)_minmax(0,140px)_96px_minmax(0,130px)_auto] items-center gap-2";
 
 function DragHandle() {
   return (
@@ -121,12 +120,7 @@ function ProductDetailDrawer({
       aria-label="Product details"
     >
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
-        <span
-          className="inline-flex h-7 items-center rounded-[6px] bg-id-pill px-2.5 text-[12px] font-medium text-[#99A1AF]"
-          style={{ fontFamily: ID_MONO }}
-        >
-          {details.id}
-        </span>
+        <IdPill className="text-[#99A1AF]">{details.id}</IdPill>
         <button
           type="button"
           aria-label="Close"
@@ -242,7 +236,7 @@ function SubcategoryTable({
 
   return (
     <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-      <div className="border-b border-[#ECECEA] bg-[#FBF9F9] px-4 py-3">
+      <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4">
         <h3 className="text-[14px] font-semibold text-[#111118]">{title}</h3>
       </div>
       <ScrollTable minWidth={760}>
@@ -285,12 +279,7 @@ function SubcategoryTable({
             >
               <DragHandle />
             </button>
-            <span
-              className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
-              style={{ fontFamily: ID_MONO }}
-            >
-              {row.id}
-            </span>
+            <IdPill>{row.id}</IdPill>
             <LiveToggle
               on={row.live}
               label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
@@ -514,7 +503,7 @@ export default function ProductsForSalePage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Products For Sale"
         toolbarBorder={false}
@@ -620,7 +609,7 @@ export default function ProductsForSalePage() {
         }
       />
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-7">
+      <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         {filtered.length === 0 || grouped.length === 0 ? (
           <div className="rounded-[10px] border border-dashed border-[#DCDCD8] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
             {getProductsForSaleEmptyMessage(products.length, filterCriteria)}

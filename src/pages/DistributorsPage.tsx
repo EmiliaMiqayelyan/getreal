@@ -4,6 +4,7 @@ import { AddDistributorModal } from "@/components/distributors/AddDistributorMod
 import { DistributorFilters } from "@/components/distributors/DistributorFilters";
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
@@ -34,11 +35,9 @@ const FILES_TRIGGER =
   "inline-flex cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[13px] font-medium leading-[18px] text-[#111118] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 const SECONDARY = "text-[12px] leading-[16px] font-medium text-[#6B7180]";
-const ID_MONO =
-  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 const GRID =
-  "grid grid-cols-[100px_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_92px_56px_48px] items-center gap-x-4";
+  "grid grid-cols-[90px_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_92px_56px_48px] items-center gap-x-4";
 
 function FilesChevron({ open }: { open: boolean }) {
   return (
@@ -320,7 +319,7 @@ export default function DistributorsPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Distributors"
         toolbar={
@@ -338,7 +337,7 @@ export default function DistributorsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
@@ -352,12 +351,7 @@ export default function DistributorsPage() {
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <span
-                    className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
-                    style={{ fontFamily: ID_MONO }}
-                  >
-                    {row.id}
-                  </span>
+                  <IdPill>{row.id}</IdPill>
                   <div className="mt-2 truncate text-[13px] leading-[18px] font-medium text-[#111118]">
                     {row.name}
                   </div>
@@ -423,12 +417,7 @@ export default function DistributorsPage() {
                     !isLast && "border-b border-[#ECECEA]",
                   )}
                 >
-                  <span
-                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
-                    style={{ fontFamily: ID_MONO }}
-                  >
-                    {row.id}
-                  </span>
+                  <IdPill>{row.id}</IdPill>
 
                   <div className="min-w-0">
                     <div className={cn(BODY, "truncate")}>

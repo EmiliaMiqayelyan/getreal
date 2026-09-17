@@ -15,6 +15,7 @@ import {
   DATE_CHIP_ROW,
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
+import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -172,9 +173,7 @@ function AssignPackerMenu({
               ? "No orders"
               : `${packer.orderCount} order${packer.orderCount === 1 ? "" : "s"}`}
           </span>
-          <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[10px] text-[#6B6B6B]">
-            {packer.code}
-          </span>
+          <IdPill>{packer.code}</IdPill>
         </button>
       ))}
       {!filtered.length ? (
@@ -293,7 +292,7 @@ export default function PackerManagerPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
@@ -334,7 +333,7 @@ export default function PackerManagerPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {
@@ -461,9 +460,7 @@ export default function PackerManagerPage() {
                     <ChevronRight size={14} className="text-[#A9A9A9]" />
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
-                    <span className="rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                      {order.code}
-                    </span>
+                    <IdPill>{order.code}</IdPill>
                     <span className="text-[12px] text-[#8A8A8A]">
                       {order.itemCount} items
                     </span>

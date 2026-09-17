@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronLeft, Minus, Plus, X } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
+import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
@@ -141,7 +142,7 @@ export function CreateManualOrderFlow({
   }
 
   return (
-    <div className="relative flex h-full min-h-0 flex-col bg-background">
+    <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
       <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -162,7 +163,7 @@ export function CreateManualOrderFlow({
       </div>
 
       {step === "create" ? (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="mx-auto max-w-[920px] space-y-4">
             <section className="overflow-hidden rounded-[8px] border border-[#ECECEA] bg-white">
               <div className="p-5 md:p-6">
@@ -216,9 +217,7 @@ export function CreateManualOrderFlow({
                                 key={line.id}
                                 className="flex items-center gap-4 border-b border-[#ECECEA] py-3 last:border-b-0"
                               >
-                                <span className="w-fit shrink-0 rounded-[8px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#6A6A6A]">
-                                  {line.sku}
-                                </span>
+                                <IdPill>{line.sku}</IdPill>
                                 <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
                                   {line.name}
                                 </span>
@@ -307,7 +306,7 @@ export function CreateManualOrderFlow({
           </div>
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5 md:px-8">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5">
               <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">

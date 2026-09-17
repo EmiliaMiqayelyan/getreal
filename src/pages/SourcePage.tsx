@@ -4,6 +4,7 @@ import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AddSourceModal } from "@/components/sources/AddSourceModal";
 import { SourceFilters } from "@/components/sources/SourceFilters";
+import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
@@ -30,11 +31,9 @@ const EDIT_LINK =
 const NOTES_LINK =
   "cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] font-medium italic underline leading-[18px] text-[#111118] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
-const ID_MONO =
-  '"SF Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
 
 const GRID =
-  "grid grid-cols-[100px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
+  "grid grid-cols-[90px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
 
 function SourcePhoto({ logoUrl, name }: { logoUrl: string | null; name: string }) {
   return (
@@ -171,7 +170,7 @@ export default function SourcePage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Source"
         toolbar={
@@ -190,7 +189,7 @@ export default function SourcePage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
@@ -206,12 +205,7 @@ export default function SourcePage() {
                 <div className="flex min-w-0 items-start gap-3">
                   <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
                   <div className="min-w-0">
-                    <span
-                      className="rounded-[6px] bg-id-pill px-2 py-0.5 text-[11px] font-medium text-[#5A5A5A]"
-                      style={{ fontFamily: ID_MONO }}
-                    >
-                      {row.id}
-                    </span>
+                    <IdPill>{row.id}</IdPill>
                     <div className={cn(BODY, "mt-2 truncate")}>{row.name}</div>
                     <LocationHover
                       className={cn(BODY, "mt-1")}
@@ -272,12 +266,7 @@ export default function SourcePage() {
                     !isLast && "border-b border-[#ECECEA]",
                   )}
                 >
-                  <span
-                    className="inline-flex h-7 w-fit items-center rounded-[6px] bg-id-pill px-2 text-[11px] font-medium text-[#5A5A5A]"
-                    style={{ fontFamily: ID_MONO }}
-                  >
-                    {row.id}
-                  </span>
+                  <IdPill>{row.id}</IdPill>
 
                   <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
 

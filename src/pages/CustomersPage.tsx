@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Flag, MessageCircle, Search, X } from "lucide-react";
+import { ChevronRight, Flag, Search, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
@@ -48,27 +49,6 @@ function formatDeliveryDate(iso: string) {
 function dayAbbrev(day?: string) {
   if (!day) return "—";
   return day.slice(0, 3);
-}
-
-function MessageCustomerButton({
-  customer,
-}: {
-  customer: AdminCustomer;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={`Message ${customer.firstName} ${customer.lastName}`}
-      title="Message customer"
-      onClick={(event) => {
-        event.stopPropagation();
-        window.location.href = `mailto:${customer.email}`;
-      }}
-      className="inline-flex shrink-0 items-center justify-center rounded-md p-0.5 text-[#A9A9A9] hover:bg-[#F5F5F3] hover:text-[#3B82F6]"
-    >
-      <MessageCircle size={14} strokeWidth={1.75} />
-    </button>
-  );
 }
 
 function parseAddress(fullAddress: string) {
@@ -121,9 +101,7 @@ function OrderDetailDrawer({
       <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
         <div className="min-w-0 pr-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-              {order.id}
-            </span>
+            <IdPill>{order.id}</IdPill>
             <span className="text-[12px] text-[#8A8A8A]">
               Ordered:{" "}
               <span className="text-[#111118]">
@@ -161,8 +139,8 @@ function OrderDetailDrawer({
             Requested Items
           </h3>
           <div className="overflow-x-auto">
-            <div className="min-w-[320px] overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-              <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#ECECEA] bg-white px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-[#FBF9F9]">
+              <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                 <div>Item / Order ID</div>
                 <div>Qty</div>
                 <div>Unit Price</div>
@@ -171,7 +149,7 @@ function OrderDetailDrawer({
               {order.items.map((item) => (
                 <div
                   key={`${order.id}-${item.itemName}`}
-                  className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-white px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
+                  className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-[#FBF9F9] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
                 >
                   <div className="min-w-0">
                     <div>{item.itemName}</div>
@@ -191,7 +169,7 @@ function OrderDetailDrawer({
                   </div>
                 </div>
               ))}
-              <div className="flex items-center justify-between border-t border-[#ECECEA] bg-white px-3 py-3 text-[#111118]">
+              <div className="flex items-center justify-between border-t border-[#EBEBEB] bg-[#FBF9F9] px-3 py-3 text-[#111118]">
                 <span className="text-[14px] font-semibold">Order Total</span>
                 <span className="text-[18px] font-bold tracking-tight">
                   {currency(order.orderPrice)}
@@ -221,12 +199,7 @@ function OrderDetailDrawer({
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {(order.coolerIds ?? []).length ? (
                   order.coolerIds!.map((id) => (
-                    <span
-                      key={id}
-                      className="rounded-[6px] bg-[#F3F3F1] px-2 py-0.5 font-mono text-[11px] text-[#99A1AF]"
-                    >
-                      {id}
-                    </span>
+                    <IdPill key={id}>{id}</IdPill>
                   ))
                 ) : (
                   <span className="text-[13px] text-[#99A1AF]">—</span>
@@ -301,9 +274,15 @@ function CustomerOrdersPanel({
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
   return (
-    <div className="border-t border-[#F0F0EE] bg-[#F9FAFB] px-3 py-3 sm:px-6 sm:py-4">
+    // Desktop pl-[26px]: row px-3 (12) + half of 28px chevron col (14) = expand-arrow center
+    <div className="relative border-t border-[#F0F0EE] bg-[#FBF9F9] px-3 py-3 sm:py-4 md:pl-[26px] md:pr-6">
+      {/* Full-height spine at expand-arrow center; sits 1px left of content so row bg doesn't cover it */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-8 bottom-0 left-[25px] hidden w-px bg-[#E4E4E0] md:block"
+      />
       {/* Mobile: stacked order cards */}
-      <div className="space-y-2 md:hidden">
+      <div className="relative space-y-2 md:hidden">
         {customer.orders.map((order) => (
           <div
             key={order.id}
@@ -346,10 +325,10 @@ function CustomerOrdersPanel({
         ))}
       </div>
 
-      {/* Desktop: table — spacer after Status so Total + View sit together on the right */}
-      <div className="hidden md:block">
+      {/* Desktop: nested table left edge aligns to expand-arrow center */}
+      <div className="relative hidden md:block">
         <ScrollTable minWidth={720} bare>
-          <div className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#EBEBEB] bg-[#FBF9F9] py-2 pr-4 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div>Order ID</div>
             <div>Order Date</div>
             <div>Delivery</div>
@@ -365,11 +344,9 @@ function CustomerOrdersPanel({
             return (
               <div
                 key={order.id}
-                className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-[#F9FAFB] px-4 py-3 text-[13px] text-[#111118] last:border-b-0"
+                className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-[#FBF9F9] py-3 pr-4 text-[13px] text-[#111118] last:border-b-0"
               >
-                <span className="w-fit rounded-[6px] bg-id-pill px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                  {order.id}
-                </span>
+                <IdPill>{order.id}</IdPill>
                 <div>
                   <div>{formatShortDate(order.orderDate)}</div>
                   {timeLabel ? (
@@ -462,9 +439,7 @@ function CustomerTable({
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]">
-                      {customer.id}
-                    </span>
+                    <IdPill>{customer.id}</IdPill>
                     <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                       {customer.firstName} {customer.lastName}
                       {customer.flagged ? (
@@ -494,17 +469,14 @@ function CustomerTable({
                     </span>
                   </div>
                 </button>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  <MessageCustomerButton customer={customer} />
-                  <div className="text-right">
-                    <div className="text-[14px] font-semibold text-[#111118]">
-                      {currency(customer.lifetimeTotal)}
-                    </div>
-                    <div className="mt-1">
-                      <span className="inline-flex rounded-full bg-[#E7F2EA] px-2 py-0.5 text-[11px] font-semibold text-[#1C5752]">
-                        {dayAbbrev(customer.deliveryDay)}
-                      </span>
-                    </div>
+                <div className="shrink-0 text-right">
+                  <div className="text-[14px] font-semibold text-[#111118]">
+                    {currency(customer.lifetimeTotal)}
+                  </div>
+                  <div className="mt-1">
+                    <span className="inline-flex rounded-full bg-[#E7F2EA] px-2 py-0.5 text-[11px] font-semibold text-[#1C5752]">
+                      {dayAbbrev(customer.deliveryDay)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -554,7 +526,7 @@ function CustomerTable({
                     type="button"
                     aria-label={open ? "Collapse" : "Expand"}
                     onClick={() => onToggle(customer.id)}
-                    className="flex justify-center"
+                    className="relative z-[1] flex justify-center"
                   >
                     <ChevronRight
                       size={14}
@@ -568,16 +540,15 @@ function CustomerTable({
                   <button
                     type="button"
                     onClick={() => onToggle(customer.id)}
-                    className="w-fit rounded-[6px] bg-[#F3F3F1] px-1.5 py-0.5 font-mono text-[11px] font-medium text-[#6B6B6B]"
+                    className="cursor-pointer"
                   >
-                    {customer.id}
+                    <IdPill>{customer.id}</IdPill>
                   </button>
 
                   <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-[#111118]">
                     <span className="truncate">
                       {customer.firstName} {customer.lastName}
                     </span>
-                    <MessageCustomerButton customer={customer} />
                     {customer.flagged ? (
                       <Flag
                         size={12}
@@ -704,7 +675,7 @@ export default function CustomersPage() {
   const inactive = filtered.filter((customer) => customer.blocked);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Customers"
         toolbar={
@@ -758,8 +729,8 @@ export default function CustomersPage() {
         }
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+      <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
+        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
           <section className="mb-6">
             <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
               Active{" "}

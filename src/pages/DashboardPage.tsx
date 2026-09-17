@@ -286,7 +286,7 @@ export default function DashboardPage() {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Dashboard Report"
         toolbar={
@@ -323,7 +323,7 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto px-4 md:px-7 py-5">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {statCards.map((card) => {
             const Icon = card.icon;

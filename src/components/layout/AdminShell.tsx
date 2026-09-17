@@ -60,7 +60,7 @@ export function AdminShell({ children }: AdminShellProps) {
 
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
         <div className="flex h-14 shrink-0 items-center gap-3 overflow-hidden border-b border-[#ECECEA] bg-white px-4 lg:hidden">
           <button
             type="button"
