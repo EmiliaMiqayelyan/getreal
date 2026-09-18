@@ -43,8 +43,8 @@ async function loadOne<T>(promise: Promise<T>): Promise<LoadResult<T>> {
 
 /**
  * Loads remote catalog, users, and roles when VITE_API_URL is set.
- * Merges API rows with temporary mock seeds (API wins on same id).
- * Surfaces load failures via toast; keeps seeded mock data as fallback.
+ * Replaces local catalog state with API rows when present.
+ * Surfaces load failures via toast.
  */
 export function ApiBootstrap() {
   const { setDistributors, setItems, setProducts, setSources } = useAppCatalog();

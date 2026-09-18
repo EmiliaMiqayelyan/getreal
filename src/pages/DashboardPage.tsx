@@ -38,16 +38,16 @@ import { cn } from "@/utils/cn";
 type ChartMode = "daily" | "weekly" | "monthly";
 
 /** Temporary seed chart points until Dashboard API owns these series. */
-const ORDERS_CHART = {
-  daily: [{ name: "Jun 30", value: 16 }],
-  weekly: [{ name: "W4", value: 55 }],
-  monthly: [{ name: "Jul", value: 152 }],
+const ORDERS_CHART: Record<ChartMode, { name: string; value: number }[]> = {
+  daily: [],
+  weekly: [],
+  monthly: [],
 };
 
-const REVENUE_CHART = {
-  daily: [{ name: "Jun 30", value: 170 }],
-  weekly: [{ name: "W4", value: 1020 }],
-  monthly: [{ name: "Jul", value: 5285 }],
+const REVENUE_CHART: Record<ChartMode, { name: string; value: number }[]> = {
+  daily: [],
+  weekly: [],
+  monthly: [],
 };
 
 function ChartToggle({

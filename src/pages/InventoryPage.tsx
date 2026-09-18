@@ -105,57 +105,7 @@ type DistributeTarget = {
 };
 
 /** Temporary seed - one product per inventory section. */
-const INITIAL_SECTIONS: InventorySection[] = [
-  {
-    title: "Meat",
-    sourceLabel: "FARMER",
-    products: [
-      {
-        id: "angus",
-        name: "Angus Chuck Ground Beef",
-        lots: [
-          {
-            orderId: "OPE-10045",
-            distributor: "4PF Co.",
-            source: "FreshAlley Meat Co",
-            deliveryDate: "Jul 16, 2026, 08:00",
-            purchased: "$125/case",
-            qty: 5,
-            unit: "1lb",
-            location: "Freezer 1",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Poultry",
-    sourceLabel: "FARMER",
-    products: [
-      {
-        id: "drumsticks",
-        name: "Drumsticks",
-        lots: [
-          {
-            orderId: "OPE-10060",
-            distributor: "Greenfield Farms",
-            source: "Sofia Reyes",
-            deliveryDate: "Jul 19, 2026, 06:00",
-            purchased: "$7.50/pack",
-            qty: 3,
-            unit: "2 per pack",
-            location: "Fridge 1",
-          },
-        ],
-      },
-    ],
-  },
-  {
-    title: "Fruits",
-    sourceLabel: "SOURCE",
-    products: [{ id: "blueberries", name: "Blueberries", lots: [] }],
-  },
-];
+const INITIAL_SECTIONS: InventorySection[] = [];
 
 const CATEGORY_GROUPS: { title: string; sections: string[] }[] = [
   { title: "API", sections: ["API Stock"] },
@@ -164,32 +114,7 @@ const CATEGORY_GROUPS: { title: string; sections: string[] }[] = [
 ];
 
 /** Temporary seed - one received order sample. */
-const RECEIVED_ORDERS: ReceivedOrder[] = [
-  {
-    id: "r-4pf",
-    supplier: "4PF Co.",
-    itemsCount: "1 item",
-    receivedAt: "Jul 20, 2026 · 12:35 PM",
-    sections: [
-      {
-        title: "Meat",
-        items: [
-          {
-            id: "4pf-angus",
-            orderId: "ID-002-02",
-            itemName: "Angus Chuck Ground Beef",
-            qty: 1,
-            unit: "Case",
-            qtyAfterUnpack: "6",
-            expDate: "Jul 28, 2026",
-            location: "",
-            splits: [],
-          },
-        ],
-      },
-    ],
-  },
-];
+const RECEIVED_ORDERS: ReceivedOrder[] = [];
 
 const PRODUCT_MATCH: Record<string, string> = {
   "Angus Chuck Ground Beef": "angus",

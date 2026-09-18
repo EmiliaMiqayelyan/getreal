@@ -1,4 +1,3 @@
-import { ITEMS } from "@/constants/items";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Item } from "@/types/item";
 
@@ -27,16 +26,7 @@ function fromItem(
   };
 }
 
-function requireItem(id: string) {
-  const item = ITEMS.find((entry) => entry.id === id);
-  if (!item) throw new Error(`Missing item ${id}`);
-  return item;
-}
-
-/** Temporary seed - keep one sample until API covers this list. */
-export const PRODUCTS_FOR_SALE: ProductForSale[] = [
-  fromItem(requireItem("IT-000009"), "PR-001", 0),
-];
+export const PRODUCTS_FOR_SALE: ProductForSale[] = [];
 
 export function productFromItem(
   item: Item,

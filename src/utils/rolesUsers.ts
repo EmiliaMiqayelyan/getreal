@@ -74,18 +74,7 @@ export function saveRoleUsers(users: RoleUser[]): void {
 }
 
 /** Seed role templates until Roles API owns this list. */
-export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [
-  {
-    id: "role-manager",
-    name: "Manager",
-    permissions: { ...MANAGER_ROLE_PERMISSIONS },
-  },
-  {
-    id: "role-warehouse",
-    name: "Warehouse Worker",
-    permissions: { ...WAREHOUSE_ROLE_PERMISSIONS },
-  },
-];
+export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [];
 
 export function loadManagedRoles(): ManagedRole[] {
   try {

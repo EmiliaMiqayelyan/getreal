@@ -33,7 +33,6 @@ import {
   DISTRIBUTOR_EMAILS,
   ORDER_CATEGORIES,
   ORDER_LIST_ITEMS,
-  SEED_IN_PROGRESS,
 } from "@/constants/distributorOrders";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -606,9 +605,7 @@ export default function ProductOrdersPage() {
           };
         });
 
-        setInProgress((prev) =>
-          appendInProgressOrders(prev, mapped, SEED_IN_PROGRESS),
-        );
+        setInProgress((prev) => appendInProgressOrders(prev, mapped));
       })
       .catch((error) => {
         notifyApiError(error, "Failed to load distributor orders.");
@@ -651,7 +648,7 @@ export default function ProductOrdersPage() {
       nextDeliveryId(inProgress),
     );
     setInProgress((prev) =>
-      appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
+      appendInProgressOrders(prev, [order]),
     );
     setExpandedId(order.id);
     showToast("Order created successfully");
@@ -683,7 +680,7 @@ export default function ProductOrdersPage() {
     );
 
     setInProgress((prev) =>
-      appendInProgressOrders(prev, [order], SEED_IN_PROGRESS),
+      appendInProgressOrders(prev, [order]),
     );
     syncReviewGroupOrder(group, distributors, products);
     setOrderedDistributors((prev) => new Set(prev).add(distributor));
@@ -710,7 +707,7 @@ export default function ProductOrdersPage() {
     });
 
     setInProgress((prev) =>
-      appendInProgressOrders(prev, created, SEED_IN_PROGRESS),
+      appendInProgressOrders(prev, created),
     );
     for (const group of remaining) {
       syncReviewGroupOrder(group, distributors, products);

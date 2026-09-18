@@ -641,7 +641,7 @@ export default function CustomersPage() {
         if (apiUsers.length === 0) return;
 
         const mapped = apiUsers.map(mapApiUserToAdminCustomer);
-        // Prefer live API customers over local mock seeds.
+        // Prefer live API customers when available.
         setCustomers(mapped);
       })
       .catch((error) => {

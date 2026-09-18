@@ -23,7 +23,6 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
-import { MEAT_OPTIONS } from "@/data/packingInventory";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -55,43 +54,14 @@ type PackOrder = {
   items: PackingLine[];
 };
 
-const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-20", label: "Wed, Jul 20", dateKey: "Jul 20", day: 20 },
-];
+const DELIVERY_CHIPS: DeliveryChip[] = [];
 
-const COOLER_OPTIONS = ["BL-0008", "BL-02313", "FR-10034", "FR-1423"];
+const COOLER_OPTIONS: string[] = [];
 
 type SourceOption = PackingSourceOption;
 
-/** Temporary seed - one packing line so SourcePicker still demos. */
-function makeItems(): PackingLine[] {
-  return [
-    {
-      id: "1",
-      name: "Angus Chuck Ground Beef",
-      category: "Meat",
-      qty: 3,
-      coolerId: "Cooler",
-      packed: false,
-      options: MEAT_OPTIONS,
-    },
-  ];
-}
-
 /** Temporary seed - one order shared with Packer Manager / Customer Orders. */
-const INITIAL_ORDERS: PackOrder[] = [
-  {
-    id: "o1",
-    customer: "Emily Rodriguez",
-    code: "ORD-U003-01",
-    itemCount: 1,
-    deliveryDate: "Wed, Jul 20, 2026",
-    packedAt: "8/29/26, 9:15am",
-    loadedAt: "9/29/26, 9:50am",
-    coolerIds: ["BL-0012", "FR-1423"],
-    items: makeItems(),
-  },
-];
+const INITIAL_ORDERS: PackOrder[] = [];
 
 const SOURCE_PANEL_WIDTH = 460;
 
@@ -635,6 +605,7 @@ export default function PackingCoolersPage() {
   }
 
   function cycleChip(delta: number) {
+    if (DELIVERY_CHIPS.length === 0) return;
     const index =
       activeChipIndex >= 0 ? activeChipIndex : 0;
     const next =

@@ -7,10 +7,10 @@ import { Button } from "@/components/ui/Button";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import {
-  MANUAL_DISTRIBUTORS,
   MANUAL_TIME_SLOTS,
 } from "@/constants/distributorOrders";
 import { TABLE_HEADER } from "@/constants/table";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
@@ -68,6 +68,7 @@ export function CreateManualOrderFlow({
   onClose,
   onCreated,
 }: CreateManualOrderFlowProps) {
+  const { distributors } = useAppCatalog();
   const [step, setStep] = useState<Step>("create");
   const [distributor, setDistributor] = useState("");
   const [lines, setLines] = useState<ManualLine[]>([]);
@@ -75,6 +76,12 @@ export function CreateManualOrderFlow({
   const [timeSlot, setTimeSlot] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
   useScrollLock(confirmClose);
+
+  const distributorOptions = useMemo(
+    () =>
+      Array.from(new Set(distributors.map((entry) => entry.name))).sort(),
+    [distributors],
+  );
 
   const total = useMemo(
     () => lines.reduce((sum, line) => sum + line.price * line.quantity, 0),
@@ -179,7 +186,7 @@ export function CreateManualOrderFlow({
                     className="w-full max-w-[420px]"
                     options={[
                       { value: "", label: "Select" },
-                      ...MANUAL_DISTRIBUTORS.map((name) => ({
+                      ...distributorOptions.map((name) => ({
                         value: name,
                         label: name,
                       })),

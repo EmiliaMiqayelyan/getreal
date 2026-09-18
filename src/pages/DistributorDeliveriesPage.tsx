@@ -509,30 +509,7 @@ function ExpirationDatePicker({
 }
 
 /** Temporary seed - one delivery order sample. */
-const INITIAL_ORDERS: DeliveryOrder[] = [
-  {
-    id: "DP-1043",
-    distributor: "4PF Co.",
-    orderDate: "Jul 16, 12:34 PM",
-    expectedDelivery: "Jul 18, 8:00 AM",
-    deliveryDateId: "2026-07-20",
-    totalPrice: 125,
-    checked: false,
-    items: [
-      {
-        id: "li-1",
-        itemCode: "ID-002-02",
-        name: "Angus Chuck Ground Beef",
-        category: "Meat",
-        quantity: 1,
-        unit: "Case",
-        source: "FreshMarket Co",
-        unitPrice: 125,
-        priceLabel: "$125/case",
-      },
-    ],
-  },
-];
+const INITIAL_ORDERS: DeliveryOrder[] = [];
 
 const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {};
 

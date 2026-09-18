@@ -76,14 +76,9 @@ export function createPlacedOrderFromManualDraft(
 export function appendInProgressOrders(
   previous: PlacedOrder[],
   created: PlacedOrder[],
-  seed?: PlacedOrder,
 ) {
   const createdIds = new Set(created.map((order) => order.id));
-  const base =
-    previous.length === 0 && seed && !createdIds.has(seed.id)
-      ? [seed]
-      : previous.filter((order) => !createdIds.has(order.id));
-
+  const base = previous.filter((order) => !createdIds.has(order.id));
   return [...created, ...base];
 }
 

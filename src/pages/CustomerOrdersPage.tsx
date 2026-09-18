@@ -108,14 +108,9 @@ const STEPS_META: { key: TimelineStepKey; header: string }[] = [
   { key: "return", header: "Return" },
 ];
 
-const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-20", label: "Wed, Jul 20", count: 1 },
-];
+const DELIVERY_CHIPS: DeliveryChip[] = [];
 
 /** Temporary seed - one line item sample. */
-const SAMPLE_ITEMS: OrderItem[] = [
-  { name: "Angus Chuck Ground Beef", qty: 1, unit: "lb", unitPrice: 33.75 },
-];
 
 function applyPackingHandoff(
   order: CustomerOrderRow,
@@ -190,42 +185,9 @@ function makeSteps(doneCount: number): TimelineStep[] {
 }
 
 /** Temporary seed - one active order and one completed order. */
-const ACTIVE_ORDERS: CustomerOrderRow[] = [
-  {
-    id: "ORD-U003-01",
-    customerName: "Emily Rodriguez",
-    itemCount: 1,
-    address: "1523 Astoria Blvd",
-    apt: "",
-    city: "Queens",
-    state: "NY",
-    zip: "11102",
-    orderDate: "Jul 16, 2026, 5:13 PM",
-    deliveryDate: "Jul 20, 2026, Wednesday",
-    deliveryLabel: "Wed, Jul 20",
-    paymentStatus: "Paid",
-    total: 33.75,
-    items: SAMPLE_ITEMS,
-    packerAssigned: "Packer Name 1",
-    coolerIds: ["BL-0012", "FR-1423"],
-    steps: makeSteps(1),
-  },
-];
+const ACTIVE_ORDERS: CustomerOrderRow[] = [];
 
-const COMPLETED_ORDERS: CompletedOrder[] = [
-  {
-    id: "ORD-U004-08",
-    customer: "Emma Thompson",
-    address: "456 Elm St, Apt 12, New York, NY",
-    zip: "90015",
-    orderDate: "Apr 15, 2026, 3:30 PM",
-    delivered: "Jul 15, 2026, 10:00 AM",
-    items: 1,
-    total: 33.75,
-    day: "Wednesday, 7/15/2026",
-    week: "Week of 7/14/2026",
-  },
-];
+const COMPLETED_ORDERS: CompletedOrder[] = [];
 
 function currency(value: number) {
   return `$${value.toFixed(2)}`;

@@ -41,15 +41,7 @@ const SCHEDULE_OPTIONS = [
 ];
 
 /** Temporary seed - one notification sample until Push API is wired. */
-const INITIAL: PushNotification[] = [
-  {
-    id: "PN-001",
-    trigger: "Order Confirmation",
-    scheduledFor: "After Order Confirmed",
-    subject: "Your Rachel's Habit Box is Scheduled!",
-    body: "Your order for [Date] is confirmed. We'll deliver to [Address] during [Time Window].",
-  },
-];
+const INITIAL: PushNotification[] = [];
 
 type Draft = {
   id?: string;

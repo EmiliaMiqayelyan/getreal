@@ -28,18 +28,7 @@ const PackingHandoffContext = createContext<PackingHandoffContextValue | null>(
 );
 
 /** Temporary seed - one packing sample until Packing API owns this state. */
-const SEED: Record<string, PackingHandoffUpdate> = {
-  "ORD-U003-01": {
-    orderCode: "ORD-U003-01",
-    packerId: "p1",
-    packerName: "Vahan N",
-    packingStartedAt: "7/29/26, 8:45am",
-    coolerReadyAt: "8/29/26, 9:15am",
-    packedAt: "8/29/26, 9:15am",
-    loadedAt: "9/29/26, 9:50am",
-    coolerIds: ["BL-0012", "FR-1423"],
-  },
-};
+const SEED: Record<string, PackingHandoffUpdate> = {};
 
 export function PackingHandoffProvider({ children }: { children: ReactNode }) {
   const [packingByCode, setPackingByCode] =

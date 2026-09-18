@@ -49,25 +49,13 @@ type ManagerOrder = {
   deliveryDate: string;
 };
 
-const DELIVERY_CHIPS: DeliveryChip[] = [
-  { id: "wed-20", label: "Wed, Jul 20", dateKey: "Jul 20", day: 20 },
-];
+const DELIVERY_CHIPS: DeliveryChip[] = [];
 
 /** Eligible packing-role users only (§6). Temporary seed - one packer. */
-const ELIGIBLE_PACKERS: Packer[] = [
-  { id: "p1", name: "Vahan N", code: "PCK-U003-01", role: "packer" },
-];
+const ELIGIBLE_PACKERS: Packer[] = [];
 
 /** Temporary seed - one order sample. */
-const INITIAL_ORDERS: ManagerOrder[] = [
-  {
-    id: "o1",
-    customer: "Emily Rodriguez",
-    code: "ORD-U003-01",
-    itemCount: 1,
-    deliveryDate: "Wed, Jul 20, 2026",
-  },
-];
+const INITIAL_ORDERS: ManagerOrder[] = [];
 
 const ROW_GRID =
   "grid grid-cols-[220px_180px_140px_140px_140px] items-center gap-x-5";
@@ -268,6 +256,7 @@ export default function PackerManagerPage() {
   }, [orders, packingByCode, search, sortBy, activeChip]);
 
   function cycleChip(delta: number) {
+    if (DELIVERY_CHIPS.length === 0) return;
     const index = activeChipIndex >= 0 ? activeChipIndex : 0;
     const next =
       (index + delta + DELIVERY_CHIPS.length) % DELIVERY_CHIPS.length;
