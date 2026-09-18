@@ -122,7 +122,7 @@ export function ManageSubcategoriesModal({
         data-scroll-lock-allow
         className="relative z-10 flex max-h-[min(560px,90vh)] w-full max-w-[440px] flex-col overflow-hidden rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#ECECEA] px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#00000014] px-5 py-4">
           <div>
             <h2
               id="manage-subcategories-title"
@@ -183,15 +183,15 @@ export function ManageSubcategoriesModal({
           ) : null}
 
           <div>
-            <p className="mb-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <p className="mb-2 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Existing
             </p>
             {options.length === 0 ? (
-              <p className="rounded-[10px] border border-dashed border-[#E6E6E3] px-3 py-6 text-center text-[13px] text-[#8A8A8A]">
+              <p className="rounded-[10px] border border-dashed border-[#00000014] px-3 py-6 text-center text-[13px] text-[#8A8A8A]">
                 No subcategories yet. Add one above.
               </p>
             ) : (
-              <ul className="divide-y divide-[#ECECEA] rounded-[10px] border border-[#ECECEA]">
+              <ul className="divide-y divide-[#00000014] rounded-[10px] border border-[#00000014]">
                 {options.map((name) => {
                   const isEditing = editingName === name;
                   return (
@@ -278,7 +278,7 @@ export function ManageSubcategoriesModal({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end border-t border-[#ECECEA] px-5 py-3">
+        <div className="flex shrink-0 items-center justify-end border-t border-[#00000014] px-5 py-3">
           <Button variant="ghost" onClick={onClose}>
             Done
           </Button>

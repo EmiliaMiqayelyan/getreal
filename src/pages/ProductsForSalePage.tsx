@@ -117,7 +117,7 @@ function ProductDetailDrawer({
 
   return (
     <aside
-      className="absolute inset-y-0 right-0 z-50 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]"
+      className="absolute inset-y-0 right-0 z-50 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]"
       aria-label="Product details"
     >
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -159,7 +159,7 @@ function ProductDetailDrawer({
           </div>
         </div>
 
-        <div className="mt-5 border-t border-[#ECECEA] pt-4 text-[15px] font-semibold text-[#111118]">
+        <div className="mt-5 border-t border-[#00000014] pt-4 text-[15px] font-semibold text-[#111118]">
           {formatSalePrice(details.salesPrice)}
           <span className="font-normal text-[#111118]">
             {" "}
@@ -236,8 +236,8 @@ function SubcategoryTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white">
-      <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4">
+    <div className="overflow-hidden rounded-[10px] border border-[#00000014] bg-white">
+      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
         <h3 className="text-[14px] font-semibold text-[#111118]">{title}</h3>
       </div>
       <ScrollTable minWidth={760}>
@@ -245,7 +245,7 @@ function SubcategoryTable({
           className={cn(
             GRID,
             TABLE_HEADER,
-            "border-b border-[#ECECEA] bg-white px-4 py-2.5",
+            "border-b border-[#00000014] bg-white px-4 py-2.5",
           )}
         >
           <span aria-hidden />
@@ -266,7 +266,7 @@ function SubcategoryTable({
             onDrop={(event) => handleDrop(event, row.id)}
             className={cn(
               GRID,
-              "border-b border-[#F0F0EE] px-4 py-3 last:border-b-0",
+              "border-b border-[#00000014] px-4 py-3 last:border-b-0",
               draggingId === row.id && "opacity-60",
             )}
           >
@@ -608,7 +608,7 @@ export default function ProductsForSalePage() {
           </div>
         }
         below={
-          <div className="flex overflow-x-auto overflow-y-hidden border-b border-[#ECECEA] bg-white px-4 md:px-7">
+          <div className="flex overflow-x-auto overflow-y-hidden border-b border-[#00000014] bg-white px-4 md:px-7">
             {PRODUCT_TABS.map((entry) => {
               const active = tab === entry;
               return (
@@ -639,7 +639,7 @@ export default function ProductsForSalePage() {
 
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         {filtered.length === 0 || grouped.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-[#DCDCD8] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
+          <div className="rounded-[10px] border border-dashed border-[#00000014] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
             {getProductsForSaleEmptyMessage(products.length, filterCriteria)}
           </div>
         ) : (

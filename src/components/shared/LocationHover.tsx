@@ -123,7 +123,7 @@ export function LocationHover({
             <div
               ref={panelRef}
               role="tooltip"
-              className="fixed z-[80] w-[260px] rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              className="fixed z-[80] w-[260px] rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
               style={{ top: pos.top, left: pos.left }}
               onMouseEnter={show}
               onMouseLeave={hide}

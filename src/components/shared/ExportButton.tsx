@@ -155,9 +155,9 @@ export function ExportButton({
         {menuOpen ? (
           <div
             role="menu"
-            className="absolute top-[calc(100%+6px)] right-0 z-50 w-[220px] rounded-[10px] border border-[#ECECEA] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+            className="absolute top-[calc(100%+6px)] right-0 z-50 w-[220px] rounded-[10px] border border-[#00000014] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           >
-            <div className="border-b border-[#F0F0EE] px-3 py-2">
+            <div className="border-b border-[#00000014] px-3 py-2">
               <div className="text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
                 Export format
               </div>
@@ -197,7 +197,7 @@ export function ExportButton({
           <div
             role="dialog"
             aria-label={`Export ${entityLabel}`}
-            className="absolute top-[calc(100%+6px)] right-0 z-50 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+            className="absolute top-[calc(100%+6px)] right-0 z-50 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           >
             <div className="mb-3">
               <div className="text-[14px] font-semibold text-[#111118]">
@@ -293,7 +293,7 @@ function ScopeOption({
         "flex w-full items-start gap-2.5 rounded-[8px] border px-2.5 py-2 text-left transition-colors",
         checked
           ? "border-[#28402B] bg-[#F4F8F4]"
-          : "border-[#ECECEA] bg-white hover:bg-[#FAFAF8]",
+          : "border-[#00000014] bg-white hover:bg-[#FAFAF8]",
       )}
     >
       <span
@@ -301,7 +301,7 @@ function ScopeOption({
           "mt-0.5 flex size-3.5 shrink-0 items-center justify-center rounded-full border",
           checked
             ? "border-[#28402B] bg-[#28402B] text-white"
-            : "border-[#C8C8C4] bg-white",
+            : "border-[#00000014] bg-white",
         )}
         aria-hidden
       >

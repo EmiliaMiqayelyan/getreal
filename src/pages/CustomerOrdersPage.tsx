@@ -22,6 +22,7 @@ import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SUB_ROW_PAD } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -239,7 +240,7 @@ function HoverCard({
 }) {
   if (step.key === "requested") {
     return (
-      <div className="w-[260px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+      <div className="w-[260px] rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl">
         <div className="text-[13px] font-semibold text-[#111118]">Ordered</div>
         <div className="mt-1 text-[12px] text-[#18A34A]">
           {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
@@ -250,7 +251,7 @@ function HoverCard({
           </span>
           {step.person ?? order.customerName}
         </div>
-        <div className="mt-3 space-y-1.5 border-t border-[#F0F0EE] pt-2">
+        <div className="mt-3 space-y-1.5 border-t border-[#00000014] pt-2">
           {order.items.map((item) => (
             <div
               key={item.name}
@@ -263,7 +264,7 @@ function HoverCard({
               </span>
             </div>
           ))}
-          <div className="flex items-center justify-between border-t border-[#F0F0EE] pt-2 text-[12px] font-bold text-[#111118]">
+          <div className="flex items-center justify-between border-t border-[#00000014] pt-2 text-[12px] font-bold text-[#111118]">
             <span>Order Total</span>
             <span>{currency(order.total)}</span>
           </div>
@@ -274,7 +275,7 @@ function HoverCard({
 
   if (step.key === "coolerPickup") {
     return (
-      <div className="w-[200px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+      <div className="w-[200px] rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl">
         <div className="text-[13px] font-semibold text-[#111118]">
           Cooler Pickup
         </div>
@@ -296,7 +297,7 @@ function HoverCard({
   };
 
   return (
-    <div className="w-[220px] rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl">
+    <div className="w-[220px] rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl">
       <div className="text-[13px] font-semibold text-[#111118]">
         {titles[step.key] ?? step.key}
       </div>
@@ -312,7 +313,7 @@ function HoverCard({
         </div>
       ) : null}
       {step.key === "onRoute" ? (
-        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#F0F0EE] pt-2 text-[11px]">
+        <div className="mt-3 grid grid-cols-2 gap-2 border-t border-[#00000014] pt-2 text-[11px]">
           <div>
             <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
               Street Address
@@ -423,7 +424,7 @@ function StepNode({
             ? step.final
               ? "bg-[#242424]"
               : "bg-[#F57850]"
-            : "border border-[#D9D4CD] bg-[#EFEDEA]",
+            : "border border-[#00000014] bg-[#EFEDEA]",
         )}
       >
         {step.done ? (
@@ -476,8 +477,8 @@ function OrderTimelineTrack({
               className={cn(
                 "h-0 flex-1 border-t",
                 segmentDone
-                  ? "border-solid border-[#D9D4CD]"
-                  : "border-dashed border-[#D9D4CD]",
+                  ? "border-solid border-[#00000014]"
+                  : "border-dashed border-[#00000014]",
               )}
             />
           );
@@ -523,8 +524,8 @@ function OrderDetailPanel({
   onClose: () => void;
 }) {
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
-        <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
+        <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <IdPill>{order.id}</IdPill>
@@ -561,8 +562,13 @@ function OrderDetailPanel({
           <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
             Requested Items
           </h3>
-          <div className="overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-[#FBF9F9]">
-            <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+            <div
+              className={cn(
+                "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                SUB_ROW_PAD,
+              )}
+            >
               <div>Item / Order ID</div>
               <div>Qty</div>
               <div>Unit Price</div>
@@ -571,7 +577,10 @@ function OrderDetailPanel({
             {order.items.map((item) => (
               <div
                 key={item.name}
-                className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-[#FBF9F9] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
+                className={cn(
+                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
+                  SUB_ROW_PAD,
+                )}
               >
                 <div className="min-w-0">
                   <div>{item.name}</div>
@@ -589,7 +598,12 @@ function OrderDetailPanel({
                 </div>
               </div>
             ))}
-            <div className="flex items-center justify-between border-t border-[#EBEBEB] bg-[#FBF9F9] px-3 py-3 text-[#111118]">
+            <div
+              className={cn(
+                "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
+                SUB_ROW_PAD,
+              )}
+            >
               <span className="text-[14px] font-semibold">Order Total</span>
               <span className="text-[18px] font-bold tracking-tight">
                 {currency(order.total)}
@@ -881,14 +895,14 @@ export default function CustomerOrdersPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white">
+      <div className="shrink-0 border-b border-[#00000014] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
             <div className="flex items-center justify-between gap-3">
               <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                 Customer Orders
               </h1>
-              <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+              <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
                 <UserMenu className="items-center" />
               </div>
             </div>
@@ -915,13 +929,13 @@ export default function CustomerOrdersPage() {
               ))}
             </div>
 
-            <div className="hidden items-center justify-end border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+            <div className="hidden items-center justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
               <UserMenu className="items-center" />
             </div>
           </div>
         </div>
 
-        <div className="flex min-h-[52px] items-center border-t border-[#ECECEA] px-4 py-2 md:h-[52px] md:py-0 md:px-7">
+        <div className="flex min-h-[52px] items-center border-t border-[#00000014] px-4 py-2 md:h-[52px] md:py-0 md:px-7">
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search
@@ -965,7 +979,7 @@ export default function CustomerOrdersPage() {
                 <button
                   type="button"
                   onClick={() => setCalendarOpen((open) => !open)}
-                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118] sm:w-auto"
+                  className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-[8px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118] sm:w-auto"
                 >
                   <Calendar size={14} className="text-[#8A8A8A]" />
                   Select Date
@@ -1042,7 +1056,7 @@ export default function CustomerOrdersPage() {
                 </DateNavButton>
 
                 {calendarOpen ? (
-                  <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+                  <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
                     <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
                       <span>July 2026</span>
                       <div className="flex gap-1 text-[#8A8A8A]">
@@ -1075,7 +1089,7 @@ export default function CustomerOrdersPage() {
                         );
                       })}
                     </div>
-                    <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#F0F0EE] pt-3">
+                    <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
                       <button
                         type="button"
                         onClick={() => setCalendarOpen(false)}
@@ -1097,9 +1111,9 @@ export default function CustomerOrdersPage() {
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#ECECEA] bg-white">
+            <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#00000014] bg-white">
               <div className="min-w-[900px]">
-                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#F0F0EE] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#00000014] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                   <div>Order ID</div>
                   {STEPS_META.map((step) => (
                     <div key={step.key} className="text-center">
@@ -1108,7 +1122,7 @@ export default function CustomerOrdersPage() {
                   ))}
                 </div>
 
-                <div className="divide-y-[5px] divide-[#F0F0EE]">
+                <div className="divide-y-[5px] divide-[#00000014]">
                   {filteredActive.map((order) => (
                     <div
                       key={order.id}
@@ -1182,9 +1196,9 @@ export default function CustomerOrdersPage() {
                 {Array.from(days.entries()).map(([day, dayOrders]) => (
                   <div
                     key={day}
-                    className="mb-6 overflow-hidden rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                    className="mb-6 overflow-hidden rounded-[10px] border border-[#00000014] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
                   >
-                    <div className="flex h-10 items-center gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-4 text-[14px] font-semibold text-[#111118]">
+                    <div className="flex h-10 items-center gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 text-[14px] font-semibold text-[#111118]">
                       <DayHeaderIcon />
                       <span>
                         {day}
@@ -1196,7 +1210,7 @@ export default function CustomerOrdersPage() {
                     </div>
                     <div className="overflow-x-auto">
                       <div className="min-w-[860px]">
-                        <div className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                        <div className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                           <div>Order ID</div>
                           <div>Customer</div>
                           <div>Address</div>
@@ -1209,7 +1223,7 @@ export default function CustomerOrdersPage() {
                         {dayOrders.map((order) => (
                           <div
                             key={order.id}
-                            className="grid grid-cols-[110px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#F3F3F1] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
+                            className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
                           >
                             <IdPill>{order.id}</IdPill>
                             <div className="font-semibold">
@@ -1248,7 +1262,7 @@ export default function CustomerOrdersPage() {
         ? createPortal(
             <div
               data-status-menu
-              className="fixed z-[80] w-max rounded-[10px] border border-[#ECECEA] bg-white p-3 shadow-xl"
+              className="fixed z-[80] w-max rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl"
               style={{
                 top: statusMenu.top,
                 left: statusMenu.left,

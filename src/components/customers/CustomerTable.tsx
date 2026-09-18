@@ -6,7 +6,7 @@ import {
 } from "@/components/icons";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
-import { TABLE_HEADER } from "@/constants/table";
+import { TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
 import type { Customer } from "@/types/customer";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/format";
@@ -48,7 +48,7 @@ export function CustomerTable({ customers }: CustomerTableProps) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[960px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-[#E4E6EB] bg-surface">
+            <tr className="border-b border-[#00000014] bg-surface">
               <th className="w-8 px-4 py-3" aria-hidden />
               {COLUMNS.map((column) => (
                 <th
@@ -102,7 +102,7 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
       <tr
         className={cn(
           "bg-surface",
-          expanded ? "border-b-0" : "border-b border-[#E4E6EB]",
+          expanded ? "border-b-0" : "border-b border-[#00000014]",
         )}
       >
         <td className="px-4 py-3.5">
@@ -153,13 +153,13 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
       </tr>
 
       {expanded ? (
-        <tr className="border-b border-[#E4E6EB] last:border-b-0">
+        <tr className="border-b border-[#00000014] last:border-b-0">
           <td colSpan={COLUMNS.length + 1} className="bg-[#FBF9F9] p-0">
-            <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
+            <div className={cn("border-t border-[#00000014]", SUB_ROW_PAD)}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-[#EBEBEB] bg-[#FBF9F9]">
+                    <tr className="border-b border-[#00000014] bg-[#FBF9F9]">
                       {ORDER_COLUMNS.map((column) => (
                         <th
                           key={column}
@@ -174,7 +174,7 @@ function CustomerRow({ customer, expanded, onToggle }: CustomerRowProps) {
                     {customer.orderHistory.map((order) => (
                       <tr
                         key={order.id}
-                        className="border-b border-[#F0F0EE] bg-[#FBF9F9] last:border-b-0"
+                        className="border-b border-[#00000014] bg-[#FBF9F9] last:border-b-0"
                       >
                         <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
                           {order.id}

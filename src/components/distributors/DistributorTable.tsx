@@ -3,7 +3,7 @@ import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/icons";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
-import { TABLE_HEADER } from "@/constants/table";
+import { TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
 import { getDistributorFullAddress } from "@/utils/distributors";
@@ -53,7 +53,7 @@ export function DistributorTable({ distributors }: DistributorTableProps) {
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1100px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-[#E4E6EB] bg-surface">
+            <tr className="border-b border-[#00000014] bg-surface">
               <th className="w-8 px-4 py-3" aria-hidden />
               {COLUMNS.map((column) => (
                 <th
@@ -111,7 +111,7 @@ function DistributorRow({
       <tr
         className={cn(
           "bg-surface",
-          expanded ? "border-b-0" : "border-b border-[#E4E6EB]",
+          expanded ? "border-b-0" : "border-b border-[#00000014]",
         )}
       >
         <td className="px-4 py-3.5">
@@ -178,13 +178,13 @@ function DistributorRow({
       </tr>
 
       {expanded ? (
-        <tr className="border-b border-[#E4E6EB] last:border-b-0">
+        <tr className="border-b border-[#00000014] last:border-b-0">
           <td colSpan={COLUMNS.length + 1} className="bg-background p-0">
-            <div className="border-t border-[#E4E6EB] px-4 py-3 md:px-10">
+            <div className={cn("border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-[#E4E6EB]">
+                    <tr className="border-b border-[#00000014]">
                       {PRODUCT_COLUMNS.map((column) => (
                         <th
                           key={column}
@@ -199,7 +199,7 @@ function DistributorRow({
                     {distributor.products.map((product) => (
                       <tr
                         key={product.id}
-                        className="border-b border-[#E4E6EB]/70 last:border-b-0"
+                        className="border-b border-[#00000014]/70 last:border-b-0"
                       >
                         <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
                           <div>{product.name}</div>

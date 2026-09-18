@@ -312,7 +312,7 @@ export function AddItemModal({
         data-scroll-lock-allow
         className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[680px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
+        <div className="flex items-center justify-between border-b border-[#00000014] px-6 pt-5 pb-3">
           <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Item" : "Add Item"}
           </h2>
@@ -328,7 +328,7 @@ export function AddItemModal({
 
         <div className="flex-1 space-y-6 overflow-auto px-6 pt-4 pb-5">
           <section>
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Basic Info
             </h3>
             <div className="space-y-3">
@@ -480,14 +480,14 @@ export function AddItemModal({
                   value={preorderInfo}
                   onChange={(event) => setPreorderInfo(event.target.value)}
                   rows={3}
-                  className="min-h-[80px] w-full resize-y rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none"
+                  className="min-h-[80px] w-full resize-y rounded-[8px] border border-[#00000014] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none"
                 />
               </Field>
             </div>
           </section>
 
-          <section className="border-t border-[#ECECEA] pt-5">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <section className="border-t border-[#00000014] pt-5">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Merchandising
             </h3>
             <div className="space-y-3">
@@ -531,7 +531,7 @@ export function AddItemModal({
                     }}
                     rows={4}
                     className={cn(
-                      "min-h-[100px] w-full resize-y rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none",
+                      "min-h-[100px] w-full resize-y rounded-[8px] border border-[#00000014] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none",
                       errors.description && INVALID_BORDER,
                     )}
                   />
@@ -544,7 +544,7 @@ export function AddItemModal({
 
               <div data-field="photos">
                 <div className="mb-3 flex items-center justify-between gap-3">
-                  <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                  <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                     Upload Item Photos
                   </h4>
                   <div className="flex items-center gap-3">
@@ -593,7 +593,7 @@ export function AddItemModal({
                     type="button"
                     disabled={photos.length >= ITEM_PHOTO_MAX}
                     onClick={() => fileRef.current?.click()}
-                    className="flex h-[100px] w-[160px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] text-[#C0C0BC] transition-colors hover:border-[#C8C8C6] disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex h-[100px] w-[160px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] text-[#C0C0BC] transition-colors hover:border-[#00000014] disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ImageIcon size={28} />
                   </button>
@@ -601,7 +601,7 @@ export function AddItemModal({
                   <div className="flex flex-wrap gap-3">
                     {photos.map((photo) => (
                       <div key={photo.id} className="w-[160px]">
-                        <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#E6E6E3]">
+                        <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#00000014]">
                           <img
                             src={photo.url}
                             alt={photo.name}
@@ -628,8 +628,8 @@ export function AddItemModal({
             </div>
           </section>
 
-          <section className="border-t border-[#ECECEA] pt-5">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <section className="border-t border-[#00000014] pt-5">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Pricing
             </h3>
             <div className="space-y-3">
@@ -961,7 +961,7 @@ export function AddItemModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-6 py-4">
+        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-6 py-4">
           {isEdit ? (
             <button
               type="button"

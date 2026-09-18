@@ -37,11 +37,11 @@ export function IdPill({ children, className }: BadgeProps) {
       ? String(children)
       : undefined;
 
-  return (
-    <span className={cn(ID_PILL, className)} title={title}>
-      <span className="min-w-0 truncate">{children}</span>
-    </span>
-  );
+    return (
+      <span className={cn(ID_PILL, className)} title={title}>
+        <span className="block min-w-0 truncate text-left">{children}</span>
+      </span>
+    );
 }
 
 export function Tag({ children, className }: BadgeProps) {

@@ -24,7 +24,7 @@ export function Input({
   return (
     <input
       className={cn(
-        "h-[33.75px] rounded-[9.38px] border border-black/8 bg-white px-3 text-[13px] text-foreground outline-none",
+        "h-[33.75px] rounded-[9.38px] border border-[#00000014] bg-white px-3 text-[13px] text-foreground outline-none",
         "placeholder:text-placeholder focus:border-black/20",
         "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:opacity-60",
         !hasWidthClass(className) && "w-auto",

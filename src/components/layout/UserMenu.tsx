@@ -68,7 +68,7 @@ export function UserMenu({ className }: UserMenuProps) {
         {open ? (
           <div
             role="menu"
-            className="absolute top-[calc(100%+6px)] right-0 z-50 min-w-[160px] rounded-lg border border-[#ECE7DF] bg-white py-1 shadow-lg"
+            className="absolute top-[calc(100%+6px)] right-0 z-50 min-w-[160px] rounded-lg border border-[#00000014] bg-white py-1 shadow-lg"
           >
             <button
               type="button"

@@ -16,7 +16,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER, ID_PILL } from "@/constants/table";
+import { TABLE_HEADER, ID_PILL, SUB_ROW_PAD } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -269,7 +269,7 @@ function nextUnusedLocation(used: string[]) {
 }
 
 const GRID =
-  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3";
+  "grid grid-cols-[90px_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3";
 
 // ORDER ID | ITEM NAME | QTY | UNIT | QTY AFTER UNPACK | EXP. DATE | ENTER LOCATION | gap | distribute | Print Label
 // Only the right-side gap is `1fr` so free width never opens a void between ITEM NAME and QTY.
@@ -492,7 +492,7 @@ function FlatLocationSelect({
               className={cn(
                 "ui-select-menu fixed z-[80] flex max-h-60 flex-col gap-0",
                 "overflow-x-hidden overflow-y-auto overscroll-contain",
-                "rounded-[8px] border border-[#E6E6E3] bg-white p-0",
+                "rounded-[8px] border border-[#00000014] bg-white p-0",
                 "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
               )}
               style={{ top: pos.top, left: pos.left, width: pos.width }}
@@ -597,7 +597,7 @@ function SplitModal({
         data-scroll-lock-allow
         className="relative z-10 w-full max-w-[420px] overflow-visible rounded-[12px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-[#ECECEA] px-6 pt-5 pb-3">
+        <div className="flex items-start justify-between gap-4 border-b border-[#00000014] px-6 pt-5 pb-3">
           <div className="min-w-0">
             <h2 className="text-[18px] font-semibold tracking-tight text-[#111118]">
               {title}
@@ -623,7 +623,7 @@ function SplitModal({
               key={index}
               className={cn(
                 "flex items-center gap-5 py-3.5",
-                index < splits.length - 1 && "border-b border-[#EEEEEE]",
+                index < splits.length - 1 && "border-b border-[#00000014]",
               )}
             >
               <QtyStepper
@@ -644,7 +644,7 @@ function SplitModal({
           ) : null}
         </div>
 
-        <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] px-6 py-4">
+        <div className="flex items-center justify-end gap-4 border-t border-[#00000014] px-6 py-4">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
@@ -814,7 +814,7 @@ function StockItemsView({
                       <div
                         className={cn(
                           STOCK_GRID,
-                          "h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4",
+                          "h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4",
                         )}
                       >
                         <span className="col-span-2 min-w-0 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
@@ -845,7 +845,7 @@ function StockItemsView({
                       <div
                         className={cn(
                           STOCK_GRID,
-                          "border-b border-[#F0F0EE] bg-white px-4 py-2",
+                          "border-b border-[#00000014] bg-white px-4 py-2",
                           TABLE_HEADER,
                         )}
                       >
@@ -869,7 +869,7 @@ function StockItemsView({
                             key={item.id}
                             className={cn(
                               STOCK_GRID,
-                              "group border-b border-[#F0F0EE] bg-white px-4 py-3 text-[13px] text-[#111118] last:border-b-0",
+                              "group border-b border-[#00000014] bg-white px-4 py-3 text-[13px] text-[#111118] last:border-b-0",
                               storageError && !rowReady && "bg-[#FFF8F6]",
                             )}
                           >
@@ -877,7 +877,9 @@ function StockItemsView({
                               className={cn(ID_PILL, "justify-self-start")}
                               title={item.orderId}
                             >
-                              <span className="min-w-0 truncate">{item.orderId}</span>
+                              <span className="block min-w-0 truncate text-left">
+                                {item.orderId}
+                              </span>
                             </span>
                             <span className="min-w-0 truncate font-semibold">
                               {item.itemName}
@@ -963,7 +965,7 @@ function StockItemsView({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
+      <div className="flex flex-col gap-2 border-t border-[#00000014] bg-white px-4 py-4 md:px-7">
         {storageError ? (
           <p className="text-right text-[12px] text-[#E25B5B]">{storageError}</p>
         ) : null}
@@ -1501,7 +1503,7 @@ export default function InventoryPage() {
                 {group.sections.map((section) => (
                   <div key={section.title}>
                     <ScrollTable minWidth={1100} className="rounded-[12px]">
-                      <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-3">
+                      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-[23px]">
                         <span className="text-[14px] font-semibold text-[#111118]">
                           {section.title}
                         </span>
@@ -1510,11 +1512,11 @@ export default function InventoryPage() {
                       <div
                         className={cn(
                           GRID,
-                          "border-b border-[#F0F0EE] bg-white px-3 py-2.5",
+                          SUB_ROW_PAD,
+                          "border-b border-[#00000014] bg-white",
                           TABLE_HEADER,
                         )}
                       >
-                        <div />
                         <div className="whitespace-nowrap">Order ID</div>
                         <div className="whitespace-nowrap">Distributor</div>
                         <div className="whitespace-nowrap">
@@ -1537,7 +1539,7 @@ export default function InventoryPage() {
                             key={product.id}
                             className={cn(
                               !isLast || open
-                                ? "border-b border-[#F0F0EE]"
+                                ? "border-b border-[#00000014]"
                                 : "",
                             )}
                           >
@@ -1546,10 +1548,12 @@ export default function InventoryPage() {
                               onClick={() => toggleExpanded(product.id)}
                               className={cn(
                                 GRID,
-                                "w-full bg-white px-3 py-3.5 text-left hover:bg-[#FAFAF8]",
+                                SUB_ROW_PAD,
+                                "w-full bg-white text-left hover:bg-[#FAFAF8]",
+                                open && "border-b border-[#00000014]",
                               )}
                             >
-                              <span className="flex justify-center text-[#8A8A8A]">
+                              <span className="flex justify-self-start text-[#8A8A8A]">
                                 <ChevronDown
                                   size={14}
                                   className={cn(
@@ -1560,7 +1564,7 @@ export default function InventoryPage() {
                                   )}
                                 />
                               </span>
-                              <div className="col-span-5 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                              <div className="col-span-4 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                                 {product.name}
                               </div>
                               <div
@@ -1585,15 +1589,15 @@ export default function InventoryPage() {
                                       key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
                                       className={cn(
                                         GRID,
-                                        "group bg-[#FBF9F9] px-3 py-3 text-[12px] text-[#111118]",
-                                        lotIndex < product.lots.length - 1
-                                          ? "border-b border-[#F0F0EE]"
-                                          : "",
+                                        SUB_ROW_PAD,
+                                        "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
                                       )}
                                     >
-                                      <div />
-                                      <span className={ID_PILL} title={lot.orderId}>
-                                        <span className="min-w-0 truncate">
+                                      <span
+                                        className={cn(ID_PILL, "justify-self-start")}
+                                        title={lot.orderId}
+                                      >
+                                        <span className="block min-w-0 truncate text-left">
                                           {lot.orderId}
                                         </span>
                                       </span>
@@ -1631,11 +1635,13 @@ export default function InventoryPage() {
                                   <div
                                     className={cn(
                                       GRID,
-                                      "bg-[#FBF9F9] px-3 py-3 text-[12px] text-[#8A8A8A]",
+                                      SUB_ROW_PAD,
+                                      "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
                                     )}
                                   >
-                                    <div />
-                                    <span className={ID_PILL}>-</span>
+                                    <span className={cn(ID_PILL, "justify-self-start")}>
+                                      -
+                                    </span>
                                     <div className="col-span-7">
                                       Inventory Empty
                                     </div>
@@ -1655,7 +1661,7 @@ export default function InventoryPage() {
         </div>
 
         {!filteredSections.length ? (
-          <div className="rounded-[10px] border border-[#ECECEA] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+          <div className="rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
             No inventory matches your filters.
           </div>
         ) : null}

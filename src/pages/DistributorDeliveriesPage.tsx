@@ -19,10 +19,12 @@ import {
   DATE_CHIP_ROW,
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
+import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { SEARCH_ICON, SEARCH_INPUT, SUB_ROW_PAD } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import type { ReceivingHandoffLine } from "@/types/receiving";
@@ -144,7 +146,7 @@ function RejectImageDrawer({
   const photoSrc = result.photoUrl;
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
       <div className="flex items-start justify-end px-5 pt-4">
         <button
           type="button"
@@ -259,7 +261,7 @@ function RejectReasonPopover({
       ref={panelRef}
       role="dialog"
       aria-label="Reject reason"
-      className="fixed z-[80] w-[248px] rounded-[12px] border border-[#ECECEA] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      className="fixed z-[80] w-[248px] rounded-[12px] border border-[#00000014] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="mb-2.5 text-[13px] font-semibold text-[#111118]">
@@ -282,7 +284,7 @@ function RejectReasonPopover({
           </button>
         ))}
       </div>
-      <div className="mt-3 border-t border-[#F0F0EE] pt-2.5">
+      <div className="mt-3 border-t border-[#00000014] pt-2.5">
         <input
           ref={photoInputRef}
           type="file"
@@ -398,7 +400,7 @@ function ExpirationDatePicker({
 
   if (readOnly) {
     return (
-      <div className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#E0E0DE] bg-[#F9FAFB] px-2.5 text-[13px] text-[#111118]">
+      <div className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-[#F9FAFB] px-2.5 text-[13px] text-[#111118]">
         <Calendar size={14} className="shrink-0 text-[#8A8A8A]" />
         <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
         <span className="min-w-0 truncate">
@@ -417,7 +419,7 @@ function ExpirationDatePicker({
         aria-expanded={open}
         aria-label="Expiration date"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#E0E0DE] bg-white px-2.5 text-left text-[13px] outline-none"
+        className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-white px-2.5 text-left text-[13px] outline-none"
       >
         <Calendar size={14} className="shrink-0 text-[#6A6A6A]" />
         <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
@@ -437,7 +439,7 @@ function ExpirationDatePicker({
               ref={panelRef}
               role="dialog"
               aria-label="Select expiration date"
-              className="fixed z-[80] w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+              className="fixed z-[80] w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
               style={{ top: pos.top, left: pos.left }}
             >
               <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
@@ -671,7 +673,7 @@ function CheckOrderView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
+      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
@@ -707,7 +709,7 @@ function CheckOrderView({
               <ScrollTable minWidth={900} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                    "grid items-center gap-x-3 border-b border-[#00000014] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                     col,
                   )}
                 >
@@ -728,7 +730,7 @@ function CheckOrderView({
                     <div
                       key={item.id}
                       className={cn(
-                        "relative grid items-center gap-x-3 border-b border-[#F0F0EE] bg-white px-4 py-3.5 last:border-b-0",
+                        "relative grid items-center gap-x-3 border-b border-[#00000014] bg-white px-4 py-3.5 last:border-b-0",
                         col,
                         state.status === "accepted" &&
                           "border-l-[3px] border-l-[#2F8F4E]",
@@ -756,7 +758,7 @@ function CheckOrderView({
                       </div>
                       <div className="flex w-max items-center gap-x-3">
                         {readOnly ? (
-                          <span className="inline-flex h-10 w-[132px] shrink-0 items-center rounded-[8px] border border-[#E0E0DE] bg-[#F9FAFB] px-3 font-mono text-[13px] text-[#111118]">
+                          <span className="inline-flex h-10 w-[132px] shrink-0 items-center rounded-[8px] border border-[#00000014] bg-[#F9FAFB] px-3 font-mono text-[13px] text-[#111118]">
                             {state.itemId}
                           </span>
                         ) : (
@@ -768,7 +770,7 @@ function CheckOrderView({
                                 itemId: event.target.value,
                               })
                             }
-                            className="h-10 w-[132px] shrink-0 rounded-[8px] border border-[#E0E0DE] bg-white px-3 text-[13px] text-[#111118] outline-none"
+                            className="h-10 w-[132px] shrink-0 rounded-[8px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118] outline-none"
                           />
                         )}
                         <button
@@ -911,7 +913,7 @@ function CheckOrderView({
         />
       ) : null}
 
-      <div className="flex items-center justify-end gap-4 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
+      <div className="flex items-center justify-end gap-4 border-t border-[#00000014] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={requestClose}
@@ -945,7 +947,7 @@ function CheckOrderView({
 }
 
 const ROW_GRID =
-  "grid grid-cols-[18px_108px_220px_150px_150px_100px_minmax(0,1fr)_88px] items-center gap-x-5";
+  "grid grid-cols-[18px_90px_220px_150px_150px_100px_minmax(0,1fr)_88px] items-center gap-x-5";
 
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
@@ -1164,15 +1166,15 @@ export default function DistributorDeliveriesPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white">
+    <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
+      <div className="shrink-0 border-b border-[#00000014] bg-white">
         <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
           <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
             <div className="flex items-center justify-between gap-3">
               <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                 Distributor Receiving
               </h1>
-              <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+              <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
                 <UserMenu className="items-center" />
               </div>
             </div>
@@ -1184,73 +1186,84 @@ export default function DistributorDeliveriesPage() {
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "flex h-[52px] items-center border-b-2 text-[14px]",
+                    "relative flex h-[52px] items-center text-[14px]",
                     activeTab === tab
-                      ? "border-[#F57850] font-medium text-[#111118]"
-                      : "border-transparent text-[#8A8A8A]",
+                      ? "font-medium text-[#111118]"
+                      : "text-[#8A8A8A] hover:text-[#4A4A4A]",
                   )}
                 >
                   {tab}
+                  {activeTab === tab ? (
+                    <span
+                      className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full"
+                      style={{ backgroundColor: ORANGE }}
+                    />
+                  ) : null}
                 </button>
               ))}
             </div>
 
-            <div className="hidden items-center justify-end gap-3 border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+            <div className="hidden justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
               <UserMenu className="items-center" />
-              <div className="text-[12px] text-[#8A8A8A]">
-                Today, Tue, Jun 22, 2026
-              </div>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
-          <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
-            <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search"
-                className="w-full pl-8"
-              />
-            </div>
+        <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#00000014] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
+          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
+            <Search size={14} className={SEARCH_ICON} />
+            <Input
+              inputSize="md"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+              className={SEARCH_INPUT}
+            />
+          </div>
 
-            <Select
-              value={productFilter}
-              onChange={setProductFilter}
-              aria-label="All products"
-              className="w-full sm:w-[140px]"
-              options={[
-                { value: "", label: "All products" },
-                ...productOptions.map((name) => ({
-                  value: name,
-                  label: name,
-                })),
-              ]}
-            />
-            <Select
-              value={distributorFilter}
-              onChange={setDistributorFilter}
-              aria-label="All Distributors"
-              className="w-full sm:w-[160px]"
-              options={[
-                { value: "", label: "All Distributors" },
-                ...distributorOptions.map((name) => ({
-                  value: name,
-                  label: name,
-                })),
-              ]}
-            />
+          <Select
+            value={productFilter}
+            onChange={setProductFilter}
+            placeholder="All products"
+            aria-label="All products"
+            className="w-full sm:w-[140px]"
+            options={[
+              { value: "", label: "All products" },
+              ...productOptions.map((name) => ({
+                value: name,
+                label: name,
+              })),
+            ]}
+          />
+          <Select
+            value={distributorFilter}
+            onChange={setDistributorFilter}
+            placeholder="All Distributors"
+            aria-label="All Distributors"
+            className="w-full sm:w-[160px]"
+            options={[
+              { value: "", label: "All Distributors" },
+              ...distributorOptions.map((name) => ({
+                value: name,
+                label: name,
+              })),
+            ]}
+          />
+          <ExportButton
+            entityLabel="deliveries"
+            recordCount={filtered.length}
+            filtersActive={Boolean(
+              search.trim() || productFilter || distributorFilter,
+            )}
+            className="w-full sm:w-auto"
+          />
+          <div className="ml-auto text-[12px] text-[#8A8A8A]">
+            Today, Tue, Jun 22, 2026
           </div>
         </div>
       </div>
 
-      <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-        <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
           <div className={DATE_CHIP_ROW}>
             <div className={DATE_CHIP_SCROLL}>
               {visibleChips.map((chip) => {
@@ -1267,7 +1280,7 @@ export default function DistributorDeliveriesPage() {
               })}
             </div>
 
-            <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+            <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
               <DateNavButton
                 aria-label="Previous dates"
                 disabled={!canShiftBack}
@@ -1304,7 +1317,7 @@ export default function DistributorDeliveriesPage() {
             </div>
           </div>
 
-          <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+          <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
             Receiving Log
           </h2>
 
@@ -1312,7 +1325,8 @@ export default function DistributorDeliveriesPage() {
             <div
               className={cn(
                 ROW_GRID,
-                "border-b border-[#F0F0EE] bg-white px-4 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                SUB_ROW_PAD,
+                "border-b border-[#00000014] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
               )}
             >
               <div />
@@ -1325,7 +1339,7 @@ export default function DistributorDeliveriesPage() {
               <div>Action</div>
             </div>
 
-            <div className="divide-y divide-[#F0F0EE]">
+            <div className="divide-y divide-[#00000014]">
               {filtered.map((order) => {
                 const open = expanded.has(order.id);
                 const results = itemResults[order.id];
@@ -1335,15 +1349,15 @@ export default function DistributorDeliveriesPage() {
                     <div
                       className={cn(
                         ROW_GRID,
-                        "px-4 py-2.5",
-                        open && "border-b border-[#F0F0EE]",
+                        SUB_ROW_PAD,
+                        open && "border-b border-[#00000014]",
                       )}
                     >
                       <button
                         type="button"
                         aria-label={open ? "Collapse" : "Expand"}
                         onClick={() => toggleExpanded(order.id)}
-                        className="flex items-center justify-center"
+                        className="flex items-center justify-self-start"
                       >
                         <ChevronDown
                           size={15}
@@ -1409,28 +1423,32 @@ export default function DistributorDeliveriesPage() {
                               key={item.id}
                               className={cn(
                                 ROW_GRID,
-                                "bg-[#FBF9F9] px-4 py-2 text-[13px]",
+                                SUB_ROW_PAD,
+                                "bg-[#FBF9F9] text-[13px]",
                                 itemIndex < order.items.length - 1 &&
-                                  "border-b border-[#F0F0EE]",
+                                  "border-b border-[#00000014]",
                               )}
                             >
-                              <div />
-                              <div />
+                              <div className="col-span-2 min-w-0 justify-self-start">
+                                <IdPill>{item.itemCode}</IdPill>
+                              </div>
                               <div
                                 className={cn(
-                                  "min-w-0",
+                                  "min-w-0 truncate",
                                   rejected
                                     ? "text-[#E25B5B]"
                                     : "text-[#111118]",
                                 )}
                               >
-                                <div className="truncate">{item.name}</div>
-                                <div className="truncate text-[12px] text-[#8A8A8A]">
-                                  {item.source}
-                                </div>
+                                {item.name}
                               </div>
-                              <div />
-                              <div />
+                              <div className="min-w-0 truncate text-[#8A8A8A]">
+                                {item.source}
+                              </div>
+                              <div className="whitespace-nowrap text-[#111118]">
+                                {item.quantity}
+                                {item.unit ? ` ${item.unit}` : ""}
+                              </div>
                               <div className="whitespace-nowrap">
                                 {rejected && result?.reason ? (
                                   <span className="font-medium text-[#E25B5B]">
@@ -1474,7 +1492,6 @@ export default function DistributorDeliveriesPage() {
               </div>
             ) : null}
           </ScrollTable>
-        </div>
 
         {imagePreview ? (
           <RejectImageDrawer

@@ -78,10 +78,13 @@ export function appendInProgressOrders(
   created: PlacedOrder[],
   seed?: PlacedOrder,
 ) {
-  if (previous.length === 0 && seed) {
-    return [...created, seed];
-  }
-  return [...created, ...previous];
+  const createdIds = new Set(created.map((order) => order.id));
+  const base =
+    previous.length === 0 && seed && !createdIds.has(seed.id)
+      ? [seed]
+      : previous.filter((order) => !createdIds.has(order.id));
+
+  return [...created, ...base];
 }
 
 function moneyLabel(value: number) {

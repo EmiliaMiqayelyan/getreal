@@ -207,7 +207,7 @@ function SourcePicker({
       ref={panelRef}
       role="listbox"
       aria-label="Distributor / Source"
-      className="fixed z-[80] max-h-[320px] w-[460px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      className="fixed z-[80] max-h-[320px] w-[460px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={{ top: pos.top, left: pos.left }}
     >
       <div className="sticky top-0 bg-white px-3 pt-3 pb-2">
@@ -323,7 +323,7 @@ function PackingDetail({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 pt-5 pb-4 md:px-7">
+      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 pt-5 pb-4 md:px-7">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
@@ -354,7 +354,7 @@ function PackingDetail({
           {groups.map(([title, items]) => (
             <section key={title}>
               <ScrollTable minWidth={960} className="rounded-[10px]">
-                <div className="flex h-10 items-center border-b border-[#EBEBEB] bg-[#FBF9F9] px-4">
+                <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
                   <span className="text-[14px] font-semibold text-[#111118]">
                     {title}
                   </span>
@@ -372,7 +372,7 @@ function PackingDetail({
                     <col style={{ width: "110px" }} />
                   </colgroup>
                   <thead>
-                    <tr className="border-b border-[#ECECEA]">
+                    <tr className="border-b border-[#00000014]">
                       <th className={cn(th, "pl-5 pr-3")}>Item Name</th>
                       <th className={cn(th, "pr-3")}>Qty</th>
                       <th className={cn(th, "pr-3")}>Distributor / Source</th>
@@ -393,7 +393,7 @@ function PackingDetail({
                       return (
                         <tr
                           key={item.id}
-                          className="border-b border-[#ECECEA] last:border-b-0"
+                          className="border-b border-[#00000014] last:border-b-0"
                         >
                           <td className={cn(td, "pl-5 pr-3")}>
                             <span className="block truncate font-medium">
@@ -530,7 +530,7 @@ function PackingDetail({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-5 border-t border-[#ECECEA] bg-white px-4 py-4 md:px-7">
+      <div className="flex items-center justify-end gap-5 border-t border-[#00000014] bg-white px-4 py-4 md:px-7">
         <button
           type="button"
           onClick={requestClose}
@@ -681,7 +681,7 @@ export default function PackingCoolersPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white">
+      <div className="shrink-0 border-b border-[#00000014] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
             Cooler Packing
@@ -689,7 +689,7 @@ export default function PackingCoolersPage() {
           <UserMenu className="items-center" />
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
+        <div className="border-t border-[#00000014] px-4 py-2 md:px-7">
           <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
             <div className="relative w-full sm:w-[220px]">
               <Search
@@ -764,7 +764,7 @@ export default function PackingCoolersPage() {
             </DateNavButton>
 
             {calendarOpen ? (
-              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
                 <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
                   <span>July 2026</span>
                   <div className="flex gap-1 text-[#8A8A8A]">
@@ -801,7 +801,7 @@ export default function PackingCoolersPage() {
                     );
                   })}
                 </div>
-                <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#F0F0EE] pt-3">
+                <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
                   <button
                     type="button"
                     onClick={() => setCalendarOpen(false)}
@@ -826,12 +826,12 @@ export default function PackingCoolersPage() {
           </div>
         </div>
 
-        <ScrollTable minWidth={860} className="rounded-[12px] border border-[#ECECEA] bg-white">
+        <ScrollTable minWidth={860} className="rounded-[12px] border border-[#00000014] bg-white">
           <div
             className={cn(
               ROW_GRID,
               MUTED_HEADER,
-              "border-b border-[#F0F0EE] bg-white px-5 py-2.5",
+              "border-b border-[#00000014] bg-white px-5 py-2.5",
             )}
           >
             <div>Customer Order ID</div>
@@ -849,7 +849,7 @@ export default function PackingCoolersPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "min-h-[88px] border-b border-[#F0F0EE] px-5 py-4 last:border-b-0",
+                  "min-h-[88px] border-b border-[#00000014] px-5 py-4 last:border-b-0",
                 )}
               >
                 <button
@@ -971,7 +971,7 @@ export default function PackingCoolersPage() {
         </ScrollTable>
 
         {!filtered.length ? (
-          <div className="mt-4 rounded-[10px] border border-[#ECECEA] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+          <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
             No orders match your filters.
           </div>
         ) : null}

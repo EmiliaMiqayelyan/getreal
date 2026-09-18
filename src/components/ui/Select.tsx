@@ -126,7 +126,7 @@ export function Select({
           isFlat
             ? "h-auto w-auto gap-1 border-0 bg-transparent p-0 text-[13px]"
             : cn(
-                "w-full justify-between rounded-[9.38px] border border-black/8 bg-white",
+                "w-full justify-between rounded-[9.38px] border border-[#00000014] bg-white",
                 "focus:border-black/20",
                 open && "border-black/20",
                 size === "sm"
@@ -167,7 +167,7 @@ export function Select({
               aria-label={ariaLabel ?? displayLabel}
               className={cn(
                 "ui-select-menu fixed z-[80] max-h-60 overflow-x-hidden overflow-y-auto overscroll-contain",
-                "flex flex-col gap-0 rounded-[8px] border border-[#E6E6E3] bg-white p-0",
+                "flex flex-col gap-0 rounded-[8px] border border-[#00000014] bg-white p-0",
                 "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
               )}
               style={{ top: pos.top, left: pos.left, width: pos.width }}

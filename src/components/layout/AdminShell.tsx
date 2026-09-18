@@ -61,13 +61,13 @@ export function AdminShell({ children }: AdminShellProps) {
       <Sidebar open={navOpen} onClose={() => setNavOpen(false)} />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-        <div className="flex h-14 shrink-0 items-center gap-3 overflow-hidden border-b border-[#ECECEA] bg-white px-4 lg:hidden">
+        <div className="flex h-14 shrink-0 items-center gap-3 overflow-hidden border-b border-[#00000014] bg-white px-4 lg:hidden">
           <button
             type="button"
             aria-label="Open menu"
             aria-expanded={navOpen}
             onClick={() => setNavOpen(true)}
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#E6E6E3] text-[#111118]"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] border border-[#00000014] text-[#111118]"
           >
             <Menu size={18} />
           </button>

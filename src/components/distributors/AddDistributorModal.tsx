@@ -27,7 +27,7 @@ function AccentRadio({ checked }: { checked: boolean }) {
     <span
       className={cn(
         "flex size-[16px] items-center justify-center rounded-full border bg-white",
-        checked ? "border-badge" : "border-[#C9C9C6]",
+        checked ? "border-badge" : "border-[#00000014]",
       )}
     >
       {checked ? <span className="size-[8px] rounded-full bg-badge" /> : null}
@@ -255,7 +255,7 @@ export function AddDistributorModal({
         aria-modal="true"
         className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[640px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#ECECEA] px-[30px] py-[18.75px]">
+        <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Distributor" : "Add Distributor"}
           </h2>
@@ -274,7 +274,7 @@ export function AddDistributorModal({
           className="flex-1 space-y-0 overflow-auto overscroll-contain px-[30px] pt-6 pb-5"
         >
           <section>
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Company Information
             </h3>
             <div className="space-y-3">
@@ -344,7 +344,7 @@ export function AddDistributorModal({
                           "h-[32px] min-w-[48px] rounded-[8px] border px-3 text-[12px] font-medium",
                           active
                             ? "border-[#111118] bg-[#111118] text-white"
-                            : "border-[#E6E6E3] bg-white text-[#6B6B6B]",
+                            : "border-[#00000014] bg-white text-[#6B6B6B]",
                         )}
                       >
                         {day}
@@ -405,7 +405,7 @@ export function AddDistributorModal({
           </section>
 
           <section data-field="payment" className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Payment Terms
             </h3>
             <div
@@ -446,7 +446,7 @@ export function AddDistributorModal({
 
           <section data-field="contacts" className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                 Contact Information
               </h3>
               <button
@@ -476,7 +476,7 @@ export function AddDistributorModal({
                   "rounded-[10px] border border-dashed bg-[#FAFAF8] px-4 py-8 text-center text-[13px] text-[#8A8A8A]",
                   errors.contacts
                     ? "border-[#E25B5B]"
-                    : "border-[#D9D9D6]",
+                    : "border-[#00000014]",
                 )}
               >
                 No contacts yet. Click + to add a supplier contact.
@@ -491,7 +491,7 @@ export function AddDistributorModal({
                     key={contact.id}
                     className={cn(
                       "rounded-[10px] border p-4",
-                      contact.primary ? "border-badge" : "border-[#E6E6E3]",
+                      contact.primary ? "border-badge" : "border-[#00000014]",
                       contactErrors && "border-[#E25B5B]",
                     )}
                   >
@@ -601,7 +601,7 @@ export function AddDistributorModal({
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                 Documents
               </h3>
               <Button
@@ -636,7 +636,7 @@ export function AddDistributorModal({
               />
             </div>
             {docs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
+              <div className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
                 <FileText size={22} className="text-[#C0C0BC]" />
                 <span>No documents uploaded yet</span>
               </div>
@@ -645,7 +645,7 @@ export function AddDistributorModal({
                 {docs.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-3 rounded-[8px] border border-[#E6E6E3] px-3 py-2.5"
+                    className="flex items-center gap-3 rounded-[8px] border border-[#00000014] px-3 py-2.5"
                   >
                     <FileText size={18} className="shrink-0 text-[#8A8A8A]" />
                     <div className="min-w-0 flex-1">
@@ -705,7 +705,7 @@ export function AddDistributorModal({
           </section>
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Notes
             </h3>
             <textarea
@@ -713,12 +713,12 @@ export function AddDistributorModal({
               onChange={(event) => setNotes(event.target.value)}
               placeholder="Write your notes here..."
               rows={4}
-              className="w-full resize-none rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] text-[#111118] outline-none placeholder:text-[#A9A9A9]"
+              className="w-full resize-none rounded-[8px] border border-[#00000014] px-3 py-2.5 text-[13px] text-[#111118] outline-none placeholder:text-[#A9A9A9]"
             />
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-[30px] py-4">
+        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-[30px] py-4">
           {isEdit ? (
             <button
               type="button"

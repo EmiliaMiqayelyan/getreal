@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/Input";
 import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
+import { SEARCH_ICON, SEARCH_INPUT, SUB_ROW_PAD } from "@/constants/table";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -87,7 +87,7 @@ function PermissionCheckbox({
           "mt-0.5 flex size-[16px] shrink-0 items-center justify-center rounded-[3px] border transition-colors",
           checked
             ? "border-[#111118] bg-[#111118] text-white"
-            : "border-[#C9C9C6] bg-white",
+            : "border-[#00000014] bg-white",
         )}
       >
         {checked ? <Check size={11} strokeWidth={3} /> : null}
@@ -349,9 +349,14 @@ export default function RolesPage() {
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <ScrollTable
           minWidth={820}
-          className="rounded-[12px] border border-[#ECECEA] bg-white"
+          className="rounded-[12px] border border-[#00000014] bg-white"
         >
-          <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#ECECEA] px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div
+            className={cn(
+              "grid grid-cols-[24px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#00000014] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+              SUB_ROW_PAD,
+            )}
+          >
             <div />
             <div>ID</div>
             <div>Name</div>
@@ -369,9 +374,14 @@ export default function RolesPage() {
             return (
               <div
                 key={user.id}
-                className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
+                className={cn(!isLast || open ? "border-b border-[#00000014]" : "")}
               >
-                <div className="grid grid-cols-[24px_64px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 px-4 py-3.5">
+                <div
+                  className={cn(
+                    "grid grid-cols-[24px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3",
+                    SUB_ROW_PAD,
+                  )}
+                >
                   <button
                     type="button"
                     aria-label={open ? "Collapse row" : "Expand row"}
@@ -390,7 +400,7 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={() => toggleExpand(user.id)}
-                    className="cursor-pointer"
+                    className="justify-self-start"
                   >
                     <IdPill>{user.id}</IdPill>
                   </button>
@@ -420,7 +430,7 @@ export default function RolesPage() {
                 </div>
 
                 {open ? (
-                  <div className="border-t border-black/8 bg-[#FBF9F9] px-[22.5px] py-[15px] md:px-6">
+                  <div className={cn("border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                         {ROLE_PERMISSION_GROUPS.map((group) => (
@@ -440,7 +450,7 @@ export default function RolesPage() {
                                   )
                                 }
                               />
-                              <div className="space-y-2.5 border-l border-[#E4E4E0] pl-3">
+                              <div className="space-y-2.5 border-l border-[#00000014] pl-3">
                                 {group.actions.map((action) => (
                                   <PermissionCheckbox
                                     key={action.key}
@@ -494,7 +504,7 @@ export default function RolesPage() {
             data-scroll-lock-allow
             className="relative z-10 w-full max-w-[460px] overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
+            <div className="flex items-center justify-between border-b border-[#00000014] px-6 pt-5 pb-3">
               <h2
                 id="roles-modal-title"
                 className="text-[20px] font-semibold tracking-tight text-[#111118]"
@@ -640,7 +650,7 @@ export default function RolesPage() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-[#ECECEA] px-6 py-4">
+            <div className="flex items-center justify-between border-t border-[#00000014] px-6 py-4">
               {draft.id ? (
                 <Button variant="dangerGhost" onClick={deleteUser}>
                   Delete User

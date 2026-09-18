@@ -65,8 +65,8 @@ export function DatePicker({
         aria-label={ariaLabel}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "relative flex h-10 w-full items-center rounded-[8px] border border-[#E6E6E3] bg-white pr-3 pl-10 text-left text-[13px] text-[#111118] outline-none hover:border-[#C8C8C6] focus:border-[#C8C8C6]",
-          open && "border-[#C8C8C6]",
+          "relative flex h-10 w-full items-center rounded-[8px] border border-[#00000014] bg-white pr-3 pl-10 text-left text-[13px] text-[#111118] outline-none hover:border-[#00000014] focus:border-[#00000014]",
+          open && "border-[#00000014]",
         )}
       >
         <Calendar className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#111118]" />

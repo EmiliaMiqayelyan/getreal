@@ -8,6 +8,7 @@ import { IdPill } from "@/components/ui/Badge";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
+import { SUB_ROW_PAD } from "@/constants/table";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -85,7 +86,7 @@ type SelectedOrder = {
 };
 
 const GRID =
-  "grid grid-cols-[28px_56px_minmax(110px,1.1fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(100px,1fr)_56px_72px_88px_96px] items-center gap-x-3";
+  "grid grid-cols-[28px_90px_minmax(120px,1.15fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(100px,1fr)_56px_72px_88px_96px] items-center gap-x-3 px-[23px]";
 
 function OrderDetailDrawer({
   selected,
@@ -98,8 +99,8 @@ function OrderDetailDrawer({
   const address = parseAddress(order.deliveryAddress || customer.fullAddress);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#ECECEA] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
-      <div className="flex items-start justify-between border-b border-[#F0F0EE] px-5 pt-3 pb-4">
+    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
+      <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
         <div className="min-w-0 pr-3">
           <div className="flex flex-wrap items-center gap-2">
             <IdPill>{order.id}</IdPill>
@@ -140,8 +141,13 @@ function OrderDetailDrawer({
             Requested Items
           </h3>
           <div className="overflow-x-auto">
-            <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-[#FBF9F9]">
-              <div className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#EBEBEB] bg-[#FBF9F9] px-3 py-2 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+              <div
+                className={cn(
+                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                  SUB_ROW_PAD,
+                )}
+              >
                 <div>Item / Order ID</div>
                 <div>Qty</div>
                 <div>Unit Price</div>
@@ -150,7 +156,10 @@ function OrderDetailDrawer({
               {order.items.map((item) => (
                 <div
                   key={`${order.id}-${item.itemName}`}
-                  className="grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#F3F3F1] bg-[#FBF9F9] px-3 py-2.5 text-[12px] text-[#111118] last:border-b-0"
+                  className={cn(
+                    "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
+                    SUB_ROW_PAD,
+                  )}
                 >
                   <div className="min-w-0">
                     <div>{item.itemName}</div>
@@ -170,7 +179,12 @@ function OrderDetailDrawer({
                   </div>
                 </div>
               ))}
-              <div className="flex items-center justify-between border-t border-[#EBEBEB] bg-[#FBF9F9] px-3 py-3 text-[#111118]">
+              <div
+                className={cn(
+                  "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
+                  SUB_ROW_PAD,
+                )}
+              >
                 <span className="text-[14px] font-semibold">Order Total</span>
                 <span className="text-[18px] font-bold tracking-tight">
                   {currency(order.orderPrice)}
@@ -275,19 +289,17 @@ function CustomerOrdersPanel({
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
   return (
-    // Desktop pl-[26px]: row px-3 (12) + half of 28px chevron col (14) = expand-arrow center
-    <div className="relative border-t border-[#F0F0EE] bg-[#FBF9F9] px-3 py-3 sm:py-4 md:pl-[26px] md:pr-6">
-      {/* Full-height spine at expand-arrow center; sits 1px left of content so row bg doesn't cover it */}
+    <div className={cn("relative border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
       <div
         aria-hidden
-        className="pointer-events-none absolute -top-8 bottom-0 left-[25px] hidden w-px bg-[#E4E4E0] md:block"
+        className="pointer-events-none absolute top-0 bottom-0 left-[23px] hidden w-px bg-[#00000014] md:block"
       />
       {/* Mobile: stacked order cards */}
       <div className="relative space-y-2 md:hidden">
         {customer.orders.map((order) => (
           <div
             key={order.id}
-            className="rounded-[10px] border border-[#ECECEA] bg-white p-3"
+            className="rounded-[10px] border border-[#00000014] bg-white p-3"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -329,7 +341,7 @@ function CustomerOrdersPanel({
       {/* Desktop: nested table left edge aligns to expand-arrow center */}
       <div className="relative hidden md:block">
         <ScrollTable minWidth={720} bare>
-          <div className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#EBEBEB] bg-[#FBF9F9] py-2 pr-4 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+          <div className="grid grid-cols-[90px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#00000014] bg-[#FBF9F9] py-[10px] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
             <div>Order ID</div>
             <div>Order Date</div>
             <div>Delivery</div>
@@ -345,7 +357,7 @@ function CustomerOrdersPanel({
             return (
               <div
                 key={order.id}
-                className="grid grid-cols-[150px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#F0F0EE] bg-[#FBF9F9] py-3 pr-4 text-[13px] text-[#111118] last:border-b-0"
+                className="grid grid-cols-[90px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-5 border-b border-[#00000014] bg-[#FBF9F9] py-[10px] text-[13px] text-[#111118] last:border-b-0"
               >
                 <IdPill>{order.id}</IdPill>
                 <div>
@@ -402,7 +414,7 @@ function CustomerTable({
 }) {
   if (!customers.length) {
     return (
-      <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
+      <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
         No customers found
       </div>
     );
@@ -417,7 +429,7 @@ function CustomerTable({
           return (
             <div
               key={customer.id}
-              className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white"
+              className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white"
             >
               <div className="flex w-full items-start gap-3 p-3.5">
                 <button
@@ -494,11 +506,11 @@ function CustomerTable({
 
       {/* Desktop table */}
       <div className="hidden md:block">
-        <ScrollTable minWidth={1020}>
+        <ScrollTable minWidth={1080}>
           <div
             className={cn(
               GRID,
-              "border-b border-[#ECECEA] bg-white px-3 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+              "border-b border-[#00000014] bg-white py-[10px] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
             )}
           >
             <div />
@@ -520,14 +532,14 @@ function CustomerTable({
             return (
               <div
                 key={customer.id}
-                className={cn(!isLast || open ? "border-b border-[#F0F0EE]" : "")}
+                className={cn(!isLast || open ? "border-b border-[#00000014]" : "")}
               >
-                <div className={cn(GRID, "px-3 py-3.5")}>
+                <div className={cn(GRID, "py-[10px]")}>
                   <button
                     type="button"
                     aria-label={open ? "Collapse" : "Expand"}
                     onClick={() => onToggle(customer.id)}
-                    className="relative z-[1] flex justify-center"
+                    className="relative z-[1] flex justify-self-start"
                   >
                     <ChevronRight
                       size={14}
@@ -541,12 +553,12 @@ function CustomerTable({
                   <button
                     type="button"
                     onClick={() => onToggle(customer.id)}
-                    className="cursor-pointer"
+                    className="min-w-0 justify-self-start"
                   >
                     <IdPill>{customer.id}</IdPill>
                   </button>
 
-                  <div className="flex min-w-0 items-center gap-1.5 text-[13px] font-semibold text-[#111118]">
+                  <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] font-semibold text-[#111118]">
                     <span className="truncate">
                       {customer.firstName} {customer.lastName}
                     </span>

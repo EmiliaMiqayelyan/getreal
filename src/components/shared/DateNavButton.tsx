@@ -5,7 +5,7 @@ import { cn } from "@/utils/cn";
 export const DATE_NAV_GROUP = "flex items-center gap-1.5";
 
 const DATE_NAV_BUTTON =
-  "flex size-[30px] shrink-0 items-center justify-center rounded-[10px] border border-[#EBEBEB] bg-white text-[#111118] disabled:opacity-40";
+  "flex size-[30px] shrink-0 items-center justify-center rounded-[10px] border border-[#00000014] bg-white text-[#111118] disabled:opacity-40";
 
 export function DateNavButton({
   className,

@@ -143,7 +143,7 @@ export function CreateManualOrderFlow({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
+      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[28px] font-semibold tracking-tight text-[#111118]">
@@ -165,7 +165,7 @@ export function CreateManualOrderFlow({
       {step === "create" ? (
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="mx-auto max-w-[920px] space-y-4">
-            <section className="overflow-hidden rounded-[8px] border border-[#ECECEA] bg-white">
+            <section className="overflow-hidden rounded-[8px] border border-[#00000014] bg-white">
               <div className="p-5 md:p-6">
                 <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Distributor
@@ -195,7 +195,7 @@ export function CreateManualOrderFlow({
 
               <div
                 className={cn(
-                  "border-t border-[#ECECEA]",
+                  "border-t border-[#00000014]",
                   !distributor && "min-h-[220px] md:min-h-[280px]",
                 )}
               >
@@ -215,7 +215,7 @@ export function CreateManualOrderFlow({
                             {sourceLines.map((line) => (
                               <div
                                 key={line.id}
-                                className="flex items-center gap-4 border-b border-[#ECECEA] py-3 last:border-b-0"
+                                className="flex items-center gap-4 border-b border-[#00000014] py-3 last:border-b-0"
                               >
                                 <IdPill>{line.sku}</IdPill>
                                 <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
@@ -245,7 +245,7 @@ export function CreateManualOrderFlow({
             </section>
 
             {distributor ? (
-              <section className="rounded-[8px] border border-[#ECECEA] bg-white p-5 md:p-6">
+              <section className="rounded-[8px] border border-[#00000014] bg-white p-5 md:p-6">
                 <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Delivery Date
                 </h2>
@@ -268,26 +268,23 @@ export function CreateManualOrderFlow({
                           key={slot}
                           className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#111118]"
                         >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() =>
-                              setTimeSlot(checked ? "" : slot)
-                            }
-                            className="peer sr-only"
-                          />
-                          <span
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={checked}
+                            onClick={() => setTimeSlot(checked ? "" : slot)}
                             className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-[#C8C8C6] bg-white",
-                              checked && "border-[#28402B] bg-[#28402B]",
+                              "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+                              checked
+                                ? "border-[#111118] bg-[#111118] text-white"
+                                : "border-[#C5C5C5] bg-white",
                             )}
-                            aria-hidden
                           >
                             {checked ? (
-                              <Check className="size-2.5 text-white" strokeWidth={3} />
+                              <Check size={11} strokeWidth={3} />
                             ) : null}
-                          </span>
-                          {slot}
+                          </button>
+                          <span>{slot}</span>
                         </label>
                       );
                     })}
@@ -308,7 +305,7 @@ export function CreateManualOrderFlow({
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
-            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5">
+            <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5">
               <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
                 {distributor}
               </h3>
@@ -316,7 +313,7 @@ export function CreateManualOrderFlow({
                 {selectedLines.map((line) => (
                   <div
                     key={line.id}
-                    className="flex items-center gap-6 border-b border-[#ECECEA] py-2.5 text-[12px]"
+                    className="flex items-center gap-6 border-b border-[#00000014] py-2.5 text-[12px]"
                   >
                     <span className="min-w-0 max-w-[14rem] truncate text-[#111118]">
                       {line.name}
@@ -352,11 +349,11 @@ export function CreateManualOrderFlow({
               </div>
             </div>
 
-            <aside className="h-fit rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5 xl:sticky xl:top-4">
+            <aside className="h-fit rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5 xl:sticky xl:top-4">
               <h3 className="mb-1 text-[15px] font-semibold text-[#111118]">
                 Order Summary
               </h3>
-              <div className="flex items-center justify-between gap-3 border-b border-[#ECECEA] py-3 text-[13px]">
+              <div className="flex items-center justify-between gap-3 border-b border-[#00000014] py-3 text-[13px]">
                 <div className="min-w-0">
                   <div className="truncate font-medium text-[#111118]">
                     {distributor}
@@ -383,7 +380,7 @@ export function CreateManualOrderFlow({
         </div>
       )}
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#ECECEA] bg-white px-4 py-3.5 md:px-8">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#00000014] bg-white px-4 py-3.5 md:px-8">
         {step === "review" ? (
           <button
             type="button"
@@ -424,7 +421,7 @@ export function CreateManualOrderFlow({
             aria-labelledby="manual-cancel-title"
             data-scroll-lock-allow
           >
-            <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-4">
+            <div className="flex items-start justify-between border-b border-[#00000014] px-6 py-4">
               <h2
                 id="manual-cancel-title"
                 className="text-[18px] font-semibold text-[#111118]"
@@ -443,7 +440,7 @@ export function CreateManualOrderFlow({
             <p className="px-6 py-5 text-[14px] text-[#111118]">
               Are you sure you want to close order request?
             </p>
-            <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
+            <div className="flex items-center justify-end gap-3 border-t border-[#00000014] px-6 py-4">
               <Button
                 variant="ghost"
                 onClick={() => setConfirmClose(false)}

@@ -98,7 +98,7 @@ function AreaChartCard({
   const gradientId = `grad-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
   return (
-    <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
+    <section className="rounded-[12px] border border-[#00000014] bg-white p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-[#111118]">{title}</h2>
         <ChartToggle value={mode} onChange={onModeChange} />
@@ -332,7 +332,7 @@ export default function DashboardPage() {
                 key={card.title}
                 type="button"
                 onClick={card.onClick}
-                className="rounded-[12px] border border-[#ECECEA] bg-white p-4 text-left"
+                className="rounded-[12px] border border-[#00000014] bg-white p-4 text-left"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -379,7 +379,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-4">
-            <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
+            <section className="rounded-[12px] border border-[#00000014] bg-white p-5">
               <h2 className="mb-4 text-[15px] font-semibold text-[#111118]">
                 Order Status
               </h2>
@@ -436,7 +436,7 @@ export default function DashboardPage() {
                 })}
               </div>
 
-              <div className="my-3 border-t border-[#F0F0EE]" />
+              <div className="my-3 border-t border-[#00000014]" />
 
               <button
                 type="button"
@@ -460,7 +460,7 @@ export default function DashboardPage() {
               </button>
             </section>
 
-            <section className="rounded-[12px] border border-[#ECECEA] bg-white p-5">
+            <section className="rounded-[12px] border border-[#00000014] bg-white p-5">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-[15px] font-semibold text-[#111118]">
                   Top Customers
@@ -475,7 +475,7 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="divide-y divide-[#F0F0EE]">
+              <div className="divide-y divide-[#00000014]">
                 {topCustomers.map((customer) => (
                   <button
                     key={customer.id}

@@ -96,7 +96,7 @@ function DescriptionHover({ description }: { description: string }) {
       {open ? (
         <div
           role="tooltip"
-          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
           onMouseLeave={hide}
@@ -198,14 +198,14 @@ export default function SourcePage() {
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
-            <div className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+            <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
               No sources found
             </div>
           ) : null}
           {filtered.map((row) => (
             <div
               key={row.id}
-              className="rounded-[12px] border border-[#ECECEA] bg-white p-3.5"
+              className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
@@ -242,7 +242,7 @@ export default function SourcePage() {
               className={cn(
                 GRID,
                 TABLE_HEADER,
-                "h-10 border-b border-[#ECECEA] px-4",
+                "h-10 border-b border-[#00000014] px-4",
               )}
             >
               <div>Source ID</div>
@@ -269,7 +269,7 @@ export default function SourcePage() {
                   className={cn(
                     GRID,
                     "h-[78px] px-4",
-                    !isLast && "border-b border-[#ECECEA]",
+                    !isLast && "border-b border-[#00000014]",
                   )}
                 >
                   <IdPill>{row.id}</IdPill>

@@ -106,7 +106,7 @@ export function RoleManagementModal({
         data-scroll-lock-allow
         className="relative z-10 flex h-[min(720px,92vh)] w-full max-w-[860px] flex-col overflow-hidden rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-[#ECECEA] px-5 py-4">
+        <div className="flex shrink-0 items-center justify-between border-b border-[#00000014] px-5 py-4">
           <h2
             id="role-mgmt-title"
             className="text-[18px] font-semibold tracking-tight text-[#111118]"
@@ -124,7 +124,7 @@ export function RoleManagementModal({
         </div>
 
         <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[200px] shrink-0 flex-col border-r border-[#ECECEA] bg-white p-3">
+          <aside className="flex w-[200px] shrink-0 flex-col border-r border-[#00000014] bg-white p-3">
             <Button
               variant="outline"
               size="lg"
@@ -194,7 +194,7 @@ export function RoleManagementModal({
                                 togglePermission(group.accessKey)
                               }
                             />
-                            <div className="space-y-2 border-l border-[#ECECEA] pl-4">
+                            <div className="space-y-2 border-l border-[#00000014] pl-4">
                               {group.actions.map((action) => (
                                 <PermissionRow
                                   key={action.key}
@@ -213,7 +213,7 @@ export function RoleManagementModal({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center justify-end gap-4 border-t border-[#ECECEA] px-5 py-4">
+                <div className="flex shrink-0 items-center justify-end gap-4 border-t border-[#00000014] px-5 py-4">
                   <Button variant="ghost" onClick={onClose}>
                     Cancel
                   </Button>
@@ -254,7 +254,7 @@ function PermissionRow({
           "flex size-[16px] shrink-0 items-center justify-center rounded-[3px] border transition-colors",
           checked
             ? "border-[#111118] bg-[#111118] text-white"
-            : "border-[#C9C9C6] bg-white",
+            : "border-[#00000014] bg-white",
         )}
       >
         {checked ? <Check size={11} strokeWidth={3} /> : null}

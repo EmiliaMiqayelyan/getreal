@@ -27,7 +27,7 @@ export function DeliveryDateChip({
         "inline-flex h-[50px] w-[160px] shrink-0 items-center justify-between rounded-[12px] border px-3.5 text-left",
         active
           ? "border-transparent bg-[#2B5B31]"
-          : "border-[#EBEBEB] bg-white",
+          : "border-[#00000014] bg-white",
       )}
     >
       <span

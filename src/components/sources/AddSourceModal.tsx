@@ -152,7 +152,7 @@ export function AddSourceModal({
         data-scroll-lock-allow
         className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[560px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
-        <div className="flex items-center justify-between border-b border-[#ECECEA] px-[30px] py-[18.75px]">
+        <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Source" : "Add Source"}
           </h2>
@@ -240,7 +240,7 @@ export function AddSourceModal({
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                 Image Place
               </h3>
               <Button
@@ -269,7 +269,7 @@ export function AddSourceModal({
 
             {logoUrl ? (
               <div>
-                <div className="flex items-center justify-center rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] px-4 py-6">
+                <div className="flex items-center justify-center rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] px-4 py-6">
                   <img
                     src={logoUrl}
                     alt={logoName || "Source image"}
@@ -291,7 +291,7 @@ export function AddSourceModal({
               <button
                 type="button"
                 onClick={() => fileRef.current?.click()}
-                className="flex w-full cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#D9D9D6] bg-[#FAFAF8] px-4 py-10 text-[13px] text-[#8A8A8A] transition-colors hover:border-[#C8C8C6]"
+                className="flex w-full cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] px-4 py-10 text-[13px] text-[#8A8A8A] transition-colors hover:border-[#00000014]"
               >
                 Upload Image
               </button>
@@ -299,7 +299,7 @@ export function AddSourceModal({
           </section>
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
-            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Description
             </h3>
             <textarea
@@ -307,12 +307,12 @@ export function AddSourceModal({
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Write your notes here..."
               rows={5}
-              className="min-h-[120px] max-h-[320px] w-full resize-y overflow-y-auto rounded-[8px] border border-[#E6E6E3] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none placeholder:text-[#A9A9A9]"
+              className="min-h-[120px] max-h-[320px] w-full resize-y overflow-y-auto rounded-[8px] border border-[#00000014] px-3 py-2.5 text-[13px] leading-relaxed text-[#111118] outline-none placeholder:text-[#A9A9A9]"
             />
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-[30px] py-4">
+        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-[30px] py-4">
           {isEdit ? (
             <button
               type="button"

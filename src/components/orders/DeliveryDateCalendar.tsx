@@ -60,7 +60,7 @@ export function DeliveryDateCalendar({
   return (
     <div
       className={cn(
-        "absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl",
+        "absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl",
         className,
       )}
     >
@@ -137,7 +137,7 @@ export function DeliveryDateCalendar({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#F0F0EE] pt-3">
+      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#00000014] pt-3">
         <button
           type="button"
           onClick={onClose}

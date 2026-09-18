@@ -141,10 +141,10 @@ function AssignPackerMenu({
       ref={panelRef}
       role="listbox"
       aria-label="Assign packer"
-      className="fixed z-[80] max-h-[320px] w-[300px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#ECECEA] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      className="fixed z-[80] max-h-[320px] w-[300px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={{ top: pos.top, left: pos.left }}
     >
-      <div className="sticky top-0 border-b border-[#F0F0EE] bg-white p-2.5">
+      <div className="sticky top-0 border-b border-[#00000014] bg-white p-2.5">
         <div className="relative">
           <Search
             size={12}
@@ -163,7 +163,7 @@ function AssignPackerMenu({
           key={packer.id}
           type="button"
           onClick={() => onChoose(packer)}
-          className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#F3F3F1] px-3 py-2.5 text-left last:border-b-0 hover:bg-[#FAFAF8]"
+          className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#00000014] px-3 py-2.5 text-left last:border-b-0 hover:bg-[#FAFAF8]"
         >
           <span className="text-[13px] font-medium text-[#111118]">
             {packer.name}
@@ -293,7 +293,7 @@ export default function PackerManagerPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white">
+      <div className="shrink-0 border-b border-[#00000014] bg-white">
         <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
           <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
             Packer Manager
@@ -301,7 +301,7 @@ export default function PackerManagerPage() {
           <UserMenu className="items-center" />
         </div>
 
-        <div className="border-t border-[#ECECEA] px-4 py-2 md:px-7">
+        <div className="border-t border-[#00000014] px-4 py-2 md:px-7">
           <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
             <div className="relative w-full sm:w-[220px]">
               <Search
@@ -375,7 +375,7 @@ export default function PackerManagerPage() {
             </DateNavButton>
 
             {calendarOpen ? (
-              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#ECECEA] bg-white p-4 shadow-xl">
+              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
                 <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
                   <span>July 2026</span>
                   <div className="flex gap-1 text-[#8A8A8A]">
@@ -425,13 +425,13 @@ export default function PackerManagerPage() {
 
         <ScrollTable
           minWidth={860}
-          className="rounded-[12px] border border-[#ECECEA] bg-white"
+          className="rounded-[12px] border border-[#00000014] bg-white"
         >
           <div
             className={cn(
               ROW_GRID,
               MUTED_HEADER,
-              "border-b border-[#F0F0EE] bg-white px-5 py-2.5",
+              "border-b border-[#00000014] bg-white px-5 py-2.5",
             )}
           >
             <div>Customer Order ID</div>
@@ -451,7 +451,7 @@ export default function PackerManagerPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "min-h-[88px] border-b border-[#F0F0EE] px-5 py-4 last:border-b-0",
+                  "min-h-[88px] border-b border-[#00000014] px-5 py-4 last:border-b-0",
                 )}
               >
                 <div className="min-w-0">
@@ -482,7 +482,7 @@ export default function PackerManagerPage() {
                             },
                       );
                     }}
-                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#E6E6E3] bg-white px-3 text-[13px] text-[#111118]"
+                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118]"
                   >
                     <Package size={14} className="shrink-0 text-[#8A8A8A]" />
                     <span className="truncate">
@@ -515,7 +515,7 @@ export default function PackerManagerPage() {
         </ScrollTable>
 
         {!rows.length ? (
-          <div className="mt-4 rounded-[10px] border border-[#ECECEA] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+          <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
             No orders match your filters.
           </div>
         ) : null}

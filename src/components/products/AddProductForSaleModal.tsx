@@ -172,7 +172,7 @@ export function AddProductForSaleModal({
         aria-labelledby="add-pfs-title"
         data-scroll-lock-allow
       >
-        <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-5">
+        <div className="flex items-start justify-between border-b border-[#00000014] px-6 py-5">
           <div>
             <h2
               id="add-pfs-title"
@@ -220,7 +220,7 @@ export function AddProductForSaleModal({
                   ? "border-[#D64545] ring-2 ring-[#D64545]/15"
                   : menuOpen
                     ? "border-[#F57850] ring-2 ring-[#F57850]/20"
-                    : "border-[#DCDCD8] hover:border-[#B8B8B4]",
+                    : "border-[#00000014] hover:border-[#00000014]",
               )}
             >
               {selected ? (
@@ -297,14 +297,14 @@ export function AddProductForSaleModal({
         <div
           ref={menuRef}
           data-scroll-lock-allow
-          className="fixed z-[60] overflow-hidden rounded-[10px] border border-[#E4E4E0] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+          className="fixed z-[60] overflow-hidden rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
           style={{
             top: menuPos.top,
             left: menuPos.left,
             width: menuPos.width,
           }}
         >
-          <div className="border-b border-[#ECECEA] p-2">
+          <div className="border-b border-[#00000014] p-2">
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-[#111118]" />
               <input
@@ -312,7 +312,7 @@ export function AddProductForSaleModal({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Search"
-                className="h-9 w-full rounded-lg border border-[#E4E4E0] bg-[#FAFAF8] py-2 pr-3 pl-8 text-[13px] text-[#111118] outline-none placeholder:text-[#9A9A96] focus:border-[#F57850]"
+                className="h-9 w-full rounded-lg border border-[#00000014] bg-[#FAFAF8] py-2 pr-3 pl-8 text-[13px] text-[#111118] outline-none placeholder:text-[#9A9A96] focus:border-[#F57850]"
               />
             </div>
           </div>

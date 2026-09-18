@@ -219,16 +219,16 @@ export default function PushNotificationsPage() {
         <ScrollTable minWidth={1100} className="rounded-[10px]">
           <table className="w-full table-fixed border-collapse">
             <colgroup>
-              <col style={{ width: "84px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "168px" }} />
+              <col style={{ width: "122px" }} />
+              <col style={{ width: "180px" }} />
+              <col style={{ width: "180px" }} />
               <col style={{ width: "200px" }} />
               <col style={{ width: "280px" }} />
               <col />
               <col style={{ width: "64px" }} />
             </colgroup>
             <thead>
-              <tr className="border-b border-[#ECECEA] bg-[#FAFAF8]">
+              <tr className="border-b border-[#00000014] bg-[#FAFAF8]">
                 <th className={cn(th, "pl-5 pr-3")}>ID</th>
                 <th className={cn(th, "pr-3")}>Data Trigger</th>
                 <th className={cn(th, "pr-3")}>Scheduled For</th>
@@ -242,18 +242,22 @@ export default function PushNotificationsPage() {
               {filtered.map((item) => (
                 <tr
                   key={item.id}
-                  className="border-b border-[#ECECEA] last:border-b-0"
+                  className="border-b border-[#00000014] last:border-b-0"
                 >
                   <td className={cn(td, "pl-5 pr-3")}>
                     <IdPill>{item.id}</IdPill>
                   </td>
-                  <td className={cn(td, "pr-3 font-semibold")}>{item.trigger}</td>
-                  <td className={cn(td, "pr-3")}>{item.scheduledFor}</td>
+                  <td className={cn(td, "pr-3 font-semibold")}>
+                    <span className="block truncate">{item.trigger}</span>
+                  </td>
+                  <td className={cn(td, "pr-3")}>
+                    <span className="block truncate">{item.scheduledFor}</span>
+                  </td>
                   <td className={cn(td, "pr-3")}>
                     <span className="block truncate">{item.subject}</span>
                   </td>
                   <td className={cn(td, "pr-4")}>
-                    <span className="block w-[280px] max-w-[280px] text-[13px] leading-5 text-[#111118]">
+                    <span className="block truncate text-[13px] leading-5 text-[#111118]">
                       {item.body}
                     </span>
                   </td>
@@ -300,7 +304,7 @@ export default function PushNotificationsPage() {
             aria-labelledby="pn-modal-title"
             className="relative z-10 flex w-full max-w-[480px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
           >
-            <div className="flex items-center justify-between border-b border-[#ECECEA] px-6 pt-5 pb-3">
+            <div className="flex items-center justify-between border-b border-[#00000014] px-6 pt-5 pb-3">
               <h2
                 id="pn-modal-title"
                 className="text-[18px] font-semibold tracking-tight text-[#111118]"
@@ -398,12 +402,12 @@ export default function PushNotificationsPage() {
                     }))
                   }
                   rows={4}
-                  className="min-h-[110px] rounded-[8px] border-[#E6E6E3] text-[13px]"
+                  className="min-h-[110px] rounded-[8px] border-[#00000014] text-[13px]"
                 />
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-4 border-t border-[#ECECEA] px-6 py-4">
+            <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-6 py-4">
               {draft.id ? (
                 <Button variant="dangerGhost" onClick={removeNotification}>
                   Remove Notification

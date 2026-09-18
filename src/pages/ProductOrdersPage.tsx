@@ -197,29 +197,31 @@ function ExpandableOrders({
           <col className="w-[100px]" />
         </colgroup>
         <thead>
-          <tr className="border-b border-[#F0F0EE] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-            <th className="px-4 py-2.5 font-semibold" />
-            <th className="py-2.5 pr-10 font-semibold">Delivery ID</th>
-            <th className="py-2.5 pr-10 font-semibold">Distributor</th>
-            <th className="py-2.5 pr-10 font-semibold">Order Date</th>
-            <th className="py-2.5 pr-10 font-semibold">Delivery Date</th>
-            <th className="py-2.5 pr-10 pl-6 font-semibold">Total Price</th>
-            <th aria-hidden className="py-2.5" />
-            <th className="px-4 py-2.5 text-right font-semibold">Invoice</th>
+          <tr className="border-b border-[#00000014] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+            <th className="py-[10px] pl-[23px] font-semibold" />
+            <th className="py-[10px] pr-10 font-semibold">Delivery ID</th>
+            <th className="py-[10px] pr-10 font-semibold">Distributor</th>
+            <th className="py-[10px] pr-10 font-semibold">Order Date</th>
+            <th className="py-[10px] pr-10 font-semibold">Delivery Date</th>
+            <th className="py-[10px] pr-10 pl-6 font-semibold">Total Price</th>
+            <th aria-hidden className="py-[10px]" />
+            <th className="py-[10px] pr-[23px] text-right font-semibold">
+              Invoice
+            </th>
           </tr>
         </thead>
-        {orders.map((order) => {
+        {orders.map((order, orderIndex) => {
           const open = expandedId === order.id;
           return (
             <tbody
-              key={order.id}
+              key={`${order.id}-${order.deliveryId}-${orderIndex}`}
               className={cn(
-                "border-b border-[#F0F0EE]",
+                "border-b border-[#00000014]",
                 open && "bg-[#F7F7F5]",
               )}
             >
               <tr>
-                <td className="px-4 py-3.5 align-middle">
+                <td className="py-[10px] pl-[23px] align-middle">
                   <button
                     type="button"
                     aria-label={open ? "Collapse" : "Expand"}
@@ -236,23 +238,23 @@ function ExpandableOrders({
                     />
                   </button>
                 </td>
-                <td className="py-3.5 pr-10 align-middle">
+                <td className="py-[10px] pr-10 align-middle">
                   <IdPill>{order.deliveryId}</IdPill>
                 </td>
-                <td className="truncate py-3.5 pr-10 text-[13px] font-semibold text-[#111118] align-middle">
+                <td className="truncate py-[10px] pr-10 text-[13px] font-semibold text-[#111118] align-middle">
                   {order.distributor}
                 </td>
-                <td className="py-3.5 pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
+                <td className="py-[10px] pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
                   {order.orderDate}
                 </td>
-                <td className="py-3.5 pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
+                <td className="py-[10px] pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
                   {order.deliveryDate}
                 </td>
-                <td className="py-3.5 pr-10 pl-6 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
+                <td className="py-[10px] pr-10 pl-6 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
                   {money(order.totalPrice)}
                 </td>
-                <td aria-hidden className="py-3.5" />
-                <td className="px-4 py-3.5 text-right align-middle">
+                <td aria-hidden className="py-[10px]" />
+                <td className="py-[10px] pr-[23px] text-right align-middle">
                   <button
                     type="button"
                     className={LINK}
@@ -264,30 +266,32 @@ function ExpandableOrders({
                 </td>
               </tr>
               {open
-                ? order.items.map((item) => (
+                ? order.items.map((item, itemIndex) => (
                     <tr
-                      key={`${order.id}-${item.sku}`}
-                      className="border-t border-[#ECECEA]"
+                      key={`${order.id}-${item.sku}-${itemIndex}`}
+                      className="border-t border-[#00000014] bg-[#FBF9F9]"
                     >
-                      <td className="px-4 py-2.5" />
-                      <td className="py-2.5 pr-10 align-middle">
+                      <td
+                        colSpan={2}
+                        className="py-[10px] pl-[23px] align-middle"
+                      >
                         <IdPill>{item.sku}</IdPill>
                       </td>
-                      <td className="truncate py-2.5 pr-10 text-[13px] text-[#111118] align-middle">
+                      <td className="truncate py-[10px] pr-10 text-[13px] text-[#111118] align-middle">
                         {item.itemName}
                       </td>
-                      <td className="truncate py-2.5 pr-10 text-[13px] text-[#8A8A8A] align-middle">
+                      <td className="truncate py-[10px] pr-10 text-[13px] text-[#8A8A8A] align-middle">
                         {item.source}
                       </td>
-                      <td className="py-2.5 pr-10 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
+                      <td className="py-[10px] pr-10 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
                         {item.quantity}x
                       </td>
-                      <td className="py-2.5 pr-10 pl-6 text-[13px] text-[#111118] align-middle whitespace-nowrap">
+                      <td className="py-[10px] pr-10 pl-6 text-[13px] text-[#111118] align-middle whitespace-nowrap">
                         {money(item.price)}
                         {item.unit ? ` / ${item.unit}` : ""}
                       </td>
-                      <td aria-hidden className="py-2.5" />
-                      <td className="px-4 py-2.5" />
+                      <td aria-hidden className="py-[10px]" />
+                      <td className="py-[10px] pr-[23px]" />
                     </tr>
                   ))
                 : null}
@@ -441,7 +445,10 @@ export default function ProductOrdersPage() {
 
   const filteredInProgress = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const seen = new Set<string>();
     return inProgress.filter((order) => {
+      if (seen.has(order.id)) return false;
+      seen.add(order.id);
       if (distributorFilter && order.distributor !== distributorFilter)
         return false;
       if (!q) return true;
@@ -734,14 +741,14 @@ export default function ProductOrdersPage() {
   if (view === "list") {
     return (
       <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-        <div className="shrink-0 border-b border-[#ECECEA] bg-white">
+        <div className="shrink-0 border-b border-[#00000014] bg-white">
           <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
             <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
               <div className="flex items-center justify-between gap-3">
                 <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                   Distributor Orders
                 </h1>
-                <div className="flex items-center border-l border-[#ECECEA] pl-5 lg:hidden">
+                <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
                   <UserMenu className="items-center" />
                 </div>
               </div>
@@ -768,13 +775,13 @@ export default function ProductOrdersPage() {
                   </button>
                 ))}
               </div>
-              <div className="hidden justify-end border-l border-[#ECECEA] pl-5 lg:flex lg:justify-self-end">
+              <div className="hidden justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
                 <UserMenu className="items-center" />
               </div>
             </div>
           </div>
 
-          <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#ECECEA] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
+          <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#00000014] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
             <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
               <Search size={14} className={SEARCH_ICON} />
               <Input
@@ -983,7 +990,7 @@ export default function ProductOrdersPage() {
                   </Button>
                 </div>
                 <ScrollTable minWidth={860}>
-                  <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F0F0EE] bg-[#FAFAF8] px-5 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                  <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#00000014] bg-[#FAFAF8] px-5 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                     <span>Item Name</span>
                     <span>Cust. Order Total</span>
                     <span>In Stock</span>
@@ -998,7 +1005,7 @@ export default function ProductOrdersPage() {
                     filteredPreview.map((row) => (
                       <div
                         key={row.id}
-                        className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#F3F3F1] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
+                        className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#00000014] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
                       >
                         <span>{row.itemName}</span>
                         <span>{row.custOrderTotal}</span>
@@ -1014,7 +1021,7 @@ export default function ProductOrdersPage() {
           ) : (
             <div className="space-y-8">
               {deliveredGroups.length === 0 ? (
-                <div className="rounded-[10px] border border-dashed border-[#DCDCD8] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
+                <div className="rounded-[10px] border border-dashed border-[#00000014] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
                   {getDeliveredEmptyMessage(deliveredFilterCriteria)}
                 </div>
               ) : (
@@ -1063,7 +1070,7 @@ export default function ProductOrdersPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#ECECEA] bg-white px-4 py-5 md:px-8">
+      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 py-5 md:px-8">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-[28px] font-semibold tracking-tight text-[#111118]">
@@ -1112,10 +1119,10 @@ export default function ProductOrdersPage() {
                         Calculate QTY
                       </button>
                     </div>
-                    <div className="overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white">
+                    <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white">
                       <div
                         className={cn(
-                          "grid gap-3 border-b border-[#F0F0EE] px-4 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                          "grid gap-3 border-b border-[#00000014] px-4 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                           ORDER_PREP_COLS,
                         )}
                       >
@@ -1133,7 +1140,7 @@ export default function ProductOrdersPage() {
                           <div
                             key={row.id}
                             className={cn(
-                              "grid items-center gap-3 border-b border-[#F3F3F1] px-4 py-3.5 last:border-b-0",
+                              "grid items-center gap-3 border-b border-[#00000014] px-4 py-3.5 last:border-b-0",
                               ORDER_PREP_COLS,
                             )}
                           >
@@ -1184,7 +1191,7 @@ export default function ProductOrdersPage() {
                 return (
                   <div
                     key={group.distributor}
-                    className="rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5"
+                    className="rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5"
                   >
                     <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
                       {group.distributor}
@@ -1193,7 +1200,7 @@ export default function ProductOrdersPage() {
                       {group.items.map((item) => (
                         <div
                           key={`${group.distributor}-${item.itemName}`}
-                          className="flex items-center gap-3 border-b border-[#ECECEA] py-2.5 text-[12px]"
+                          className="flex items-center gap-3 border-b border-[#00000014] py-2.5 text-[12px]"
                         >
                           <span className="min-w-0 flex-[1.15] truncate text-[#111118]">
                             {item.itemName}
@@ -1302,7 +1309,7 @@ export default function ProductOrdersPage() {
               })}
             </div>
 
-            <aside className="h-fit shrink-0 rounded-[12px] border border-[#ECECEA] bg-white px-4 py-3.5 xl:sticky xl:top-4">
+            <aside className="h-fit shrink-0 rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5 xl:sticky xl:top-4">
               <h3 className="mb-1 text-[15px] font-semibold text-[#111118]">
                 Order Summary
               </h3>
@@ -1312,7 +1319,7 @@ export default function ProductOrdersPage() {
                   return (
                     <div
                       key={`sum-${group.distributor}`}
-                      className="flex items-center justify-between gap-3 border-b border-[#ECECEA] py-3 text-[13px]"
+                      className="flex items-center justify-between gap-3 border-b border-[#00000014] py-3 text-[13px]"
                     >
                       <div className="min-w-0">
                         <div className="truncate font-medium text-[#111118]">
@@ -1337,7 +1344,7 @@ export default function ProductOrdersPage() {
                 })}
               </div>
               {pendingReviewGroups.length > 0 ? (
-                <div className="flex items-center justify-between border-b border-[#ECECEA] py-3 text-[12px] text-[#8A8A8A]">
+                <div className="flex items-center justify-between border-b border-[#00000014] py-3 text-[12px] text-[#8A8A8A]">
                   <span>Remaining</span>
                   <span className="font-medium text-[#111118]">
                     {money(pendingTotal)}
@@ -1357,7 +1364,7 @@ export default function ProductOrdersPage() {
         </div>
       )}
 
-      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#ECECEA] bg-white px-4 py-3.5 md:px-8">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-t border-[#00000014] bg-white px-4 py-3.5 md:px-8">
         {view === "review" ? (
           <button
             type="button"
@@ -1398,7 +1405,7 @@ export default function ProductOrdersPage() {
             aria-labelledby="cancel-order-title"
             data-scroll-lock-allow
           >
-            <div className="flex items-start justify-between border-b border-[#ECECEA] px-6 py-4">
+            <div className="flex items-start justify-between border-b border-[#00000014] px-6 py-4">
               <h2
                 id="cancel-order-title"
                 className="text-[18px] font-semibold text-[#111118]"
@@ -1417,7 +1424,7 @@ export default function ProductOrdersPage() {
             <p className="px-6 py-5 text-[14px] text-[#111118]">
               Are you sure you want to close order request?
             </p>
-            <div className="flex items-center justify-end gap-3 border-t border-[#ECECEA] px-6 py-4">
+            <div className="flex items-center justify-end gap-3 border-t border-[#00000014] px-6 py-4">
               <Button
                 variant="ghost"
                 onClick={() => setConfirmClose(false)}

@@ -21,7 +21,7 @@ export function ScrollTable({
   return (
     <div
       className={cn(
-        !bare && "overflow-hidden rounded-[12px] border border-[#ECECEA] bg-white",
+        !bare && "overflow-hidden rounded-[12px] border border-[#00000014] bg-white",
         className,
       )}
     >
