@@ -21,6 +21,7 @@ import { toCreateDistributorPayload } from "@/lib/api/payloads";
 import type { Distributor } from "@/types/distributor";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
+import { apiId } from "@/utils/entityIds";
 import {
   filterDistributors,
   getDistributorFullAddress,
@@ -324,7 +325,7 @@ export default function DistributorsPage() {
     const snapshot = editing;
     removeDistributor(id);
     if (isApiConfigured()) {
-      void distributorsApi.remove(id).catch((error) => {
+      void distributorsApi.remove(apiId(editing)).catch((error) => {
         saveDistributor(snapshot, "create");
         notifyApiError(error, "Failed to delete distributor.");
       });
@@ -504,7 +505,7 @@ export default function DistributorsPage() {
                 const payload = toCreateDistributorPayload(distributor);
                 if (editing) {
                   const updated = await distributorsApi.update(
-                    editing.id,
+                    apiId(editing),
                     payload,
                   );
                   const mapped = mapApiDistributorToDistributor(updated, 0);
@@ -513,6 +514,7 @@ export default function DistributorsPage() {
                       ...distributor,
                       ...mapped,
                       id: editing.id,
+                      recordId: mapped.recordId ?? editing.recordId,
                       deliveryDays: distributor.deliveryDays,
                       documents: distributor.documents,
                       categories: distributor.categories,

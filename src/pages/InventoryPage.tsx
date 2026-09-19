@@ -25,6 +25,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { inventoryApi, isApiConfigured } from "@/lib/api";
 import { cn } from "@/utils/cn";
+import { findByEntityRef } from "@/utils/entityIds";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
@@ -974,7 +975,7 @@ export default function InventoryPage() {
         if (cancelled || rows.length === 0) return;
 
         const products: InventoryProduct[] = rows.map((row, index) => {
-          const item = catalogItems.find((entry) => entry.id === row.itemId);
+          const item = findByEntityRef(catalogItems, row.itemId);
           return {
             id: row.id ?? `inv-${index}`,
             name: item?.merchandisingName || item?.name || row.itemId || "Item",

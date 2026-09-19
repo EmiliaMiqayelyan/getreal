@@ -34,6 +34,8 @@ export type DistributorDeliverySlot = {
 
 export type Distributor = {
   id: string;
+  /** Backend record UUID when known; used for API paths and FK payloads. */
+  recordId?: string;
   name: string;
   paymentTerms: string;
   contact: string;

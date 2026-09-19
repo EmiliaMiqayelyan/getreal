@@ -1,5 +1,6 @@
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
+import { matchesEntityRef } from "@/utils/entityIds";
 
 export type AddProductForSaleInput = {
   selectedItemId: string;
@@ -31,7 +32,7 @@ export function validateAddProductForSale(
 
   const duplicate = input.existingProducts.find(
     (product) =>
-      product.itemId === selectedItemId &&
+      matchesEntityRef(item, product.itemId) &&
       product.id !== (input.editingProductId ?? null),
   );
   if (duplicate) {

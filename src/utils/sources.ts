@@ -1,4 +1,5 @@
 import type { Source } from "@/types/source";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
 import { locationFromAddress, resolveFullAddress } from "@/utils/format";
 
 export type SourceFilterCriteria = {
@@ -118,7 +119,8 @@ type SourceLinked = {
 export function resolveSourceId(sourceName: string, sources: Source[]) {
   const normalized = sourceName.trim();
   if (!normalized) return undefined;
-  return sources.find((source) => source.name === normalized)?.id;
+  const match = sources.find((source) => source.name === normalized);
+  return match ? apiId(match) : undefined;
 }
 
 export function attachSourceIds<T extends SourceLinked>(
@@ -137,7 +139,7 @@ export function findSourceForRecord(
   previousSources: Source[] = [],
 ) {
   if (record.sourceId) {
-    return sources.find((source) => source.id === record.sourceId);
+    return findByEntityRef(sources, record.sourceId);
   }
 
   const previousById = new Map(previousSources.map((source) => [source.id, source]));

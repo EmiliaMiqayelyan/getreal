@@ -49,6 +49,7 @@ import type {
 } from "@/types/distributorOrder";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
+import { findByEntityRef } from "@/utils/entityIds";
 import {
   appendInProgressOrders,
   applyCalculatedQuantitiesForCategory,
@@ -578,14 +579,11 @@ export default function ProductOrdersPage() {
 
         const mapped: PlacedOrder[] = remote.map((order, index) => {
           const distributorName =
-            distributors.find((entry) => entry.id === order.distributorId)
-              ?.name ??
+            findByEntityRef(distributors, order.distributorId)?.name ??
             order.distributorId ??
             "Distributor";
           const lines = (order.items ?? []).map((line) => {
-            const product = products.find(
-              (entry) => entry.id === line.productId,
-            );
+            const product = findByEntityRef(products, line.productId);
             return {
               sku: line.productId ?? "",
               itemName: product?.merchandisingName ?? line.productId ?? "Item",

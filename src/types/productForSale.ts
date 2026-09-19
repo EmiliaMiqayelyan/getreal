@@ -2,6 +2,8 @@ import type { ItemPhoto } from "@/types/item";
 
 export type ProductForSale = {
   id: string;
+  /** Backend record UUID when known; used for API paths and FK payloads. */
+  recordId?: string;
   itemId: string;
   sortOrder: number;
   live: boolean;

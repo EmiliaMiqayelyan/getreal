@@ -6,10 +6,11 @@ import { isApiConfigured } from "./client";
 import { formatApiError } from "./errors";
 import { ordersApi } from "./orders";
 import { toastFromApi } from "@/lib/toastBridge";
+import { apiId } from "@/utils/entityIds";
 
 /**
  * Push a distributor review group to POST /orders.
- * Uses Products for Sale IDs as `productId` (backend expects product UUIDs).
+ * Uses product record UUIDs as `productId` (backend expects product UUIDs).
  */
 export function syncReviewGroupOrder(
   group: ReviewGroup,
@@ -20,9 +21,11 @@ export function syncReviewGroupOrder(
 
   const distributor = distributors.find(
     (entry) =>
-      entry.name === group.distributor || entry.id === group.distributor,
+      entry.name === group.distributor ||
+      entry.id === group.distributor ||
+      entry.recordId === group.distributor,
   );
-  if (!distributor?.id) {
+  if (!distributor) {
     toastFromApi(
       `Could not sync order: distributor "${group.distributor}" has no API id.`,
       "error",
@@ -36,11 +39,12 @@ export function syncReviewGroupOrder(
         products.find(
           (entry) =>
             entry.merchandisingName === line.itemName ||
-            entry.id === line.itemName,
+            entry.id === line.itemName ||
+            entry.recordId === line.itemName,
         ) ?? null;
-      if (!product?.id) return null;
+      if (!product) return null;
       return {
-        productId: product.id,
+        productId: apiId(product),
         quantity: Math.max(1, line.quantity),
         frequency: "one_time" as const,
       };
@@ -66,7 +70,7 @@ export function syncReviewGroupOrder(
   void ordersApi
     .create({
       type: "distributor",
-      distributorId: distributor.id,
+      distributorId: apiId(distributor),
       communicationChannel: "quickbooks",
       items,
     })

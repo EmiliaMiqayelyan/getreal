@@ -130,9 +130,11 @@ export function ApiBootstrap() {
           setDistributors((current) => mergeById(current, apiDistributors));
         }
 
-        const distributorsById = new Map(
-          apiDistributors.map((entry) => [entry.id, entry.name] as const),
-        );
+        const distributorsById = new Map<string, string>();
+        for (const entry of apiDistributors) {
+          distributorsById.set(entry.id, entry.name);
+          if (entry.recordId) distributorsById.set(entry.recordId, entry.name);
+        }
 
         const apiSources = sourcesPayload.map((source, index) =>
           mapApiSourceToSource(source, index, distributorsById),

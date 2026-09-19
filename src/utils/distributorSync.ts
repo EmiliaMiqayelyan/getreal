@@ -2,6 +2,7 @@ import type { Distributor } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
+import { apiId, findByEntityRef, matchesEntityRef } from "@/utils/entityIds";
 import { getSourceEffectiveDistributor, findSourceForRecord } from "@/utils/sources";
 
 type DistributorLinked = {
@@ -29,7 +30,8 @@ export function resolveDistributorId(
 ) {
   const normalized = distributorName.trim();
   if (!normalized) return undefined;
-  return distributors.find((entry) => entry.name === normalized)?.id;
+  const match = distributors.find((entry) => entry.name === normalized);
+  return match ? apiId(match) : undefined;
 }
 
 export function attachDistributorIds<T extends DistributorLinked>(
@@ -46,11 +48,11 @@ export function attachDistributorIds<T extends DistributorLinked>(
 
 function matchesDistributor(
   record: DistributorLinked,
-  distributorId: string,
+  distributor: Distributor,
   previousName?: string,
 ) {
   return (
-    record.distributorId === distributorId ||
+    matchesEntityRef(distributor, record.distributorId) ||
     (previousName ? record.distributor === previousName : false)
   );
 }
@@ -66,29 +68,28 @@ export function syncDistributorReferences(
   },
 ) {
   const previousName = previous?.name;
+  const linkedDistributorId = apiId(distributor);
   const linkedItemIds = new Set(
     catalog.items
-      .filter((item) =>
-        matchesDistributor(item, distributor.id, previousName),
-      )
+      .filter((item) => matchesDistributor(item, distributor, previousName))
       .map((item) => item.id),
   );
 
   const items = catalog.items.map((item) =>
-    matchesDistributor(item, distributor.id, previousName)
+    matchesDistributor(item, distributor, previousName)
       ? {
           ...item,
-          distributorId: distributor.id,
+          distributorId: linkedDistributorId,
           distributor: distributor.name,
         }
       : item,
   );
 
   const sources = catalog.sources.map((source) =>
-    matchesDistributor(source, distributor.id, previousName)
+    matchesDistributor(source, distributor, previousName)
       ? {
           ...source,
-          distributorId: distributor.id,
+          distributorId: linkedDistributorId,
           distributor: distributor.name,
         }
       : source,
@@ -98,14 +99,14 @@ export function syncDistributorReferences(
     if (product.itemId && linkedItemIds.has(product.itemId)) {
       return {
         ...product,
-        distributorId: distributor.id,
+        distributorId: linkedDistributorId,
         distributor: distributor.name,
       };
     }
-    if (matchesDistributor(product, distributor.id, previousName)) {
+    if (matchesDistributor(product, distributor, previousName)) {
       return {
         ...product,
-        distributorId: distributor.id,
+        distributorId: linkedDistributorId,
         distributor: distributor.name,
       };
     }
@@ -124,10 +125,10 @@ export function withResolvedDistributor<T extends DistributorLinked>(
     resolveDistributorId(record.distributor, distributors);
   if (!distributorId) return record;
 
-  const distributor = distributors.find((entry) => entry.id === distributorId);
+  const distributor = findByEntityRef(distributors, distributorId);
   return {
     ...record,
-    distributorId,
+    distributorId: distributor ? apiId(distributor) : distributorId,
     distributor: distributor?.name ?? record.distributor,
   };
 }
@@ -175,10 +176,8 @@ export function syncCatalogProductsForSources(
   items: Item[],
   previousSources: Source[],
 ): ProductForSale[] {
-  const itemsById = new Map(items.map((item) => [item.id, item]));
-
   return products.map((product) => {
-    const linkedItem = product.itemId ? itemsById.get(product.itemId) : undefined;
+    const linkedItem = findByEntityRef(items, product.itemId);
     if (linkedItem) {
       return syncProductWithItem(product, linkedItem);
     }
@@ -190,7 +189,7 @@ export function syncCatalogProductsForSources(
     return {
       ...product,
       source: source.name,
-      sourceId: source.id,
+      sourceId: apiId(source),
       distributor: effective.name,
       distributorId: effective.id,
     };
@@ -223,11 +222,9 @@ export function syncCatalogProductsForItems(
   items: Item[],
   products: ProductForSale[],
 ): ProductForSale[] {
-  const itemsById = new Map(items.map((item) => [item.id, item]));
-
   return products.map((product) => {
     if (!product.itemId) return product;
-    const item = itemsById.get(product.itemId);
+    const item = findByEntityRef(items, product.itemId);
     if (!item) return product;
     return syncProductWithItem(product, item);
   });

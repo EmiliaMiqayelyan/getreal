@@ -37,6 +37,7 @@ import {
   type ProductTab,
 } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
 import { validateAddProductForSale } from "@/utils/productForSaleForm";
 import {
   filterProductsForSale,
@@ -366,10 +367,25 @@ export default function ProductsForSalePage() {
   }, [products, viewing]);
 
   const excludedItemIds = useMemo(() => {
-    const set = new Set(products.map((product) => product.itemId));
-    if (editTarget) set.delete(editTarget.itemId);
+    const set = new Set<string>();
+    for (const product of products) {
+      if (product.itemId) set.add(product.itemId);
+      const linked = findByEntityRef(catalog, product.itemId);
+      if (linked) {
+        set.add(linked.id);
+        if (linked.recordId) set.add(linked.recordId);
+      }
+    }
+    if (editTarget) {
+      set.delete(editTarget.itemId);
+      const linked = findByEntityRef(catalog, editTarget.itemId);
+      if (linked) {
+        set.delete(linked.id);
+        if (linked.recordId) set.delete(linked.recordId);
+      }
+    }
     return set;
-  }, [products, editTarget]);
+  }, [products, editTarget, catalog]);
 
   function selectTab(nextTab: ProductTab) {
     setTab(nextTab);
@@ -377,14 +393,15 @@ export default function ProductsForSalePage() {
   }
 
   function toggleLive(id: string, live: boolean) {
+    const target = products.find((row) => row.id === id);
     setProducts((current) =>
       current.map((row) => (row.id === id ? { ...row, live } : row)),
     );
     setViewing((current) =>
       current?.id === id ? { ...current, live } : current,
     );
-    if (isApiConfigured()) {
-      void productsApi.update(id, { isLive: live }).catch((error) => {
+    if (isApiConfigured() && target) {
+      void productsApi.update(apiId(target), { isLive: live }).catch((error) => {
         setProducts((current) =>
           current.map((row) => (row.id === id ? { ...row, live: !live } : row)),
         );
@@ -416,7 +433,7 @@ export default function ProductsForSalePage() {
       );
       if (isApiConfigured()) {
         const positions = next.map((product, index) => ({
-          id: product.id,
+          id: apiId(product),
           position: product.sortOrder ?? index,
         }));
         void productsApi.reorder(positions).catch((error) => {
@@ -443,11 +460,16 @@ export default function ProductsForSalePage() {
         if (isApiConfigured()) {
           try {
             const saved = await productsApi.update(
-              editTarget.id,
-              toCreateProductPayload(updated),
+              apiId(editTarget),
+              toCreateProductPayload(updated, catalog),
             );
             const mapped = mapApiProductToProductForSale(saved, 0, catalog);
-            const merged = { ...updated, ...mapped, id: editTarget.id };
+            const merged = {
+              ...updated,
+              ...mapped,
+              id: editTarget.id,
+              recordId: mapped.recordId ?? editTarget.recordId,
+            };
             setProducts((current) =>
               current.map((row) => (row.id === editTarget.id ? merged : row)),
             );
@@ -477,7 +499,7 @@ export default function ProductsForSalePage() {
       if (isApiConfigured()) {
         try {
           const created = await productsApi.create(
-            toCreateProductPayload(draft),
+            toCreateProductPayload(draft, catalog),
           );
           const mapped = mapApiProductToProductForSale(created, 0, catalog);
           setProducts((current) => [...current, { ...draft, ...mapped }]);
@@ -502,7 +524,7 @@ export default function ProductsForSalePage() {
     setEditTarget(null);
     if (isApiConfigured()) {
       void productsApi
-        .remove(id)
+        .remove(apiId(snapshot))
         .then(() => showSuccess("Product removed."))
         .catch((error) => {
           setProducts((current) => [snapshot, ...current]);
@@ -648,7 +670,12 @@ export default function ProductsForSalePage() {
           catalog={catalog}
           existingProducts={products}
           excludedItemIds={excludedItemIds}
-          initialItemId={editTarget?.itemId}
+          initialItemId={
+            editTarget
+              ? findByEntityRef(catalog, editTarget.itemId)?.id ??
+                editTarget.itemId
+              : undefined
+          }
           editingProductId={editTarget?.id ?? null}
         />
 

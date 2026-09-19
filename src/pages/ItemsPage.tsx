@@ -22,6 +22,7 @@ import { toCreateItemPayload } from "@/lib/api/payloads";
 import type { ExportRequest } from "@/types/export";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import { cn } from "@/utils/cn";
+import { apiId } from "@/utils/entityIds";
 import {
   getItemDisplayName,
   getItemPrimaryPhoto,
@@ -254,7 +255,7 @@ export default function ItemsPage() {
     const previous = rows;
     setItems((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void itemsApi.remove(id).catch((error) => {
+      void itemsApi.remove(apiId(editing)).catch((error) => {
         setItems(previous);
         notifyApiError(error, "Failed to delete item.");
       });
@@ -526,7 +527,7 @@ export default function ItemsPage() {
                     : [],
                 );
                 if (editing) {
-                  const updated = await itemsApi.update(editing.id, payload);
+                  const updated = await itemsApi.update(apiId(editing), payload);
                   const mapped = mapApiItemToItem(updated, 0, {
                     categoriesById,
                     distributorsById,
@@ -539,6 +540,7 @@ export default function ItemsPage() {
                             ...item,
                             ...mapped,
                             id: editing.id,
+                            recordId: mapped.recordId ?? editing.recordId,
                             // Keep rich UI fields the API does not store yet.
                             merchandisingName: item.merchandisingName,
                             description: item.description,

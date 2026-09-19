@@ -9,6 +9,8 @@ export type CaseBy = "Lbs / case" | "Units / case";
 
 export type Item = {
   id: string;
+  /** Backend record UUID when known; used for API paths and FK payloads. */
+  recordId?: string;
   name: string;
   merchandisingName: string;
   description: string;

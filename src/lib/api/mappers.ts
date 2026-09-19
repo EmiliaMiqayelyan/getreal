@@ -136,8 +136,10 @@ export function mapApiItemToItem(
     (item.distributorId && options.distributorsById?.get(item.distributorId)) ||
     "";
 
+  const recordId = item.id;
   return {
-    id: item.id ?? `API-ITEM-${index + 1}`,
+    id: item.itemCode ?? recordId ?? `API-ITEM-${index + 1}`,
+    recordId,
     name: item.name ?? "Item",
     merchandisingName: item.merchandisingName ?? item.name ?? "Item",
     description: item.description ?? "",
@@ -166,9 +168,11 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
   const name = product.merchandisingName ?? product.name ?? "Product";
   const priceCents = product.sellingPrice ?? product.price ?? 0;
   const sellingPrice = centsToDollars(priceCents);
+  const recordId = product.itemId ?? product.id;
 
   return {
-    id: product.itemId ?? product.id ?? `API-${index + 1}`,
+    id: product.productId ?? recordId ?? `API-${index + 1}`,
+    recordId,
     name,
     merchandisingName: name,
     description: product.description ?? "",
@@ -194,13 +198,20 @@ export function mapApiProductToProductForSale(
   index: number,
   catalogItems: Item[] = [],
 ): ProductForSale {
-  const linked = catalogItems.find((item) => item.id === product.itemId);
+  const linked = catalogItems.find(
+    (item) =>
+      item.recordId === product.itemId ||
+      item.id === product.itemId,
+  );
   const name = product.merchandisingName ?? product.name ?? "Product";
   const priceCents = product.sellingPrice ?? product.price ?? 0;
+  const recordId = product.id;
 
   return {
-    id: product.id ?? `API-PFS-${index + 1}`,
-    itemId: product.itemId ?? linked?.id ?? "",
+    id: product.productId ?? recordId ?? `API-PFS-${index + 1}`,
+    recordId,
+    // Prefer the item business code for UI linking; fall back to API itemId (UUID).
+    itemId: linked?.id ?? product.itemId ?? "",
     sortOrder: product.position ?? index,
     live: Boolean(product.isLive),
     merchandisingName: name,
@@ -247,9 +258,11 @@ export function mapApiDistributorToDistributor(
     (fullAddress ? locationFromAddress(fullAddress) : "");
 
   const primary = contacts[0];
+  const recordId = distributor.id;
 
   return {
-    id: distributor.id ?? `DIS-API-${index + 1}`,
+    id: distributor.distributorCode ?? recordId ?? `DIS-API-${index + 1}`,
+    recordId,
     name: distributor.name ?? "Distributor",
     paymentTerms: distributor.paymentTerms ?? "",
     contact: primary
@@ -288,8 +301,11 @@ export function mapApiSourceToSource(
     [source.city, source.state].filter(Boolean).join(", ") ||
     (fullAddress ? locationFromAddress(fullAddress) : "");
 
+  const recordId = source.id;
+
   return {
-    id: source.id ?? `SRC-API-${index + 1}`,
+    id: source.sourceCode ?? recordId ?? `SRC-API-${index + 1}`,
+    recordId,
     name: source.name ?? "Source",
     location,
     fullAddress: source.address?.trim() || fullAddress,

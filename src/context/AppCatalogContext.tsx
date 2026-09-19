@@ -28,6 +28,7 @@ import {
   withResolvedDistributor,
 } from "@/utils/distributorSync";
 import { nextDistributorId } from "@/utils/distributors";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
 import {
   attachSourceIds,
   getSourceLocation,
@@ -228,12 +229,12 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
           const sourceId =
             resolved.sourceId ?? resolveSourceId(resolved.source, current.sources);
           const source = sourceId
-            ? current.sources.find((entry) => entry.id === sourceId)
+            ? findByEntityRef(current.sources, sourceId)
             : current.sources.find((entry) => entry.name === resolved.source);
 
           return {
             ...resolved,
-            sourceId: source?.id ?? sourceId,
+            sourceId: source ? apiId(source) : sourceId,
             source: source?.name ?? resolved.source,
           };
         });

@@ -13,6 +13,13 @@ import {
 import type { CreateProductPayload, UpdateProductPayload } from "./products";
 import type { CreateSourcePayload } from "./sources";
 import type { ApiCategory, CatalogSubcategory } from "./types";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
+
+function businessCodeOrUndefined(id: string | undefined) {
+  const trimmed = id?.trim() ?? "";
+  if (!trimmed || trimmed.endsWith("-TEMP")) return undefined;
+  return trimmed;
+}
 
 function splitAddress(fullAddress: string): {
   address: string;
@@ -56,6 +63,7 @@ export function toCreateDistributorPayload(
   const parsed = splitAddress(distributor.fullAddress || distributor.location);
   return {
     name: distributor.name.trim(),
+    distributorCode: businessCodeOrUndefined(distributor.id),
     address: parsed.address || distributor.fullAddress || undefined,
     city: parsed.city,
     state: parsed.state,
@@ -79,6 +87,7 @@ export function toCreateSourcePayload(source: Source): CreateSourcePayload {
   const parsed = splitAddress(source.fullAddress || source.location);
   return {
     name: source.name.trim(),
+    sourceCode: businessCodeOrUndefined(source.id),
     distributorId: source.distributorId,
     description: source.description || undefined,
     address: parsed.address || source.fullAddress || undefined,
@@ -121,9 +130,11 @@ export function toCreateItemPayload(
 
 export function toCreateProductPayload(
   product: ProductForSale,
+  catalogItems: Item[] = [],
 ): CreateProductPayload {
+  const linked = findByEntityRef(catalogItems, product.itemId);
   return {
-    itemId: product.itemId,
+    itemId: linked ? apiId(linked) : product.itemId,
     merchandisingName: product.merchandisingName.trim(),
     sellingPrice: dollarsToCents(product.salesPrice),
     description: product.description || undefined,
@@ -134,6 +145,7 @@ export function toCreateProductPayload(
 
 export function toUpdateProductPayload(
   product: ProductForSale,
+  catalogItems: Item[] = [],
 ): UpdateProductPayload {
-  return toCreateProductPayload(product);
+  return toCreateProductPayload(product, catalogItems);
 }

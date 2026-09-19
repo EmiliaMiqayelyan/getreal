@@ -52,6 +52,7 @@ export type CatalogSubcategory = {
 
 export type ApiItem = {
   id?: string;
+  itemCode?: string;
   name?: string;
   categoryId?: string;
   subcategoryId?: string | null;

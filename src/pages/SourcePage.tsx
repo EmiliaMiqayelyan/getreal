@@ -22,6 +22,7 @@ import { toCreateSourcePayload } from "@/lib/api/payloads";
 import type { ExportRequest } from "@/types/export";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
+import { apiId } from "@/utils/entityIds";
 import {
   filterSources,
   getSourceDistributorDisplay,
@@ -177,7 +178,7 @@ export default function SourcePage() {
     const snapshot = editing;
     setSources((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void sourcesApi.remove(id).catch((error) => {
+      void sourcesApi.remove(apiId(editing)).catch((error) => {
         setSources((current) => [snapshot, ...current]);
         notifyApiError(error, "Failed to delete source.");
       });
@@ -347,7 +348,7 @@ export default function SourcePage() {
               try {
                 const payload = toCreateSourcePayload(source);
                 if (editing) {
-                  const updated = await sourcesApi.update(editing.id, payload);
+                  const updated = await sourcesApi.update(apiId(editing), payload);
                   const mapped = mapApiSourceToSource(
                     updated,
                     0,
@@ -360,6 +361,7 @@ export default function SourcePage() {
                             ...source,
                             ...mapped,
                             id: editing.id,
+                            recordId: mapped.recordId ?? editing.recordId,
                             logoUrl: source.logoUrl,
                             logoName: source.logoName,
                           }

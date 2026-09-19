@@ -5,6 +5,7 @@ import {
   type ItemPhoto,
 } from "@/types/item";
 import type { ProductForSale, ProductTab } from "@/types/productForSale";
+import { findByEntityRef } from "@/utils/entityIds";
 import { getItemDisplayName } from "@/utils/items";
 import type { SubcategoryMap } from "@/utils/subcategories";
 
@@ -34,7 +35,7 @@ export function resolveProductTableDisplay(
   product: ProductForSale,
   items: Item[],
 ): ProductTableDisplay {
-  const item = items.find((entry) => entry.id === product.itemId);
+  const item = findByEntityRef(items, product.itemId);
   if (!item) {
     return {
       merchandisingName: product.merchandisingName,
@@ -56,7 +57,7 @@ export function resolveProductDetails(
   product: ProductForSale,
   items: Item[],
 ): ProductDetailsDisplay {
-  const item = items.find((entry) => entry.id === product.itemId);
+  const item = findByEntityRef(items, product.itemId);
   if (!item) {
     return {
       id: product.id,
@@ -108,7 +109,7 @@ export function resolveProductInheritedFields(
   product: ProductForSale,
   items: Item[],
 ): ProductInheritedFields {
-  const item = items.find((entry) => entry.id === product.itemId);
+  const item = findByEntityRef(items, product.itemId);
   if (!item) {
     return {
       category: product.category || "Other",
