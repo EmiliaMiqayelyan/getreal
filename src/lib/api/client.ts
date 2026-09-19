@@ -150,3 +150,104 @@ export async function apiRequest<T>(
 
   return unwrapData<T>(json);
 }
+
+function filenameFromContentDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const utf8 = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header);
+  if (utf8?.[1]) {
+    try {
+      return decodeURIComponent(utf8[1].trim().replace(/^"|"$/g, ""));
+    } catch {
+      return utf8[1].trim().replace(/^"|"$/g, "");
+    }
+  }
+  const plain = /filename\s*=\s*("?)([^";]+)\1/i.exec(header);
+  return plain?.[2]?.trim() ?? null;
+}
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Fetch a binary/file response (e.g. CSV export) and trigger a browser download. */
+export async function apiDownload(
+  path: string,
+  options: RequestInit & { auth?: boolean; filename?: string } = {},
+): Promise<void> {
+  if (!isApiConfigured()) {
+    throw new ApiError("API URL is not configured", 0, null);
+  }
+
+  const headers = new Headers(options.headers);
+  const useAuth = options.auth !== false;
+  if (useAuth) {
+    const token = getAuthToken();
+    if (!token) {
+      throw new ApiError(
+        "You must be signed in to continue.",
+        401,
+        null,
+      );
+    }
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const { filename: fallbackFilename, ...fetchOptions } = options;
+
+  let response: Response;
+  try {
+    response = await fetch(buildUrl(path), {
+      ...fetchOptions,
+      headers,
+    });
+  } catch {
+    throw new ApiError(
+      "Unable to reach the server. Check your connection.",
+      0,
+      null,
+    );
+  }
+
+  if (response.status === 401 && useAuth) {
+    setAuthToken(null);
+    try {
+      localStorage.removeItem("getreal.auth");
+      localStorage.removeItem("getreal.role");
+      localStorage.removeItem("getreal.lastActive");
+      localStorage.removeItem("getreal.userName");
+    } catch {
+      // no-op
+    }
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    let json: unknown = null;
+    if (text) {
+      try {
+        json = JSON.parse(text) as unknown;
+      } catch {
+        json = text;
+      }
+    }
+    const message =
+      (json && typeof json === "object" && "message" in json
+        ? String((json as { message?: string }).message)
+        : null) ?? response.statusText;
+    throw new ApiError(message || "Request failed", response.status, json);
+  }
+
+  const blob = await response.blob();
+  const filename =
+    filenameFromContentDisposition(
+      response.headers.get("Content-Disposition"),
+    ) ?? fallbackFilename ?? "export.csv";
+  triggerBlobDownload(blob, filename);
+}

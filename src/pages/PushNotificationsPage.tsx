@@ -1,17 +1,18 @@
 import { useMemo, useState } from "react";
-import { Plus, Search, X } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { IdPill } from "@/components/ui/Badge";
+import { Modal } from "@/components/ui/Modal";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
+import { TABLE_HEADER } from "@/constants/table";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
 
 const LINK_BLUE = "#3B82F6";
@@ -76,7 +77,6 @@ export default function PushNotificationsPage() {
   const [triggerFilter, setTriggerFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
-  useScrollLock(modalOpen);
 
   const triggers = useMemo(
     () => Array.from(new Set(items.map((item) => item.trigger))).sort(),
@@ -170,16 +170,11 @@ export default function PushNotificationsPage() {
         title="Push Notifications"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full sm:w-[220px]">
-              <Search size={14} className={SEARCH_ICON} />
-              <Input
-                inputSize="md"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search ID, name"
-                className={SEARCH_INPUT}
-              />
-            </div>
+            <SearchField
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search ID, name"
+            />
 
             <Select
               value={triggerFilter}
@@ -281,145 +276,112 @@ export default function PushNotificationsPage() {
         </ScrollTable>
       </div>
 
-      {modalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-none p-6 sm:items-center">
-          <button
-            type="button"
-            aria-label="Close dialog overlay"
-            className="absolute inset-0 bg-[#333333]/55"
-            onClick={closeModal}
-          />
-
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="pn-modal-title"
-            className="relative z-10 flex w-full max-w-[480px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_20px_50px_rgba(0,0,0,0.18)]"
-          >
-            <div className="flex items-center justify-between border-b border-[#00000014] px-6 pt-5 pb-3">
-              <h2
-                id="pn-modal-title"
-                className="text-[18px] font-semibold tracking-tight text-[#111118]"
-              >
-                {draft.id ? "Edit Push Notification" : "Create Push Notification"}
-              </h2>
-              <button
-                type="button"
-                onClick={closeModal}
-                aria-label="Close"
-                className="rounded-md p-1 text-[#8A8A8A] transition-colors hover:bg-[#F5F5F3] hover:text-[#111118]"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-4 px-6 pt-5 pb-5">
-              <div>
-                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
-                  Data Trigger
-                </Label>
-                <Select
-                  value={draft.trigger}
-                  onChange={(value) =>
-                    setDraft((current) => ({ ...current, trigger: value }))
-                  }
-                  placeholder="Select"
-                  aria-label="Data Trigger"
-                  options={[
-                    { value: "", label: "Select", disabled: true },
-                    ...TRIGGER_OPTIONS.map((option) => ({
-                      value: option,
-                      label: option,
-                    })),
-                  ]}
-                  size="md"
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
-                  Scheduled for
-                </Label>
-                <Select
-                  value={draft.scheduledFor}
-                  onChange={(value) =>
-                    setDraft((current) => ({
-                      ...current,
-                      scheduledFor: value,
-                    }))
-                  }
-                  placeholder="Select time and case"
-                  aria-label="Scheduled for"
-                  options={[
-                    {
-                      value: "",
-                      label: "Select time and case",
-                      disabled: true,
-                    },
-                    ...SCHEDULE_OPTIONS.map((option) => ({
-                      value: option,
-                      label: option,
-                    })),
-                  ]}
-                  size="md"
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
-                  Header / Subject Line
-                </Label>
-                <Input
-                  value={draft.subject}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      subject: event.target.value,
-                    }))
-                  }
-                  className="w-full"
-                />
-              </div>
-
-              <div>
-                <Label className="mb-1.5 text-[11px] font-semibold text-[#2E2E2E]">
-                  Content Body
-                </Label>
-                <Textarea
-                  value={draft.body}
-                  onChange={(event) =>
-                    setDraft((current) => ({
-                      ...current,
-                      body: event.target.value,
-                    }))
-                  }
-                  rows={4}
-                  className="min-h-[110px] rounded-[8px] border-[#00000014] text-[13px]"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-6 py-4">
-              {draft.id ? (
-                <Button variant="dangerGhost" onClick={removeNotification}>
-                  Remove Notification
-                </Button>
-              ) : (
-                <span />
-              )}
-
-              <div className="flex items-center gap-4">
-                <Button variant="ghost" onClick={closeModal}>
-                  Cancel
-                </Button>
-                <Button variant="dark" disabled={!canSave} onClick={save}>
-                  Save
-                </Button>
-              </div>
+      <Modal
+        open={modalOpen}
+        title={
+          draft.id ? "Edit Push Notification" : "Create Push Notification"
+        }
+        onClose={closeModal}
+        size="sm"
+        className="max-w-[480px]"
+        footer={
+          <div className="flex w-full items-center justify-between gap-4">
+            {draft.id ? (
+              <Button variant="dangerGhost" onClick={removeNotification}>
+                Remove Notification
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" onClick={closeModal}>
+                Cancel
+              </Button>
+              <Button variant="dark" disabled={!canSave} onClick={save}>
+                Save
+              </Button>
             </div>
           </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <Label>Data Trigger</Label>
+            <Select
+              value={draft.trigger}
+              onChange={(value) =>
+                setDraft((current) => ({ ...current, trigger: value }))
+              }
+              placeholder="Select"
+              aria-label="Data Trigger"
+              options={[
+                { value: "", label: "Select", disabled: true },
+                ...TRIGGER_OPTIONS.map((option) => ({
+                  value: option,
+                  label: option,
+                })),
+              ]}
+              size="md"
+            />
+          </div>
+
+          <div>
+            <Label>Scheduled for</Label>
+            <Select
+              value={draft.scheduledFor}
+              onChange={(value) =>
+                setDraft((current) => ({
+                  ...current,
+                  scheduledFor: value,
+                }))
+              }
+              placeholder="Select time and case"
+              aria-label="Scheduled for"
+              options={[
+                {
+                  value: "",
+                  label: "Select time and case",
+                  disabled: true,
+                },
+                ...SCHEDULE_OPTIONS.map((option) => ({
+                  value: option,
+                  label: option,
+                })),
+              ]}
+              size="md"
+            />
+          </div>
+
+          <div>
+            <Label>Header / Subject Line</Label>
+            <Input
+              value={draft.subject}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  subject: event.target.value,
+                }))
+              }
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <Label>Content Body</Label>
+            <Textarea
+              value={draft.body}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  body: event.target.value,
+                }))
+              }
+              rows={4}
+              className="min-h-[110px] rounded-[8px] border-[#00000014] text-[13px]"
+            />
+          </div>
         </div>
-      ) : null}
+      </Modal>
     </div>
   );
 }

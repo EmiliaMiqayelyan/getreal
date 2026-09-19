@@ -1,22 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
+import { Tabs } from "@/components/ui/Tabs";
+import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { isApiConfigured, itemsApi, categoriesApi } from "@/lib/api";
+import { isApiConfigured, itemsApi, categoriesApi, downloadListExport } from "@/lib/api";
 import { mapApiItemToItem } from "@/lib/api/mappers";
 import { toCreateItemPayload } from "@/lib/api/payloads";
-import type { ApiCategory } from "@/lib/api/types";
+import type { ExportRequest } from "@/types/export";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import { cn } from "@/utils/cn";
 import {
@@ -24,7 +26,7 @@ import {
   getItemPrimaryPhoto,
   nextItemId,
 } from "@/utils/items";
-
+import { subcategoriesForCategory } from "@/utils/subcategories";
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
 const SECONDARY =
@@ -144,10 +146,17 @@ function PhotoThumb({ item }: { item: Item }) {
 export default function ItemsPage() {
   useDocumentTitle("Items");
 
-  const { items: rows, setItems } = useAppCatalog();
+  const {
+    items: rows,
+    setItems,
+    categories,
+    subcategoryRecords,
+    subcategoriesByCategory,
+  } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [tab, setTab] = useState<ItemTab>("All");
@@ -164,6 +173,28 @@ export default function ItemsPage() {
     [rows],
   );
 
+  const activeCategory = tab === "All" ? categoryFilter : tab;
+
+  const subcategoryOptions = useMemo(() => {
+    if (activeCategory) {
+      return subcategoriesForCategory(subcategoriesByCategory, activeCategory);
+    }
+    return Array.from(
+      new Set(
+        Object.values(subcategoriesByCategory).flatMap((names) => names),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [activeCategory, subcategoriesByCategory]);
+
+  useEffect(() => {
+    if (
+      subcategoryFilter &&
+      !subcategoryOptions.includes(subcategoryFilter)
+    ) {
+      setSubcategoryFilter("");
+    }
+  }, [subcategoryFilter, subcategoryOptions]);
+
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return rows.filter((row) => {
@@ -176,25 +207,38 @@ export default function ItemsPage() {
         tab === "All"
           ? !categoryFilter || row.category === categoryFilter
           : row.category === tab;
+      const matchesSubcategory =
+        !subcategoryFilter || row.subcategory === subcategoryFilter;
       const matchesDistributor =
         !distributorFilter || row.distributor === distributorFilter;
       const matchesSource = !sourceFilter || row.source === sourceFilter;
       return (
         matchesQuery &&
         matchesCategory &&
+        matchesSubcategory &&
         matchesDistributor &&
         matchesSource
       );
     });
-  }, [categoryFilter, distributorFilter, query, rows, sourceFilter, tab]);
+  }, [
+    categoryFilter,
+    distributorFilter,
+    query,
+    rows,
+    sourceFilter,
+    subcategoryFilter,
+    tab,
+  ]);
 
   function selectTab(nextTab: ItemTab) {
     setTab(nextTab);
     setCategoryFilter(nextTab === "All" ? "" : nextTab);
+    setSubcategoryFilter("");
   }
 
   function selectCategoryFilter(value: string) {
     setCategoryFilter(value);
+    setSubcategoryFilter("");
     if (!value) {
       setTab("All");
       return;
@@ -237,20 +281,14 @@ export default function ItemsPage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Items"
-        toolbarBorder={false}
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search size={14} className={SEARCH_ICON} />
-              <Input
-                inputSize="md"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search name"
-                aria-label="Search name"
-                className={SEARCH_INPUT}
-              />
-            </div>
+            <SearchField
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+              aria-label="Search"
+            />
 
             <Select
               value={categoryFilter}
@@ -263,6 +301,21 @@ export default function ItemsPage() {
                 ...ITEM_CATEGORIES.map((category) => ({
                   value: category,
                   label: category,
+                })),
+              ]}
+            />
+
+            <Select
+              value={subcategoryFilter}
+              onChange={setSubcategoryFilter}
+              className="w-full sm:w-[150px]"
+              aria-label="Subcategory"
+              placeholder="Subcategory"
+              options={[
+                { value: "", label: "Subcategory" },
+                ...subcategoryOptions.map((subcategory) => ({
+                  value: subcategory,
+                  label: subcategory,
                 })),
               ]}
             />
@@ -304,10 +357,19 @@ export default function ItemsPage() {
                 filtersActive={Boolean(
                   query.trim() ||
                     categoryFilter ||
+                    subcategoryFilter ||
                     distributorFilter ||
                     sourceFilter ||
                     tab !== "All",
                 )}
+                onExport={async (request: ExportRequest) => {
+                  await downloadListExport(
+                    "/items",
+                    {},
+                    request.format,
+                    "items",
+                  );
+                }}
                 className="w-full sm:w-auto"
               />
               <Button
@@ -322,41 +384,21 @@ export default function ItemsPage() {
           </div>
         }
         below={
-          <div className="flex overflow-x-auto overflow-y-hidden border-b border-[#00000014] bg-white px-4 md:px-7">
-            {TABS.map((entry) => {
-              const active = tab === entry;
-              return (
-                <button
-                  key={entry}
-                  type="button"
-                  onClick={() => selectTab(entry)}
-                  className={cn(
-                    "relative flex h-7 min-w-[77px] shrink-0 cursor-pointer items-center justify-center px-4 text-[13px] font-medium transition-colors",
-                    active
-                      ? "text-[#111118]"
-                      : "text-[#8A8A8A] hover:text-[#111118]",
-                  )}
-                >
-                  {entry}
-                  {active ? (
-                    <span
-                      className="absolute inset-x-0 -bottom-px h-[3px] bg-badge"
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          <Tabs
+            aria-label="Item categories"
+            items={TABS.map((entry) => ({ id: entry, label: entry }))}
+            value={tab}
+            onChange={(id) => selectTab(id as ItemTab)}
+          />
         }
       />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
-            <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+            <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
               No items found
-            </div>
+            </EmptyStateBox>
           ) : null}
           {filtered.map((row) => (
             <div
@@ -416,9 +458,12 @@ export default function ItemsPage() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+              <EmptyStateBox
+                variant="solid"
+                className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
+              >
                 No items found
-              </div>
+              </EmptyStateBox>
             ) : null}
 
             {filtered.map((row, index) => {
@@ -482,21 +527,36 @@ export default function ItemsPage() {
           void (async () => {
             if (isApiConfigured()) {
               try {
-                const categories: ApiCategory[] = await categoriesApi.list();
-                const payload = toCreateItemPayload(item, categories);
+                const categoryList =
+                  categories.length > 0
+                    ? categories
+                    : await categoriesApi.list();
+                const payload = toCreateItemPayload(
+                  item,
+                  categoryList,
+                  subcategoryRecords,
+                );
+                const categoriesById = new Map(
+                  categoryList
+                    .filter((c) => c.id && c.name)
+                    .map((c) => [c.id as string, c.name as string]),
+                );
+                const subcategoriesById = new Map(
+                  subcategoryRecords
+                    .filter((entry) => entry.id)
+                    .map((entry) => [entry.id as string, entry.name] as const),
+                );
+                const distributorsById = new Map(
+                  item.distributorId
+                    ? [[item.distributorId, item.distributor]]
+                    : [],
+                );
                 if (editing) {
                   const updated = await itemsApi.update(editing.id, payload);
                   const mapped = mapApiItemToItem(updated, 0, {
-                    categoriesById: new Map(
-                      categories
-                        .filter((c) => c.id && c.name)
-                        .map((c) => [c.id as string, c.name as string]),
-                    ),
-                    distributorsById: new Map(
-                      item.distributorId
-                        ? [[item.distributorId, item.distributor]]
-                        : [],
-                    ),
+                    categoriesById,
+                    distributorsById,
+                    subcategoriesById,
                   });
                   setItems((current) =>
                     current.map((row) =>
@@ -509,6 +569,8 @@ export default function ItemsPage() {
                             merchandisingName: item.merchandisingName,
                             description: item.description,
                             subcategory: item.subcategory,
+                            subcategoryId:
+                              item.subcategoryId ?? mapped.subcategoryId,
                             source: item.source,
                             sourceId: item.sourceId,
                             sourcePer: item.sourcePer,
@@ -526,16 +588,9 @@ export default function ItemsPage() {
                 } else {
                   const created = await itemsApi.create(payload);
                   const mapped = mapApiItemToItem(created, 0, {
-                    categoriesById: new Map(
-                      categories
-                        .filter((c) => c.id && c.name)
-                        .map((c) => [c.id as string, c.name as string]),
-                    ),
-                    distributorsById: new Map(
-                      item.distributorId
-                        ? [[item.distributorId, item.distributor]]
-                        : [],
-                    ),
+                    categoriesById,
+                    distributorsById,
+                    subcategoriesById,
                   });
                   setItems((current) => [
                     {
@@ -544,6 +599,8 @@ export default function ItemsPage() {
                       merchandisingName: item.merchandisingName,
                       description: item.description,
                       subcategory: item.subcategory,
+                      subcategoryId:
+                        item.subcategoryId ?? mapped.subcategoryId,
                       source: item.source,
                       sourceId: item.sourceId,
                       sourcePer: item.sourcePer,

@@ -1,14 +1,18 @@
 import { useMemo, useState, type DragEvent } from "react";
-import { Plus, Search, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { AddProductForSaleModal } from "@/components/products/AddProductForSaleModal";
 import { Header } from "@/components/layout/AdminHeader";
 import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
+import { IconButton } from "@/components/ui/IconButton";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT, TABLE_HEADER } from "@/constants/table";
+import { Switch } from "@/components/ui/Switch";
+import { Tabs } from "@/components/ui/Tabs";
+import { TABLE_HEADER } from "@/constants/table";
 import {
   nextProductId,
   nextProductSortOrder,
@@ -70,37 +74,6 @@ function sourceLogo(name: string, sources: Source[]) {
   return sources.find((source) => source.name === name)?.logoUrl ?? null;
 }
 
-function LiveToggle({
-  on,
-  label,
-  onChange,
-}: {
-  on: boolean;
-  label: string;
-  onChange: (next: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={() => onChange(!on)}
-      className={cn(
-        "relative inline-flex h-[22px] w-[40px] shrink-0 cursor-pointer items-center rounded-full p-[2px] transition-colors",
-        on ? "bg-badge" : "bg-[#D0D0CC]",
-      )}
-    >
-      <span
-        className={cn(
-          "block h-[18px] w-[18px] rounded-full bg-white shadow-[0_1px_2px_rgba(0,0,0,0.2)] transition-transform",
-          on ? "translate-x-[18px]" : "translate-x-0",
-        )}
-      />
-    </button>
-  );
-}
-
 function ProductDetailDrawer({
   product,
   catalog,
@@ -122,14 +95,9 @@ function ProductDetailDrawer({
     >
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
         <IdPill className="text-[#99A1AF]">{details.id}</IdPill>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="cursor-pointer rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3] hover:text-[#111118]"
-        >
+        <IconButton aria-label="Close" onClick={onClose}>
           <X className="size-5" />
-        </button>
+        </IconButton>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-8">
@@ -281,10 +249,10 @@ function SubcategoryTable({
               <DragHandle />
             </button>
             <IdPill>{row.id}</IdPill>
-            <LiveToggle
-              on={row.live}
+            <Switch
+              checked={row.live}
               label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
-              onChange={(live) => onToggleLive(row.id, live)}
+              onCheckedChange={(live) => onToggleLive(row.id, live)}
             />
             <span className={cn(BODY, "truncate font-semibold")}>
               {display.merchandisingName}
@@ -534,20 +502,14 @@ export default function ProductsForSalePage() {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Products For Sale"
-        toolbarBorder={false}
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full min-w-0 sm:w-[160px] sm:shrink-0 sm:flex-none">
-              <Search size={14} className={SEARCH_ICON} />
-              <Input
-                inputSize="md"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search name"
-                aria-label="Search name"
-                className={SEARCH_INPUT}
-              />
-            </div>
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+              aria-label="Search"
+            />
 
             <Select
               value={categoryFilter}
@@ -608,40 +570,20 @@ export default function ProductsForSalePage() {
           </div>
         }
         below={
-          <div className="flex overflow-x-auto overflow-y-hidden border-b border-[#00000014] bg-white px-4 md:px-7">
-            {PRODUCT_TABS.map((entry) => {
-              const active = tab === entry;
-              return (
-                <button
-                  key={entry}
-                  type="button"
-                  onClick={() => selectTab(entry)}
-                  className={cn(
-                    "relative flex h-7 min-w-[77px] shrink-0 cursor-pointer items-center justify-center px-4 text-[13px] font-medium transition-colors",
-                    active
-                      ? "text-[#111118]"
-                      : "text-[#8A8A8A] hover:text-[#111118]",
-                  )}
-                >
-                  {entry}
-                  {active ? (
-                    <span
-                      className="absolute inset-x-0 -bottom-px h-[3px] bg-badge"
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              );
-            })}
-          </div>
+          <Tabs
+            aria-label="Product categories"
+            items={PRODUCT_TABS.map((entry) => ({ id: entry, label: entry }))}
+            value={tab}
+            onChange={(id) => selectTab(id as ProductTab)}
+          />
         }
       />
 
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         {filtered.length === 0 || grouped.length === 0 ? (
-          <div className="rounded-[10px] border border-dashed border-[#00000014] bg-white px-6 py-16 text-center text-[14px] text-[#8A8A8A]">
+          <EmptyStateBox variant="dashed" className="rounded-[10px] bg-white px-6 py-16 text-[14px]">
             {getProductsForSaleEmptyMessage(products.length, filterCriteria)}
-          </div>
+          </EmptyStateBox>
         ) : (
           <div className="space-y-8">
             {grouped.map(({ category, subcategories }) => (

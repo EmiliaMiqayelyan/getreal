@@ -5,9 +5,9 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
 } from "lucide-react";
 
+import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
@@ -18,8 +18,9 @@ import {
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
@@ -182,15 +183,11 @@ function SourcePicker({
     >
       <div className="sticky top-0 bg-white px-3 pt-3 pb-2">
         <div className="relative">
-          <Search
-            size={13}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-          />
-          <Input
+          <SearchField
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="w-full pl-8"
+            fill
           />
         </div>
       </div>
@@ -229,6 +226,7 @@ function PackingDetail({
 }) {
   const [draft, setDraft] = useState(order);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [openMenu, setOpenMenu] = useState<{
     id: string;
     anchor: HTMLElement;
@@ -257,10 +255,8 @@ function PackingDetail({
 
   function requestClose() {
     if (isDraftDirty(order, draft)) {
-      const leave = window.confirm(
-        "You have unsaved packing changes. Leave without completing Cooler Ready?",
-      );
-      if (!leave) return;
+      setLeaveConfirmOpen(true);
+      return;
     }
     onClose();
   }
@@ -520,6 +516,15 @@ function PackingDetail({
           Cooler Ready
         </button>
       </div>
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="Leave packing?"
+        message="You have unsaved packing changes. Leave without completing Cooler Ready?"
+        confirmLabel="Leave"
+        onClose={() => setLeaveConfirmOpen(false)}
+        onConfirm={onClose}
+      />
     </div>
   );
 }
@@ -652,28 +657,15 @@ export default function PackingCoolersPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white">
-        <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
-          <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-            Cooler Packing
-          </h1>
-          <UserMenu className="items-center" />
-        </div>
-
-        <div className="border-t border-[#00000014] px-4 py-2 md:px-7">
-          <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
-            <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search"
-                className="w-full pl-8"
-              />
-            </div>
+      <Header
+        title="Cooler Packing"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+            />
             <Select
               value={sortBy}
               onChange={setSortBy}
@@ -689,8 +681,8 @@ export default function PackingCoolersPage() {
               Today, Tue, Jun 22, 2026
             </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className={DATE_CHIP_ROW}>

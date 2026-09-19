@@ -1,6 +1,8 @@
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
+
 import { apiRequest } from "./client";
 import type { ApiOrder } from "./types";
-import { normalizeNamedList, pickNamedEntity } from "./normalize";
+import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
 export type CreateOrderItemPayload = {
   productId: string;
@@ -56,21 +58,21 @@ export const ordersApi = {
   },
 
   list(params: OrdersListParams = {}) {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? DEFAULT_PAGE_LIMIT;
     const search = new URLSearchParams();
     if (params.category) search.set("category", params.category);
-    if (params.page != null) search.set("page", String(params.page));
-    if (params.limit != null) search.set("limit", String(params.limit));
+    search.set("page", String(page));
+    search.set("limit", String(limit));
     if (params.status) search.set("status", params.status);
     if (params.type) search.set("type", params.type);
     const qs = search.toString();
-    return apiRequest<unknown>(`/orders${qs ? `?${qs}` : ""}`).then(
-      (payload) =>
-        normalizeNamedList<ApiOrder>(payload, [
-          "orders",
-          "items",
-          "data",
-          "results",
-        ]),
+    return apiRequest<unknown>(`/orders?${qs}`).then((payload) =>
+      normalizePaginatedList<ApiOrder>(
+        payload,
+        ["orders", "items", "data", "results"],
+        { page, limit },
+      ),
     );
   },
 

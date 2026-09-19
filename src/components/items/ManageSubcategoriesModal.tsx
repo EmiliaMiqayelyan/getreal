@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Pencil, Plus, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -35,6 +36,8 @@ export function ManageSubcategoriesModal({
   const [editingName, setEditingName] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const options = subcategoriesForCategory(subcategoriesByCategory, category);
 
@@ -44,12 +47,16 @@ export function ManageSubcategoriesModal({
     setEditingName(null);
     setEditValue("");
     setError(null);
+    setBusy(false);
   }, [open, category]);
 
   if (!open) return null;
 
-  function handleCreate() {
-    const result = addSubcategory(category, draftName);
+  async function handleCreate() {
+    if (busy) return;
+    setBusy(true);
+    const result = await addSubcategory(category, draftName);
+    setBusy(false);
     if (result) {
       setError(result);
       return;
@@ -72,9 +79,11 @@ export function ManageSubcategoriesModal({
     setError(null);
   }
 
-  function handleRename() {
-    if (!editingName) return;
-    const result = renameSubcategory(category, editingName, editValue);
+  async function handleRename() {
+    if (!editingName || busy) return;
+    setBusy(true);
+    const result = await renameSubcategory(category, editingName, editValue);
+    setBusy(false);
     if (result) {
       setError(result);
       return;
@@ -87,12 +96,16 @@ export function ManageSubcategoriesModal({
   }
 
   function handleRemove(name: string) {
-    const confirmed = window.confirm(
-      `Remove subcategory "${name}"? Items using it will clear this field.`,
-    );
-    if (!confirmed) return;
+    setPendingRemove(name);
+  }
 
-    const result = removeSubcategory(category, name);
+  async function confirmRemove() {
+    const name = pendingRemove;
+    if (!name || busy) return;
+
+    setBusy(true);
+    const result = await removeSubcategory(category, name);
+    setBusy(false);
     if (result) {
       setError(result);
       return;
@@ -157,20 +170,20 @@ export function ManageSubcategoriesModal({
                   if (error) setError(null);
                 }}
                 placeholder="e.g. Organ Meat"
-                disabled={!category}
+                disabled={!category || busy}
                 className="min-w-0 flex-1"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    handleCreate();
+                    void handleCreate();
                   }
                 }}
               />
               <Button
                 variant="dark"
                 size="sm"
-                disabled={!category || !draftName.trim()}
-                onClick={handleCreate}
+                disabled={!category || !draftName.trim() || busy}
+                onClick={() => void handleCreate()}
               >
                 <Plus size={14} />
                 Add
@@ -208,10 +221,11 @@ export function ManageSubcategoriesModal({
                           }}
                           className="min-w-0 flex-1"
                           autoFocus
+                          disabled={busy}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               event.preventDefault();
-                              handleRename();
+                              void handleRename();
                             }
                             if (event.key === "Escape") {
                               event.preventDefault();
@@ -231,13 +245,15 @@ export function ManageSubcategoriesModal({
                             <Button
                               variant="dark"
                               size="sm"
-                              onClick={handleRename}
+                              disabled={busy}
+                              onClick={() => void handleRename()}
                             >
                               Save
                             </Button>
                             <Button
                               variant="ghost"
                               size="sm"
+                              disabled={busy}
                               onClick={cancelEdit}
                             >
                               Cancel
@@ -248,10 +264,12 @@ export function ManageSubcategoriesModal({
                             <button
                               type="button"
                               aria-label={`Edit ${name}`}
+                              disabled={busy}
                               onClick={() => startEdit(name)}
                               className={cn(
                                 "cursor-pointer rounded-md p-1.5 text-[#6B6B6B]",
                                 "hover:bg-[#F5F5F3] hover:text-[#111118]",
+                                "disabled:cursor-not-allowed disabled:opacity-50",
                               )}
                             >
                               <Pencil size={14} />
@@ -259,10 +277,12 @@ export function ManageSubcategoriesModal({
                             <button
                               type="button"
                               aria-label={`Delete ${name}`}
+                              disabled={busy}
                               onClick={() => handleRemove(name)}
                               className={cn(
                                 "cursor-pointer rounded-md p-1.5 text-[#6B6B6B]",
                                 "hover:bg-[#FDF2F2] hover:text-[#E25B5B]",
+                                "disabled:cursor-not-allowed disabled:opacity-50",
                               )}
                             >
                               <Trash2 size={14} />
@@ -284,6 +304,20 @@ export function ManageSubcategoriesModal({
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(pendingRemove)}
+        title="Remove subcategory"
+        message={
+          pendingRemove
+            ? `Remove subcategory "${pendingRemove}"? Items using it will clear this field.`
+            : ""
+        }
+        confirmLabel="Remove"
+        confirmVariant="danger"
+        onClose={() => setPendingRemove(null)}
+        onConfirm={() => void confirmRemove()}
+      />
     </div>
   );
 }

@@ -6,7 +6,6 @@ import {
   ChevronRight,
   Minus,
   Plus,
-  Search,
   X,
 } from "lucide-react";
 
@@ -15,6 +14,7 @@ import { LocationHover } from "@/components/shared/LocationHover";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER, ID_PILL, SUB_ROW_PAD } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
@@ -1316,18 +1316,11 @@ export default function InventoryPage() {
         title="Inventory"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                className="w-full pl-8"
-              />
-            </div>
+            <SearchField
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search"
+            />
 
             <Select
               value={itemFilter}

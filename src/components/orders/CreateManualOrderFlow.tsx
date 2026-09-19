@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, Minus, Plus, X } from "lucide-react";
+import { Check, ChevronLeft, Minus, Plus } from "lucide-react";
 
 import { UserMenu } from "@/components/layout/UserMenu";
 import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
 import {
@@ -11,7 +12,6 @@ import {
 } from "@/constants/distributorOrders";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
-import { useScrollLock } from "@/hooks/useScrollLock";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
 import {
@@ -75,7 +75,6 @@ export function CreateManualOrderFlow({
   const [deliveryDate, setDeliveryDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
-  useScrollLock(confirmClose);
 
   const distributorOptions = useMemo(
     () =>
@@ -419,48 +418,14 @@ export function CreateManualOrderFlow({
         </div>
       </div>
 
-      {confirmClose ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4">
-          <div
-            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="manual-cancel-title"
-            data-scroll-lock-allow
-          >
-            <div className="flex items-start justify-between border-b border-[#00000014] px-6 py-4">
-              <h2
-                id="manual-cancel-title"
-                className="text-[18px] font-semibold text-[#111118]"
-              >
-                Cancel and Close Order
-              </h2>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setConfirmClose(false)}
-                className="rounded-md p-1 text-[#8A8A8A] hover:bg-background"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-            <p className="px-6 py-5 text-[14px] text-[#111118]">
-              Are you sure you want to close order request?
-            </p>
-            <div className="flex items-center justify-end gap-3 border-t border-[#00000014] px-6 py-4">
-              <Button
-                variant="ghost"
-                onClick={() => setConfirmClose(false)}
-              >
-                Cancel
-              </Button>
-              <Button variant="dark" onClick={onClose}>
-                Cancel Order
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmDialog
+        open={confirmClose}
+        title="Cancel and Close Order"
+        message="Are you sure you want to close order request?"
+        confirmLabel="Cancel Order"
+        onClose={() => setConfirmClose(false)}
+        onConfirm={onClose}
+      />
     </div>
   );
 }

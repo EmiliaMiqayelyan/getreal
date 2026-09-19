@@ -34,7 +34,10 @@ export const MODAL_OVERLAY =
 export const MODAL_PANEL =
   "relative z-10 w-full overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl";
 
-/** Toolbar search field with leading icon */
+/** Toolbar search field with leading icon (14×14, matches INPUT_LEADING_ICON_SIZE). */
 export const SEARCH_ICON =
-  "pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]";
+  "pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-foreground";
 export const SEARCH_INPUT = "w-full pl-8";
+/** Shared header/toolbar search width - full on mobile, fixed 220px from sm up. */
+export const SEARCH_FIELD_WIDTH =
+  "w-full sm:w-[220px] sm:shrink-0 sm:flex-none";

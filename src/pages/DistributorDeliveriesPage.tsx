@@ -7,11 +7,11 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Search,
   X,
 } from "lucide-react";
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
+import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
@@ -21,12 +21,16 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT, SUB_ROW_PAD } from "@/constants/table";
+import { Tabs } from "@/components/ui/Tabs";
+import { SUB_ROW_PAD } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { downloadListExport } from "@/lib/api";
+import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
 import { cn } from "@/utils/cn";
 import {
@@ -591,6 +595,7 @@ function CheckOrderView({
   const [checks, setChecks] = useState(
     () => initialChecks ?? emptyChecks(order.items),
   );
+  const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [rejectFor, setRejectFor] = useState<string | null>(null);
   const [rejectAnchor, setRejectAnchor] = useState<HTMLElement | null>(null);
   const [phase, setPhase] = useState<"check" | "review">(
@@ -626,10 +631,8 @@ function CheckOrderView({
       return;
     }
     if (isChecksDirty(order.items, checks)) {
-      const leave = window.confirm(
-        "You have unsaved receiving changes. Leave without completing Accept Order?",
-      );
-      if (!leave) return;
+      setLeaveConfirmOpen(true);
+      return;
     }
     onClose();
   }
@@ -919,6 +922,15 @@ function CheckOrderView({
           </button>
         )}
       </div>
+
+      <ConfirmDialog
+        open={leaveConfirmOpen}
+        title="Leave receiving?"
+        message="You have unsaved receiving changes. Leave without completing Accept Order?"
+        confirmLabel="Leave"
+        onClose={() => setLeaveConfirmOpen(false)}
+        onConfirm={onClose}
+      />
     </div>
   );
 }
@@ -1144,101 +1156,77 @@ export default function DistributorDeliveriesPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white">
-        <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
-          <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-                Distributor Receiving
-              </h1>
-              <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
-                <UserMenu className="items-center" />
-              </div>
-            </div>
+      <Header
+        title="Distributor Receiving"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+              <SearchField
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Search"
+              />
 
-            <div className="flex h-full items-center gap-6 sm:gap-8">
-              {(["Orders", "Received"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={cn(
-                    "relative flex h-[52px] items-center text-[14px]",
-                    activeTab === tab
-                      ? "font-medium text-[#111118]"
-                      : "text-[#8A8A8A] hover:text-[#4A4A4A]",
-                  )}
-                >
-                  {tab}
-                  {activeTab === tab ? (
-                    <span
-                      className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full"
-                      style={{ backgroundColor: ORANGE }}
-                    />
-                  ) : null}
-                </button>
-              ))}
-            </div>
-
-            <div className="hidden justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
-              <UserMenu className="items-center" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#00000014] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
-          <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-            <Search size={14} className={SEARCH_ICON} />
-            <Input
-              inputSize="md"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search"
-              className={SEARCH_INPUT}
+            <Select
+              value={productFilter}
+              onChange={setProductFilter}
+              placeholder="All products"
+              aria-label="All products"
+              className="w-full sm:w-[140px]"
+              options={[
+                { value: "", label: "All products" },
+                ...productOptions.map((name) => ({
+                  value: name,
+                  label: name,
+                })),
+              ]}
             />
+            <Select
+              value={distributorFilter}
+              onChange={setDistributorFilter}
+              placeholder="All Distributors"
+              aria-label="All Distributors"
+              className="w-full sm:w-[160px]"
+              options={[
+                { value: "", label: "All Distributors" },
+                ...distributorOptions.map((name) => ({
+                  value: name,
+                  label: name,
+                })),
+              ]}
+            />
+            <ExportButton
+              entityLabel="deliveries"
+              recordCount={filtered.length}
+              filtersActive={Boolean(
+                search.trim() || productFilter || distributorFilter,
+              )}
+              onExport={async (request: ExportRequest) => {
+                await downloadListExport(
+                  "/orders",
+                  { type: "distributor" },
+                  request.format,
+                  "deliveries",
+                );
+              }}
+              className="w-full sm:w-auto"
+            />
+            <div className="ml-auto text-[12px] text-[#8A8A8A]">
+              Today, Tue, Jun 22, 2026
+            </div>
           </div>
-
-          <Select
-            value={productFilter}
-            onChange={setProductFilter}
-            placeholder="All products"
-            aria-label="All products"
-            className="w-full sm:w-[140px]"
-            options={[
-              { value: "", label: "All products" },
-              ...productOptions.map((name) => ({
-                value: name,
-                label: name,
-              })),
+        }
+        below={
+          <Tabs
+            aria-label="Receiving views"
+            items={[
+              { id: "Orders", label: "Orders" },
+              { id: "Received", label: "Received" },
             ]}
+            value={activeTab}
+            onChange={(id) => setActiveTab(id as "Orders" | "Received")}
           />
-          <Select
-            value={distributorFilter}
-            onChange={setDistributorFilter}
-            placeholder="All Distributors"
-            aria-label="All Distributors"
-            className="w-full sm:w-[160px]"
-            options={[
-              { value: "", label: "All Distributors" },
-              ...distributorOptions.map((name) => ({
-                value: name,
-                label: name,
-              })),
-            ]}
-          />
-          <ExportButton
-            entityLabel="deliveries"
-            recordCount={filtered.length}
-            filtersActive={Boolean(
-              search.trim() || productFilter || distributorFilter,
-            )}
-            className="w-full sm:w-auto"
-          />
-          <div className="ml-auto text-[12px] text-[#8A8A8A]">
-            Today, Tue, Jun 22, 2026
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
           <div className={DATE_CHIP_ROW}>

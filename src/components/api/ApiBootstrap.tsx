@@ -14,12 +14,13 @@ import {
   mapApiProductToProductForSale,
   mapApiRoleToManagedRole,
   mapApiSourceToSource,
+  mapApiSubcategoryToCatalog,
   mapApiUserToRoleUser,
   normalizeRolesList,
-  normalizeUsersList,
   productsApi,
   rolesApi,
   sourcesApi,
+  subcategoriesApi,
   usersApi,
 } from "@/lib/api";
 
@@ -47,7 +48,14 @@ async function loadOne<T>(promise: Promise<T>): Promise<LoadResult<T>> {
  * Surfaces load failures via toast.
  */
 export function ApiBootstrap() {
-  const { setDistributors, setItems, setProducts, setSources } = useAppCatalog();
+  const {
+    setDistributors,
+    setItems,
+    setProducts,
+    setSources,
+    setCategories,
+    setSubcategoryRecords,
+  } = useAppCatalog();
   const { setUsers, setManagedRoles } = useRolesUsers();
   const { showError } = useToast();
 
@@ -63,6 +71,7 @@ export function ApiBootstrap() {
         itemsResult,
         productsResult,
         categoriesResult,
+        subcategoriesResult,
         usersResult,
         rolesResult,
       ] = await Promise.all([
@@ -71,6 +80,7 @@ export function ApiBootstrap() {
         loadOne(itemsApi.list()),
         loadOne(productsApi.list()),
         loadOne(categoriesApi.list()),
+        loadOne(subcategoriesApi.list()),
         loadOne(usersApi.list({ page: 1, limit: 100 })),
         loadOne(rolesApi.list()),
       ]);
@@ -88,6 +98,7 @@ export function ApiBootstrap() {
       noteFailure("Items", itemsResult);
       noteFailure("Products", productsResult);
       noteFailure("Categories", categoriesResult);
+      noteFailure("Subcategories", subcategoriesResult);
       noteFailure("Users", usersResult);
       noteFailure("Roles", rolesResult);
 
@@ -100,7 +111,10 @@ export function ApiBootstrap() {
       const categoriesPayload = categoriesResult.ok
         ? categoriesResult.data
         : [];
-      const usersPayload = usersResult.ok ? usersResult.data : [];
+      const subcategoriesPayload = subcategoriesResult.ok
+        ? subcategoriesResult.data
+        : [];
+      const usersPayload = usersResult.ok ? usersResult.data : null;
       const rolesPayload = rolesResult.ok ? rolesResult.data : [];
 
       const apiDistributors = distributorsPayload.map(
@@ -121,16 +135,32 @@ export function ApiBootstrap() {
         setSources((current) => mergeById(current, apiSources));
       }
 
+      if (categoriesPayload.length > 0) {
+        setCategories(categoriesPayload);
+      }
+
       const categoriesById = new Map(
         categoriesPayload
           .filter((category) => category.id && category.name)
           .map((category) => [category.id as string, category.name as string]),
       );
 
+      const catalogSubcategories = subcategoriesPayload
+        .map((entry) => mapApiSubcategoryToCatalog(entry, categoriesById))
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+      setSubcategoryRecords(catalogSubcategories);
+
+      const subcategoriesById = new Map(
+        catalogSubcategories
+          .filter((entry) => entry.id)
+          .map((entry) => [entry.id as string, entry.name] as const),
+      );
+
       const apiItems = itemsPayload.map((item, index) =>
         mapApiItemToItem(item, index, {
           categoriesById,
           distributorsById,
+          subcategoriesById,
         }),
       );
 
@@ -145,7 +175,7 @@ export function ApiBootstrap() {
         setProducts((current) => mergeById(current, products));
       }
 
-      const apiUsers = normalizeUsersList(usersPayload);
+      const apiUsers = usersPayload?.items ?? [];
       if (apiUsers.length > 0) {
         setUsers((current) =>
           mergeById(current, apiUsers.map(mapApiUserToRoleUser)),

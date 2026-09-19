@@ -1,30 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Download, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
-import type {
-  ExportFormat,
-  ExportHandler,
-  ExportScope,
-} from "@/types/export";
+import type { ExportHandler, ExportScope } from "@/types/export";
 import { cn } from "@/utils/cn";
-
-const FORMAT_OPTIONS: {
-  format: ExportFormat;
-  label: string;
-  detail: string;
-}[] = [
-  {
-    format: "csv",
-    label: "CSV",
-    detail: "Spreadsheet-friendly raw data",
-  },
-  {
-    format: "xlsx",
-    label: "Excel",
-    detail: "Formatted .xlsx workbook",
-  },
-];
 
 type ExportButtonProps = {
   /** Plural entity name used in copy, e.g. "customers". */
@@ -35,10 +14,7 @@ type ExportButtonProps = {
   filtersActive?: boolean;
   disabled?: boolean;
   className?: string;
-  /**
-   * Called when the user confirms an export.
-   * Wire to the backend later; UI shows a preparing / ready toast for now.
-   */
+  /** Called when the user confirms an export; should download from the API. */
   onExport?: ExportHandler;
 };
 
@@ -51,26 +27,22 @@ export function ExportButton({
   onExport,
 }: ExportButtonProps) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [format, setFormat] = useState<ExportFormat>("csv");
   const [scope, setScope] = useState<ExportScope>("filtered");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!menuOpen && !panelOpen) return;
+    if (!panelOpen) return;
 
     function onPointerDown(event: MouseEvent) {
       if (!rootRef.current?.contains(event.target as Node)) {
-        setMenuOpen(false);
         setPanelOpen(false);
       }
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
-        setMenuOpen(false);
         setPanelOpen(false);
       }
     }
@@ -81,7 +53,7 @@ export function ExportButton({
       document.removeEventListener("mousedown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [menuOpen, panelOpen]);
+  }, [panelOpen]);
 
   useEffect(() => {
     if (!toast) return;
@@ -94,18 +66,12 @@ export function ExportButton({
       ? `${recordCount.toLocaleString()} ${entityLabel}`
       : entityLabel;
 
-  function openPanel(nextFormat: ExportFormat) {
-    setFormat(nextFormat);
-    setMenuOpen(false);
-    setPanelOpen(true);
-  }
-
   async function confirmExport() {
     if (busy) return;
     setBusy(true);
 
     const request = {
-      format,
+      format: "csv" as const,
       scope,
       recordCount,
       entityLabel,
@@ -113,12 +79,11 @@ export function ExportButton({
 
     try {
       setToast(`Preparing ${entityLabel} export…`);
-      await onExport?.(request);
-      // Placeholder until backend download is wired.
-      await new Promise((resolve) => window.setTimeout(resolve, 500));
-      setToast(
-        `Export ready (${format.toUpperCase()}) - download will connect to the API next`,
-      );
+      if (!onExport) {
+        throw new Error("Export handler is not configured");
+      }
+      await onExport(request);
+      setToast("Download started (CSV)");
       setPanelOpen(false);
     } catch {
       setToast("Export failed. Try again.");
@@ -134,13 +99,10 @@ export function ExportButton({
           type="button"
           variant="outline"
           disabled={disabled || busy}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen || panelOpen}
+          aria-haspopup="dialog"
+          aria-expanded={panelOpen}
           aria-label={`Export ${entityLabel}`}
-          onClick={() => {
-            setPanelOpen(false);
-            setMenuOpen((open) => !open);
-          }}
+          onClick={() => setPanelOpen((open) => !open)}
           className="w-full sm:w-auto"
         >
           {busy ? (
@@ -151,47 +113,6 @@ export function ExportButton({
           Export
           <ChevronDown size={14} className="opacity-60" />
         </Button>
-
-        {menuOpen ? (
-          <div
-            role="menu"
-            className="absolute top-[calc(100%+6px)] right-0 z-50 w-[220px] rounded-[10px] border border-[#00000014] bg-white py-1 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-          >
-            <div className="border-b border-[#00000014] px-3 py-2">
-              <div className="text-[11px] font-semibold tracking-[0.04em] text-[#2E2E2E] uppercase">
-                Export format
-              </div>
-              {typeof recordCount === "number" ? (
-                <div className="mt-0.5 text-[12px] text-[#6B7180]">
-                  {countLabel}
-                  {filtersActive ? " (filtered)" : ""}
-                </div>
-              ) : null}
-            </div>
-            {FORMAT_OPTIONS.map((option) => (
-              <button
-                key={option.format}
-                type="button"
-                role="menuitem"
-                onClick={() => openPanel(option.format)}
-                className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left transition-colors hover:bg-[#F7F6F3]"
-              >
-                <FileSpreadsheet
-                  size={15}
-                  className="mt-0.5 shrink-0 text-[#6B7180]"
-                />
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-semibold text-[#111118]">
-                    {option.label}
-                  </span>
-                  <span className="block text-[11px] leading-[15px] text-[#8A8A8A]">
-                    {option.detail}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        ) : null}
 
         {panelOpen ? (
           <div
@@ -204,8 +125,8 @@ export function ExportButton({
                 Export {entityLabel}
               </div>
               <div className="mt-0.5 text-[12px] text-[#6B7180]">
-                {format === "csv" ? "CSV file" : "Excel workbook"} ·{" "}
-                {countLabel}
+                CSV file · {countLabel}
+                {filtersActive ? " (filtered)" : ""}
               </div>
             </div>
 
@@ -253,7 +174,7 @@ export function ExportButton({
                 ) : (
                   <Download size={14} />
                 )}
-                Export
+                Export CSV
               </Button>
             </div>
           </div>
@@ -262,7 +183,7 @@ export function ExportButton({
 
       {toast ? (
         <div className="pointer-events-none fixed right-6 bottom-6 z-[60] flex max-w-[320px] items-start gap-2 rounded-[10px] bg-[#242424] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
-          {toast.startsWith("Export ready") ? (
+          {toast.startsWith("Download started") ? (
             <Check size={14} className="mt-0.5 shrink-0 text-[#7DDF8A]" />
           ) : busy ? (
             <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />

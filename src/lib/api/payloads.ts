@@ -5,10 +5,14 @@ import type { Source } from "@/types/source";
 
 import type { CreateDistributorPayload } from "./distributors";
 import type { CreateItemPayload } from "./items";
-import { dollarsToCents, findCategoryIdByName } from "./mappers";
+import {
+  dollarsToCents,
+  findCategoryIdByName,
+  findSubcategoryIdByName,
+} from "./mappers";
 import type { CreateProductPayload, UpdateProductPayload } from "./products";
 import type { CreateSourcePayload } from "./sources";
-import type { ApiCategory } from "./types";
+import type { ApiCategory, CatalogSubcategory } from "./types";
 
 function splitAddress(fullAddress: string): {
   address: string;
@@ -88,6 +92,7 @@ export function toCreateSourcePayload(source: Source): CreateSourcePayload {
 export function toCreateItemPayload(
   item: Item,
   categories: ApiCategory[],
+  subcategories: CatalogSubcategory[] = [],
 ): CreateItemPayload {
   const categoryId =
     findCategoryIdByName(categories, item.category) ??
@@ -98,9 +103,16 @@ export function toCreateItemPayload(
   if (!item.distributorId) {
     throw new Error("Item requires a distributorId for the API");
   }
+
+  const subcategoryId =
+    item.subcategoryId ||
+    findSubcategoryIdByName(subcategories, item.category, item.subcategory) ||
+    null;
+
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
     categoryId,
+    subcategoryId,
     distributorId: item.distributorId,
     buyingPrice: dollarsToCents(item.buyingPrice),
     contents: Math.max(1, item.contents || 1),

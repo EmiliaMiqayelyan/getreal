@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronRight, Copy, Plus, Search, X } from "lucide-react";
+import { Check, ChevronRight, Copy, Plus, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { RoleManagementModal } from "@/components/roles/RoleManagementModal";
@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT, SUB_ROW_PAD } from "@/constants/table";
+import { SUB_ROW_PAD } from "@/constants/table";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -308,16 +309,11 @@ export default function RolesPage() {
         title="Roles"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full sm:w-[220px]">
-              <Search size={14} className={SEARCH_ICON} />
-              <Input
-                inputSize="md"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search ID, name"
-                className={SEARCH_INPUT}
-              />
-            </div>
+            <SearchField
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search ID, name"
+            />
 
             <Select
               value={roleFilter}

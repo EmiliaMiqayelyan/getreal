@@ -1,10 +1,10 @@
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
+import type { ExportHandler } from "@/types/export";
 import { WEEK_DAYS } from "@/utils/format";
 
 type DistributorFiltersProps = {
@@ -17,6 +17,7 @@ type DistributorFiltersProps = {
   onLocationChange: (value: string) => void;
   onWeekdayChange: (value: string) => void;
   onAdd: () => void;
+  onExport?: ExportHandler;
 };
 
 export function DistributorFilters({
@@ -29,22 +30,18 @@ export function DistributorFilters({
   onLocationChange,
   onWeekdayChange,
   onAdd,
+  onExport,
 }: DistributorFiltersProps) {
   const filtersActive = Boolean(query.trim() || location || weekday);
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-      <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-        <Search size={14} className={SEARCH_ICON} />
-        <Input
-          inputSize="md"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search name"
-          aria-label="Search name"
-          className={SEARCH_INPUT}
-        />
-      </div>
+      <SearchField
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder="Search"
+        aria-label="Search"
+      />
 
       <Select
         value={location}
@@ -78,6 +75,7 @@ export function DistributorFilters({
           entityLabel="distributors"
           recordCount={recordCount}
           filtersActive={filtersActive}
+          onExport={onExport}
           className="w-full sm:w-auto"
         />
         <Button

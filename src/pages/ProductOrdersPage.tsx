@@ -6,12 +6,11 @@ import {
   ChevronRight,
   Minus,
   Plus,
-  Search,
-  X,
 } from "lucide-react";
 
 import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow";
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
+import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
@@ -22,10 +21,11 @@ import {
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SearchField } from "@/components/ui/SearchField";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
+import { Tabs } from "@/components/ui/Tabs";
 import {
   DELIVERED_ORDERS,
   DELIVERED_SORT_OPTIONS,
@@ -37,8 +37,7 @@ import {
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { useScrollLock } from "@/hooks/useScrollLock";
-import { isApiConfigured, normalizeOrdersList, ordersApi } from "@/lib/api";
+import { downloadListExport, isApiConfigured, ordersApi } from "@/lib/api";
 import { syncReviewGroupOrder } from "@/lib/api/orderSync";
 import type {
   ManualOrderDraft,
@@ -47,6 +46,7 @@ import type {
   ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
+import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import {
   appendInProgressOrders,
@@ -77,7 +77,6 @@ import {
   toDeliveryDateId,
 } from "@/utils/deliveryCalendar";
 
-const ORANGE = "#F57850";
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
 const DEFAULT_DELIVERY_DATE_ID = "2026-07-14";
 const CHIP_WINDOW_SIZE = 3;
@@ -339,7 +338,6 @@ export default function ProductOrdersPage() {
   const [confirmClose, setConfirmClose] = useState(false);
   const [toast, setToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("Orders created successfully");
-  useScrollLock(confirmClose);
 
   const deliveryWeekdays = useMemo(
     () => getDeliveryWeekdayIndices(distributors, distributorFilter),
@@ -563,8 +561,8 @@ export default function ProductOrdersPage() {
     if (!isApiConfigured()) return;
     void ordersApi
       .list({ page: 1, limit: 50, type: "distributor" })
-      .then((payload) => {
-        const remote = normalizeOrdersList(payload);
+      .then((result) => {
+        const remote = result.items;
         if (remote.length === 0) return;
 
         const mapped: PlacedOrder[] = remote.map((order, index) => {
@@ -738,172 +736,158 @@ export default function ProductOrdersPage() {
   if (view === "list") {
     return (
       <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-        <div className="shrink-0 border-b border-[#00000014] bg-white">
-          <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
-            <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
-              <div className="flex items-center justify-between gap-3">
-                <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-                  Distributor Orders
-                </h1>
-                <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
-                  <UserMenu className="items-center" />
-                </div>
-              </div>
-              <div className="flex h-full items-center gap-6 sm:gap-8">
-                {(["Orders", "Delivered"] as const).map((name) => (
-                  <button
-                    key={name}
-                    type="button"
-                    onClick={() => setTab(name)}
-                    className={cn(
-                      "relative flex h-[52px] items-center text-[14px]",
-                      tab === name
-                        ? "font-medium text-[#111118]"
-                        : "text-[#8A8A8A] hover:text-[#4A4A4A]",
-                    )}
-                  >
-                    {name}
-                    {tab === name ? (
-                      <span
-                        className="absolute right-0 bottom-0 left-0 h-[2px] rounded-full"
-                        style={{ backgroundColor: ORANGE }}
-                      />
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-              <div className="hidden justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
-                <UserMenu className="items-center" />
-              </div>
-            </div>
-          </div>
-
-          <div className="flex min-h-[52px] flex-wrap items-center gap-2 border-t border-[#00000014] px-4 py-2 md:h-[52px] md:flex-nowrap md:py-0 md:px-7">
-            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search size={14} className={SEARCH_ICON} />
-              <Input
-                inputSize="md"
+        <Header
+          title="Distributor Orders"
+          toolbar={
+            <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+              <SearchField
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search"
-                className={SEARCH_INPUT}
               />
-            </div>
-            {tab === "Orders" ? (
-              <>
-                <Select
-                  value={productFilter}
-                  onChange={setProductFilter}
-                  placeholder="All products"
-                  aria-label="All products"
-                  className="w-full sm:w-[140px]"
-                  options={[
-                    { value: "", label: "All products" },
-                    ...productOptions,
-                  ]}
-                />
-                {showDistributorFilter ? (
+              {tab === "Orders" ? (
+                <>
                   <Select
-                    value={distributorFilter}
-                    onChange={setDistributorFilter}
-                    placeholder="All Distributors"
-                    aria-label="All Distributors"
-                    className="w-full sm:w-[160px]"
+                    value={productFilter}
+                    onChange={setProductFilter}
+                    placeholder="All products"
+                    aria-label="All products"
+                    className="w-full sm:w-[140px]"
                     options={[
-                      { value: "", label: "All Distributors" },
-                      ...distributorOptions.map((name) => ({
-                        value: name,
-                        label: name,
+                      { value: "", label: "All products" },
+                      ...productOptions,
+                    ]}
+                  />
+                  {showDistributorFilter ? (
+                    <Select
+                      value={distributorFilter}
+                      onChange={setDistributorFilter}
+                      placeholder="All Distributors"
+                      aria-label="All Distributors"
+                      className="w-full sm:w-[160px]"
+                      options={[
+                        { value: "", label: "All Distributors" },
+                        ...distributorOptions.map((name) => ({
+                          value: name,
+                          label: name,
+                        })),
+                      ]}
+                    />
+                  ) : null}
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+                    <ExportButton
+                      entityLabel="orders"
+                      recordCount={exportCount}
+                      filtersActive={exportFiltersActive}
+                      onExport={async (request: ExportRequest) => {
+                        await downloadListExport(
+                          "/orders",
+                          { type: "distributor" },
+                          request.format,
+                          "orders",
+                        );
+                      }}
+                      className="w-full sm:w-auto"
+                    />
+                    <Button
+                      variant="primary"
+                      onClick={openManualFlow}
+                      className="w-full sm:w-auto"
+                    >
+                      <Plus className="size-3.5" />
+                      Create Order
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Select
+                    value={deliveredZipFilter}
+                    onChange={setDeliveredZipFilter}
+                    placeholder="ZIP Code"
+                    aria-label="ZIP Code"
+                    className="w-full sm:w-[130px]"
+                    options={[
+                      { value: "", label: "ZIP Code" },
+                      ...deliveredZipOptions.map((zip) => ({
+                        value: zip,
+                        label: zip,
                       })),
                     ]}
                   />
-                ) : null}
-                <div className="flex w-full flex-wrap items-center gap-2 sm:ml-auto sm:w-auto sm:flex-nowrap">
+                  <Select
+                    value={deliveredDateFilter}
+                    onChange={setDeliveredDateFilter}
+                    placeholder="Select Date"
+                    aria-label="Select Date"
+                    className="w-full sm:w-[190px]"
+                    options={[
+                      { value: "", label: "Select Date" },
+                      ...deliveredDateOptions.map((day) => ({
+                        value: day,
+                        label: day,
+                      })),
+                    ]}
+                  />
+                  <Select
+                    value={deliveredStatusFilter}
+                    onChange={setDeliveredStatusFilter}
+                    placeholder="Status"
+                    aria-label="Status"
+                    className="w-full sm:w-[130px]"
+                    options={[
+                      { value: "", label: "Status" },
+                      ...DELIVERED_ORDER_STATUSES.map((status) => ({
+                        value: status,
+                        label: status,
+                      })),
+                    ]}
+                  />
+                  <Select
+                    value={deliveredSort}
+                    onChange={(value) =>
+                      setDeliveredSort(
+                        value as DeliveredFilterCriteria["sortBy"],
+                      )
+                    }
+                    placeholder="Sort by"
+                    aria-label="Sort by"
+                    className="w-full sm:w-[140px]"
+                    options={DELIVERED_SORT_OPTIONS.map((option) => ({
+                      value: option.value,
+                      label: option.label,
+                    }))}
+                  />
                   <ExportButton
                     entityLabel="orders"
                     recordCount={exportCount}
                     filtersActive={exportFiltersActive}
-                    className="w-full sm:w-auto"
+                    onExport={async (request: ExportRequest) => {
+                      await downloadListExport(
+                        "/orders",
+                        { type: "distributor" },
+                        request.format,
+                        "orders",
+                      );
+                    }}
+                    className="w-full sm:ml-auto sm:w-auto"
                   />
-                  <Button
-                    variant="primary"
-                    onClick={openManualFlow}
-                    className="w-full sm:w-auto"
-                  >
-                    <Plus className="size-3.5" />
-                    Create Order
-                  </Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <Select
-                  value={deliveredZipFilter}
-                  onChange={setDeliveredZipFilter}
-                  placeholder="ZIP Code"
-                  aria-label="ZIP Code"
-                  className="w-full sm:w-[130px]"
-                  options={[
-                    { value: "", label: "ZIP Code" },
-                    ...deliveredZipOptions.map((zip) => ({
-                      value: zip,
-                      label: zip,
-                    })),
-                  ]}
-                />
-                <Select
-                  value={deliveredDateFilter}
-                  onChange={setDeliveredDateFilter}
-                  placeholder="Select Date"
-                  aria-label="Select Date"
-                  className="w-full sm:w-[190px]"
-                  options={[
-                    { value: "", label: "Select Date" },
-                    ...deliveredDateOptions.map((day) => ({
-                      value: day,
-                      label: day,
-                    })),
-                  ]}
-                />
-                <Select
-                  value={deliveredStatusFilter}
-                  onChange={setDeliveredStatusFilter}
-                  placeholder="Status"
-                  aria-label="Status"
-                  className="w-full sm:w-[130px]"
-                  options={[
-                    { value: "", label: "Status" },
-                    ...DELIVERED_ORDER_STATUSES.map((status) => ({
-                      value: status,
-                      label: status,
-                    })),
-                  ]}
-                />
-                <Select
-                  value={deliveredSort}
-                  onChange={(value) =>
-                    setDeliveredSort(
-                      value as DeliveredFilterCriteria["sortBy"],
-                    )
-                  }
-                  placeholder="Sort by"
-                  aria-label="Sort by"
-                  className="w-full sm:w-[140px]"
-                  options={DELIVERED_SORT_OPTIONS.map((option) => ({
-                    value: option.value,
-                    label: option.label,
-                  }))}
-                />
-                <ExportButton
-                  entityLabel="orders"
-                  recordCount={exportCount}
-                  filtersActive={exportFiltersActive}
-                  className="w-full sm:ml-auto sm:w-auto"
-                />
-              </>
-            )}
-          </div>
-        </div>
+                </>
+              )}
+            </div>
+          }
+          below={
+            <Tabs
+              aria-label="Order views"
+              items={[
+                { id: "Orders", label: "Orders" },
+                { id: "Delivered", label: "Delivered" },
+              ]}
+              value={tab}
+              onChange={(id) => setTab(id as "Orders" | "Delivered")}
+            />
+          }
+        />
 
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
           {tab === "Orders" ? (
@@ -1393,48 +1377,14 @@ export default function ProductOrdersPage() {
         </div>
       </div>
 
-      {confirmClose ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4">
-          <div
-            className="w-full max-w-[420px] overflow-hidden overscroll-contain rounded-[12px] bg-white shadow-xl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="cancel-order-title"
-            data-scroll-lock-allow
-          >
-            <div className="flex items-start justify-between border-b border-[#00000014] px-6 py-4">
-              <h2
-                id="cancel-order-title"
-                className="text-[18px] font-semibold text-[#111118]"
-              >
-                Cancel and Close Order
-              </h2>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => setConfirmClose(false)}
-                className="rounded-md p-1 text-[#8A8A8A] hover:bg-background"
-              >
-                <X className="size-5" />
-              </button>
-            </div>
-            <p className="px-6 py-5 text-[14px] text-[#111118]">
-              Are you sure you want to close order request?
-            </p>
-            <div className="flex items-center justify-end gap-3 border-t border-[#00000014] px-6 py-4">
-              <Button
-                variant="ghost"
-                onClick={() => setConfirmClose(false)}
-              >
-                Cancel
-              </Button>
-              <Button variant="dark" onClick={cancelOrderRequest}>
-                Cancel Order
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <ConfirmDialog
+        open={confirmClose}
+        title="Cancel and Close Order"
+        message="Are you sure you want to close order request?"
+        confirmLabel="Cancel Order"
+        onClose={() => setConfirmClose(false)}
+        onConfirm={cancelOrderRequest}
+      />
 
       {toast ? (
         <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">

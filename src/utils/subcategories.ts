@@ -2,6 +2,7 @@ import {
   ITEM_CATEGORIES,
   ITEM_SUBCATEGORIES,
 } from "@/types/item";
+import type { CatalogSubcategory } from "@/lib/api/types";
 
 const STORAGE_KEY = "getreal.item.subcategories";
 
@@ -61,6 +62,46 @@ export function subcategoriesForCategory(
   return map[category] ?? [];
 }
 
+export function catalogRecordsFromMap(map: SubcategoryMap): CatalogSubcategory[] {
+  const records: CatalogSubcategory[] = [];
+  for (const [category, names] of Object.entries(map)) {
+    for (const name of names) {
+      records.push({ name, category });
+    }
+  }
+  return records;
+}
+
+export function mapFromCatalogRecords(
+  records: CatalogSubcategory[],
+): SubcategoryMap {
+  const next: SubcategoryMap = {};
+  for (const record of records) {
+    const category = record.category.trim();
+    const name = record.name.trim();
+    if (!category || !name) continue;
+    const current = next[category] ?? [];
+    if (!current.some((entry) => entry.toLowerCase() === name.toLowerCase())) {
+      next[category] = [...current, name];
+    }
+  }
+  return next;
+}
+
+export function findCatalogSubcategory(
+  records: CatalogSubcategory[],
+  category: string,
+  name: string,
+): CatalogSubcategory | undefined {
+  const categoryKey = category.trim().toLowerCase();
+  const nameKey = name.trim().toLowerCase();
+  return records.find(
+    (entry) =>
+      entry.category.trim().toLowerCase() === categoryKey &&
+      entry.name.trim().toLowerCase() === nameKey,
+  );
+}
+
 export function addSubcategoryToMap(
   map: SubcategoryMap,
   category: string,
@@ -69,6 +110,9 @@ export function addSubcategoryToMap(
   const trimmed = name.trim();
   if (!category) return { ok: false, error: "Select a category first." };
   if (!trimmed) return { ok: false, error: "Subcategory name is required." };
+  if (trimmed.length < 2) {
+    return { ok: false, error: "Subcategory name must be at least 2 characters." };
+  }
 
   const current = map[category] ?? [];
   if (current.some((entry) => entry.toLowerCase() === trimmed.toLowerCase())) {
@@ -93,6 +137,9 @@ export function renameSubcategoryInMap(
   const trimmed = nextName.trim();
   if (!category) return { ok: false, error: "Select a category first." };
   if (!trimmed) return { ok: false, error: "Subcategory name is required." };
+  if (trimmed.length < 2) {
+    return { ok: false, error: "Subcategory name must be at least 2 characters." };
+  }
 
   const current = map[category] ?? [];
   if (!current.includes(previous)) {

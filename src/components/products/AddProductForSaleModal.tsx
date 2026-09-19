@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
@@ -306,7 +307,11 @@ export function AddProductForSaleModal({
         >
           <div className="border-b border-[#00000014] p-2">
             <div className="relative">
-              <Search className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-[#111118]" />
+              <Search
+                size={INPUT_LEADING_ICON_SIZE}
+                strokeWidth={2}
+                className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-foreground"
+              />
               <input
                 ref={searchRef}
                 value={query}

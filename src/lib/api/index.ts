@@ -1,7 +1,16 @@
-export { ApiError, getApiBaseUrl, getAuthToken, isApiConfigured, setAuthToken } from "./client";
+export {
+  ApiError,
+  apiDownload,
+  getApiBaseUrl,
+  getAuthToken,
+  isApiConfigured,
+  setAuthToken,
+} from "./client";
+export { downloadListExport } from "./exportDownload";
 export { authApi } from "./auth";
 export { productsApi } from "./products";
 export { categoriesApi } from "./categories";
+export { subcategoriesApi } from "./subcategories";
 export { ordersApi } from "./orders";
 export { dashboardApi } from "./dashboard";
 export { usersApi } from "./users";
@@ -20,7 +29,7 @@ export {
 export type { ApiFieldErrors } from "./errors";
 export * from "./types";
 export * from "./mappers";
-export { normalizeNamedList, pickNamedEntity } from "./normalize";
+export { normalizeNamedList, normalizePaginatedList, pickNamedEntity } from "./normalize";
 export {
   toCreateDistributorPayload,
   toCreateItemPayload,

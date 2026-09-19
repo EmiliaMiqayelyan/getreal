@@ -1,10 +1,10 @@
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { ExportButton } from "@/components/shared/ExportButton";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SEARCH_ICON, SEARCH_INPUT } from "@/constants/table";
+import type { ExportHandler } from "@/types/export";
 
 type SourceFiltersProps = {
   query: string;
@@ -17,6 +17,7 @@ type SourceFiltersProps = {
   onLocationChange: (value: string) => void;
   onDistributorChange: (value: string) => void;
   onAdd: () => void;
+  onExport?: ExportHandler;
 };
 
 export function SourceFilters({
@@ -30,22 +31,18 @@ export function SourceFilters({
   onLocationChange,
   onDistributorChange,
   onAdd,
+  onExport,
 }: SourceFiltersProps) {
   const filtersActive = Boolean(query.trim() || location || distributor);
 
   return (
     <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-      <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-        <Search size={14} className={SEARCH_ICON} />
-        <Input
-          inputSize="md"
-          value={query}
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Search name"
-          aria-label="Search name"
-          className={SEARCH_INPUT}
-        />
-      </div>
+      <SearchField
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        placeholder="Search"
+        aria-label="Search"
+      />
 
       <Select
         value={location}
@@ -82,6 +79,7 @@ export function SourceFilters({
           entityLabel="sources"
           recordCount={recordCount}
           filtersActive={filtersActive}
+          onExport={onExport}
           className="w-full sm:w-auto"
         />
         <Button

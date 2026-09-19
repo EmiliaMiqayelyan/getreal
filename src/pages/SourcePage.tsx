@@ -5,17 +5,20 @@ import { LocationHover } from "@/components/shared/LocationHover";
 import { AddSourceModal } from "@/components/sources/AddSourceModal";
 import { SourceFilters } from "@/components/sources/SourceFilters";
 import { IdPill } from "@/components/ui/Badge";
+import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
+  downloadListExport,
   isApiConfigured,
   mapApiSourceToSource,
   sourcesApi,
 } from "@/lib/api";
 import { toCreateSourcePayload } from "@/lib/api/payloads";
+import type { ExportRequest } from "@/types/export";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import {
@@ -191,6 +194,14 @@ export default function SourcePage() {
             onLocationChange={setLocationFilter}
             onDistributorChange={setDistributorFilter}
             onAdd={openCreate}
+            onExport={async (request: ExportRequest) => {
+              await downloadListExport(
+                "/sources",
+                {},
+                request.format,
+                "sources",
+              );
+            }}
           />
         }
       />
@@ -198,9 +209,9 @@ export default function SourcePage() {
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
-            <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+            <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
               No sources found
-            </div>
+            </EmptyStateBox>
           ) : null}
           {filtered.map((row) => (
             <div
@@ -255,9 +266,12 @@ export default function SourcePage() {
             </div>
 
             {filtered.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+              <EmptyStateBox
+                variant="solid"
+                className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
+              >
                 No sources found
-              </div>
+              </EmptyStateBox>
             ) : null}
 
             {filtered.map((row, index) => {

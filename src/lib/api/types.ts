@@ -33,10 +33,28 @@ export type ApiCategory = {
   updatedAt?: string;
 };
 
+export type ApiSubcategory = {
+  id?: string;
+  name?: string;
+  categoryId?: string;
+  category?: string | { id?: string; name?: string };
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** UI/catalog representation of a subcategory (name keyed by category). */
+export type CatalogSubcategory = {
+  id?: string;
+  name: string;
+  category: string;
+  categoryId?: string;
+};
+
 export type ApiItem = {
   id?: string;
   name?: string;
   categoryId?: string;
+  subcategoryId?: string | null;
   distributorId?: string;
   sourceId?: string;
   buyingPrice?: number;
@@ -157,6 +175,14 @@ export type ApiRole = {
 export type LoginResponse = {
   token: string;
   user?: ApiUser;
+};
+
+/** Normalized list page from any paginated API endpoint. */
+export type PaginatedResult<T> = {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 export type PaginatedUsers = {

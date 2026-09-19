@@ -3,10 +3,12 @@ import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
 import { ManageSubcategoriesModal } from "@/components/items/ManageSubcategoriesModal";
 import { Button } from "@/components/ui/Button";
+import { INVALID_FIELD_BORDER } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { findSubcategoryIdByName } from "@/lib/api/mappers";
 import {
   CASE_BY_OPTIONS,
   ITEM_CATEGORIES,
@@ -48,7 +50,7 @@ import {
 import { subcategoriesForCategory } from "@/utils/subcategories";
 
 const FIELD_LABEL = "text-[11px] font-semibold text-[#2E2E2E]";
-const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
+const INVALID_BORDER = INVALID_FIELD_BORDER;
 /** Read-only calculated fields - solid gray, no border (matches design). */
 const READONLY_FIELD =
   "h-[33.75px] rounded-[9.38px] border border-transparent bg-[#F3F3F1] text-[13px] text-[#6B6B6B]";
@@ -68,7 +70,7 @@ function uid() {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1 text-[11px] text-[#E25B5B]">{message}</p>;
+  return <p className="mt-1 text-[11px] text-danger">{message}</p>;
 }
 
 export function AddItemModal({
@@ -85,6 +87,7 @@ export function AddItemModal({
     distributors,
     sources: catalogSources,
     subcategoriesByCategory,
+    subcategoryRecords,
   } = useAppCatalog();
 
   const [distributor, setDistributor] = useState("");
@@ -281,6 +284,11 @@ export function AddItemModal({
       preorderInfo: preorderInfo.trim(),
       category,
       subcategory,
+      subcategoryId: findSubcategoryIdByName(
+        subcategoryRecords,
+        category,
+        subcategory,
+      ),
       distributor,
       distributorId: resolveDistributorId(distributor, distributors),
       source,
@@ -633,21 +641,19 @@ export function AddItemModal({
               Pricing
             </h3>
             <div className="space-y-3">
+              {/* Step 1: Source per always visible. Unit/Case fields reveal after. */}
               <div className="grid gap-3 sm:grid-cols-3">
                 <div data-field="sourcePer">
-                  <Field label="Source Per">
+                  <Field label="Source per">
                     <Select
                       value={sourcePer}
                       onChange={(value) => {
                         const next = value as SourcePer | "";
                         setSourcePer(next);
-                        if (next === "Unit") {
-                          setCaseBy("");
-                          setCaseWeightLbs("");
-                          setContents("");
-                        } else if (next === "Case" && !caseBy) {
-                          setCaseBy("Units / case");
-                        }
+                        setCaseBy("");
+                        setCaseWeightLbs("");
+                        setContents("");
+                        setPieceWeightOz("");
                         if (errors.sourcePer || errors.caseBy) {
                           setErrors((current) => ({
                             ...current,
@@ -657,7 +663,7 @@ export function AddItemModal({
                         }
                       }}
                       className="w-full"
-                      aria-label="Source Per"
+                      aria-label="Source per"
                       placeholder="Select"
                       buttonClassName={cn(errors.sourcePer && INVALID_BORDER)}
                       options={[
@@ -671,6 +677,60 @@ export function AddItemModal({
                   </Field>
                   <FieldError message={errors.sourcePer} />
                 </div>
+
+                {sourcePer === "Unit" ? (
+                  <>
+                    <div data-field="buyingPrice">
+                      <Field label="Price per lb">
+                        <MoneyInput
+                          value={buyingPrice}
+                          placeholder="0.00"
+                          onChange={(value) => {
+                            setBuyingPrice(sanitizeMoneyTyping(value));
+                            if (errors.buyingPrice) {
+                              setErrors((current) => ({
+                                ...current,
+                                buyingPrice: undefined,
+                              }));
+                            }
+                          }}
+                          invalid={Boolean(errors.buyingPrice)}
+                        />
+                      </Field>
+                      <FieldError message={errors.buyingPrice} />
+                    </div>
+                    <div data-field="pieceWeightOz">
+                      <Field label="Piece weight">
+                        <Select
+                          value={pieceWeightOz}
+                          onChange={(value) => {
+                            setPieceWeightOz(value);
+                            if (errors.pieceWeightOz) {
+                              setErrors((current) => ({
+                                ...current,
+                                pieceWeightOz: undefined,
+                              }));
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Piece weight"
+                          placeholder="Select"
+                          buttonClassName={cn(
+                            errors.pieceWeightOz && INVALID_BORDER,
+                          )}
+                          options={[
+                            { value: "", label: "Select" },
+                            ...PIECE_WEIGHT_OPTIONS.map((entry) => ({
+                              value: String(entry.oz),
+                              label: entry.label,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <FieldError message={errors.pieceWeightOz} />
+                    </div>
+                  </>
+                ) : null}
 
                 {sourcePer === "Case" ? (
                   <div data-field="caseBy">
@@ -708,255 +768,300 @@ export function AddItemModal({
                   </div>
                 ) : null}
 
-                <div data-field="buyingPrice">
-                  <Field
-                    label={
-                      sourcePer === "Unit"
-                        ? "Price per lb"
-                        : sourcePer === "Case"
-                          ? "Case price"
-                          : "Buying Price"
-                    }
-                  >
-                    <MoneyInput
-                      value={buyingPrice}
-                      placeholder="0.00"
-                      onChange={(value) => {
-                        setBuyingPrice(sanitizeMoneyTyping(value));
-                        if (errors.buyingPrice) {
-                          setErrors((current) => ({
-                            ...current,
-                            buyingPrice: undefined,
-                          }));
-                        }
-                      }}
-                      invalid={Boolean(errors.buyingPrice)}
-                    />
-                  </Field>
-                  <FieldError message={errors.buyingPrice} />
-                </div>
-
-                {sourcePer === "Unit" ? (
-                  <div data-field="pieceWeightOz">
-                    <Field label="Piece weight">
-                      <Select
-                        value={pieceWeightOz}
+                {sourcePer === "Case" && caseBy ? (
+                  <div data-field="buyingPrice">
+                    <Field label="Case price">
+                      <MoneyInput
+                        value={buyingPrice}
+                        placeholder="0.00"
                         onChange={(value) => {
-                          setPieceWeightOz(value);
-                          if (errors.pieceWeightOz) {
+                          setBuyingPrice(sanitizeMoneyTyping(value));
+                          if (errors.buyingPrice) {
                             setErrors((current) => ({
                               ...current,
-                              pieceWeightOz: undefined,
+                              buyingPrice: undefined,
                             }));
                           }
                         }}
-                        className="w-full"
-                        aria-label="Piece weight"
-                        placeholder="Select"
-                        buttonClassName={cn(
-                          errors.pieceWeightOz && INVALID_BORDER,
-                        )}
-                        options={[
-                          { value: "", label: "Select" },
-                          ...PIECE_WEIGHT_OPTIONS.map((entry) => ({
-                            value: String(entry.oz),
-                            label: entry.label,
-                          })),
-                        ]}
+                        invalid={Boolean(errors.buyingPrice)}
                       />
                     </Field>
-                    <FieldError message={errors.pieceWeightOz} />
+                    <FieldError message={errors.buyingPrice} />
                   </div>
                 ) : null}
               </div>
 
+              {/* Unit: calculated row + selling, then final margin */}
+              {sourcePer === "Unit" ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Cost per piece">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.costPerPiece)}
+                      />
+                    </Field>
+                    <Field label="40% Margin Suggested Price">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.suggestedPrice)}
+                      />
+                    </Field>
+                    <div data-field="sellingPrice">
+                      <Field label="Selling Price">
+                        <MoneyInput
+                          value={sellingPrice}
+                          placeholder="0.00"
+                          onChange={(value) => {
+                            setSellingPrice(sanitizeMoneyTyping(value));
+                            if (errors.sellingPrice) {
+                              setErrors((current) => ({
+                                ...current,
+                                sellingPrice: undefined,
+                              }));
+                            }
+                          }}
+                          invalid={Boolean(errors.sellingPrice)}
+                        />
+                      </Field>
+                      <FieldError message={errors.sellingPrice} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Final Margin">
+                      <CalculatedValue
+                        value={formatFinalMarginPercent(finalMargin)}
+                      />
+                    </Field>
+                  </div>
+                </>
+              ) : null}
+
+              {/* Case + Lbs / case */}
               {sourcePer === "Case" && caseBy === "Lbs / case" ? (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div data-field="caseWeightLbs">
-                    <Field label="Total case weight (lbs)">
-                      <Input
-                        value={caseWeightLbs}
-                        inputMode="decimal"
-                        placeholder="0"
-                        onChange={(event) => {
-                          setCaseWeightLbs(
-                            sanitizeMoneyTyping(event.target.value),
-                          );
-                          if (errors.caseWeightLbs) {
-                            setErrors((current) => ({
-                              ...current,
-                              caseWeightLbs: undefined,
-                            }));
-                          }
-                        }}
-                        className={cn(
-                          "w-full",
-                          errors.caseWeightLbs && INVALID_BORDER,
-                        )}
+                <>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div data-field="caseWeightLbs">
+                      <Field label="Total case weight (lbs)">
+                        <Input
+                          value={caseWeightLbs}
+                          inputMode="decimal"
+                          placeholder="0"
+                          onChange={(event) => {
+                            setCaseWeightLbs(
+                              sanitizeMoneyTyping(event.target.value),
+                            );
+                            if (errors.caseWeightLbs) {
+                              setErrors((current) => ({
+                                ...current,
+                                caseWeightLbs: undefined,
+                              }));
+                            }
+                          }}
+                          className={cn(
+                            "w-full",
+                            errors.caseWeightLbs && INVALID_BORDER,
+                          )}
+                        />
+                      </Field>
+                      <FieldError message={errors.caseWeightLbs} />
+                    </div>
+                    <div data-field="contents">
+                      <Field label="Pieces per case">
+                        <Input
+                          value={contents}
+                          inputMode="numeric"
+                          placeholder="0"
+                          onChange={(event) => {
+                            setContents(event.target.value.replace(/\D/g, ""));
+                            if (errors.contents) {
+                              setErrors((current) => ({
+                                ...current,
+                                contents: undefined,
+                              }));
+                            }
+                          }}
+                          className={cn(
+                            "w-full",
+                            errors.contents && INVALID_BORDER,
+                          )}
+                        />
+                      </Field>
+                      <FieldError message={errors.contents} />
+                    </div>
+                    <div data-field="singleItemUnit">
+                      <Field label="Single Item Unit">
+                        <Select
+                          value={singleItemUnit}
+                          onChange={(value) => {
+                            setSingleItemUnit(value);
+                            if (errors.singleItemUnit) {
+                              setErrors((current) => ({
+                                ...current,
+                                singleItemUnit: undefined,
+                              }));
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Single Item Unit"
+                          placeholder="Select"
+                          buttonClassName={cn(
+                            errors.singleItemUnit && INVALID_BORDER,
+                          )}
+                          options={[
+                            { value: "", label: "Select" },
+                            ...SINGLE_ITEM_UNITS.map((entry) => ({
+                              value: entry,
+                              label: entry,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <FieldError message={errors.singleItemUnit} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Cost per lb">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.costPerLb)}
                       />
                     </Field>
-                    <FieldError message={errors.caseWeightLbs} />
-                  </div>
-                  <div data-field="contents">
-                    <Field label="Pieces per case">
-                      <Input
-                        value={contents}
-                        inputMode="numeric"
-                        placeholder="0"
-                        onChange={(event) => {
-                          setContents(event.target.value.replace(/\D/g, ""));
-                          if (errors.contents) {
-                            setErrors((current) => ({
-                              ...current,
-                              contents: undefined,
-                            }));
-                          }
-                        }}
-                        className={cn(
-                          "w-full",
-                          errors.contents && INVALID_BORDER,
-                        )}
+                    <Field label="Cost per piece">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.costPerPiece)}
                       />
                     </Field>
-                    <FieldError message={errors.contents} />
-                  </div>
-                  <div data-field="singleItemUnit">
-                    <Field label="Single Item Unit">
-                      <Select
-                        value={singleItemUnit}
-                        onChange={(value) => {
-                          setSingleItemUnit(value);
-                          if (errors.singleItemUnit) {
-                            setErrors((current) => ({
-                              ...current,
-                              singleItemUnit: undefined,
-                            }));
-                          }
-                        }}
-                        className="w-full"
-                        aria-label="Single Item Unit"
-                        placeholder="Select"
-                        buttonClassName={cn(
-                          errors.singleItemUnit && INVALID_BORDER,
-                        )}
-                        options={[
-                          { value: "", label: "Select" },
-                          ...SINGLE_ITEM_UNITS.map((entry) => ({
-                            value: entry,
-                            label: entry,
-                          })),
-                        ]}
+                    <Field label="40% Margin Suggested Price">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.suggestedPrice)}
                       />
                     </Field>
-                    <FieldError message={errors.singleItemUnit} />
                   </div>
-                </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div data-field="sellingPrice">
+                      <Field label="Selling Price">
+                        <MoneyInput
+                          value={sellingPrice}
+                          placeholder="0.00"
+                          onChange={(value) => {
+                            setSellingPrice(sanitizeMoneyTyping(value));
+                            if (errors.sellingPrice) {
+                              setErrors((current) => ({
+                                ...current,
+                                sellingPrice: undefined,
+                              }));
+                            }
+                          }}
+                          invalid={Boolean(errors.sellingPrice)}
+                        />
+                      </Field>
+                      <FieldError message={errors.sellingPrice} />
+                    </div>
+                    <Field label="Final Margin">
+                      <CalculatedValue
+                        value={formatFinalMarginPercent(finalMargin)}
+                      />
+                    </Field>
+                  </div>
+                </>
               ) : null}
 
+              {/* Case + Units / case */}
               {sourcePer === "Case" && caseBy === "Units / case" ? (
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div data-field="contents">
-                    <Field label="Pieces per case">
-                      <Input
-                        value={contents}
-                        inputMode="numeric"
-                        placeholder="0"
-                        onChange={(event) => {
-                          setContents(event.target.value.replace(/\D/g, ""));
-                          if (errors.contents) {
-                            setErrors((current) => ({
-                              ...current,
-                              contents: undefined,
-                            }));
-                          }
-                        }}
-                        className={cn(
-                          "w-full",
-                          errors.contents && INVALID_BORDER,
-                        )}
+                <>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div data-field="contents">
+                      <Field label="Pieces per case">
+                        <Input
+                          value={contents}
+                          inputMode="numeric"
+                          placeholder="0"
+                          onChange={(event) => {
+                            setContents(event.target.value.replace(/\D/g, ""));
+                            if (errors.contents) {
+                              setErrors((current) => ({
+                                ...current,
+                                contents: undefined,
+                              }));
+                            }
+                          }}
+                          className={cn(
+                            "w-full",
+                            errors.contents && INVALID_BORDER,
+                          )}
+                        />
+                      </Field>
+                      <FieldError message={errors.contents} />
+                    </div>
+                    <div data-field="singleItemUnit">
+                      <Field label="Single Item Unit">
+                        <Select
+                          value={singleItemUnit}
+                          onChange={(value) => {
+                            setSingleItemUnit(value);
+                            if (errors.singleItemUnit) {
+                              setErrors((current) => ({
+                                ...current,
+                                singleItemUnit: undefined,
+                              }));
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Single Item Unit"
+                          placeholder="Select"
+                          buttonClassName={cn(
+                            errors.singleItemUnit && INVALID_BORDER,
+                          )}
+                          options={[
+                            { value: "", label: "Select" },
+                            ...SINGLE_ITEM_UNITS.map((entry) => ({
+                              value: entry,
+                              label: entry,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <FieldError message={errors.singleItemUnit} />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Cost per piece">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.costPerPiece)}
                       />
                     </Field>
-                    <FieldError message={errors.contents} />
-                  </div>
-                  <div data-field="singleItemUnit">
-                    <Field label="Single Item Unit">
-                      <Select
-                        value={singleItemUnit}
-                        onChange={(value) => {
-                          setSingleItemUnit(value);
-                          if (errors.singleItemUnit) {
-                            setErrors((current) => ({
-                              ...current,
-                              singleItemUnit: undefined,
-                            }));
-                          }
-                        }}
-                        className="w-full"
-                        aria-label="Single Item Unit"
-                        placeholder="Select"
-                        buttonClassName={cn(
-                          errors.singleItemUnit && INVALID_BORDER,
-                        )}
-                        options={[
-                          { value: "", label: "Select" },
-                          ...SINGLE_ITEM_UNITS.map((entry) => ({
-                            value: entry,
-                            label: entry,
-                          })),
-                        ]}
+                    <Field label="40% Margin Suggested Price">
+                      <CalculatedMoney
+                        value={formatCalculatedMoney(pricing.suggestedPrice)}
                       />
                     </Field>
-                    <FieldError message={errors.singleItemUnit} />
+                    <div data-field="sellingPrice">
+                      <Field label="Selling Price">
+                        <MoneyInput
+                          value={sellingPrice}
+                          placeholder="0.00"
+                          onChange={(value) => {
+                            setSellingPrice(sanitizeMoneyTyping(value));
+                            if (errors.sellingPrice) {
+                              setErrors((current) => ({
+                                ...current,
+                                sellingPrice: undefined,
+                              }));
+                            }
+                          }}
+                          invalid={Boolean(errors.sellingPrice)}
+                        />
+                      </Field>
+                      <FieldError message={errors.sellingPrice} />
+                    </div>
                   </div>
-                </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Final Margin">
+                      <CalculatedValue
+                        value={formatFinalMarginPercent(finalMargin)}
+                      />
+                    </Field>
+                  </div>
+                </>
               ) : null}
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                {sourcePer === "Case" && caseBy === "Lbs / case" ? (
-                  <Field label="Cost per lb">
-                    <CalculatedMoney
-                      value={formatCalculatedMoney(pricing.costPerLb)}
-                    />
-                  </Field>
-                ) : null}
-                <Field label="Cost per piece">
-                  <CalculatedMoney
-                    value={formatCalculatedMoney(pricing.costPerPiece)}
-                  />
-                </Field>
-                <Field label="40% Margin Suggested Price">
-                  <CalculatedMoney
-                    value={formatCalculatedMoney(pricing.suggestedPrice)}
-                  />
-                </Field>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div data-field="sellingPrice">
-                  <Field label="Selling Price">
-                    <MoneyInput
-                      value={sellingPrice}
-                      placeholder="0.00"
-                      onChange={(value) => {
-                        setSellingPrice(sanitizeMoneyTyping(value));
-                        if (errors.sellingPrice) {
-                          setErrors((current) => ({
-                            ...current,
-                            sellingPrice: undefined,
-                          }));
-                        }
-                      }}
-                      invalid={Boolean(errors.sellingPrice)}
-                    />
-                  </Field>
-                  <FieldError message={errors.sellingPrice} />
-                </div>
-                <Field label="Final Margin">
-                  <CalculatedValue
-                    value={formatFinalMarginPercent(finalMargin)}
-                  />
-                </Field>
-              </div>
             </div>
           </section>
         </div>

@@ -114,48 +114,65 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
   const sourcePer = input.sourcePer as SourcePer | "";
   if (!sourcePer) {
     errors.sourcePer = "Select how this item is sourced.";
-  } else if (!(SOURCE_PER_OPTIONS as readonly string[]).includes(sourcePer)) {
+    return errors;
+  }
+
+  if (!(SOURCE_PER_OPTIONS as readonly string[]).includes(sourcePer)) {
     errors.sourcePer = "Select a valid source type.";
+    return errors;
+  }
+
+  if (sourcePer === "Unit") {
+    if (!isValidMoneyInput(input.buyingPrice)) {
+      errors.buyingPrice = "Enter a valid monetary value.";
+    }
+
+    const oz = Number(input.pieceWeightOz);
+    const validOz = PIECE_WEIGHT_OPTIONS.some((entry) => entry.oz === oz);
+    if (!validOz) {
+      errors.pieceWeightOz = "Select a piece weight.";
+    }
+
+    if (!isValidMoneyInput(input.sellingPrice)) {
+      errors.sellingPrice = "Enter a valid monetary value.";
+    }
+
+    return errors;
+  }
+
+  // Case path: Case by must be chosen before other case fields apply.
+  const caseBy = input.caseBy as CaseBy | "";
+  if (!caseBy) {
+    errors.caseBy = "Select how the case is measured.";
+    return errors;
+  }
+
+  if (!(CASE_BY_OPTIONS as readonly string[]).includes(caseBy)) {
+    errors.caseBy = "Select a valid case measure.";
+    return errors;
   }
 
   if (!isValidMoneyInput(input.buyingPrice)) {
     errors.buyingPrice = "Enter a valid monetary value.";
   }
 
-  if (sourcePer === "Unit") {
-    const oz = Number(input.pieceWeightOz);
-    const validOz = PIECE_WEIGHT_OPTIONS.some((entry) => entry.oz === oz);
-    if (!validOz) {
-      errors.pieceWeightOz = "Select a piece weight.";
+  if (caseBy === "Lbs / case") {
+    if (!isValidPositiveDecimalInput(input.caseWeightLbs)) {
+      errors.caseWeightLbs = "Enter total case weight in lbs.";
     }
   }
 
-  if (sourcePer === "Case") {
-    const caseBy = input.caseBy as CaseBy | "";
-    if (!caseBy) {
-      errors.caseBy = "Select how the case is measured.";
-    } else if (!(CASE_BY_OPTIONS as readonly string[]).includes(caseBy)) {
-      errors.caseBy = "Select a valid case measure.";
-    }
+  const contents = parseContentsInput(input.contents);
+  if (!input.contents.trim() || contents <= 0) {
+    errors.contents = "Pieces per case must be greater than zero.";
+  }
 
-    if (caseBy === "Lbs / case") {
-      if (!isValidPositiveDecimalInput(input.caseWeightLbs)) {
-        errors.caseWeightLbs = "Enter total case weight in lbs.";
-      }
-    }
-
-    const contents = parseContentsInput(input.contents);
-    if (!input.contents.trim() || contents <= 0) {
-      errors.contents = "Pieces per case must be greater than zero.";
-    }
-
-    if (!input.singleItemUnit) {
-      errors.singleItemUnit = "Select a single item unit.";
-    } else if (
-      !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
-    ) {
-      errors.singleItemUnit = "Select a valid single item unit.";
-    }
+  if (!input.singleItemUnit) {
+    errors.singleItemUnit = "Select a single item unit.";
+  } else if (
+    !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
+  ) {
+    errors.singleItemUnit = "Select a valid single item unit.";
   }
 
   if (!isValidMoneyInput(input.sellingPrice)) {

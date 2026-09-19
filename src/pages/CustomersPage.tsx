@@ -1,23 +1,26 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight, Flag, Search, X } from "lucide-react";
+import { ChevronRight, Flag, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
+import { Pagination } from "@/components/ui/Pagination";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 import { SUB_ROW_PAD } from "@/constants/table";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import {
+  downloadListExport,
   isApiConfigured,
   mapApiUserToAdminCustomer,
-  normalizeUsersList,
   usersApi,
 } from "@/lib/api";
+import type { ExportRequest } from "@/types/export";
 import type {
   AdminCustomer,
   AdminCustomerOrder,
@@ -34,7 +37,9 @@ function currency(value: number) {
 }
 
 function formatShortDate(iso: string) {
+  if (!iso?.trim()) return "-";
   const date = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
@@ -288,6 +293,19 @@ function CustomerOrdersPanel({
   customer: AdminCustomer;
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
+  if (!customer.orders.length) {
+    return (
+      <div
+        className={cn(
+          "border-t border-[#00000014] bg-[#FBF9F9] py-8 text-center text-[13px] text-[#8A8A8A]",
+          SUB_ROW_PAD,
+        )}
+      >
+        No data found
+      </div>
+    );
+  }
+
   return (
     <div className={cn("relative border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
       <div
@@ -622,27 +640,46 @@ export default function CustomersPage() {
   useDocumentTitle("Customers");
 
   const { notifyApiError } = useApiFeedback();
+  const apiConfigured = isApiConfigured();
   const [customers, setCustomers] = useState(ADMIN_CUSTOMERS);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [zipFilter, setZipFilter] = useState("");
   const [orderCountFilter, setOrderCountFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageLimit, setPageLimit] = useState(DEFAULT_PAGE_LIMIT);
+  const [total, setTotal] = useState(ADMIN_CUSTOMERS.length);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    const timer = window.setTimeout(() => {
+      setDebouncedQuery(query.trim());
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, zipFilter, orderCountFilter]);
+
+  useEffect(() => {
+    if (!apiConfigured) return;
     let cancelled = false;
 
     void usersApi
-      .list({ page: 1, limit: 100, role: "customer" })
-      .then((payload) => {
+      .list({
+        page,
+        limit: DEFAULT_PAGE_LIMIT,
+        role: "customer",
+        ...(debouncedQuery ? { search: debouncedQuery } : {}),
+      })
+      .then((result) => {
         if (cancelled) return;
-        const apiUsers = normalizeUsersList(payload);
-        if (apiUsers.length === 0) return;
-
-        const mapped = apiUsers.map(mapApiUserToAdminCustomer);
-        // Prefer live API customers when available.
-        setCustomers(mapped);
+        setCustomers(result.items.map(mapApiUserToAdminCustomer));
+        setTotal(result.total);
+        setPageLimit(result.limit);
+        if (result.page !== page) setPage(result.page);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -652,7 +689,7 @@ export default function CustomersPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError]);
+  }, [apiConfigured, debouncedQuery, notifyApiError, page]);
 
   const zipOptions = useMemo(
     () =>
@@ -663,9 +700,10 @@ export default function CustomersPage() {
   );
 
   const filtered = useMemo(() => {
-    const normalized = query.trim().toLowerCase();
+    const normalized = debouncedQuery.toLowerCase();
     return customers.filter((customer) => {
       const matchesQuery =
+        apiConfigured ||
         !normalized ||
         customer.id.toLowerCase().includes(normalized) ||
         `${customer.firstName} ${customer.lastName}`
@@ -684,10 +722,24 @@ export default function CustomersPage() {
 
       return matchesQuery && matchesZip && matchesOrders;
     });
-  }, [customers, orderCountFilter, query, zipFilter]);
+  }, [
+    apiConfigured,
+    customers,
+    debouncedQuery,
+    orderCountFilter,
+    zipFilter,
+  ]);
 
-  const active = filtered.filter((customer) => !customer.blocked);
-  const inactive = filtered.filter((customer) => customer.blocked);
+  const pagedCustomers = useMemo(() => {
+    if (apiConfigured) return filtered;
+    const start = (page - 1) * pageLimit;
+    return filtered.slice(start, start + pageLimit);
+  }, [apiConfigured, filtered, page, pageLimit]);
+
+  const displayTotal = apiConfigured ? total : filtered.length;
+
+  const active = pagedCustomers.filter((customer) => !customer.blocked);
+  const inactive = pagedCustomers.filter((customer) => customer.blocked);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -695,18 +747,11 @@ export default function CustomersPage() {
         title="Customers"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search ID, customer name"
-                className="w-full pl-8"
-              />
-            </div>
+            <SearchField
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search ID, customer name"
+            />
 
             <Select
               value={zipFilter}
@@ -734,10 +779,23 @@ export default function CustomersPage() {
 
             <ExportButton
               entityLabel="customers"
-              recordCount={filtered.length}
+              recordCount={displayTotal}
               filtersActive={Boolean(
                 query.trim() || zipFilter || orderCountFilter,
               )}
+              onExport={async (request: ExportRequest) => {
+                await downloadListExport(
+                  "/users",
+                  {
+                    role: "customer",
+                    ...(request.scope === "filtered" && query.trim()
+                      ? { search: query.trim() }
+                      : {}),
+                  },
+                  request.format,
+                  "customers",
+                );
+              }}
               className="w-full sm:ml-auto sm:w-auto"
             />
           </div>
@@ -780,6 +838,13 @@ export default function CustomersPage() {
             />
           </section>
         </div>
+
+        <Pagination
+          page={page}
+          limit={pageLimit}
+          total={displayTotal}
+          onPageChange={setPage}
+        />
 
         {selected ? (
           <OrderDetailDrawer

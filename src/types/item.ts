@@ -15,6 +15,7 @@ export type Item = {
   preorderInfo: string;
   category: string;
   subcategory: string;
+  subcategoryId?: string;
   distributor: string;
   distributorId?: string;
   source: string;

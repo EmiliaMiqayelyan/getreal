@@ -2,6 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import {
+  FormField,
+  INVALID_FIELD_BORDER,
+} from "@/components/ui/FormField";
+import { IconButton } from "@/components/ui/IconButton";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
@@ -19,9 +24,6 @@ import {
 } from "@/utils/sourceForm";
 import { getSourceDistributorSelection } from "@/utils/sources";
 
-const FIELD_LABEL = "text-[11px] font-semibold text-[#2E2E2E]";
-const INVALID_BORDER = "border-[#E25B5B] focus:border-[#E25B5B]";
-
 type AddSourceModalProps = {
   open: boolean;
   onClose: () => void;
@@ -30,11 +32,6 @@ type AddSourceModalProps = {
   onRemove?: () => void;
   source?: Source | null;
 };
-
-function FieldError({ message }: { message?: string }) {
-  if (!message) return null;
-  return <p className="mt-1 text-[11px] text-[#E25B5B]">{message}</p>;
-}
 
 export function AddSourceModal({
   open,
@@ -156,85 +153,85 @@ export function AddSourceModal({
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
             {isEdit ? "Edit Source" : "Add Source"}
           </h2>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={handleClose}
-            className="cursor-pointer rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
-          >
+          <IconButton aria-label="Close" onClick={handleClose}>
             <X size={18} />
-          </button>
+          </IconButton>
         </div>
 
         <div className="flex-1 space-y-0 overflow-auto px-[30px] pt-6 pb-5">
           <section>
             <div className="space-y-5">
-              <div data-field="name">
-                <label className={FIELD_LABEL}>Source Name</label>
-                <Input
-                  value={name}
-                  onChange={(event) => {
-                    setName(event.target.value);
-                    if (errors.name) {
-                      setErrors((current) => ({ ...current, name: undefined }));
-                    }
-                  }}
-                  className={cn(
-                    "mt-1.5 w-full",
-                    errors.name && INVALID_BORDER,
-                  )}
-                />
-                <FieldError message={errors.name} />
-              </div>
+              <FormField label="Source Name" error={errors.name}>
+                <div data-field="name">
+                  <Input
+                    value={name}
+                    onChange={(event) => {
+                      setName(event.target.value);
+                      if (errors.name) {
+                        setErrors((current) => ({
+                          ...current,
+                          name: undefined,
+                        }));
+                      }
+                    }}
+                    className={cn(
+                      "w-full",
+                      errors.name && INVALID_FIELD_BORDER,
+                    )}
+                  />
+                </div>
+              </FormField>
 
-              <div data-field="address">
-                <label className={FIELD_LABEL}>Full Address</label>
-                <Input
-                  value={address}
-                  onChange={(event) => {
-                    setAddress(event.target.value);
-                    if (errors.address) {
-                      setErrors((current) => ({
-                        ...current,
-                        address: undefined,
-                      }));
-                    }
-                  }}
-                  className={cn(
-                    "mt-1.5 w-full",
-                    errors.address && INVALID_BORDER,
-                  )}
-                />
-                <FieldError message={errors.address} />
-              </div>
+              <FormField label="Full Address" error={errors.address}>
+                <div data-field="address">
+                  <Input
+                    value={address}
+                    onChange={(event) => {
+                      setAddress(event.target.value);
+                      if (errors.address) {
+                        setErrors((current) => ({
+                          ...current,
+                          address: undefined,
+                        }));
+                      }
+                    }}
+                    className={cn(
+                      "w-full",
+                      errors.address && INVALID_FIELD_BORDER,
+                    )}
+                  />
+                </div>
+              </FormField>
 
-              <div data-field="distributor">
-                <label className={FIELD_LABEL}>Distributor</label>
-                <Select
-                  value={distributor}
-                  onChange={(value) => {
-                    setDistributor(value);
-                    if (errors.distributor) {
-                      setErrors((current) => ({
-                        ...current,
-                        distributor: undefined,
-                      }));
-                    }
-                  }}
-                  className="mt-1.5 w-full"
-                  aria-label="Distributor"
-                  placeholder="Select"
-                  buttonClassName={cn(errors.distributor && INVALID_BORDER)}
-                  options={[
-                    { value: SOURCE_NO_DISTRIBUTOR, label: "No Distributor" },
-                    ...distributorOptions.map((item) => ({
-                      value: item,
-                      label: item,
-                    })),
-                  ]}
-                />
-                <FieldError message={errors.distributor} />
-              </div>
+              <FormField label="Distributor" error={errors.distributor}>
+                <div data-field="distributor">
+                  <Select
+                    value={distributor}
+                    onChange={(value) => {
+                      setDistributor(value);
+                      if (errors.distributor) {
+                        setErrors((current) => ({
+                          ...current,
+                          distributor: undefined,
+                        }));
+                      }
+                    }}
+                    className="w-full"
+                    aria-label="Distributor"
+                    placeholder="Select"
+                    buttonClassName={cn(
+                      errors.distributor && INVALID_FIELD_BORDER,
+                    )}
+                    options={[
+                      { value: SOURCE_NO_DISTRIBUTOR, label: "No Distributor" },
+                      ...distributorOptions.map((item) => ({
+                        value: item,
+                        label: item,
+                      })),
+                    ]}
+                  />
+                </div>
+              </FormField>
             </div>
           </section>
 

@@ -5,13 +5,21 @@ import { cn } from "@/utils/cn";
 type EmptyStateBoxProps = {
   children: ReactNode;
   className?: string;
+  variant?: "dashed" | "solid";
 };
 
-export function EmptyStateBox({ children, className }: EmptyStateBoxProps) {
+export function EmptyStateBox({
+  children,
+  className,
+  variant = "dashed",
+}: EmptyStateBoxProps) {
   return (
     <div
       className={cn(
-        "text-muted flex min-h-[88px] items-center justify-center rounded-xl border border-dashed border-[#00000014] bg-[#fafbfc] px-4 py-6 text-center text-sm",
+        "text-muted flex min-h-[88px] items-center justify-center rounded-xl px-4 py-6 text-center text-sm",
+        variant === "dashed" &&
+          "border border-dashed border-border bg-[#fafbfc]",
+        variant === "solid" && "border border-border bg-white",
         className,
       )}
     >

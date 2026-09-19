@@ -11,6 +11,9 @@ import { DISTRIBUTORS } from "@/constants/distributors";
 import { ITEMS } from "@/constants/items";
 import { PRODUCTS_FOR_SALE } from "@/constants/productsForSale";
 import { SOURCES } from "@/constants/sources";
+import { formatApiError, isApiConfigured, subcategoriesApi } from "@/lib/api";
+import { findCategoryIdByName } from "@/lib/api/mappers";
+import type { ApiCategory, CatalogSubcategory } from "@/lib/api/types";
 import type { Distributor } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
@@ -33,7 +36,10 @@ import {
 } from "@/utils/sources";
 import {
   addSubcategoryToMap,
+  catalogRecordsFromMap,
+  findCatalogSubcategory,
   loadSubcategories,
+  mapFromCatalogRecords,
   removeSubcategoryFromMap,
   renameSubcategoryInMap,
   saveSubcategories,
@@ -47,6 +53,8 @@ type AppCatalogContextValue = {
   items: Item[];
   sources: Source[];
   products: ProductForSale[];
+  categories: ApiCategory[];
+  subcategoryRecords: CatalogSubcategory[];
   subcategoriesByCategory: SubcategoryMap;
   setDistributors: (
     updater: Distributor[] | ((current: Distributor[]) => Distributor[]),
@@ -56,6 +64,14 @@ type AppCatalogContextValue = {
   setProducts: (
     updater: ProductForSale[] | ((current: ProductForSale[]) => ProductForSale[]),
   ) => void;
+  setCategories: (
+    updater: ApiCategory[] | ((current: ApiCategory[]) => ApiCategory[]),
+  ) => void;
+  setSubcategoryRecords: (
+    updater:
+      | CatalogSubcategory[]
+      | ((current: CatalogSubcategory[]) => CatalogSubcategory[]),
+  ) => void;
   saveDistributor: (
     distributor: Distributor,
     mode: SaveDistributorMode,
@@ -63,13 +79,13 @@ type AppCatalogContextValue = {
   ) => void;
   removeDistributor: (id: string) => void;
   getDistributorById: (id: string) => Distributor | undefined;
-  addSubcategory: (category: string, name: string) => string | null;
+  addSubcategory: (category: string, name: string) => Promise<string | null>;
   renameSubcategory: (
     category: string,
     previous: string,
     nextName: string,
-  ) => string | null;
-  removeSubcategory: (category: string, name: string) => string | null;
+  ) => Promise<string | null>;
+  removeSubcategory: (category: string, name: string) => Promise<string | null>;
 };
 
 const AppCatalogContext = createContext<AppCatalogContextValue | null>(null);
@@ -91,11 +107,16 @@ function applySubcategoryRename(
   category: string,
   previous: string,
   nextName: string,
+  nextId?: string,
 ) {
   return {
     items: items.map((item) =>
       item.category === category && item.subcategory === previous
-        ? { ...item, subcategory: nextName }
+        ? {
+            ...item,
+            subcategory: nextName,
+            subcategoryId: nextId ?? item.subcategoryId,
+          }
         : item,
     ),
     products: products.map((product) =>
@@ -115,7 +136,7 @@ function applySubcategoryRemoval(
   return {
     items: items.map((item) =>
       item.category === category && item.subcategory === name
-        ? { ...item, subcategory: "" }
+        ? { ...item, subcategory: "", subcategoryId: undefined }
         : item,
     ),
     products: products.map((product) =>
@@ -128,8 +149,14 @@ function applySubcategoryRemoval(
 
 export function AppCatalogProvider({ children }: { children: ReactNode }) {
   const [catalog, setCatalog] = useState(bootstrapCatalog);
-  const [subcategoriesByCategory, setSubcategoriesByCategory] = useState(
-    loadSubcategories,
+  const [categories, setCategoriesState] = useState<ApiCategory[]>([]);
+  const [subcategoryRecords, setSubcategoryRecordsState] = useState<
+    CatalogSubcategory[]
+  >(() => catalogRecordsFromMap(loadSubcategories()));
+
+  const subcategoriesByCategory = useMemo(
+    () => mapFromCatalogRecords(subcategoryRecords),
+    [subcategoryRecords],
   );
 
   const setDistributors = useCallback(
@@ -278,36 +305,137 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const setCategories = useCallback(
+    (
+      updater: ApiCategory[] | ((current: ApiCategory[]) => ApiCategory[]),
+    ) => {
+      setCategoriesState((current) =>
+        typeof updater === "function" ? updater(current) : updater,
+      );
+    },
+    [],
+  );
+
+  const setSubcategoryRecords = useCallback(
+    (
+      updater:
+        | CatalogSubcategory[]
+        | ((current: CatalogSubcategory[]) => CatalogSubcategory[]),
+    ) => {
+      setSubcategoryRecordsState((current) => {
+        const next =
+          typeof updater === "function" ? updater(current) : updater;
+        if (!isApiConfigured()) {
+          saveSubcategories(mapFromCatalogRecords(next));
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
   const getDistributorById = useCallback(
     (id: string) => catalog.distributors.find((entry) => entry.id === id),
     [catalog.distributors],
   );
 
-  const addSubcategory = useCallback((category: string, name: string) => {
-    const result = addSubcategoryToMap(
-      subcategoriesByCategory,
-      category,
-      name,
-    );
-    if (!result.ok) return result.error;
-    saveSubcategories(result.map);
-    setSubcategoriesByCategory(result.map);
-    return null;
-  }, [subcategoriesByCategory]);
+  const addSubcategory = useCallback(
+    async (category: string, name: string) => {
+      const trimmed = name.trim();
+      const localResult = addSubcategoryToMap(
+        mapFromCatalogRecords(subcategoryRecords),
+        category,
+        trimmed,
+      );
+      if (!localResult.ok) return localResult.error;
+
+      if (isApiConfigured()) {
+        const categoryId = findCategoryIdByName(categories, category);
+        if (!categoryId) {
+          return "Category is not available on the server yet.";
+        }
+        try {
+          const created = await subcategoriesApi.create({
+            name: trimmed,
+            categoryId,
+          });
+          setSubcategoryRecords((current) => [
+            ...current,
+            {
+              id: created.id,
+              name: created.name?.trim() || trimmed,
+              category,
+              categoryId: created.categoryId ?? categoryId,
+            },
+          ]);
+          return null;
+        } catch (error) {
+          return formatApiError(error, "Failed to create subcategory.");
+        }
+      }
+
+      setSubcategoryRecords(catalogRecordsFromMap(localResult.map));
+      return null;
+    },
+    [categories, subcategoryRecords, setSubcategoryRecords],
+  );
 
   const renameSubcategory = useCallback(
-    (category: string, previous: string, nextName: string) => {
-      const result = renameSubcategoryInMap(
-        subcategoriesByCategory,
+    async (category: string, previous: string, nextName: string) => {
+      const trimmed = nextName.trim();
+      const localResult = renameSubcategoryInMap(
+        mapFromCatalogRecords(subcategoryRecords),
         category,
         previous,
-        nextName,
+        trimmed,
       );
-      if (!result.ok) return result.error;
+      if (!localResult.ok) return localResult.error;
 
-      const trimmed = nextName.trim();
-      saveSubcategories(result.map);
-      setSubcategoriesByCategory(result.map);
+      const existing = findCatalogSubcategory(
+        subcategoryRecords,
+        category,
+        previous,
+      );
+
+      if (isApiConfigured()) {
+        if (!existing?.id) {
+          return "Subcategory is not available on the server yet.";
+        }
+        try {
+          const updated = await subcategoriesApi.update(existing.id, {
+            name: trimmed,
+          });
+          const resolvedName = updated.name?.trim() || trimmed;
+          setSubcategoryRecords((current) =>
+            current.map((entry) =>
+              entry.category === category && entry.name === previous
+                ? {
+                    ...entry,
+                    id: updated.id ?? entry.id,
+                    name: resolvedName,
+                    categoryId: updated.categoryId ?? entry.categoryId,
+                  }
+                : entry,
+            ),
+          );
+          setCatalog((current) => ({
+            ...current,
+            ...applySubcategoryRename(
+              current.items,
+              current.products,
+              category,
+              previous,
+              resolvedName,
+              updated.id ?? existing.id,
+            ),
+          }));
+          return null;
+        } catch (error) {
+          return formatApiError(error, "Failed to update subcategory.");
+        }
+      }
+
+      setSubcategoryRecords(catalogRecordsFromMap(localResult.map));
       setCatalog((current) => ({
         ...current,
         ...applySubcategoryRename(
@@ -320,20 +448,52 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       }));
       return null;
     },
-    [subcategoriesByCategory],
+    [subcategoryRecords, setSubcategoryRecords],
   );
 
   const removeSubcategory = useCallback(
-    (category: string, name: string) => {
-      const result = removeSubcategoryFromMap(
-        subcategoriesByCategory,
+    async (category: string, name: string) => {
+      const localResult = removeSubcategoryFromMap(
+        mapFromCatalogRecords(subcategoryRecords),
         category,
         name,
       );
-      if (!result.ok) return result.error;
+      if (!localResult.ok) return localResult.error;
 
-      saveSubcategories(result.map);
-      setSubcategoriesByCategory(result.map);
+      const existing = findCatalogSubcategory(
+        subcategoryRecords,
+        category,
+        name,
+      );
+
+      if (isApiConfigured()) {
+        if (!existing?.id) {
+          return "Subcategory is not available on the server yet.";
+        }
+        try {
+          await subcategoriesApi.remove(existing.id);
+          setSubcategoryRecords((current) =>
+            current.filter(
+              (entry) =>
+                !(entry.category === category && entry.name === name),
+            ),
+          );
+          setCatalog((current) => ({
+            ...current,
+            ...applySubcategoryRemoval(
+              current.items,
+              current.products,
+              category,
+              name,
+            ),
+          }));
+          return null;
+        } catch (error) {
+          return formatApiError(error, "Failed to delete subcategory.");
+        }
+      }
+
+      setSubcategoryRecords(catalogRecordsFromMap(localResult.map));
       setCatalog((current) => ({
         ...current,
         ...applySubcategoryRemoval(
@@ -345,7 +505,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       }));
       return null;
     },
-    [subcategoriesByCategory],
+    [subcategoryRecords, setSubcategoryRecords],
   );
 
   const value = useMemo(
@@ -354,11 +514,15 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       items: catalog.items,
       sources: catalog.sources,
       products: catalog.products,
+      categories,
+      subcategoryRecords,
       subcategoriesByCategory,
       setDistributors,
       setItems,
       setSources,
       setProducts,
+      setCategories,
+      setSubcategoryRecords,
       saveDistributor,
       removeDistributor,
       getDistributorById,
@@ -369,15 +533,19 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
     [
       addSubcategory,
       catalog,
+      categories,
       getDistributorById,
       removeDistributor,
       removeSubcategory,
       renameSubcategory,
       saveDistributor,
+      setCategories,
       setDistributors,
       setItems,
       setProducts,
       setSources,
+      setSubcategoryRecords,
+      subcategoryRecords,
       subcategoriesByCategory,
     ],
   );

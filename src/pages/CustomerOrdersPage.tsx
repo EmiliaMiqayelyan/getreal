@@ -5,12 +5,11 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  Search,
   Truck,
   X,
 } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
@@ -20,17 +19,21 @@ import {
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
+import { Pagination } from "@/components/ui/Pagination";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
+import { Tabs } from "@/components/ui/Tabs";
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 import { SUB_ROW_PAD } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
+  downloadListExport,
   isApiConfigured,
-  normalizeOrdersList,
   ordersApi,
 } from "@/lib/api";
+import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
@@ -651,6 +654,7 @@ export default function CustomerOrdersPage() {
 
   const { packingByCode } = usePackingHandoff();
   const { notifyApiError } = useApiFeedback();
+  const apiConfigured = isApiConfigured();
 
   const [orders, setOrders] = useState(ACTIVE_ORDERS);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
@@ -662,6 +666,9 @@ export default function CustomerOrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState(19);
+  const [page, setPage] = useState(1);
+  const [pageLimit, setPageLimit] = useState(DEFAULT_PAGE_LIMIT);
+  const [total, setTotal] = useState(0);
   const [statusMenu, setStatusMenu] = useState<{
     orderId: string;
     stepKey: TimelineStepKey;
@@ -671,15 +678,17 @@ export default function CustomerOrdersPage() {
   } | null>(null);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    setPage(1);
+  }, [activeTab, search, statusFilter, zipFilter, sortBy]);
+
+  useEffect(() => {
+    if (!apiConfigured || activeTab !== "Orders") return;
     let cancelled = false;
 
     void ordersApi
-      .list({ page: 1, limit: 50, type: "standard" })
-      .then((payload) => {
+      .list({ page, limit: DEFAULT_PAGE_LIMIT, type: "standard" })
+      .then((result) => {
         if (cancelled) return;
-        const remote = normalizeOrdersList(payload);
-        if (remote.length === 0) return;
 
         const statusToDone: Record<string, number> = {
           requested: 1,
@@ -691,7 +700,7 @@ export default function CustomerOrdersPage() {
           cancelled: 0,
         };
 
-        const mapped: CustomerOrderRow[] = remote.map((order, index) => {
+        const mapped: CustomerOrderRow[] = result.items.map((order, index) => {
           const doneCount = statusToDone[order.status ?? "requested"] ?? 1;
           const itemCount = (order.items ?? []).reduce(
             (sum, line) => sum + (line.quantity ?? 0),
@@ -727,11 +736,10 @@ export default function CustomerOrdersPage() {
           };
         });
 
-        setOrders((current) => {
-          const byId = new Map(current.map((row) => [row.id, row]));
-          for (const row of mapped) byId.set(row.id, row);
-          return Array.from(byId.values());
-        });
+        setOrders(mapped);
+        setTotal(result.total);
+        setPageLimit(result.limit);
+        if (result.page !== page) setPage(result.page);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -741,7 +749,7 @@ export default function CustomerOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError]);
+  }, [activeTab, apiConfigured, notifyApiError, page]);
 
   useEffect(() => {
     if (!statusMenu) return;
@@ -797,6 +805,12 @@ export default function CustomerOrdersPage() {
     });
   }, [ordersWithPacking, search, statusFilter]);
 
+  const pagedActive = useMemo(() => {
+    if (apiConfigured) return filteredActive;
+    const start = (page - 1) * pageLimit;
+    return filteredActive.slice(start, start + pageLimit);
+  }, [apiConfigured, filteredActive, page, pageLimit]);
+
   const filteredCompleted = useMemo(() => {
     const q = search.trim().toLowerCase();
     let next = COMPLETED_ORDERS.filter(
@@ -817,16 +831,21 @@ export default function CustomerOrdersPage() {
     return next;
   }, [search, sortBy, zipFilter]);
 
+  const pagedCompleted = useMemo(() => {
+    const start = (page - 1) * pageLimit;
+    return filteredCompleted.slice(start, start + pageLimit);
+  }, [filteredCompleted, page, pageLimit]);
+
   const completedGroups = useMemo(() => {
     const weeks = new Map<string, Map<string, CompletedOrder[]>>();
-    filteredCompleted.forEach((order) => {
+    pagedCompleted.forEach((order) => {
       if (!weeks.has(order.week)) weeks.set(order.week, new Map());
       const days = weeks.get(order.week)!;
       if (!days.has(order.day)) days.set(order.day, []);
       days.get(order.day)!.push(order);
     });
     return Array.from(weeks.entries());
-  }, [filteredCompleted]);
+  }, [pagedCompleted]);
 
   const zipOptions = useMemo(
     () =>
@@ -837,8 +856,11 @@ export default function CustomerOrdersPage() {
   const selectedOrder =
     ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
 
-  const exportCount =
-    activeTab === "Orders" ? filteredActive.length : filteredCompleted.length;
+  const ordersTotal = apiConfigured ? total : filteredActive.length;
+  const displayTotal =
+    activeTab === "Orders" ? ordersTotal : filteredCompleted.length;
+
+  const exportCount = displayTotal;
   const exportFiltersActive =
     activeTab === "Orders"
       ? Boolean(search.trim() || statusFilter)
@@ -857,60 +879,15 @@ export default function CustomerOrdersPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white">
-        <div className="flex min-h-[52px] items-center px-4 md:px-7 lg:h-[52px]">
-          <div className="flex w-full flex-col gap-3 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center lg:gap-4">
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-                Customer Orders
-              </h1>
-              <div className="flex items-center border-l border-[#00000014] pl-5 lg:hidden">
-                <UserMenu className="items-center" />
-              </div>
-            </div>
-
-            <div className="flex h-full items-center gap-6 sm:gap-8">
-              {(["Orders", "Completed"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => {
-                    setActiveTab(tab);
-                    setSelectedOrderId(null);
-                    setStatusMenu(null);
-                  }}
-                  className={cn(
-                    "flex h-[52px] items-center border-b-2 text-[14px]",
-                    activeTab === tab
-                      ? "border-[#F57850] font-medium text-[#111118]"
-                      : "border-transparent text-[#8A8A8A]",
-                  )}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
-            <div className="hidden items-center justify-end border-l border-[#00000014] pl-5 lg:flex lg:justify-self-end">
-              <UserMenu className="items-center" />
-            </div>
-          </div>
-        </div>
-
-        <div className="flex min-h-[52px] items-center border-t border-[#00000014] px-4 py-2 md:h-[52px] md:py-0 md:px-7">
+      <Header
+        title="Customer Orders"
+        toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-            <div className="relative w-full min-w-[160px] flex-1 sm:max-w-[220px] sm:flex-none">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search"
-                className="w-full pl-8"
-              />
-            </div>
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+            />
 
             {activeTab === "Orders" ? (
               <Select
@@ -972,6 +949,14 @@ export default function CustomerOrdersPage() {
                 entityLabel="orders"
                 recordCount={exportCount}
                 filtersActive={exportFiltersActive}
+                onExport={async (request: ExportRequest) => {
+                  await downloadListExport(
+                    "/orders",
+                    { type: "standard" },
+                    request.format,
+                    "orders",
+                  );
+                }}
                 className="w-full sm:w-auto"
               />
               <div className="text-[12px] text-[#8A8A8A]">
@@ -979,8 +964,23 @@ export default function CustomerOrdersPage() {
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        }
+        below={
+          <Tabs
+            aria-label="Order views"
+            items={[
+              { id: "Orders", label: "Orders" },
+              { id: "Completed", label: "Completed" },
+            ]}
+            value={activeTab}
+            onChange={(id) => {
+              setActiveTab(id as "Orders" | "Completed");
+              setSelectedOrderId(null);
+              setStatusMenu(null);
+            }}
+          />
+        }
+      />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7">
@@ -1085,7 +1085,7 @@ export default function CustomerOrdersPage() {
                 </div>
 
                 <div className="divide-y-[5px] divide-[#00000014]">
-                  {filteredActive.map((order) => (
+                  {pagedActive.map((order) => (
                     <div
                       key={order.id}
                       className="relative bg-white px-4 py-4 sm:px-5"
@@ -1219,6 +1219,13 @@ export default function CustomerOrdersPage() {
           </div>
         )}
       </div>
+
+      <Pagination
+        page={page}
+        limit={pageLimit}
+        total={displayTotal}
+        onPageChange={setPage}
+      />
 
       {statusMenu
         ? createPortal(

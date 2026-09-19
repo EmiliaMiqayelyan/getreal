@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { useEffect } from "react";
 
 import { CloseIcon } from "@/components/icons";
 import { MODAL_TITLE } from "@/constants/table";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { cn } from "@/utils/cn";
+import { useEffect } from "react";
+
+export type ModalSize = "sm" | "md" | "lg";
 
 type ModalProps = {
   open: boolean;
@@ -13,6 +15,15 @@ type ModalProps = {
   children: ReactNode;
   footer?: ReactNode;
   className?: string;
+  size?: ModalSize;
+  /** Stacking order for nested dialogs (e.g. confirms above other modals). */
+  zIndexClass?: string;
+};
+
+const SIZE_CLASS: Record<ModalSize, string> = {
+  sm: "max-w-[420px]",
+  md: "max-w-[540px]",
+  lg: "max-w-[720px]",
 };
 
 export function Modal({
@@ -22,6 +33,8 @@ export function Modal({
   children,
   footer,
   className,
+  size = "md",
+  zIndexClass = "z-50",
 }: ModalProps) {
   useScrollLock(open);
 
@@ -39,7 +52,12 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-hidden overscroll-none p-6 sm:items-center">
+    <div
+      className={cn(
+        "fixed inset-0 flex items-start justify-center overflow-hidden overscroll-none p-6 sm:items-center",
+        zIndexClass,
+      )}
+    >
       <button
         type="button"
         aria-label="Close dialog overlay"
@@ -52,7 +70,8 @@ export function Modal({
         aria-modal="true"
         aria-labelledby="modal-title"
         className={cn(
-          "bg-surface relative z-10 flex max-h-[calc(100dvh-3rem)] w-full max-w-[540px] flex-col overflow-hidden overscroll-contain rounded-2xl shadow-xl",
+          "bg-surface relative z-10 flex max-h-[calc(100dvh-3rem)] w-full flex-col overflow-hidden overscroll-contain rounded-2xl shadow-xl",
+          SIZE_CLASS[size],
           className,
         )}
       >

@@ -1,6 +1,8 @@
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
+
 import { apiRequest } from "./client";
-import type { ApiUser, PaginatedUsers } from "./types";
-import { normalizeNamedList, pickNamedEntity } from "./normalize";
+import type { ApiUser } from "./types";
+import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
 export type CreateUserPayload = {
   email: string;
@@ -39,25 +41,22 @@ export type UsersListParams = {
 
 export const usersApi = {
   list(params: UsersListParams = {}) {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? DEFAULT_PAGE_LIMIT;
     const search = new URLSearchParams();
-    if (params.page != null) search.set("page", String(params.page));
-    if (params.limit != null) search.set("limit", String(params.limit));
+    search.set("page", String(page));
+    search.set("limit", String(limit));
     if (params.role) search.set("role", params.role);
     if (params.roleId) search.set("roleId", params.roleId);
     if (params.search) search.set("search", params.search);
     const qs = search.toString();
-    return apiRequest<PaginatedUsers | ApiUser[] | unknown>(
-      `/users${qs ? `?${qs}` : ""}`,
-    ).then((payload) => {
-      const users = normalizeNamedList<ApiUser>(payload, [
-        "users",
-        "items",
-        "data",
-        "results",
-      ]);
-      if (users.length > 0) return users;
-      return payload as PaginatedUsers | ApiUser[];
-    });
+    return apiRequest<unknown>(`/users?${qs}`).then((payload) =>
+      normalizePaginatedList<ApiUser>(
+        payload,
+        ["users", "items", "data", "results"],
+        { page, limit },
+      ),
+    );
   },
 
   getById(id: string) {

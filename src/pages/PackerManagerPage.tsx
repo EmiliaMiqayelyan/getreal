@@ -5,10 +5,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Search,
 } from "lucide-react";
 
-import { UserMenu } from "@/components/layout/UserMenu";
+import { Header } from "@/components/layout/AdminHeader";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
@@ -16,8 +15,8 @@ import {
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
 import { IdPill } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -134,15 +133,11 @@ function AssignPackerMenu({
     >
       <div className="sticky top-0 border-b border-[#00000014] bg-white p-2.5">
         <div className="relative">
-          <Search
-            size={12}
-            className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-          />
-          <Input
+          <SearchField
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
-            className="w-full pl-8"
+            fill
           />
         </div>
       </div>
@@ -282,28 +277,15 @@ export default function PackerManagerPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white">
-        <div className="flex min-h-[52px] items-center justify-between gap-4 px-4 md:h-[52px] md:px-7">
-          <h1 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-            Packer Manager
-          </h1>
-          <UserMenu className="items-center" />
-        </div>
-
-        <div className="border-t border-[#00000014] px-4 py-2 md:px-7">
-          <div className="flex min-h-[52px] flex-wrap items-center gap-2 md:h-[52px] md:flex-nowrap md:py-0">
-            <div className="relative w-full sm:w-[220px]">
-              <Search
-                size={13}
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#111118]"
-              />
-              <Input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search"
-                className="w-full pl-8"
-              />
-            </div>
+      <Header
+        title="Packer Manager"
+        toolbar={
+          <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+            />
             <Select
               value={sortBy}
               onChange={setSortBy}
@@ -319,8 +301,8 @@ export default function PackerManagerPage() {
               Today, Tue, Jun 22, 2026
             </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
         <div className={DATE_CHIP_ROW}>

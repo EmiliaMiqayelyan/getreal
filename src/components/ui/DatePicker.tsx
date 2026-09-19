@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Calendar } from "lucide-react";
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
+import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
 import { parseDeliveryDateId } from "@/utils/deliveryCalendar";
 import { cn } from "@/utils/cn";
 
@@ -69,7 +70,11 @@ export function DatePicker({
           open && "border-[#00000014]",
         )}
       >
-        <Calendar className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[#111118]" />
+        <Calendar
+          size={INPUT_LEADING_ICON_SIZE}
+          strokeWidth={2}
+          className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-foreground"
+        />
         <span className={cn(!value && "text-[#111118]")}>
           {value ? formatTriggerLabel(value) : placeholder}
         </span>

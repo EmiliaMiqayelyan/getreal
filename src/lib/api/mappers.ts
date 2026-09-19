@@ -14,9 +14,13 @@ import type {
   ApiProduct,
   ApiRole,
   ApiSource,
+  ApiSubcategory,
   ApiUser,
+  CatalogSubcategory,
 } from "./types";
 import { normalizeNamedList } from "./normalize";
+
+export type { CatalogSubcategory };
 
 export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
   const roleName = user.role ?? "Manager";
@@ -117,12 +121,17 @@ export function mapApiItemToItem(
   options: {
     categoriesById?: Map<string, string>;
     distributorsById?: Map<string, string>;
+    subcategoriesById?: Map<string, string>;
   } = {},
 ): Item {
   const categoryName =
     (item.categoryId && options.categoriesById?.get(item.categoryId)) ||
     item.category ||
     "Protein";
+  const subcategoryName =
+    (item.subcategoryId && options.subcategoriesById?.get(item.subcategoryId)) ||
+    item.subcategory ||
+    "";
   const distributorName =
     (item.distributorId && options.distributorsById?.get(item.distributorId)) ||
     "";
@@ -134,7 +143,8 @@ export function mapApiItemToItem(
     description: item.description ?? "",
     preorderInfo: "",
     category: categoryName,
-    subcategory: item.subcategory ?? "",
+    subcategory: subcategoryName,
+    subcategoryId: item.subcategoryId ?? undefined,
     distributor: distributorName,
     distributorId: item.distributorId,
     source: "",
@@ -303,6 +313,51 @@ export function findCategoryIdByName(
   const normalized = name.trim().toLowerCase();
   return categories.find((category) => category.name?.toLowerCase() === normalized)
     ?.id;
+}
+
+export function findSubcategoryIdByName(
+  subcategories: Array<Pick<CatalogSubcategory, "id" | "name" | "category">>,
+  category: string,
+  name: string,
+): string | undefined {
+  const categoryKey = category.trim().toLowerCase();
+  const nameKey = name.trim().toLowerCase();
+  if (!categoryKey || !nameKey) return undefined;
+  return subcategories.find(
+    (entry) =>
+      entry.category.trim().toLowerCase() === categoryKey &&
+      entry.name.trim().toLowerCase() === nameKey,
+  )?.id;
+}
+
+export function mapApiSubcategoryToCatalog(
+  subcategory: ApiSubcategory,
+  categoriesById: Map<string, string> = new Map(),
+): CatalogSubcategory | null {
+  const name = subcategory.name?.trim();
+  if (!name) return null;
+
+  const nestedCategory =
+    subcategory.category && typeof subcategory.category === "object"
+      ? subcategory.category
+      : null;
+  const categoryId =
+    subcategory.categoryId ?? nestedCategory?.id ?? undefined;
+  const categoryName =
+    (typeof subcategory.category === "string"
+      ? subcategory.category
+      : nestedCategory?.name) ||
+    (categoryId ? categoriesById.get(categoryId) : undefined) ||
+    "";
+
+  if (!categoryName) return null;
+
+  return {
+    id: subcategory.id,
+    name,
+    category: categoryName,
+    categoryId,
+  };
 }
 
 export function normalizeUsersList(payload: unknown): ApiUser[] {

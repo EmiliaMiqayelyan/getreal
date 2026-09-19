@@ -1,4 +1,4 @@
-export type ExportFormat = "csv" | "xlsx";
+export type ExportFormat = "csv";
 
 export type ExportScope = "filtered" | "all";
 

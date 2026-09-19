@@ -12,11 +12,13 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   distributorsApi,
+  downloadListExport,
   isApiConfigured,
   mapApiDistributorToDistributor,
 } from "@/lib/api";
 import { toCreateDistributorPayload } from "@/lib/api/payloads";
 import type { Distributor } from "@/types/distributor";
+import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import {
   filterDistributors,
@@ -339,6 +341,14 @@ export default function DistributorsPage() {
             onLocationChange={setLocationFilter}
             onWeekdayChange={setWeekdayFilter}
             onAdd={openCreate}
+            onExport={async (request: ExportRequest) => {
+              await downloadListExport(
+                "/distributors",
+                {},
+                request.format,
+                "distributors",
+              );
+            }}
           />
         }
       />
