@@ -19,9 +19,9 @@ export function CustomerFilters({
       <Input
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
-        placeholder="Customer name or email"
+        placeholder="Search"
         className="w-full max-w-[280px]"
-        aria-label="Search customers"
+        aria-label="Search"
       />
       <Select
         value={status}

@@ -18,8 +18,10 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
@@ -335,11 +337,16 @@ function StepNode({
     const rect = nodeRef.current?.getBoundingClientRect();
     if (!rect) return;
 
-    const cardWidth = 260;
-    const estimatedHeight = 160;
+    // Requested hover card is taller (line items); others are ~160px.
+    const cardWidth = step.key === "requested" ? 260 : 220;
+    const estimatedHeight = step.key === "requested" ? 220 : 160;
     const gap = 8;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const placeAbove = spaceBelow < estimatedHeight + gap;
+    const spaceAbove = rect.top;
+    // Prefer below; only flip above when there is not enough room under the node
+    // but enough room above (avoids clipping with a single top row).
+    const placeAbove =
+      spaceBelow < estimatedHeight + gap && spaceAbove > spaceBelow;
 
     setPos({
       top: placeAbove ? rect.top - gap : rect.bottom + gap,
@@ -405,7 +412,7 @@ function StepNode({
         ? createPortal(
             <div
               role="tooltip"
-              className="pointer-events-auto fixed z-[80] hidden sm:block"
+              className="pointer-events-auto fixed z-[100] hidden sm:block"
               style={{
                 top: pos.top,
                 left: pos.left,
@@ -656,7 +663,10 @@ export default function CustomerOrdersPage() {
   const { notifyApiError } = useApiFeedback();
   const apiConfigured = isApiConfigured();
 
-  const [orders, setOrders] = useState(ACTIVE_ORDERS);
+  const [orders, setOrders] = useState(() =>
+    apiConfigured ? [] : ACTIVE_ORDERS,
+  );
+  const [loading, setLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [activeChip, setActiveChip] = useState("wed-20");
   const [search, setSearch] = useState("");
@@ -677,13 +687,20 @@ export default function CustomerOrdersPage() {
     placeAbove: boolean;
   } | null>(null);
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeTab, search, statusFilter, zipFilter, sortBy]);
+  // Reset to first page when switching tabs (server list is tab-scoped).
+  const [tabForPage, setTabForPage] = useState(activeTab);
+  if (activeTab !== tabForPage) {
+    setTabForPage(activeTab);
+    if (page !== 1) setPage(1);
+  }
 
   useEffect(() => {
-    if (!apiConfigured || activeTab !== "Orders") return;
+    if (!apiConfigured || activeTab !== "Orders") {
+      if (activeTab !== "Orders") setLoading(false);
+      return;
+    }
     let cancelled = false;
+    setLoading(true);
 
     void ordersApi
       .list({ page, limit: DEFAULT_PAGE_LIMIT, type: "standard" })
@@ -744,6 +761,9 @@ export default function CustomerOrdersPage() {
       .catch((error) => {
         if (cancelled) return;
         notifyApiError(error, "Failed to load customer orders.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -878,7 +898,7 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Customer Orders"
         toolbar={
@@ -983,195 +1003,210 @@ export default function CustomerOrdersPage() {
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7">
-        {activeTab === "Orders" ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className={DATE_CHIP_ROW}>
-              <div className={DATE_CHIP_SCROLL}>
-                {DELIVERY_CHIPS.map((chip) => {
-                  const active = chip.id === activeChip;
-                  return (
-                    <DeliveryDateChip
-                      key={chip.id}
-                      label={chip.label}
-                      count={chip.count}
-                      active={active}
-                      onClick={() => setActiveChip(chip.id)}
-                    />
-                  );
-                })}
-              </div>
-
-              <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
-                <DateNavButton aria-label="Previous dates">
-                  <ChevronLeft size={14} />
-                </DateNavButton>
-                <DateNavButton aria-label="Next dates">
-                  <ChevronRight size={14} />
-                </DateNavButton>
-                <DateNavButton
-                  aria-label="Calendar"
-                  aria-expanded={calendarOpen}
-                  onClick={() => setCalendarOpen((open) => !open)}
-                >
-                  <CalendarIcon />
-                </DateNavButton>
-
-                {calendarOpen ? (
-                  <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
-                    <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
-                      <span>July 2026</span>
-                      <div className="flex gap-1 text-[#8A8A8A]">
-                        <ChevronLeft size={14} />
-                        <ChevronRight size={14} />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
-                      {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
-                        <div key={day} className="py-1">
-                          {day}
-                        </div>
-                      ))}
-                      {Array.from({ length: 31 }, (_, index) => {
-                        const day = index + 1;
-                        return (
-                          <button
-                            key={day}
-                            type="button"
-                            onClick={() => setSelectedDay(day)}
-                            className={cn(
-                              "rounded-full py-1.5 text-[#111118]",
-                              selectedDay === day
-                                ? "bg-[#E8E5E0] font-semibold"
-                                : "hover:bg-background",
-                            )}
-                          >
-                            {day}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
-                      <button
-                        type="button"
-                        onClick={() => setCalendarOpen(false)}
-                        className="text-[13px] text-[#8A8A8A]"
-                      >
-                        Close
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setCalendarOpen(false)}
-                        className="rounded-[8px] px-4 py-1.5 text-[13px] font-medium text-white"
-                        style={{ background: ORANGE }}
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="min-h-0 flex-1 overflow-auto rounded-[10px] border border-[#00000014] bg-white">
-              <div className="min-w-[900px]">
-                <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#00000014] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                  <div>Order ID</div>
-                  {STEPS_META.map((step) => (
-                    <div key={step.key} className="text-center">
-                      {step.header}
-                    </div>
-                  ))}
+        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+          {activeTab === "Orders" ? (
+            <div>
+              <div className={DATE_CHIP_ROW}>
+                <div className={DATE_CHIP_SCROLL}>
+                  {DELIVERY_CHIPS.map((chip) => {
+                    const active = chip.id === activeChip;
+                    return (
+                      <DeliveryDateChip
+                        key={chip.id}
+                        label={chip.label}
+                        count={chip.count}
+                        active={active}
+                        onClick={() => setActiveChip(chip.id)}
+                      />
+                    );
+                  })}
                 </div>
 
-                <div className="divide-y-[5px] divide-[#00000014]">
-                  {pagedActive.map((order) => (
-                    <div
-                      key={order.id}
-                      className="relative bg-white px-4 py-4 sm:px-5"
-                    >
-                      <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
+                <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+                  <DateNavButton aria-label="Previous dates">
+                    <ChevronLeft size={14} />
+                  </DateNavButton>
+                  <DateNavButton aria-label="Next dates">
+                    <ChevronRight size={14} />
+                  </DateNavButton>
+                  <DateNavButton
+                    aria-label="Calendar"
+                    aria-expanded={calendarOpen}
+                    onClick={() => setCalendarOpen((open) => !open)}
+                  >
+                    <CalendarIcon />
+                  </DateNavButton>
+
+                  {calendarOpen ? (
+                    <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
+                      <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
+                        <span>July 2026</span>
+                        <div className="flex gap-1 text-[#8A8A8A]">
+                          <ChevronLeft size={14} />
+                          <ChevronRight size={14} />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
+                        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
+                          (day) => (
+                            <div key={day} className="py-1">
+                              {day}
+                            </div>
+                          ),
+                        )}
+                        {Array.from({ length: 31 }, (_, index) => {
+                          const day = index + 1;
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => setSelectedDay(day)}
+                              className={cn(
+                                "rounded-full py-1.5 text-[#111118]",
+                                selectedDay === day
+                                  ? "bg-[#E8E5E0] font-semibold"
+                                  : "hover:bg-background",
+                              )}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
                         <button
                           type="button"
-                          onClick={() => setSelectedOrderId(order.id)}
-                          className="text-left"
+                          onClick={() => setCalendarOpen(false)}
+                          className="text-[13px] text-[#8A8A8A]"
                         >
-                          <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
-                            {order.customerName}
-                            <ChevronRight size={13} className="text-[#A9A9A9]" />
-                          </div>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                            <IdPill>{order.id}</IdPill>
-                            <span className="text-[12px] text-[#8A8A8A]">
-                              {order.itemCount} items
-                            </span>
-                          </div>
+                          Close
                         </button>
-
-                        <OrderTimelineTrack
-                          order={order}
-                          onStatusClick={(stepKey, anchor) => {
-                            const menuWidth = 220;
-                            const menuHeight = 88;
-                            const gap = 8;
-                            const placeAbove =
-                              window.innerHeight - anchor.bottom <
-                              menuHeight + gap;
-                            setStatusMenu(
-                              statusMenu?.orderId === order.id &&
-                                statusMenu.stepKey === stepKey
-                                ? null
-                                : {
-                                    orderId: order.id,
-                                    stepKey,
-                                    placeAbove,
-                                    top: placeAbove
-                                      ? anchor.top - gap
-                                      : anchor.bottom + gap,
-                                    left: Math.max(
-                                      12,
-                                      Math.min(
-                                        anchor.left +
-                                          anchor.width / 2 -
-                                          menuWidth / 2,
-                                        window.innerWidth - menuWidth - 12,
-                                      ),
-                                    ),
-                                  },
-                            );
-                          }}
-                        />
+                        <button
+                          type="button"
+                          onClick={() => setCalendarOpen(false)}
+                          className="rounded-[8px] px-4 py-1.5 text-[13px] font-medium text-white"
+                          style={{ background: ORANGE }}
+                        >
+                          Apply
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  ) : null}
                 </div>
               </div>
-            </div>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 space-y-8 overflow-auto">
-            {completedGroups.map(([week, days]) => (
-              <section key={week}>
-                <h2 className="mb-5 text-[22px] font-semibold tracking-tight text-[#111118]">
-                  {week}
-                </h2>
-                {Array.from(days.entries()).map(([day, dayOrders]) => (
-                  <div
-                    key={day}
-                    className="mb-6 overflow-hidden rounded-[10px] border border-[#00000014] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-                  >
-                    <div className="flex h-10 items-center gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 text-[14px] font-semibold text-[#111118]">
-                      <DayHeaderIcon />
-                      <span>
-                        {day}
-                        <span className="font-medium text-[#8A8A8A]">
-                          {" "}
-                          · {dayOrders.length} orders
-                        </span>
-                      </span>
+
+              {loading ? (
+                <AppLoader variant="table" label="Loading orders" />
+              ) : (
+                <ScrollTable minWidth={900} className="rounded-[12px]">
+                  <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#00000014] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                    <div>Order ID</div>
+                    {STEPS_META.map((step) => (
+                      <div key={step.key} className="text-center">
+                        {step.header}
+                      </div>
+                    ))}
+                  </div>
+
+                  {pagedActive.length === 0 ? (
+                    <div className="px-5 py-10 text-center text-[13px] text-[#8A8A8A]">
+                      No orders found
                     </div>
-                    <div className="overflow-x-auto">
-                      <div className="min-w-[860px]">
+                  ) : (
+                    <div className="divide-y-[5px] divide-[#00000014]">
+                      {pagedActive.map((order) => (
+                        <div
+                          key={order.id}
+                          className="relative bg-white px-4 py-4 sm:px-5"
+                        >
+                          <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedOrderId(order.id)}
+                              className="text-left"
+                            >
+                              <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
+                                {order.customerName}
+                                <ChevronRight
+                                  size={13}
+                                  className="text-[#A9A9A9]"
+                                />
+                              </div>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                <IdPill>{order.id}</IdPill>
+                                <span className="text-[12px] text-[#8A8A8A]">
+                                  {order.itemCount} items
+                                </span>
+                              </div>
+                            </button>
+
+                            <OrderTimelineTrack
+                              order={order}
+                              onStatusClick={(stepKey, anchor) => {
+                                const menuWidth = 220;
+                                const menuHeight = 88;
+                                const gap = 8;
+                                const spaceBelow =
+                                  window.innerHeight - anchor.bottom;
+                                const spaceAbove = anchor.top;
+                                const placeAbove =
+                                  spaceBelow < menuHeight + gap &&
+                                  spaceAbove > spaceBelow;
+                                setStatusMenu(
+                                  statusMenu?.orderId === order.id &&
+                                    statusMenu.stepKey === stepKey
+                                    ? null
+                                    : {
+                                        orderId: order.id,
+                                        stepKey,
+                                        placeAbove,
+                                        top: placeAbove
+                                          ? anchor.top - gap
+                                          : anchor.bottom + gap,
+                                        left: Math.max(
+                                          12,
+                                          Math.min(
+                                            anchor.left +
+                                              anchor.width / 2 -
+                                              menuWidth / 2,
+                                            window.innerWidth - menuWidth - 12,
+                                          ),
+                                        ),
+                                      },
+                                );
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </ScrollTable>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-8">
+              {completedGroups.map(([week, days]) => (
+                <section key={week}>
+                  <h2 className="mb-5 text-[22px] font-semibold tracking-tight text-[#111118]">
+                    {week}
+                  </h2>
+                  {Array.from(days.entries()).map(([day, dayOrders]) => (
+                    <div
+                      key={day}
+                      className="mb-6 overflow-hidden rounded-[12px] border border-[#00000014] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+                    >
+                      <div className="flex h-10 items-center gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 text-[14px] font-semibold text-[#111118]">
+                        <DayHeaderIcon />
+                        <span>
+                          {day}
+                          <span className="font-medium text-[#8A8A8A]">
+                            {" "}
+                            · {dayOrders.length} orders
+                          </span>
+                        </span>
+                      </div>
+                      <ScrollTable minWidth={860} bare>
                         <div className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
                           <div>Order ID</div>
                           <div>Customer</div>
@@ -1188,9 +1223,7 @@ export default function CustomerOrdersPage() {
                             className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
                           >
                             <IdPill>{order.id}</IdPill>
-                            <div className="font-semibold">
-                              {order.customer}
-                            </div>
+                            <div className="font-semibold">{order.customer}</div>
                             <LocationHover
                               className="text-[13px] text-[#111118]"
                               fullAddress={order.address}
@@ -1198,79 +1231,76 @@ export default function CustomerOrdersPage() {
                               {order.address}
                             </LocationHover>
                             <div>{order.zip}</div>
-                            <div className="text-[#111118]">
-                              {order.orderDate}
-                            </div>
-                            <div className="text-[#111118]">
-                              {order.delivered}
-                            </div>
+                            <div className="text-[#111118]">{order.orderDate}</div>
+                            <div className="text-[#111118]">{order.delivered}</div>
                             <div>{order.items}</div>
                             <div className="font-bold">
                               {currency(order.total)}
                             </div>
                           </div>
                         ))}
-                      </div>
+                      </ScrollTable>
                     </div>
-                  </div>
-                ))}
-              </section>
-            ))}
-          </div>
-        )}
-      </div>
+                  ))}
+                </section>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <Pagination
-        page={page}
-        limit={pageLimit}
-        total={displayTotal}
-        onPageChange={setPage}
-      />
+        {!loading || activeTab !== "Orders" ? (
+          <Pagination
+            page={page}
+            limit={pageLimit}
+            total={displayTotal}
+            onPageChange={setPage}
+          />
+        ) : null}
 
-      {statusMenu
-        ? createPortal(
-            <div
-              data-status-menu
-              className="fixed z-[80] w-max rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl"
-              style={{
-                top: statusMenu.top,
-                left: statusMenu.left,
-                transform: statusMenu.placeAbove
-                  ? "translateY(-100%)"
-                  : undefined,
-              }}
-            >
-              <div className="mb-2 text-[12px] font-semibold text-[#111118]">
-                Change Status
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
-                  onClick={() => advanceStatus(statusMenu.orderId, 1)}
-                >
-                  Requested
-                </button>
-                <button
-                  type="button"
-                  className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
-                  style={{ background: ORANGE }}
-                  onClick={() => advanceStatus(statusMenu.orderId, 3)}
-                >
-                  On Route
-                </button>
-              </div>
-            </div>,
-            document.body,
-          )
-        : null}
+        {statusMenu
+          ? createPortal(
+              <div
+                data-status-menu
+                className="fixed z-[100] w-max rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl"
+                style={{
+                  top: statusMenu.top,
+                  left: statusMenu.left,
+                  transform: statusMenu.placeAbove
+                    ? "translateY(-100%)"
+                    : undefined,
+                }}
+              >
+                <div className="mb-2 text-[12px] font-semibold text-[#111118]">
+                  Change Status
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
+                    onClick={() => advanceStatus(statusMenu.orderId, 1)}
+                  >
+                    Requested
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
+                    style={{ background: ORANGE }}
+                    onClick={() => advanceStatus(statusMenu.orderId, 3)}
+                  >
+                    On Route
+                  </button>
+                </div>
+              </div>,
+              document.body,
+            )
+          : null}
 
-      {selectedOrder ? (
-        <OrderDetailPanel
-          order={selectedOrder}
-          onClose={() => setSelectedOrderId(null)}
-        />
-      ) : null}
+        {selectedOrder ? (
+          <OrderDetailPanel
+            order={selectedOrder}
+            onClose={() => setSelectedOrderId(null)}
+          />
+        ) : null}
       </div>
     </div>
   );

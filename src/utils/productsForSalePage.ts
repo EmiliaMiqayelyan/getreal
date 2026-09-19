@@ -82,7 +82,7 @@ export function resolveProductDetails(
 export type ProductFilterCriteria = {
   query: string;
   tab: ProductTab;
-  category: string;
+  subcategory: string;
   distributor: string;
   source: string;
 };
@@ -133,7 +133,7 @@ export function resolveProductInheritedFields(
 export function hasActiveProductFilters(criteria: ProductFilterCriteria) {
   return Boolean(
     criteria.query.trim() ||
-      criteria.category ||
+      criteria.subcategory ||
       criteria.distributor ||
       criteria.source ||
       criteria.tab !== "All",
@@ -164,17 +164,20 @@ export function filterProductsForSale(
     const inherited = resolveProductInheritedFields(row, items);
 
     const matchesTab =
-      criteria.tab === "All" ? true : inherited.category === criteria.tab;
-    const matchesCategory =
-      criteria.tab === "All"
-        ? !criteria.category || inherited.category === criteria.category
-        : inherited.category === criteria.tab;
+      criteria.tab === "All" || inherited.category === criteria.tab;
+    const matchesSubcategory =
+      !criteria.subcategory || inherited.subcategory === criteria.subcategory;
     const matchesDistributor =
       !criteria.distributor || inherited.distributor === criteria.distributor;
     const matchesSource =
       !criteria.source || inherited.source === criteria.source;
 
-    if (!matchesTab || !matchesCategory || !matchesDistributor || !matchesSource) {
+    if (
+      !matchesTab ||
+      !matchesSubcategory ||
+      !matchesDistributor ||
+      !matchesSource
+    ) {
       return false;
     }
 

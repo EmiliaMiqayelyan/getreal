@@ -20,6 +20,7 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { SearchField } from "@/components/ui/SearchField";
@@ -303,7 +304,7 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors, products } = useAppCatalog();
+  const { distributors, products, isBootstrapping } = useAppCatalog();
   const { notifyApiError } = useApiFeedback();
 
   const [view, setView] = useState<View>("list");
@@ -324,6 +325,7 @@ export default function ProductOrdersPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
+  const [loading, setLoading] = useState(() => isApiConfigured());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
     null,
@@ -558,10 +560,19 @@ export default function ProductOrdersPage() {
   }, [inProgress]);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!isApiConfigured()) {
+      setLoading(false);
+      return;
+    }
+    // Wait for catalog bootstrap so mapping uses API distributors/products.
+    if (isBootstrapping) return;
+
+    let cancelled = false;
+
     void ordersApi
       .list({ page: 1, limit: 50, type: "distributor" })
       .then((result) => {
+        if (cancelled) return;
         const remote = result.items;
         if (remote.length === 0) return;
 
@@ -606,9 +617,19 @@ export default function ProductOrdersPage() {
         setInProgress((prev) => appendInProgressOrders(prev, mapped));
       })
       .catch((error) => {
+        if (cancelled) return;
         notifyApiError(error, "Failed to load distributor orders.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
-  }, [distributors, notifyApiError, products]);
+
+    return () => {
+      cancelled = true;
+    };
+    // Fetch once after bootstrap. Do not refetch when catalog arrays change identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBootstrapping]);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -941,6 +962,10 @@ export default function ProductOrdersPage() {
                 </div>
               </div>
 
+              {loading ? (
+                <AppLoader variant="table" label="Loading orders" />
+              ) : (
+                <>
               {filteredInProgress.length > 0 ? (
                 <section className="mb-8">
                   <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
@@ -998,6 +1023,8 @@ export default function ProductOrdersPage() {
                   )}
                 </ScrollTable>
               </section>
+                </>
+              )}
             </>
           ) : (
             <div className="space-y-8">

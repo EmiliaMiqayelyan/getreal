@@ -1,5 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { Navigate, useNavigate } from "react-router";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -138,7 +139,14 @@ export default function LoginPage() {
               ) : null}
 
               <Button type="submit" className="mt-2 w-full" disabled={submitting}>
-                {submitting ? "Signing in…" : "Sign in"}
+                {submitting ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    Signing in…
+                  </>
+                ) : (
+                  "Sign in"
+                )}
               </Button>
             </form>
 

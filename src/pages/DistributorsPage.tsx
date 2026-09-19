@@ -4,6 +4,7 @@ import { AddDistributorModal } from "@/components/distributors/AddDistributorMod
 import { DistributorFilters } from "@/components/distributors/DistributorFilters";
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
@@ -274,8 +275,12 @@ function NotesHover({ notes }: { notes: string }) {
 export default function DistributorsPage() {
   useDocumentTitle("Distributors");
 
-  const { distributors: rows, saveDistributor, removeDistributor } =
-    useAppCatalog();
+  const {
+    distributors: rows,
+    saveDistributor,
+    removeDistributor,
+    isBootstrapping,
+  } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -354,6 +359,10 @@ export default function DistributorsPage() {
       />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+        {isBootstrapping ? (
+          <AppLoader variant="table" label="Loading distributors" />
+        ) : (
+          <>
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
@@ -479,6 +488,8 @@ export default function DistributorsPage() {
             })}
           </ScrollTable>
         </div>
+          </>
+        )}
       </div>
 
       <AddDistributorModal

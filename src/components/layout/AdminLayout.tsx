@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Navigate, Outlet } from "react-router";
 
 import { ApiBootstrap } from "@/components/api/ApiBootstrap";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { AppCatalogProvider } from "@/context/AppCatalogContext";
 import { PackingHandoffProvider } from "@/context/PackingHandoffContext";
 import { ReceivingHandoffProvider } from "@/context/ReceivingHandoffContext";
@@ -16,7 +17,13 @@ function AuthenticatedShell() {
 
   return (
     <AdminShell>
-      <Suspense fallback={null}>
+      <Suspense
+        fallback={
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7">
+            <AppLoader variant="table" label="Loading page" />
+          </div>
+        }
+      >
         <Outlet />
       </Suspense>
     </AdminShell>

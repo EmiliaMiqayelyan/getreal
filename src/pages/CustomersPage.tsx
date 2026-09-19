@@ -4,6 +4,7 @@ import { ChevronRight, Flag, X } from "lucide-react";
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
 import { Pagination } from "@/components/ui/Pagination";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -14,6 +15,7 @@ import { SUB_ROW_PAD } from "@/constants/table";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
   downloadListExport,
   isApiConfigured,
@@ -641,31 +643,34 @@ export default function CustomersPage() {
 
   const { notifyApiError } = useApiFeedback();
   const apiConfigured = isApiConfigured();
-  const [customers, setCustomers] = useState(ADMIN_CUSTOMERS);
+  const [customers, setCustomers] = useState(() =>
+    apiConfigured ? [] : ADMIN_CUSTOMERS,
+  );
+  const [loading, setLoading] = useState(apiConfigured);
   const [query, setQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query.trim(), 300);
   const [zipFilter, setZipFilter] = useState("");
   const [orderCountFilter, setOrderCountFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
   const [page, setPage] = useState(1);
   const [pageLimit, setPageLimit] = useState(DEFAULT_PAGE_LIMIT);
-  const [total, setTotal] = useState(ADMIN_CUSTOMERS.length);
+  const [total, setTotal] = useState(() =>
+    apiConfigured ? 0 : ADMIN_CUSTOMERS.length,
+  );
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setDebouncedQuery(query.trim());
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [query]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [debouncedQuery, zipFilter, orderCountFilter]);
+  // Adjust page during render when server search changes so the fetch effect
+  // runs once with page=1 (avoids filter-change → fetch(page N) → fetch(page 1)).
+  const [searchForPage, setSearchForPage] = useState(debouncedQuery);
+  if (debouncedQuery !== searchForPage) {
+    setSearchForPage(debouncedQuery);
+    if (page !== 1) setPage(1);
+  }
 
   useEffect(() => {
     if (!apiConfigured) return;
     let cancelled = false;
+    setLoading(true);
 
     void usersApi
       .list({
@@ -684,6 +689,9 @@ export default function CustomersPage() {
       .catch((error) => {
         if (cancelled) return;
         notifyApiError(error, "Failed to load customers.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
@@ -750,12 +758,15 @@ export default function CustomersPage() {
             <SearchField
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, customer name"
+              placeholder="Search"
             />
 
             <Select
               value={zipFilter}
-              onChange={setZipFilter}
+              onChange={(value) => {
+                setZipFilter(value);
+                if (!apiConfigured) setPage(1);
+              }}
               className="w-full sm:w-[150px]"
               aria-label="By Zip Code"
               options={[
@@ -766,7 +777,10 @@ export default function CustomersPage() {
 
             <Select
               value={orderCountFilter}
-              onChange={setOrderCountFilter}
+              onChange={(value) => {
+                setOrderCountFilter(value);
+                if (!apiConfigured) setPage(1);
+              }}
               className="w-full sm:w-[170px]"
               aria-label="All Order Counts"
               options={[
@@ -804,47 +818,59 @@ export default function CustomersPage() {
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
         <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
-          <section className="mb-6">
-            <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
-              Active{" "}
-              <span className="font-semibold text-[#6B7180]">
-                ({active.length})
-              </span>
-            </h2>
-            <CustomerTable
-              customers={active}
-              expandedId={expandedId}
-              onToggle={(id) =>
-                setExpandedId((current) => (current === id ? null : id))
-              }
-              onViewOrder={(customer, order) => setSelected({ customer, order })}
-            />
-          </section>
+          {loading ? (
+            <AppLoader variant="table" label="Loading customers" />
+          ) : (
+            <>
+              <section className="mb-6">
+                <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
+                  Active{" "}
+                  <span className="font-semibold text-[#6B7180]">
+                    ({active.length})
+                  </span>
+                </h2>
+                <CustomerTable
+                  customers={active}
+                  expandedId={expandedId}
+                  onToggle={(id) =>
+                    setExpandedId((current) => (current === id ? null : id))
+                  }
+                  onViewOrder={(customer, order) =>
+                    setSelected({ customer, order })
+                  }
+                />
+              </section>
 
-          <section>
-            <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
-              Inactive{" "}
-              <span className="font-semibold text-[#6B7180]">
-                ({inactive.length})
-              </span>
-            </h2>
-            <CustomerTable
-              customers={inactive}
-              expandedId={expandedId}
-              onToggle={(id) =>
-                setExpandedId((current) => (current === id ? null : id))
-              }
-              onViewOrder={(customer, order) => setSelected({ customer, order })}
-            />
-          </section>
+              <section>
+                <h2 className="mb-3 text-[15px] font-semibold text-[#111118]">
+                  Inactive{" "}
+                  <span className="font-semibold text-[#6B7180]">
+                    ({inactive.length})
+                  </span>
+                </h2>
+                <CustomerTable
+                  customers={inactive}
+                  expandedId={expandedId}
+                  onToggle={(id) =>
+                    setExpandedId((current) => (current === id ? null : id))
+                  }
+                  onViewOrder={(customer, order) =>
+                    setSelected({ customer, order })
+                  }
+                />
+              </section>
+            </>
+          )}
         </div>
 
-        <Pagination
-          page={page}
-          limit={pageLimit}
-          total={displayTotal}
-          onPageChange={setPage}
-        />
+        {!loading ? (
+          <Pagination
+            page={page}
+            limit={pageLimit}
+            total={displayTotal}
+            onPageChange={setPage}
+          />
+        ) : null}
 
         {selected ? (
           <OrderDetailDrawer

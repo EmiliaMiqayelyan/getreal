@@ -1,11 +1,19 @@
 export {
   ApiError,
   apiDownload,
+  apiRequest,
   getApiBaseUrl,
   getAuthToken,
   isApiConfigured,
   setAuthToken,
 } from "./client";
+export type { ApiRequestOptions } from "./client";
+export {
+  buildRequestKey,
+  CATALOG_LIST_CACHE_MS,
+  clearRequestDedupeState,
+  invalidateCacheForUrl,
+} from "./requestDedupe";
 export { downloadListExport } from "./exportDownload";
 export { authApi } from "./auth";
 export { productsApi } from "./products";

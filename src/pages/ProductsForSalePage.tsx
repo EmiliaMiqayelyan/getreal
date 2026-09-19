@@ -1,9 +1,10 @@
-import { useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 import { Plus, X } from "lucide-react";
 
 import { AddProductForSaleModal } from "@/components/products/AddProductForSaleModal";
 import { Header } from "@/components/layout/AdminHeader";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { IconButton } from "@/components/ui/IconButton";
@@ -28,7 +29,7 @@ import {
   productsApi,
 } from "@/lib/api";
 import { toCreateProductPayload } from "@/lib/api/payloads";
-import { ITEM_CATEGORIES, type Item } from "@/types/item";
+import { type Item } from "@/types/item";
 import type { Source } from "@/types/source";
 import {
   PRODUCT_TABS,
@@ -43,12 +44,12 @@ import {
   formatSubcategoryTitle,
   getProductsForSaleEmptyMessage,
   groupProductsForSale,
-  isProductTab,
   reorderProductsInSubcategory,
   resolveProductDetails,
   resolveProductTableDisplay,
   uniqueProductFieldValues,
 } from "@/utils/productsForSalePage";
+import { subcategoriesForCategory } from "@/utils/subcategories";
 
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
@@ -204,30 +205,31 @@ function SubcategoryTable({
   }
 
   return (
-    <div className="overflow-hidden rounded-[10px] border border-[#00000014] bg-white">
+    <ScrollTable minWidth={760} className="rounded-[12px]">
       <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
-        <h3 className="text-[14px] font-semibold text-[#111118]">{title}</h3>
+        <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
+          {title}
+        </h3>
       </div>
-      <ScrollTable minWidth={760}>
-        <div
-          className={cn(
-            GRID,
-            TABLE_HEADER,
-            "border-b border-[#00000014] bg-white px-4 py-2.5",
-          )}
-        >
-          <span aria-hidden />
-          <span>ID</span>
-          <span>Live</span>
-          <span>Merchandising Name</span>
-          <span>Source</span>
-          <span className="whitespace-nowrap">Sales Price</span>
-          <span>Unit of Sales</span>
-          <span aria-hidden />
-        </div>
-        {rows.map((row) => {
-          const display = resolveProductTableDisplay(row, catalog);
-          return (
+      <div
+        className={cn(
+          GRID,
+          TABLE_HEADER,
+          "border-b border-[#00000014] bg-white px-4 py-2.5",
+        )}
+      >
+        <span aria-hidden />
+        <span>ID</span>
+        <span>Live</span>
+        <span>Merchandising Name</span>
+        <span>Source</span>
+        <span className="whitespace-nowrap">Sales Price</span>
+        <span>Unit of Sales</span>
+        <span aria-hidden />
+      </div>
+      {rows.map((row) => {
+        const display = resolveProductTableDisplay(row, catalog);
+        return (
           <div
             key={row.id}
             onDragOver={(event) => event.preventDefault()}
@@ -279,10 +281,9 @@ function SubcategoryTable({
               </button>
             </div>
           </div>
-          );
-        })}
-      </ScrollTable>
-    </div>
+        );
+      })}
+    </ScrollTable>
   );
 }
 
@@ -295,10 +296,11 @@ export default function ProductsForSalePage() {
     items: catalog,
     sources,
     subcategoriesByCategory,
+    isBootstrapping,
   } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
   const [tab, setTab] = useState<ProductTab>("All");
@@ -315,15 +317,37 @@ export default function ProductsForSalePage() {
     [catalog, products],
   );
 
+  const activeCategory = tab === "All" ? "" : tab;
+
+  const subcategoryOptions = useMemo(() => {
+    if (activeCategory) {
+      return subcategoriesForCategory(subcategoriesByCategory, activeCategory);
+    }
+    return Array.from(
+      new Set(
+        Object.values(subcategoriesByCategory).flatMap((names) => names),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+  }, [activeCategory, subcategoriesByCategory]);
+
+  useEffect(() => {
+    if (
+      subcategoryFilter &&
+      !subcategoryOptions.includes(subcategoryFilter)
+    ) {
+      setSubcategoryFilter("");
+    }
+  }, [subcategoryFilter, subcategoryOptions]);
+
   const filterCriteria = useMemo(
     () => ({
       query: search,
       tab,
-      category: categoryFilter,
+      subcategory: subcategoryFilter,
       distributor: distributorFilter,
       source: sourceFilter,
     }),
-    [categoryFilter, distributorFilter, search, sourceFilter, tab],
+    [distributorFilter, search, sourceFilter, subcategoryFilter, tab],
   );
 
   const filtered = useMemo(
@@ -349,18 +373,7 @@ export default function ProductsForSalePage() {
 
   function selectTab(nextTab: ProductTab) {
     setTab(nextTab);
-    setCategoryFilter(nextTab === "All" ? "" : nextTab);
-  }
-
-  function selectCategoryFilter(value: string) {
-    setCategoryFilter(value);
-    if (!value) {
-      setTab("All");
-      return;
-    }
-    if (isProductTab(value)) {
-      setTab(value);
-    }
+    setSubcategoryFilter("");
   }
 
   function toggleLive(id: string, live: boolean) {
@@ -512,16 +525,16 @@ export default function ProductsForSalePage() {
             />
 
             <Select
-              value={categoryFilter}
-              onChange={selectCategoryFilter}
-              className="w-full sm:w-[140px]"
-              aria-label="Category"
-              placeholder="Category"
+              value={subcategoryFilter}
+              onChange={setSubcategoryFilter}
+              className="w-full sm:w-[150px]"
+              aria-label="Subcategory"
+              placeholder="Subcategory"
               options={[
-                { value: "", label: "Category" },
-                ...ITEM_CATEGORIES.map((category) => ({
-                  value: category,
-                  label: category,
+                { value: "", label: "Subcategory" },
+                ...subcategoryOptions.map((subcategory) => ({
+                  value: subcategory,
+                  label: subcategory,
                 })),
               ]}
             />
@@ -580,7 +593,9 @@ export default function ProductsForSalePage() {
       />
 
       <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
-        {filtered.length === 0 || grouped.length === 0 ? (
+        {isBootstrapping ? (
+          <AppLoader variant="table" label="Loading products" />
+        ) : filtered.length === 0 || grouped.length === 0 ? (
           <EmptyStateBox variant="dashed" className="rounded-[10px] bg-white px-6 py-16 text-[14px]">
             {getProductsForSaleEmptyMessage(products.length, filterCriteria)}
           </EmptyStateBox>

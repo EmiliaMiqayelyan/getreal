@@ -21,10 +21,14 @@ type HeaderProps = {
  * Shared page chrome. Layer heights (desktop):
  * - L1 title + UserMenu: 52px
  * - L2 toolbar (filters / actions): 64px when present
- * - L3 below (e.g. Tabs): ~28px (h-7) when present — omit when unused
+ * - L3 tabs: 28px (h-7) when present
+ *
+ * Section order stays title → filters → tabs. No spacer when tabs are absent.
+ *
+ * Heights live on each layer (not the shared ROW base) so `md:h-[52px]` and
+ * `md:h-[64px]` never compete in the same class list (`cn` does not twMerge).
  */
-const ROW =
-  "flex min-h-[52px] items-center bg-white px-4 md:h-[52px] md:px-7";
+const ROW = "flex items-center bg-white px-4 md:px-7";
 
 export function Header({
   title,
@@ -37,7 +41,12 @@ export function Header({
 
   return (
     <div className={cn("shrink-0", className)}>
-      <header className={cn(ROW, "justify-between gap-4 border-b border-border")}>
+      <header
+        className={cn(
+          ROW,
+          "min-h-[52px] justify-between gap-4 border-b border-border md:h-[52px]",
+        )}
+      >
         <h1 className={cn("min-w-0", PAGE_TITLE)}>{title}</h1>
         <div className="flex shrink-0 items-center border-l border-border pl-5">
           <UserMenu className="items-center" />
@@ -48,8 +57,10 @@ export function Header({
         <div
           className={cn(
             ROW,
-            "py-3.5 md:h-[64px] md:py-3",
-            showToolbarBorder && "border-b border-border",
+            // Always reserve 1px border so filter controls share the same box
+            // model with or without tabs (visible vs transparent).
+            "box-border min-h-[52px] border-b py-3.5 md:h-[64px] md:py-3",
+            showToolbarBorder ? "border-border" : "border-transparent",
           )}
         >
           <div className="flex w-full min-w-0 items-center">{toolbar}</div>

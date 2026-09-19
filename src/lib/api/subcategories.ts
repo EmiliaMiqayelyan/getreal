@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiSubcategory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -17,7 +18,9 @@ export const subcategoriesApi = {
     const query = new URLSearchParams();
     if (params?.categoryId) query.set("categoryId", params.categoryId);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiRequest<unknown>(`/subcategories${suffix}`).then((payload) =>
+    return apiRequest<unknown>(`/subcategories${suffix}`, {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
       normalizeNamedList<ApiSubcategory>(payload, [
         "subcategories",
         "data",

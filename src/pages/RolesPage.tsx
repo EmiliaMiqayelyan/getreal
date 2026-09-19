@@ -3,6 +3,7 @@ import { Check, ChevronRight, Copy, Plus, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { RoleManagementModal } from "@/components/roles/RoleManagementModal";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { IdPill } from "@/components/ui/Badge";
@@ -10,6 +11,7 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { SUB_ROW_PAD } from "@/constants/table";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -103,6 +105,7 @@ export default function RolesPage() {
 
   const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles, sessionPermissions } =
     useRolesUsers();
+  const { isBootstrapping } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
@@ -312,7 +315,7 @@ export default function RolesPage() {
             <SearchField
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, name"
+              placeholder="Search"
             />
 
             <Select
@@ -343,6 +346,9 @@ export default function RolesPage() {
       />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+        {isBootstrapping ? (
+          <AppLoader variant="table" label="Loading users" />
+        ) : (
         <ScrollTable
           minWidth={820}
           className="rounded-[12px] border border-[#00000014] bg-white"
@@ -482,6 +488,7 @@ export default function RolesPage() {
             );
           })}
         </ScrollTable>
+        )}
       </div>
 
       {modalOpen ? (

@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiDistributor } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -26,7 +27,9 @@ export type UpdateDistributorPayload = Partial<CreateDistributorPayload>;
 
 export const distributorsApi = {
   list() {
-    return apiRequest<unknown>("/distributors").then((payload) =>
+    return apiRequest<unknown>("/distributors", {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
       normalizeNamedList<ApiDistributor>(payload, [
         "distributors",
         "data",

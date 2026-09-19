@@ -5,6 +5,7 @@ import { LocationHover } from "@/components/shared/LocationHover";
 import { AddSourceModal } from "@/components/sources/AddSourceModal";
 import { SourceFilters } from "@/components/sources/SourceFilters";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
@@ -119,7 +120,12 @@ function DescriptionHover({ description }: { description: string }) {
 export default function SourcePage() {
   useDocumentTitle("Source");
 
-  const { sources: rows, distributors, setSources } = useAppCatalog();
+  const {
+    sources: rows,
+    distributors,
+    setSources,
+    isBootstrapping,
+  } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -207,6 +213,10 @@ export default function SourcePage() {
       />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+        {isBootstrapping ? (
+          <AppLoader variant="table" label="Loading sources" />
+        ) : (
+          <>
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
@@ -316,6 +326,8 @@ export default function SourcePage() {
             })}
           </ScrollTable>
         </div>
+          </>
+        )}
       </div>
 
       <AddSourceModal

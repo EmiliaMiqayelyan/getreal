@@ -1,10 +1,13 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiCategory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export const categoriesApi = {
   list() {
-    return apiRequest<unknown>("/categories").then((payload) =>
+    return apiRequest<unknown>("/categories", {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
       normalizeNamedList<ApiCategory>(payload, [
         "categories",
         "data",

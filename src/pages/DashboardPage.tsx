@@ -23,6 +23,7 @@ import {
 import { useNavigate } from "react-router";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { ROUTES } from "@/constants";
@@ -180,48 +181,86 @@ export default function DashboardPage() {
   const [revenueChartApi, setRevenueChartApi] = useState<
     typeof REVENUE_CHART.daily | null
   >(null);
+  const [loading, setLoading] = useState(() => isApiConfigured());
+
+  useEffect(() => {
+    if (!isApiConfigured()) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+
+    async function loadStats() {
+      try {
+        const stats = await dashboardApi.getStats();
+        if (cancelled) return;
+        setApiStats(stats && typeof stats === "object" ? stats : null);
+      } catch {
+        // Keep seeded dashboard data.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadStats();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isApiConfigured()) return;
     let cancelled = false;
 
-    async function load() {
+    async function loadOrdersChart() {
       try {
-        const [stats, ordersChart, revenueChart] = await Promise.all([
-          dashboardApi.getStats(),
-          dashboardApi.getChart(ordersMode),
-          dashboardApi.getChart(revenueMode),
-        ]);
+        const ordersChart = await dashboardApi.getChart(ordersMode);
         if (cancelled) return;
-        setApiStats(stats && typeof stats === "object" ? stats : null);
         if (Array.isArray(ordersChart) && ordersChart.length > 0) {
           setOrdersChartApi(
             ordersChart.map((point, index) => ({
-              name:
-                String(point.name ?? point.label ?? `P${index + 1}`),
-              value: Number(point.value ?? point.total ?? 0),
-            })),
-          );
-        }
-        if (Array.isArray(revenueChart) && revenueChart.length > 0) {
-          setRevenueChartApi(
-            revenueChart.map((point, index) => ({
-              name:
-                String(point.name ?? point.label ?? `P${index + 1}`),
+              name: String(point.name ?? point.label ?? `P${index + 1}`),
               value: Number(point.value ?? point.total ?? 0),
             })),
           );
         }
       } catch {
-        // Keep seeded dashboard data.
+        // Keep seeded chart data.
       }
     }
 
-    void load();
+    void loadOrdersChart();
     return () => {
       cancelled = true;
     };
-  }, [ordersMode, revenueMode]);
+  }, [ordersMode]);
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+
+    async function loadRevenueChart() {
+      try {
+        const revenueChart = await dashboardApi.getChart(revenueMode);
+        if (cancelled) return;
+        if (Array.isArray(revenueChart) && revenueChart.length > 0) {
+          setRevenueChartApi(
+            revenueChart.map((point, index) => ({
+              name: String(point.name ?? point.label ?? `P${index + 1}`),
+              value: Number(point.value ?? point.total ?? 0),
+            })),
+          );
+        }
+      } catch {
+        // Keep seeded chart data.
+      }
+    }
+
+    void loadRevenueChart();
+    return () => {
+      cancelled = true;
+    };
+  }, [revenueMode]);
 
   const ordersChartData =
     ordersChartApi ?? ORDERS_CHART[ordersMode];
@@ -340,7 +379,11 @@ export default function DashboardPage() {
                       {card.title}
                     </p>
                     <p className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
-                      {card.value}
+                      {loading ? (
+                        <AppLoader variant="inline" size="sm" label="Loading" />
+                      ) : (
+                        card.value
+                      )}
                     </p>
                     <p className="mt-1 text-[12px] text-[#9A9A9A]">
                       {card.subtitle}

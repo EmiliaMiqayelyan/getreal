@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiProduct } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -34,14 +35,15 @@ export const productsApi = {
     if (params.distributorId) search.set("distributorId", params.distributorId);
     if (params.sourceId) search.set("sourceId", params.sourceId);
     const qs = search.toString();
-    return apiRequest<unknown>(`/products${qs ? `?${qs}` : ""}`).then(
-      (payload) =>
-        normalizeNamedList<ApiProduct>(payload, [
-          "products",
-          "items",
-          "data",
-          "results",
-        ]),
+    return apiRequest<unknown>(`/products${qs ? `?${qs}` : ""}`, {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
+      normalizeNamedList<ApiProduct>(payload, [
+        "products",
+        "items",
+        "data",
+        "results",
+      ]),
     );
   },
 
@@ -67,10 +69,10 @@ export const productsApi = {
     );
   },
 
-  reorder(products: Array<{ id: string; position: number }>) {
+  reorder(items: Array<{ id: string; position: number }>) {
     return apiRequest<unknown>("/products/reorder", {
       method: "PATCH",
-      body: JSON.stringify({ products }),
+      body: JSON.stringify({ items }),
     });
   },
 

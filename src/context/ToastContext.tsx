@@ -49,6 +49,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     }, tone === "error" ? 4500 : 2800);
   }, []);
 
+  const showError = useCallback(
+    (message: string) => showToast(message, "error"),
+    [showToast],
+  );
+  const showSuccess = useCallback(
+    (message: string) => showToast(message, "success"),
+    [showToast],
+  );
+
   useEffect(() => {
     registerToastHandler(showToast);
     return () => registerToastHandler(null);
@@ -57,10 +66,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const value = useMemo<ToastContextValue>(
     () => ({
       showToast,
-      showError: (message: string) => showToast(message, "error"),
-      showSuccess: (message: string) => showToast(message, "success"),
+      showError,
+      showSuccess,
     }),
-    [showToast],
+    [showError, showSuccess, showToast],
   );
 
   return (

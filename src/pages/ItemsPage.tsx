@@ -5,6 +5,7 @@ import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -152,10 +153,10 @@ export default function ItemsPage() {
     categories,
     subcategoryRecords,
     subcategoriesByCategory,
+    isBootstrapping,
   } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
@@ -173,7 +174,7 @@ export default function ItemsPage() {
     [rows],
   );
 
-  const activeCategory = tab === "All" ? categoryFilter : tab;
+  const activeCategory = tab === "All" ? "" : tab;
 
   const subcategoryOptions = useMemo(() => {
     if (activeCategory) {
@@ -203,10 +204,7 @@ export default function ItemsPage() {
         !normalized ||
         row.name.toLowerCase().includes(normalized) ||
         displayName.includes(normalized);
-      const matchesCategory =
-        tab === "All"
-          ? !categoryFilter || row.category === categoryFilter
-          : row.category === tab;
+      const matchesCategory = tab === "All" || row.category === tab;
       const matchesSubcategory =
         !subcategoryFilter || row.subcategory === subcategoryFilter;
       const matchesDistributor =
@@ -221,7 +219,6 @@ export default function ItemsPage() {
       );
     });
   }, [
-    categoryFilter,
     distributorFilter,
     query,
     rows,
@@ -232,20 +229,7 @@ export default function ItemsPage() {
 
   function selectTab(nextTab: ItemTab) {
     setTab(nextTab);
-    setCategoryFilter(nextTab === "All" ? "" : nextTab);
     setSubcategoryFilter("");
-  }
-
-  function selectCategoryFilter(value: string) {
-    setCategoryFilter(value);
-    setSubcategoryFilter("");
-    if (!value) {
-      setTab("All");
-      return;
-    }
-    if ((ITEM_CATEGORIES as readonly string[]).includes(value)) {
-      setTab(value as ItemTab);
-    }
   }
 
   function openCreate() {
@@ -288,21 +272,6 @@ export default function ItemsPage() {
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search"
               aria-label="Search"
-            />
-
-            <Select
-              value={categoryFilter}
-              onChange={selectCategoryFilter}
-              className="w-full sm:w-[140px]"
-              aria-label="Category"
-              placeholder="Category"
-              options={[
-                { value: "", label: "Category" },
-                ...ITEM_CATEGORIES.map((category) => ({
-                  value: category,
-                  label: category,
-                })),
-              ]}
             />
 
             <Select
@@ -356,7 +325,6 @@ export default function ItemsPage() {
                 recordCount={filtered.length}
                 filtersActive={Boolean(
                   query.trim() ||
-                    categoryFilter ||
                     subcategoryFilter ||
                     distributorFilter ||
                     sourceFilter ||
@@ -394,6 +362,10 @@ export default function ItemsPage() {
       />
 
       <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+        {isBootstrapping ? (
+          <AppLoader variant="table" label="Loading items" />
+        ) : (
+          <>
         <div className="space-y-2 md:hidden">
           {filtered.length === 0 ? (
             <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
@@ -516,6 +488,8 @@ export default function ItemsPage() {
             })}
           </ScrollTable>
         </div>
+          </>
+        )}
       </div>
 
       <AddItemModal

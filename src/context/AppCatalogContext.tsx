@@ -56,6 +56,9 @@ type AppCatalogContextValue = {
   categories: ApiCategory[];
   subcategoryRecords: CatalogSubcategory[];
   subcategoriesByCategory: SubcategoryMap;
+  /** True while the initial API catalog bootstrap is in flight. */
+  isBootstrapping: boolean;
+  setBootstrapping: (value: boolean) => void;
   setDistributors: (
     updater: Distributor[] | ((current: Distributor[]) => Distributor[]),
   ) => void;
@@ -153,6 +156,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   const [subcategoryRecords, setSubcategoryRecordsState] = useState<
     CatalogSubcategory[]
   >(() => catalogRecordsFromMap(loadSubcategories()));
+  const [isBootstrapping, setBootstrapping] = useState(() => isApiConfigured());
 
   const subcategoriesByCategory = useMemo(
     () => mapFromCatalogRecords(subcategoryRecords),
@@ -517,6 +521,8 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       categories,
       subcategoryRecords,
       subcategoriesByCategory,
+      isBootstrapping,
+      setBootstrapping,
       setDistributors,
       setItems,
       setSources,
@@ -535,6 +541,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       catalog,
       categories,
       getDistributorById,
+      isBootstrapping,
       removeDistributor,
       removeSubcategory,
       renameSubcategory,

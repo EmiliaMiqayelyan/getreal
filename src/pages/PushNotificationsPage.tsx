@@ -173,7 +173,7 @@ export default function PushNotificationsPage() {
             <SearchField
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search ID, name"
+              placeholder="Search"
             />
 
             <Select

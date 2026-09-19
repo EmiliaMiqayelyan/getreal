@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiItem } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -15,7 +16,9 @@ export type UpdateItemPayload = Partial<CreateItemPayload>;
 
 export const itemsApi = {
   list() {
-    return apiRequest<unknown>("/items").then((payload) =>
+    return apiRequest<unknown>("/items", {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
       normalizeNamedList<ApiItem>(payload, ["items", "data", "results"]),
     );
   },

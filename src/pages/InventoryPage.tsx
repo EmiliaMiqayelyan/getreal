@@ -11,6 +11,7 @@ import {
 
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -941,7 +942,7 @@ type EditLocationTarget = {
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
-  const { items: catalogItems } = useAppCatalog();
+  const { items: catalogItems, isBootstrapping } = useAppCatalog();
   const { notifyApiError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
@@ -951,6 +952,7 @@ export default function InventoryPage() {
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sections, setSections] = useState(INITIAL_SECTIONS);
   const [seedOrders, setSeedOrders] = useState(RECEIVED_ORDERS);
+  const [loading, setLoading] = useState(() => isApiConfigured());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
@@ -958,7 +960,12 @@ export default function InventoryPage() {
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!isApiConfigured()) {
+      setLoading(false);
+      return;
+    }
+    if (isBootstrapping) return;
+
     let cancelled = false;
 
     void inventoryApi
@@ -1005,12 +1012,17 @@ export default function InventoryPage() {
       .catch((error) => {
         if (cancelled) return;
         notifyApiError(error, "Failed to load inventory.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [catalogItems, notifyApiError]);
+    // Fetch once after catalog bootstrap; remapping on every catalogItems identity change caused duplicate GETs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBootstrapping]);
 
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {
@@ -1410,6 +1422,10 @@ export default function InventoryPage() {
           </div>
         ) : null}
 
+        {loading ? (
+          <AppLoader variant="table" label="Loading inventory" />
+        ) : (
+          <>
         <div className="space-y-8">
           {filteredGroups.map((group) => (
             <section key={group.title}>
@@ -1583,6 +1599,8 @@ export default function InventoryPage() {
             No inventory matches your filters.
           </div>
         ) : null}
+          </>
+        )}
       </div>
 
       <SplitModal

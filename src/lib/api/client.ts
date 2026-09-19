@@ -1,5 +1,10 @@
 import { env } from "@/lib/env";
 
+import {
+  invalidateCacheForUrl,
+  isIdempotentMethod,
+  runDedupedRequest,
+} from "./requestDedupe";
 import type { ApiEnvelope } from "./types";
 
 export const AUTH_TOKEN_KEY = "getreal.authToken";
@@ -55,14 +60,61 @@ function unwrapData<T>(json: unknown): T {
   return json as T;
 }
 
-export async function apiRequest<T>(
-  path: string,
-  options: RequestInit & { auth?: boolean } = {},
-): Promise<T> {
-  if (!isApiConfigured()) {
-    throw new ApiError("API URL is not configured", 0, null);
+function clearLocalSession() {
+  setAuthToken(null);
+  try {
+    localStorage.removeItem("getreal.auth");
+    localStorage.removeItem("getreal.role");
+    localStorage.removeItem("getreal.lastActive");
+    localStorage.removeItem("getreal.userName");
+  } catch {
+    // no-op
   }
+}
 
+export type ApiRequestOptions = RequestInit & {
+  auth?: boolean;
+  /**
+   * Reuse a completed identical GET for this many ms.
+   * Default 0 (in-flight dedupe only). Catalog lists may use a short TTL.
+   */
+  cacheTtlMs?: number;
+  /** Skip in-flight / response-cache sharing for this call. */
+  dedupe?: boolean;
+};
+
+function withCallerSignal<T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+): Promise<T> {
+  if (!signal) return promise;
+  if (signal.aborted) {
+    return Promise.reject(new DOMException("Aborted", "AbortError"));
+  }
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+async function executeFetch<T>(
+  url: string,
+  options: ApiRequestOptions,
+  /** When false, omit AbortSignal so shared in-flight work is not cancelled by one consumer. */
+  attachSignal = true,
+): Promise<T> {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -81,13 +133,30 @@ export async function apiRequest<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
+  const {
+    auth: _auth,
+    cacheTtlMs: _cacheTtlMs,
+    dedupe: _dedupe,
+    signal,
+    ...fetchOptions
+  } = options;
+  void _auth;
+  void _cacheTtlMs;
+  void _dedupe;
+
   let response: Response;
   try {
-    response = await fetch(buildUrl(path), {
-      ...options,
+    response = await fetch(url, {
+      ...fetchOptions,
+      ...(attachSignal && signal ? { signal } : {}),
       headers,
     });
-  } catch {
+  } catch (error) {
+    if (attachSignal && signal?.aborted) {
+      throw error instanceof Error
+        ? error
+        : new DOMException("Aborted", "AbortError");
+    }
     throw new ApiError(
       "Unable to reach the server. Check your connection.",
       0,
@@ -106,15 +175,7 @@ export async function apiRequest<T>(
   }
 
   if (response.status === 401 && useAuth) {
-    setAuthToken(null);
-    try {
-      localStorage.removeItem("getreal.auth");
-      localStorage.removeItem("getreal.role");
-      localStorage.removeItem("getreal.lastActive");
-      localStorage.removeItem("getreal.userName");
-    } catch {
-      // no-op
-    }
+    clearLocalSession();
   }
 
   if (!response.ok) {
@@ -149,6 +210,48 @@ export async function apiRequest<T>(
   }
 
   return unwrapData<T>(json);
+}
+
+export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions = {},
+): Promise<T> {
+  if (!isApiConfigured()) {
+    throw new ApiError("API URL is not configured", 0, null);
+  }
+
+  const url = buildUrl(path);
+  const method = (options.method ?? "GET").toUpperCase();
+  const useAuth = options.auth !== false;
+  const allowDedupe = options.dedupe !== false && isIdempotentMethod(method);
+
+  if (!allowDedupe) {
+    if (!isIdempotentMethod(method)) {
+      invalidateCacheForUrl(url);
+    }
+    return executeFetch<T>(url, options, true);
+  }
+
+  const body =
+    typeof options.body === "string"
+      ? options.body
+      : options.body != null
+        ? String(options.body)
+        : null;
+
+  // Shared in-flight fetch must not be aborted by a single consumer (e.g. StrictMode remount).
+  const shared = runDedupedRequest<T>(
+    {
+      method,
+      url,
+      body,
+      auth: useAuth,
+    },
+    () => executeFetch<T>(url, options, false),
+    { cacheTtlMs: options.cacheTtlMs ?? 0 },
+  );
+
+  return withCallerSignal(shared, options.signal ?? undefined);
 }
 
 function filenameFromContentDisposition(header: string | null): string | null {
@@ -216,15 +319,7 @@ export async function apiDownload(
   }
 
   if (response.status === 401 && useAuth) {
-    setAuthToken(null);
-    try {
-      localStorage.removeItem("getreal.auth");
-      localStorage.removeItem("getreal.role");
-      localStorage.removeItem("getreal.lastActive");
-      localStorage.removeItem("getreal.userName");
-    } catch {
-      // no-op
-    }
+    clearLocalSession();
   }
 
   if (!response.ok) {

@@ -1,4 +1,5 @@
 import { apiRequest } from "./client";
+import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiRole } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -16,7 +17,9 @@ export type UpdateRolePayload = {
 
 export const rolesApi = {
   list() {
-    return apiRequest<unknown>("/roles").then((payload) =>
+    return apiRequest<unknown>("/roles", {
+      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+    }).then((payload) =>
       normalizeNamedList<ApiRole>(payload, ["roles", "items", "data", "results"]),
     );
   },

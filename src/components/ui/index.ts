@@ -1,3 +1,4 @@
+export { AppLoader } from "./AppLoader";
 export { CountBadge, IdPill, Tag, StatusBadge } from "./Badge";
 export { ConfirmDialog } from "./ConfirmDialog";
 export { DatePicker } from "./DatePicker";
