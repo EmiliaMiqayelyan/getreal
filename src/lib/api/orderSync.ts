@@ -65,17 +65,17 @@ function toOrderItemPayloads(
   products: ProductForSale[],
   catalogItems: Item[] = [],
 ): CreateOrderItemPayload[] {
-  return lines
-    .map((line) => {
-      const product = findProductForLine(line, products, catalogItems);
-      if (!product) return null;
-      return {
-        productId: apiId(product),
-        quantity: Math.max(1, line.quantity),
-        frequency: "one_time" as const,
-      };
-    })
-    .filter((entry): entry is CreateOrderItemPayload => Boolean(entry));
+  const payloads: CreateOrderItemPayload[] = [];
+  for (const line of lines) {
+    const product = findProductForLine(line, products, catalogItems);
+    if (!product) continue;
+    payloads.push({
+      productId: apiId(product),
+      quantity: Math.max(1, line.quantity),
+      frequency: "one_time",
+    });
+  }
+  return payloads;
 }
 
 function postDistributorOrder(input: {
