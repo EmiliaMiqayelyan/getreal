@@ -17,7 +17,7 @@ import {
   isApiConfigured,
   mapApiDistributorToDistributor,
 } from "@/lib/api";
-import { toCreateDistributorPayload } from "@/lib/api/payloads";
+import { toCreateDistributorPayload, resolveDistributorDocuments } from "@/lib/api/payloads";
 import type { Distributor } from "@/types/distributor";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
@@ -502,7 +502,15 @@ export default function DistributorsPage() {
           void (async () => {
             if (isApiConfigured()) {
               try {
-                const payload = toCreateDistributorPayload(distributor);
+                const documents = await resolveDistributorDocuments(
+                  distributor.documents ?? [],
+                );
+                const withDocs = {
+                  ...distributor,
+                  documents,
+                  docs: documents.length ? String(documents.length) : null,
+                };
+                const payload = toCreateDistributorPayload(withDocs);
                 if (editing) {
                   const updated = await distributorsApi.update(
                     apiId(editing),
@@ -511,14 +519,12 @@ export default function DistributorsPage() {
                   const mapped = mapApiDistributorToDistributor(updated, 0);
                   saveDistributor(
                     {
-                      ...distributor,
+                      ...withDocs,
                       ...mapped,
                       id: editing.id,
                       recordId: mapped.recordId ?? editing.recordId,
-                      deliveryDays: distributor.deliveryDays,
-                      documents: distributor.documents,
-                      categories: distributor.categories,
-                      products: distributor.products,
+                      categories: withDocs.categories,
+                      products: withDocs.products,
                     },
                     "update",
                     editing,
@@ -528,12 +534,10 @@ export default function DistributorsPage() {
                   const mapped = mapApiDistributorToDistributor(created, 0);
                   saveDistributor(
                     {
-                      ...distributor,
+                      ...withDocs,
                       ...mapped,
-                      deliveryDays: distributor.deliveryDays,
-                      documents: distributor.documents,
-                      categories: distributor.categories,
-                      products: distributor.products,
+                      categories: withDocs.categories,
+                      products: withDocs.products,
                     },
                     "create",
                   );

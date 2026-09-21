@@ -215,6 +215,7 @@ function RejectReasonPopover({
   const photoInputRef = useRef<HTMLInputElement>(null);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [photoTaken, setPhotoTaken] = useState(hasPhoto);
+  const [photoError, setPhotoError] = useState(false);
 
   useEffect(() => {
     function place() {
@@ -260,6 +261,14 @@ function RejectReasonPopover({
     };
   }, [anchor, onClose]);
 
+  function handleSelectReason(reason: RejectReason) {
+    if (!photoTaken) {
+      setPhotoError(true);
+      return;
+    }
+    onSelect(reason);
+  }
+
   return createPortal(
     <div
       ref={panelRef}
@@ -268,27 +277,7 @@ function RejectReasonPopover({
       className="fixed z-[80] w-[248px] rounded-[12px] border border-[#00000014] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={{ top: pos.top, left: pos.left }}
     >
-      <div className="mb-2.5 text-[13px] font-semibold text-[#111118]">
-        Reason
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        {REJECT_REASONS.map((reason) => (
-          <button
-            key={reason}
-            type="button"
-            onClick={() => onSelect(reason)}
-            className={cn(
-              "h-10 rounded-[10px] px-2.5 text-center text-[11px] font-medium",
-              reason === "Missing Exp Date"
-                ? "bg-[#FDECEC] text-[#E25B5B]"
-                : "bg-[#F3F3F1] text-[#111118] hover:bg-[#ECECEA]",
-            )}
-          >
-            {reason}
-          </button>
-        ))}
-      </div>
-      <div className="mt-3 border-t border-[#00000014] pt-2.5">
+      <div className="mb-2.5">
         <input
           ref={photoInputRef}
           type="file"
@@ -299,18 +288,51 @@ function RejectReasonPopover({
             const file = event.target.files?.[0];
             if (!file) return;
             setPhotoTaken(true);
+            setPhotoError(false);
             onPhoto?.(file);
             event.target.value = "";
           }}
         />
         <button
           type="button"
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] bg-[#F3F3F1] text-[12px] font-medium text-[#111118] hover:bg-[#ECECEA]"
+          className={cn(
+            "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] text-[12px] font-medium hover:bg-[#ECECEA]",
+            photoError
+              ? "border border-danger bg-[#FDECEC] text-[#E25B5B]"
+              : "bg-[#F3F3F1] text-[#111118]",
+          )}
           onClick={() => photoInputRef.current?.click()}
         >
           <Camera size={14} />
-          {photoTaken ? "Photo attached · Retake" : "Take photo of problem"}
+          {photoTaken ? "Photo attached · Retake" : "Take photo of problem *"}
         </button>
+        {photoError ? (
+          <p className="mt-1.5 text-[11px] text-[#E25B5B]">
+            Problem photo is required.
+          </p>
+        ) : null}
+      </div>
+      <div className="border-t border-[#00000014] pt-2.5">
+        <div className="mb-2.5 text-[13px] font-semibold text-[#111118]">
+          Reason
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {REJECT_REASONS.map((reason) => (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => handleSelectReason(reason)}
+              className={cn(
+                "h-10 rounded-[10px] px-2.5 text-center text-[11px] font-medium",
+                reason === "Missing Exp Date"
+                  ? "bg-[#FDECEC] text-[#E25B5B]"
+                  : "bg-[#F3F3F1] text-[#111118] hover:bg-[#ECECEA]",
+              )}
+            >
+              {reason}
+            </button>
+          ))}
+        </div>
       </div>
     </div>,
     document.body,
@@ -574,6 +596,13 @@ function validateChecks(
     }
     if (state.status === "rejected" && !state.reason) {
       errors.push(`${item.name}: rejection reason required`);
+    }
+    if (
+      state.status === "rejected" &&
+      !state.photoName &&
+      !state.photoUrl
+    ) {
+      errors.push(`${item.name}: problem photo required`);
     }
   }
   return errors;

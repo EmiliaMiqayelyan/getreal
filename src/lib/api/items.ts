@@ -8,8 +8,15 @@ export type CreateItemPayload = {
   categoryId: string;
   subcategoryId?: string | null;
   distributorId: string;
+  sourceId?: string;
+  /** Integer cents. */
   buyingPrice: number;
   contents: number;
+  buyingUnit?: string;
+  singleItemUnit?: string;
+  description?: string;
+  /** Uploaded image URLs. */
+  photos?: string[];
 };
 
 export type UpdateItemPayload = Partial<CreateItemPayload>;

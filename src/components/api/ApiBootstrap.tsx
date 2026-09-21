@@ -164,11 +164,28 @@ export function ApiBootstrap() {
             .map((entry) => [entry.id as string, entry.name] as const),
         );
 
+        const sourcesById = new Map<string, string>();
+        for (const entry of apiSources) {
+          sourcesById.set(entry.id, entry.name);
+          if (entry.recordId) sourcesById.set(entry.recordId, entry.name);
+        }
+
+        const sellingPriceByItemId = new Map<string, number>();
+        for (const product of productsPayload) {
+          if (!product.itemId) continue;
+          const dollars = (product.sellingPrice ?? product.price ?? 0) / 100;
+          sellingPriceByItemId.set(product.itemId, dollars);
+        }
+
         const apiItems = itemsPayload.map((item, index) =>
           mapApiItemToItem(item, index, {
             categoriesById,
             distributorsById,
+            sourcesById,
             subcategoriesById,
+            sellingPriceDollars: item.id
+              ? sellingPriceByItemId.get(item.id)
+              : undefined,
           }),
         );
 

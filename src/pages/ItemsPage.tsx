@@ -16,13 +16,27 @@ import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { isApiConfigured, itemsApi, categoriesApi, downloadListExport } from "@/lib/api";
-import { mapApiItemToItem } from "@/lib/api/mappers";
-import { toCreateItemPayload } from "@/lib/api/payloads";
+import {
+  categoriesApi,
+  downloadListExport,
+  isApiConfigured,
+  itemsApi,
+  mapApiItemToItem,
+  mapApiProductToProductForSale,
+  productsApi,
+  resolveItemPhotoUrls,
+  toCreateItemPayload,
+} from "@/lib/api";
+import { dollarsToCents } from "@/lib/api/mappers";
 import type { ExportRequest } from "@/types/export";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
+import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
-import { apiId } from "@/utils/entityIds";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
+import {
+  calcFinalMarginPercent,
+  calcPricingBreakdown,
+} from "@/utils/itemPricing";
 import {
   getItemDisplayName,
   getItemPrimaryPhoto,
@@ -43,8 +57,56 @@ const GRID =
   "grid grid-cols-[90px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
 
 function formatSalePrice(value: number) {
-  if (Number.isInteger(value)) return `$${value}`;
+  if (!Number.isFinite(value) || value <= 0) return "—";
   return `$${value.toFixed(2)}`;
+}
+
+/** Sale price lives on /products; keep it in sync when saving an item. */
+async function upsertItemSaleProduct(
+  item: Item,
+  itemRecordId: string,
+  existingProducts: ProductForSale[],
+): Promise<ProductForSale | null> {
+  if (!item.sellingPrice || item.sellingPrice <= 0) return null;
+
+  const pricing = calcPricingBreakdown({
+    sourcePer: item.sourcePer,
+    caseBy: item.caseBy,
+    buyingPrice: item.buyingPrice,
+    pieceWeightOz: item.pieceWeightOz,
+    caseWeightLbs: item.caseWeightLbs,
+    piecesPerCase: item.contents,
+  });
+  const finalMargin = calcFinalMarginPercent(
+    item.sellingPrice,
+    pricing.costPerPiece,
+  );
+
+  const body = {
+    itemId: itemRecordId,
+    merchandisingName:
+      item.merchandisingName.trim() || item.name.trim() || "Item",
+    sellingPrice: dollarsToCents(item.sellingPrice),
+    description: item.description.trim() || undefined,
+    marginSugPrice: dollarsToCents(pricing.suggestedPrice),
+    finalMargin: `${finalMargin.toFixed(2)}%`,
+    isLive: true,
+  };
+
+  const existing = existingProducts.find(
+    (product) =>
+      product.itemId === item.id ||
+      product.itemId === itemRecordId ||
+      (item.recordId != null && product.itemId === item.recordId),
+  );
+
+  const saved = existing
+    ? await productsApi.update(apiId(existing), body)
+    : await productsApi.create(body);
+
+  return mapApiProductToProductForSale(saved, 0, [
+    { ...item, recordId: itemRecordId },
+  ]);
 }
 
 function SourceCell({ children }: { children: ReactNode }) {
@@ -151,6 +213,8 @@ export default function ItemsPage() {
   const {
     items: rows,
     setItems,
+    products,
+    setProducts,
     categories,
     subcategoryRecords,
     subcategoriesByCategory,
@@ -164,6 +228,24 @@ export default function ItemsPage() {
   const [tab, setTab] = useState<ItemTab>("All");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
+
+  const salePriceByItemRef = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const product of products) {
+      if (!(product.salesPrice > 0) || !product.itemId) continue;
+      map.set(product.itemId, product.salesPrice);
+    }
+    return map;
+  }, [products]);
+
+  function displaySalePrice(row: Item) {
+    if (row.sellingPrice > 0) return row.sellingPrice;
+    return (
+      salePriceByItemRef.get(row.id) ??
+      (row.recordId ? salePriceByItemRef.get(row.recordId) : undefined) ??
+      0
+    );
+  }
 
   const distributorOptions = useMemo(
     () => Array.from(new Set(rows.map((row) => row.distributor))).sort(),
@@ -391,7 +473,7 @@ export default function ItemsPage() {
                       {row.subcategory ? ` · ${row.subcategory}` : ""}
                     </div>
                     <div className="mt-0.5 text-[13px] font-semibold text-[#111118]">
-                      {formatSalePrice(row.sellingPrice)}
+                      {formatSalePrice(displaySalePrice(row))}
                     </div>
                     <div className={cn(SECONDARY, "mt-0.5")}>
                       {row.singleItemUnit || "—"}
@@ -466,7 +548,7 @@ export default function ItemsPage() {
                   </div>
                   <div>
                     <div className={cn(BODY, "font-semibold")}>
-                      {formatSalePrice(row.sellingPrice)}
+                      {formatSalePrice(displaySalePrice(row))}
                     </div>
                     <div className={cn(SECONDARY, "mt-0.5")}>
                       {row.singleItemUnit || "—"}
@@ -506,10 +588,12 @@ export default function ItemsPage() {
                   categories.length > 0
                     ? categories
                     : await categoriesApi.list();
+                const photoUrls = await resolveItemPhotoUrls(item.photos ?? []);
                 const payload = toCreateItemPayload(
                   item,
                   categoryList,
                   subcategoryRecords,
+                  photoUrls,
                 );
                 const categoriesById = new Map(
                   categoryList
@@ -526,71 +610,99 @@ export default function ItemsPage() {
                     ? [[item.distributorId, item.distributor]]
                     : [],
                 );
+                const sourcesById = new Map(
+                  item.sourceId ? [[item.sourceId, item.source]] : [],
+                );
+
+                const mapOpts = {
+                  categoriesById,
+                  distributorsById,
+                  sourcesById,
+                  subcategoriesById,
+                  sellingPriceDollars: item.sellingPrice,
+                };
+
+                let savedItem: Item;
                 if (editing) {
-                  const updated = await itemsApi.update(apiId(editing), payload);
-                  const mapped = mapApiItemToItem(updated, 0, {
-                    categoriesById,
-                    distributorsById,
-                    subcategoriesById,
-                  });
+                  const updated = await itemsApi.update(
+                    apiId(editing),
+                    payload,
+                  );
+                  const mapped = mapApiItemToItem(updated, 0, mapOpts);
+                  savedItem = {
+                    ...item,
+                    ...mapped,
+                    id: editing.id,
+                    recordId: mapped.recordId ?? editing.recordId,
+                    merchandisingName:
+                      item.merchandisingName || mapped.merchandisingName,
+                    preorderInfo: item.preorderInfo,
+                    caseBy: item.caseBy || mapped.caseBy,
+                    caseWeightLbs: item.caseWeightLbs,
+                    pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
+                    sourcePer: item.sourcePer || mapped.sourcePer,
+                    source: item.source || mapped.source,
+                    sellingPrice: item.sellingPrice,
+                  };
                   setItems((current) =>
                     current.map((row) =>
-                      row.id === editing.id
-                        ? {
-                            ...item,
-                            ...mapped,
-                            id: editing.id,
-                            recordId: mapped.recordId ?? editing.recordId,
-                            // Keep rich UI fields the API does not store yet.
-                            merchandisingName: item.merchandisingName,
-                            description: item.description,
-                            subcategory: item.subcategory,
-                            subcategoryId:
-                              item.subcategoryId ?? mapped.subcategoryId,
-                            source: item.source,
-                            sourceId: item.sourceId,
-                            sourcePer: item.sourcePer,
-                            caseBy: item.caseBy,
-                            pieceWeightOz: item.pieceWeightOz,
-                            caseWeightLbs: item.caseWeightLbs,
-                            singleItemUnit: item.singleItemUnit,
-                            sellingPrice: item.sellingPrice,
-                            photos: item.photos,
-                            preorderInfo: item.preorderInfo,
-                          }
-                        : row,
+                      row.id === editing.id ? savedItem : row,
                     ),
                   );
                 } else {
                   const created = await itemsApi.create(payload);
-                  const mapped = mapApiItemToItem(created, 0, {
-                    categoriesById,
-                    distributorsById,
-                    subcategoriesById,
-                  });
-                  setItems((current) => [
-                    {
-                      ...item,
-                      ...mapped,
-                      merchandisingName: item.merchandisingName,
-                      description: item.description,
-                      subcategory: item.subcategory,
-                      subcategoryId:
-                        item.subcategoryId ?? mapped.subcategoryId,
-                      source: item.source,
-                      sourceId: item.sourceId,
-                      sourcePer: item.sourcePer,
-                      caseBy: item.caseBy,
-                      pieceWeightOz: item.pieceWeightOz,
-                      caseWeightLbs: item.caseWeightLbs,
-                      singleItemUnit: item.singleItemUnit,
-                      sellingPrice: item.sellingPrice,
-                      photos: item.photos,
-                      preorderInfo: item.preorderInfo,
-                    },
-                    ...current,
-                  ]);
+                  const mapped = mapApiItemToItem(created, 0, mapOpts);
+                  savedItem = {
+                    ...item,
+                    ...mapped,
+                    merchandisingName:
+                      item.merchandisingName || mapped.merchandisingName,
+                    preorderInfo: item.preorderInfo,
+                    caseBy: item.caseBy || mapped.caseBy,
+                    caseWeightLbs: item.caseWeightLbs,
+                    pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
+                    sourcePer: item.sourcePer || mapped.sourcePer,
+                    source: item.source || mapped.source,
+                    sellingPrice: item.sellingPrice,
+                  };
+                  setItems((current) => [savedItem, ...current]);
                 }
+
+                const itemRecordId = savedItem.recordId ?? apiId(savedItem);
+                const product = await upsertItemSaleProduct(
+                  savedItem,
+                  itemRecordId,
+                  products,
+                );
+                if (product) {
+                  setProducts((current) => {
+                    const existing = findByEntityRef(current, product.id);
+                    if (existing) {
+                      return current.map((row) =>
+                        row.id === existing.id
+                          ? {
+                              ...product,
+                              id: existing.id,
+                              recordId: product.recordId ?? existing.recordId,
+                              sortOrder: existing.sortOrder,
+                            }
+                          : row,
+                      );
+                    }
+                    return [
+                      {
+                        ...product,
+                        sortOrder:
+                          current.reduce(
+                            (max, row) => Math.max(max, row.sortOrder),
+                            0,
+                          ) + 1,
+                      },
+                      ...current,
+                    ];
+                  });
+                }
+
                 showSuccess(editing ? "Item updated." : "Item created.");
                 closeModal();
                 return;

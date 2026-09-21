@@ -554,6 +554,7 @@ export function AddItemModal({
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h4 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                     Upload Item Photos
+                    <span className="text-danger"> *</span>
                   </h4>
                   <div className="flex items-center gap-3">
                     <span className="text-[13px] font-medium text-[#000000]">
@@ -583,6 +584,7 @@ export function AddItemModal({
                           id: uid(),
                           url: URL.createObjectURL(file),
                           name: file.name,
+                          file,
                         },
                       ]);
                       if (errors.photos) {
@@ -601,7 +603,12 @@ export function AddItemModal({
                     type="button"
                     disabled={photos.length >= ITEM_PHOTO_MAX}
                     onClick={() => fileRef.current?.click()}
-                    className="flex h-[100px] w-[160px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] text-[#C0C0BC] transition-colors hover:border-[#00000014] disabled:cursor-not-allowed disabled:opacity-40"
+                    className={cn(
+                      "flex h-[100px] w-[160px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed bg-[#FAFAF8] text-[#C0C0BC] transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                      errors.photos
+                        ? "border-danger hover:border-danger"
+                        : "border-[#00000014] hover:border-[#00000014]",
+                    )}
                   >
                     <ImageIcon size={28} />
                   </button>

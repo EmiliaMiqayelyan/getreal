@@ -57,9 +57,17 @@ export type ApiItem = {
   categoryId?: string;
   subcategoryId?: string | null;
   distributorId?: string;
-  sourceId?: string;
+  sourceId?: string | null;
+  /** Integer cents. Backend derives costPerUnit = buyingPrice / contents. */
   buyingPrice?: number;
   contents?: number;
+  /** Backend-computed cost per unit/piece in cents. */
+  costPerUnit?: number;
+  /** Free-form unit label, e.g. Unit / Case. */
+  buyingUnit?: string | null;
+  singleItemUnit?: string | null;
+  /** Array of uploaded image URLs (strings, not objects). */
+  photos?: string[] | null;
   merchandisingName?: string;
   description?: string | null;
   category?: string;
@@ -76,6 +84,16 @@ export type ApiDistributorContact = {
   title?: string;
 };
 
+/** Backend shape: `{ "Mon": "08:00", "Wed": "09:30" }` */
+export type ApiDeliverySchedule = Record<string, string>;
+
+export type ApiDistributorDocument = {
+  id?: string;
+  name?: string;
+  url?: string;
+  size?: string;
+};
+
 export type ApiDistributor = {
   id?: string;
   distributorCode?: string;
@@ -85,9 +103,9 @@ export type ApiDistributor = {
   state?: string | null;
   zipCode?: string | null;
   paymentTerms?: string | null;
-  deliverySchedule?: unknown;
+  deliverySchedule?: ApiDeliverySchedule | null;
   contacts?: ApiDistributorContact[] | null;
-  documents?: unknown;
+  documents?: ApiDistributorDocument[] | null;
   notes?: string | null;
   status?: string;
   createdAt?: string;

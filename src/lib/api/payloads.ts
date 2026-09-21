@@ -1,7 +1,8 @@
-import type { Distributor } from "@/types/distributor";
+import type { Distributor, DistributorDocument } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
+import { apiId, findByEntityRef } from "@/utils/entityIds";
 
 import type { CreateDistributorPayload } from "./distributors";
 import type { CreateItemPayload } from "./items";
@@ -12,8 +13,13 @@ import {
 } from "./mappers";
 import type { CreateProductPayload, UpdateProductPayload } from "./products";
 import type { CreateSourcePayload } from "./sources";
-import type { ApiCategory, CatalogSubcategory } from "./types";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import type {
+  ApiCategory,
+  ApiDeliverySchedule,
+  ApiDistributorDocument,
+  CatalogSubcategory,
+} from "./types";
+import { persistDocumentFile } from "./upload";
 
 function businessCodeOrUndefined(id: string | undefined) {
   const trimmed = id?.trim() ?? "";
@@ -57,10 +63,76 @@ function splitAddress(fullAddress: string): {
   };
 }
 
+export function deliveryDaysToSchedule(
+  slots: Array<{ day: string; time: string }>,
+): ApiDeliverySchedule {
+  const schedule: ApiDeliverySchedule = {};
+  for (const slot of slots) {
+    const day = slot.day.trim();
+    const time = slot.time.trim();
+    if (!day || !time) continue;
+    schedule[day] = time;
+  }
+  return schedule;
+}
+
+function isPersistableDocumentUrl(url: string | undefined): url is string {
+  if (!url) return false;
+  return (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  );
+}
+
+/** Upload / data-URL encode pending files so documents survive refresh. */
+export async function resolveDistributorDocuments(
+  documents: DistributorDocument[],
+): Promise<DistributorDocument[]> {
+  const resolved: DistributorDocument[] = [];
+  for (const doc of documents) {
+    if (doc.file) {
+      const url = await persistDocumentFile(doc.file);
+      resolved.push({
+        id: doc.id,
+        name: doc.name,
+        size: doc.size,
+        url,
+      });
+      continue;
+    }
+    if (isPersistableDocumentUrl(doc.url)) {
+      resolved.push({
+        id: doc.id,
+        name: doc.name,
+        size: doc.size,
+        url: doc.url,
+      });
+    }
+  }
+  return resolved;
+}
+
+function toApiDocuments(
+  documents: DistributorDocument[],
+): ApiDistributorDocument[] {
+  return documents
+    .filter((doc) => isPersistableDocumentUrl(doc.url))
+    .map((doc) => ({
+      id: doc.id,
+      name: doc.name,
+      url: doc.url,
+      size: doc.size,
+    }));
+}
+
 export function toCreateDistributorPayload(
   distributor: Distributor,
 ): CreateDistributorPayload {
   const parsed = splitAddress(distributor.fullAddress || distributor.location);
+  const deliverySchedule = deliveryDaysToSchedule(
+    distributor.deliveryDays ?? [],
+  );
   return {
     name: distributor.name.trim(),
     distributorCode: businessCodeOrUndefined(distributor.id),
@@ -77,6 +149,8 @@ export function toCreateDistributorPayload(
       phone: contact.phone.trim() || undefined,
       title: contact.title.trim() || undefined,
     })),
+    deliverySchedule,
+    documents: toApiDocuments(distributor.documents ?? []),
   };
 }
 
@@ -102,6 +176,7 @@ export function toCreateItemPayload(
   item: Item,
   categories: ApiCategory[],
   subcategories: CatalogSubcategory[] = [],
+  photoUrls: string[] = [],
 ): CreateItemPayload {
   const categoryId =
     findCategoryIdByName(categories, item.category) ??
@@ -118,13 +193,21 @@ export function toCreateItemPayload(
     findSubcategoryIdByName(subcategories, item.category, item.subcategory) ||
     null;
 
+  const contents = Math.max(1, Math.round(item.contents || 1));
+  const buyingPriceCents = dollarsToCents(item.buyingPrice);
+
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
     categoryId,
     subcategoryId,
     distributorId: item.distributorId,
-    buyingPrice: dollarsToCents(item.buyingPrice),
-    contents: Math.max(1, item.contents || 1),
+    ...(item.sourceId ? { sourceId: item.sourceId } : {}),
+    buyingPrice: buyingPriceCents,
+    contents,
+    buyingUnit: item.sourcePer || undefined,
+    singleItemUnit: item.singleItemUnit || undefined,
+    description: item.description.trim() || undefined,
+    photos: photoUrls,
   };
 }
 

@@ -42,6 +42,7 @@ type DocDraft = {
   name: string;
   size: string;
   url?: string;
+  file?: File;
 };
 
 type AddDistributorModalProps = {
@@ -220,7 +221,13 @@ export function AddDistributorModal({
       fullAddress: address.trim(),
       delivery: [delivery.days, delivery.time].filter(Boolean).join(" "),
       deliveryDays,
-      documents: docs,
+      documents: docs.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        size: doc.size,
+        url: doc.url,
+        file: doc.file ?? uploadedFilesRef.current.get(doc.id),
+      })),
       notes,
       contacts,
       categories: distributor?.categories ?? [],
@@ -629,6 +636,7 @@ export function AddDistributorModal({
                       name: file.name,
                       size: formatFileSize(file.size),
                       url: URL.createObjectURL(file),
+                      file,
                     },
                   ]);
                   event.target.value = "";

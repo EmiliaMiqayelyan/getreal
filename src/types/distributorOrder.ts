@@ -101,7 +101,10 @@ export type ManualLine = ManualCatalogItem & {
 /** Payload passed from Create Manual Order before Delivery ID assignment. */
 export type ManualOrderDraft = {
   distributor: string;
+  /** Display label shown in the orders list. */
   deliveryDate: string;
+  /** ISO date (YYYY-MM-DD) for POST /orders when available. */
+  deliveryDateIso?: string;
   totalPrice: number;
   items: PlacedOrder["items"];
 };

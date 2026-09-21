@@ -39,7 +39,7 @@ import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { downloadListExport, isApiConfigured, ordersApi } from "@/lib/api";
-import { syncReviewGroupOrder } from "@/lib/api/orderSync";
+import { syncManualDistributorOrder, syncReviewGroupOrder } from "@/lib/api/orderSync";
 import type {
   ManualOrderDraft,
   OrderCategory,
@@ -305,7 +305,7 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors, products, isBootstrapping } = useAppCatalog();
+  const { distributors, products, items, isBootstrapping } = useAppCatalog();
   const { notifyApiError } = useApiFeedback();
 
   const [view, setView] = useState<View>("list");
@@ -667,6 +667,7 @@ export default function ProductOrdersPage() {
     setInProgress((prev) =>
       appendInProgressOrders(prev, [order]),
     );
+    syncManualDistributorOrder(draft, distributors, products, items);
     setExpandedId(order.id);
     showToast("Order created successfully");
     resetToList();
@@ -699,7 +700,7 @@ export default function ProductOrdersPage() {
     setInProgress((prev) =>
       appendInProgressOrders(prev, [order]),
     );
-    syncReviewGroupOrder(group, distributors, products);
+    syncReviewGroupOrder(group, distributors, products, items);
     setOrderedDistributors((prev) => new Set(prev).add(distributor));
     setExpandedId(order.id);
     showToast("Order submitted");
@@ -727,7 +728,7 @@ export default function ProductOrdersPage() {
       appendInProgressOrders(prev, created),
     );
     for (const group of remaining) {
-      syncReviewGroupOrder(group, distributors, products);
+      syncReviewGroupOrder(group, distributors, products, items);
     }
     setOrderedDistributors(new Set(reviewGroups.map((group) => group.distributor)));
     setExpandedId(created[0]?.id ?? null);

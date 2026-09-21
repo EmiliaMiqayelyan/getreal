@@ -1,14 +1,26 @@
 import { permissionsForRoleType } from "@/utils/rolePermissions";
 import type { AdminCustomer, ManagedRole, RoleUser } from "@/types/admin";
-import type { Distributor, DistributorContact } from "@/types/distributor";
-import type { Item } from "@/types/item";
+import type {
+  Distributor,
+  DistributorContact,
+  DistributorDeliverySlot,
+  DistributorDocument,
+} from "@/types/distributor";
+import type { Item, ItemPhoto, SourcePer } from "@/types/item";
+import { pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
-import { locationFromAddress } from "@/utils/format";
+import {
+  formatDeliveryLabel,
+  locationFromAddress,
+  WEEK_DAYS,
+} from "@/utils/format";
 
 import type {
   ApiCategory,
+  ApiDeliverySchedule,
   ApiDistributor,
+  ApiDistributorDocument,
   ApiItem,
   ApiOrder,
   ApiProduct,
@@ -115,13 +127,40 @@ function centsToDollars(cents: number | undefined): number {
   return cents / 100;
 }
 
+export { centsToDollars };
+
+function mapApiItemPhotos(
+  photos: string[] | null | undefined,
+  itemKey: string,
+): ItemPhoto[] {
+  if (!Array.isArray(photos)) return [];
+  return photos
+    .filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    .map((url, photoIndex) => ({
+      id: `api-photo-${itemKey}-${photoIndex}`,
+      url,
+      name: url.split("/").pop() || `Photo ${photoIndex + 1}`,
+    }));
+}
+
+function sourcePerFromBuyingUnit(buyingUnit: string | null | undefined): SourcePer {
+  const normalized = buyingUnit?.trim().toLowerCase() ?? "";
+  if (normalized === "unit" || normalized === "lb" || normalized === "lbs") {
+    return "Unit";
+  }
+  return "Case";
+}
+
 export function mapApiItemToItem(
   item: ApiItem,
   index: number,
   options: {
     categoriesById?: Map<string, string>;
     distributorsById?: Map<string, string>;
+    sourcesById?: Map<string, string>;
     subcategoriesById?: Map<string, string>;
+    /** Selling price in dollars from the linked product, when known. */
+    sellingPriceDollars?: number;
   } = {},
 ): Item {
   const categoryName =
@@ -135,8 +174,19 @@ export function mapApiItemToItem(
   const distributorName =
     (item.distributorId && options.distributorsById?.get(item.distributorId)) ||
     "";
+  const sourceName =
+    (item.sourceId && options.sourcesById?.get(item.sourceId)) || "";
 
   const recordId = item.id;
+  const itemKey = recordId ?? item.itemCode ?? String(index);
+  const photos = mapApiItemPhotos(item.photos, itemKey);
+  const sourcePer = sourcePerFromBuyingUnit(item.buyingUnit);
+  const singleItemUnit = item.singleItemUnit?.trim() || "Each";
+  const pieceWeightOz =
+    sourcePer === "Unit" ? pieceWeightOzFromLabel(singleItemUnit) : 0;
+  const contents = Math.max(1, item.contents ?? 1);
+  const buyingPrice = centsToDollars(item.buyingPrice);
+
   return {
     id: item.itemCode ?? recordId ?? `API-ITEM-${index + 1}`,
     recordId,
@@ -149,17 +199,17 @@ export function mapApiItemToItem(
     subcategoryId: item.subcategoryId ?? undefined,
     distributor: distributorName,
     distributorId: item.distributorId,
-    source: "",
-    sourceId: item.sourceId,
-    sourcePer: "Case",
-    caseBy: "Units / case",
-    pieceWeightOz: 0,
+    source: sourceName,
+    sourceId: item.sourceId ?? undefined,
+    sourcePer,
+    caseBy: sourcePer === "Case" ? "Units / case" : "",
+    pieceWeightOz,
     caseWeightLbs: 0,
-    buyingPrice: centsToDollars(item.buyingPrice),
-    contents: item.contents ?? 1,
-    singleItemUnit: "Each",
-    sellingPrice: 0,
-    photos: [],
+    buyingPrice,
+    contents: sourcePer === "Unit" ? 1 : contents,
+    singleItemUnit,
+    sellingPrice: options.sellingPriceDollars ?? 0,
+    photos,
   };
 }
 
@@ -228,6 +278,52 @@ export function mapApiProductToProductForSale(
   };
 }
 
+export function scheduleToDeliveryDays(
+  schedule: ApiDeliverySchedule | null | undefined,
+): DistributorDeliverySlot[] {
+  if (!schedule || typeof schedule !== "object" || Array.isArray(schedule)) {
+    return [];
+  }
+  const slots: DistributorDeliverySlot[] = [];
+  for (const day of WEEK_DAYS) {
+    const time = schedule[day];
+    if (typeof time === "string" && time.trim()) {
+      slots.push({ day, time: time.trim() });
+    }
+  }
+  // Include any unexpected keys (backend may use full day names later).
+  for (const [day, time] of Object.entries(schedule)) {
+    if (WEEK_DAYS.includes(day as (typeof WEEK_DAYS)[number])) continue;
+    if (typeof time === "string" && time.trim()) {
+      slots.push({ day, time: time.trim() });
+    }
+  }
+  return slots;
+}
+
+export function mapApiDocuments(
+  documents: ApiDistributorDocument[] | null | undefined,
+  distributorKey: string,
+): DistributorDocument[] {
+  if (!Array.isArray(documents)) return [];
+  return documents
+    .map((doc, docIndex) => {
+      const url = typeof doc?.url === "string" ? doc.url : undefined;
+      const name =
+        (typeof doc?.name === "string" && doc.name.trim()) ||
+        `Document ${docIndex + 1}`;
+      return {
+        id:
+          (typeof doc?.id === "string" && doc.id) ||
+          `api-doc-${distributorKey}-${docIndex}`,
+        name,
+        size: (typeof doc?.size === "string" && doc.size) || "",
+        url,
+      };
+    })
+    .filter((doc) => Boolean(doc.url));
+}
+
 export function mapApiDistributorToDistributor(
   distributor: ApiDistributor,
   index: number,
@@ -259,6 +355,10 @@ export function mapApiDistributorToDistributor(
 
   const primary = contacts[0];
   const recordId = distributor.id;
+  const distributorKey = recordId ?? distributor.distributorCode ?? String(index);
+  const deliveryDays = scheduleToDeliveryDays(distributor.deliverySchedule);
+  const deliveryLabel = formatDeliveryLabel(deliveryDays);
+  const documents = mapApiDocuments(distributor.documents, distributorKey);
 
   return {
     id: distributor.distributorCode ?? recordId ?? `DIS-API-${index + 1}`,
@@ -271,14 +371,14 @@ export function mapApiDistributorToDistributor(
     phone: primary?.phone ?? "",
     location,
     fullAddress: distributor.address?.trim() || fullAddress,
-    delivery: "",
-    deliveryDays: [],
-    documents: [],
+    delivery: [deliveryLabel.days, deliveryLabel.time].filter(Boolean).join(" "),
+    deliveryDays,
+    documents,
     notes: distributor.notes ?? "",
     contacts,
     categories: [],
     items: 0,
-    docs: null,
+    docs: documents.length ? String(documents.length) : null,
     products: [],
   };
 }

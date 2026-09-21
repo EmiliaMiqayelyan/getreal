@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type DragEvent,
+} from "react";
 import { Plus, X } from "lucide-react";
 
 import { AddProductForSaleModal } from "@/components/products/AddProductForSaleModal";
@@ -186,23 +191,65 @@ function SubcategoryTable({
   ) => void;
 }) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [previewIds, setPreviewIds] = useState<string[] | null>(null);
+
+  const sourceIds = useMemo(() => rows.map((row) => row.id), [rows]);
+  const rowById = useMemo(
+    () => new Map(rows.map((row) => [row.id, row])),
+    [rows],
+  );
+  const displayIds = previewIds ?? sourceIds;
+  const displayRows = displayIds
+    .map((id) => rowById.get(id))
+    .filter((row): row is ProductForSale => Boolean(row));
+
+  useEffect(() => {
+    if (!draggingId) setPreviewIds(null);
+  }, [draggingId]);
 
   if (rows.length === 0) return null;
 
-  const visibleIds = rows.map((row) => row.id);
+  function clearDragState() {
+    setDraggingId(null);
+    setPreviewIds(null);
+  }
 
   function handleDragStart(event: DragEvent<HTMLButtonElement>, id: string) {
     setDraggingId(id);
+    setPreviewIds(sourceIds);
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", id);
   }
 
-  function handleDrop(event: DragEvent<HTMLDivElement>, targetId: string) {
+  function handleDragOver(event: DragEvent<HTMLDivElement>, targetId: string) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (!draggingId || draggingId === targetId || !previewIds) return;
+
+    const fromIndex = previewIds.indexOf(draggingId);
+    const toIndex = previewIds.indexOf(targetId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    const next = [...previewIds];
+    next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, draggingId);
+    setPreviewIds(next);
+  }
+
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
     const draggedId = draggingId ?? event.dataTransfer.getData("text/plain");
-    if (!draggedId || draggedId === targetId) return;
-    onReorder(draggedId, targetId, visibleIds);
-    setDraggingId(null);
+    const order = previewIds ?? sourceIds;
+    clearDragState();
+    if (!draggedId) return;
+
+    const fromIndex = sourceIds.indexOf(draggedId);
+    const toIndex = order.indexOf(draggedId);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+
+    const targetId = sourceIds[toIndex];
+    if (!targetId || targetId === draggedId) return;
+    onReorder(draggedId, targetId, sourceIds);
   }
 
   return (
@@ -228,24 +275,27 @@ function SubcategoryTable({
         <span>Unit of Sales</span>
         <span aria-hidden />
       </div>
-      {rows.map((row) => {
+      {displayRows.map((row) => {
         const display = resolveProductTableDisplay(row, catalog);
+        const isDragging = draggingId === row.id;
         return (
           <div
             key={row.id}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => handleDrop(event, row.id)}
+            onDragOver={(event) => handleDragOver(event, row.id)}
+            onDrop={handleDrop}
             className={cn(
               GRID,
-              "border-b border-[#00000014] px-4 py-3 last:border-b-0",
-              draggingId === row.id && "opacity-60",
+              "border-b border-[#00000014] bg-white px-4 py-3 last:border-b-0 transition-[background-color,opacity,box-shadow] duration-150 ease-out",
+              draggingId && !isDragging && "bg-[#F7F7F5]",
+              isDragging &&
+                "bg-[#F3F3F1] opacity-55 shadow-[inset_0_0_0_1px_#0000000A]",
             )}
           >
             <button
               type="button"
               draggable
               onDragStart={(event) => handleDragStart(event, row.id)}
-              onDragEnd={() => setDraggingId(null)}
+              onDragEnd={clearDragState}
               className="cursor-grab active:cursor-grabbing"
               aria-label={`Reorder ${display.merchandisingName}`}
             >

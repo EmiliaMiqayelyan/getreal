@@ -116,7 +116,10 @@ async function executeFetch<T>(
   attachSignal = true,
 ): Promise<T> {
   const headers = new Headers(options.headers);
-  if (options.body && !headers.has("Content-Type")) {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+  // Let the browser set multipart boundary for FormData; JSON otherwise.
+  if (options.body && !isFormData && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
 

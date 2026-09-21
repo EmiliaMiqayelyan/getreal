@@ -1,6 +1,5 @@
 import type {
   DeliveredOrder,
-  ManualCatalogItem,
   OrderListItem,
   PreviewRow,
 } from "@/types/distributorOrder";
@@ -39,9 +38,3 @@ export const MANUAL_TIME_SLOTS = [
   "06:00–08:00 AM",
   "09:00–11:00 AM",
 ] as const;
-
-/** Catalog shown after a distributor is selected on Create Manual Order. */
-export const MANUAL_CATALOG: ManualCatalogItem[] = [];
-
-/** Optional items surfaced through Add Item in the manual order flow. */
-export const MANUAL_EXTRA_CATALOG: ManualCatalogItem[] = [];

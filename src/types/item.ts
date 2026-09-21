@@ -2,6 +2,8 @@ export type ItemPhoto = {
   id: string;
   url: string;
   name: string;
+  /** Pending local file from the upload picker; cleared once uploaded to the API. */
+  file?: File;
 };
 
 export type SourcePer = "Unit" | "Case";

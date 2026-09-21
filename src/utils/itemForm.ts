@@ -107,7 +107,9 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.description = `Description must be ${ITEM_DESCRIPTION_MAX} characters or fewer.`;
   }
 
-  if (input.photosCount > ITEM_PHOTO_MAX) {
+  if (input.photosCount < 1) {
+    errors.photos = "Upload at least one item photo.";
+  } else if (input.photosCount > ITEM_PHOTO_MAX) {
     errors.photos = `No more than ${ITEM_PHOTO_MAX} photos can be uploaded.`;
   }
 

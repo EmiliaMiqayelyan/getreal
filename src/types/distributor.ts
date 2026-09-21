@@ -25,6 +25,8 @@ export type DistributorDocument = {
   size: string;
   /** Object/data URL when file bytes are available; omitted for mock metadata-only docs. */
   url?: string;
+  /** Pending local file from the upload picker; cleared once persisted to the API. */
+  file?: File;
 };
 
 export type DistributorDeliverySlot = {

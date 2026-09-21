@@ -3,6 +3,8 @@ import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiDistributor } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
+import type { ApiDeliverySchedule, ApiDistributorDocument } from "./types";
+
 export type ApiDistributorContactPayload = {
   firstName: string;
   lastName?: string;
@@ -21,6 +23,9 @@ export type CreateDistributorPayload = {
   paymentTerms?: string;
   notes?: string;
   contacts: ApiDistributorContactPayload[];
+  /** `{ Mon: "08:00", Wed: "08:00" }` - object, not an array. */
+  deliverySchedule?: ApiDeliverySchedule;
+  documents?: ApiDistributorDocument[];
 };
 
 export type UpdateDistributorPayload = Partial<CreateDistributorPayload>;

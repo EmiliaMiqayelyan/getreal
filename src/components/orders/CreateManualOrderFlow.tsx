@@ -68,7 +68,7 @@ export function CreateManualOrderFlow({
   onClose,
   onCreated,
 }: CreateManualOrderFlowProps) {
-  const { distributors } = useAppCatalog();
+  const { distributors, items, sources } = useAppCatalog();
   const [step, setStep] = useState<Step>("create");
   const [distributor, setDistributor] = useState("");
   const [lines, setLines] = useState<ManualLine[]>([]);
@@ -120,7 +120,11 @@ export function CreateManualOrderFlow({
       setLines([]);
       return;
     }
-    setLines(createManualLines(getManualCatalogForDistributor(name)));
+    setLines(
+      createManualLines(
+        getManualCatalogForDistributor(name, items, sources, distributors),
+      ),
+    );
   }
 
   function setQty(id: string, quantity: number) {
@@ -135,6 +139,7 @@ export function CreateManualOrderFlow({
     onCreated({
       distributor,
       deliveryDate: expectedDeliveryLabel,
+      deliveryDateIso: deliveryDate || undefined,
       totalPrice: total,
       items: selectedLines.map((line) => ({
         sku: line.sku,
@@ -212,38 +217,45 @@ export function CreateManualOrderFlow({
                     </div>
 
                     <div className="space-y-6">
-                      {groupedBySource.map(([source, sourceLines]) => (
-                        <div key={source}>
-                          <h3 className="mb-1 text-[16px] font-semibold text-[#111118]">
-                            {source}
-                          </h3>
-                          <div>
-                            {sourceLines.map((line) => (
-                              <div
-                                key={line.id}
-                                className="flex items-center gap-4 border-b border-[#00000014] py-3 last:border-b-0"
-                              >
-                                <IdPill>{line.sku}</IdPill>
-                                <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
-                                  {line.name}
-                                </span>
-                                <span className="w-[88px] shrink-0 text-[13px] text-[#111118]">
-                                  In stock: {line.inStock}
-                                </span>
-                                <span className="w-[96px] shrink-0 text-[13px] text-[#111118]">
-                                  {money(line.price)}/{line.unit}
-                                </span>
-                                <div className="ml-auto">
-                                  <QtyStepper
-                                    value={line.quantity}
-                                    onChange={(q) => setQty(line.id, q)}
-                                  />
+                      {lines.length === 0 ? (
+                        <p className="py-6 text-[13px] text-[#8A8A8A]">
+                          No items found for this distributor. Add items linked
+                          to this distributor first.
+                        </p>
+                      ) : (
+                        groupedBySource.map(([source, sourceLines]) => (
+                          <div key={source}>
+                            <h3 className="mb-1 text-[16px] font-semibold text-[#111118]">
+                              {source}
+                            </h3>
+                            <div>
+                              {sourceLines.map((line) => (
+                                <div
+                                  key={line.id}
+                                  className="flex items-center gap-4 border-b border-[#00000014] py-3 last:border-b-0"
+                                >
+                                  <IdPill>{line.sku}</IdPill>
+                                  <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
+                                    {line.name}
+                                  </span>
+                                  <span className="w-[88px] shrink-0 text-[13px] text-[#111118]">
+                                    In stock: {line.inStock}
+                                  </span>
+                                  <span className="w-[96px] shrink-0 text-[13px] text-[#111118]">
+                                    {money(line.price)}/{line.unit}
+                                  </span>
+                                  <div className="ml-auto">
+                                    <QtyStepper
+                                      value={line.quantity}
+                                      onChange={(q) => setQty(line.id, q)}
+                                    />
+                                  </div>
                                 </div>
-                              </div>
-                            ))}
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </div>
                 ) : null}
