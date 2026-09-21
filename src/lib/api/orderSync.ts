@@ -83,20 +83,22 @@ function postDistributorOrder(input: {
   items: CreateOrderItemPayload[];
   deliveryDate?: string;
 }) {
-  void ordersApi
-    .create({
-      type: "distributor",
-      distributorId: apiId(input.distributor),
-      communicationChannel: "quickbooks",
-      deliveryDate: input.deliveryDate,
-      items: input.items,
-    })
-    .catch((error) => {
-      toastFromApi(
-        formatApiError(error, "Failed to sync distributor order."),
-        "error",
-      );
-    });
+  const body: Parameters<typeof ordersApi.create>[0] = {
+    type: "distributor",
+    distributorId: apiId(input.distributor),
+    communicationChannel: "quickbooks",
+    items: input.items,
+  };
+  if (input.deliveryDate) {
+    body.deliveryDate = input.deliveryDate;
+  }
+
+  void ordersApi.create(body).catch((error) => {
+    toastFromApi(
+      formatApiError(error, "Failed to sync distributor order."),
+      "error",
+    );
+  });
 }
 
 /**

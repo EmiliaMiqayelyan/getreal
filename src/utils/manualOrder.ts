@@ -92,3 +92,22 @@ export function formatManualDeliveryLabel(
   if (!timeSlot) return day;
   return `${day}, ${timeSlot}`;
 }
+
+/** Build a full ISO datetime for POST /orders from YYYY-MM-DD + optional slot. */
+export function toOrderDeliveryDateIso(
+  dateYmd: string,
+  timeSlot = "",
+): string | undefined {
+  if (!dateYmd.trim()) return undefined;
+
+  const [year, month, day] = dateYmd.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+
+  const match = timeSlot.match(/^(\d{1,2}):(\d{2})/);
+  const hours = match ? Number(match[1]) : 12;
+  const minutes = match ? Number(match[2]) : 0;
+
+  const date = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}

@@ -103,7 +103,7 @@ export type ManualOrderDraft = {
   distributor: string;
   /** Display label shown in the orders list. */
   deliveryDate: string;
-  /** ISO date (YYYY-MM-DD) for POST /orders when available. */
+  /** Full ISO datetime for POST /orders when available. */
   deliveryDateIso?: string;
   totalPrice: number;
   items: PlacedOrder["items"];

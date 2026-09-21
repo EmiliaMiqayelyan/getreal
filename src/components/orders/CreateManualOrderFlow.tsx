@@ -18,6 +18,7 @@ import {
   createManualLines,
   formatManualDeliveryLabel,
   getManualCatalogForDistributor,
+  toOrderDeliveryDateIso,
 } from "@/utils/manualOrder";
 
 type Step = "create" | "review";
@@ -139,7 +140,7 @@ export function CreateManualOrderFlow({
     onCreated({
       distributor,
       deliveryDate: expectedDeliveryLabel,
-      deliveryDateIso: deliveryDate || undefined,
+      deliveryDateIso: toOrderDeliveryDateIso(deliveryDate, timeSlot),
       totalPrice: total,
       items: selectedLines.map((line) => ({
         sku: line.sku,
