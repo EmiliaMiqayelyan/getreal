@@ -144,7 +144,9 @@ export function filterOrderDemandRows(
   return rows.filter((row) => {
     if (criteria.productFilter) {
       const category = ORDER_ITEM_CATEGORIES[row.id];
-      if (category !== criteria.productFilter) return false;
+      const matchesCategory = category === criteria.productFilter;
+      const matchesName = row.itemName === criteria.productFilter;
+      if (!matchesCategory && !matchesName) return false;
     }
 
     if (query && !row.itemName.toLowerCase().includes(query)) {
@@ -313,4 +315,110 @@ export function getDeliveredEmptyMessage(criteria: DeliveredFilterCriteria) {
     return "No delivered orders match your search or filters.";
   }
   return "No delivered orders yet.";
+}
+
+function csvCell(value: string) {
+  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
+}
+
+function csvMoney(value: number) {
+  if (!Number.isFinite(value)) return "—";
+  if (Number.isInteger(value)) return `$${value}`;
+  return `$${value.toFixed(2)}`;
+}
+
+function downloadCsv(filename: string, sections: string[][]) {
+  const lines = sections.map((row) => row.map(csvCell).join(","));
+  const blob = new Blob([`\uFEFF${lines.join("\r\n")}`], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+const IN_PROGRESS_HEADERS = [
+  "Delivery ID",
+  "Distributor",
+  "Order Date",
+  "Delivery Date",
+  "Total Price",
+] as const;
+
+const ORDER_LIST_HEADERS = [
+  "Item Name",
+  "Cust. Order Total",
+  "In Stock",
+  "Quantity Receiving",
+  "Date Receiving By",
+] as const;
+
+const DELIVERED_HEADERS = [
+  "Week",
+  "Day",
+  "Delivery ID",
+  "Distributor",
+  "Order Date",
+  "Delivery Date",
+  "Total Price",
+] as const;
+
+/** CSV of the In Progress and Order List tables on the Orders tab. */
+export function downloadDistributorOrdersCsv(
+  inProgress: PlacedOrder[],
+  orderList: PreviewRow[],
+  filename = "distributor-orders.csv",
+) {
+  const rows: string[][] = [
+    ["In Progress"],
+    [...IN_PROGRESS_HEADERS],
+    ...inProgress.map((order) => [
+      order.deliveryId,
+      order.distributor,
+      order.orderDate || "—",
+      order.deliveryDate || "—",
+      csvMoney(order.totalPrice),
+    ]),
+    [],
+    ["Order List"],
+    [...ORDER_LIST_HEADERS],
+    ...orderList.map((row) => [
+      row.itemName,
+      String(row.custOrderTotal),
+      row.inStock == null ? "—" : String(row.inStock),
+      String(row.qtyReceiving),
+      row.dateReceivingBy || "—",
+    ]),
+  ];
+  downloadCsv(filename, rows);
+}
+
+/** CSV of the Delivered tab, including the week and day headings. */
+export function downloadDeliveredOrdersCsv(
+  groups: DeliveredGroup[],
+  filename = "delivered-orders.csv",
+) {
+  const rows: string[][] = [[...DELIVERED_HEADERS]];
+  for (const group of groups) {
+    for (const day of group.days) {
+      for (const order of day.orders) {
+        rows.push([
+          group.week,
+          day.day,
+          order.deliveryId,
+          order.distributor,
+          order.orderDate || "—",
+          order.deliveryDate || "—",
+          csvMoney(order.totalPrice),
+        ]);
+      }
+    }
+  }
+  downloadCsv(filename, rows);
 }

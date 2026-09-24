@@ -345,7 +345,7 @@ export default function RolesPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading users" />
         ) : (

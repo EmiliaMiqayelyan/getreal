@@ -362,7 +362,7 @@ export default function DashboardPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           {statCards.map((card) => {
             const Icon = card.icon;

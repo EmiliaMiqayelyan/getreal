@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Item } from "@/types/item";
@@ -41,6 +42,7 @@ export function AddProductForSaleModal({
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [itemError, setItemError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -64,6 +66,7 @@ export function AddProductForSaleModal({
     setMenuOpen(false);
     setQuery("");
     setItemError("");
+    setConfirmRemove(false);
   }, [open, initialItemId]);
 
   useEffect(() => {
@@ -71,12 +74,12 @@ export function AddProductForSaleModal({
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
-        else handleClose();
+        else if (!confirmRemove) handleClose();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, menuOpen, onClose]);
+  }, [open, menuOpen, onClose, confirmRemove]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -132,6 +135,12 @@ export function AddProductForSaleModal({
   }, [options, query]);
 
   const selected = catalog.find((item) => item.id === selectedId) ?? null;
+  const editingProduct =
+    existingProducts.find((product) => product.id === editingProductId) ??
+    null;
+  const productName = selected
+    ? getItemDisplayName(selected)
+    : editingProduct?.merchandisingName.trim() || "";
   const canSubmit = Boolean(selected);
   const isEdit = mode === "edit" || Boolean(editingProductId);
 
@@ -152,7 +161,12 @@ export function AddProductForSaleModal({
   }
 
   function handleRemove() {
+    setConfirmRemove(true);
+  }
+
+  function confirmRemoveProduct() {
     onRemove?.();
+    setConfirmRemove(false);
     handleClose();
   }
 
@@ -164,7 +178,14 @@ export function AddProductForSaleModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !confirmRemove) {
+          handleClose();
+        }
+      }}
+    >
       <div
         ref={rootRef}
         className="relative w-full max-w-[520px] overflow-visible overscroll-contain rounded-[12px] bg-white shadow-[0_16px_48px_rgba(0,0,0,0.18)]"
@@ -179,7 +200,7 @@ export function AddProductForSaleModal({
               id="add-pfs-title"
               className="text-[18px] font-semibold text-[#111118]"
             >
-              {isEdit ? "Edit Product For Sale" : "Add Product For Sale"}
+              {isEdit ? "Remove Product For Sale" : "Add Product For Sale"}
             </h2>
             {isEdit && editingProductId ? (
               <p className="mt-1 text-[13px] text-[#8A8A8A]">
@@ -203,6 +224,11 @@ export function AddProductForSaleModal({
           </label>
 
           <div className="relative">
+            {isEdit ? (
+              <div className="flex h-11 w-full items-center rounded-[8px] border border-[#00000014] bg-[#FAFAF8] px-3 text-[14px] text-[#111118]">
+                <span className="truncate">{productName || "This product"}</span>
+              </div>
+            ) : (
             <button
               ref={triggerRef}
               type="button"
@@ -269,18 +295,10 @@ export function AddProductForSaleModal({
                 />
               </svg>
             </button>
+            )}
           </div>
           {itemError ? (
             <p className="mt-2 text-[12px] text-[#D64545]">{itemError}</p>
-          ) : null}
-          {isEdit ? (
-            <Button
-              variant="dangerGhost"
-              onClick={handleRemove}
-              className="mt-3 hover:underline"
-            >
-              Remove
-            </Button>
           ) : null}
         </div>
 
@@ -288,9 +306,15 @@ export function AddProductForSaleModal({
           <Button variant="ghost" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
-            {isEdit ? "Edit" : "Add to List"}
-          </Button>
+          {isEdit ? (
+            <Button variant="danger" onClick={handleRemove}>
+              Remove
+            </Button>
+          ) : (
+            <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
+              Add to List
+            </Button>
+          )}
         </div>
       </div>
 
@@ -352,6 +376,15 @@ export function AddProductForSaleModal({
           </ul>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remove Product For Sale"
+        message={`Remove ${productName || "this product"}?`}
+        confirmLabel="Remove"
+        confirmVariant="danger"
+        onClose={() => setConfirmRemove(false)}
+        onConfirm={confirmRemoveProduct}
+      />
     </div>
   );
 }

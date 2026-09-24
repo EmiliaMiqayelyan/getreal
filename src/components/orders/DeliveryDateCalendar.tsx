@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import {
@@ -6,15 +6,16 @@ import {
   formatCalendarMonth,
   getMonthGridCells,
   isDeliveryWeekday,
+  startOfLocalDay,
   toDeliveryDateId,
 } from "@/utils/deliveryCalendar";
 import { cn } from "@/utils/cn";
 
-const ORANGE = "#F57850";
-
 type DeliveryDateCalendarProps = {
   /** When omitted, every day in the month is selectable. */
   deliveryWeekdays?: Set<number>;
+  /** Block days before today. */
+  disablePast?: boolean;
   selectedDateId: string;
   onSelectDate: (dateId: string) => void;
   onClose: () => void;
@@ -24,6 +25,7 @@ type DeliveryDateCalendarProps = {
 
 export function DeliveryDateCalendar({
   deliveryWeekdays,
+  disablePast = false,
   selectedDateId,
   onSelectDate,
   onClose,
@@ -34,11 +36,13 @@ export function DeliveryDateCalendar({
     const base = initialMonth ?? new Date();
     return new Date(base.getFullYear(), base.getMonth(), 1);
   });
-  const [pendingDateId, setPendingDateId] = useState(selectedDateId);
 
-  useEffect(() => {
-    setPendingDateId(selectedDateId);
-  }, [selectedDateId]);
+  const today = startOfLocalDay(new Date());
+  const atEarliestMonth =
+    disablePast &&
+    (visibleMonth.getFullYear() < today.getFullYear() ||
+      (visibleMonth.getFullYear() === today.getFullYear() &&
+        visibleMonth.getMonth() <= today.getMonth()));
 
   const cells = useMemo(
     () => getMonthGridCells(visibleMonth.getFullYear(), visibleMonth.getMonth()),
@@ -46,15 +50,11 @@ export function DeliveryDateCalendar({
   );
 
   function shiftMonth(delta: number) {
+    if (delta < 0 && atEarliestMonth) return;
     setVisibleMonth(
       (current) =>
         new Date(current.getFullYear(), current.getMonth() + delta, 1),
     );
-  }
-
-  function handleApply() {
-    onSelectDate(pendingDateId);
-    onClose();
   }
 
   return (
@@ -70,8 +70,9 @@ export function DeliveryDateCalendar({
           <button
             type="button"
             aria-label="Previous month"
+            disabled={atEarliestMonth}
             onClick={() => shiftMonth(-1)}
-            className="flex size-7 items-center justify-center rounded-[6px] hover:bg-[#F5F5F3]"
+            className="flex size-7 items-center justify-center rounded-[6px] hover:bg-[#F5F5F3] disabled:cursor-default disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <ChevronLeft size={14} />
           </button>
@@ -102,10 +103,12 @@ export function DeliveryDateCalendar({
             visibleMonth.getMonth(),
             day,
           );
+          const past = disablePast && startOfLocalDay(date).getTime() < today.getTime();
           const available =
-            !deliveryWeekdays || isDeliveryWeekday(date, deliveryWeekdays);
+            !past &&
+            (!deliveryWeekdays || isDeliveryWeekday(date, deliveryWeekdays));
           const dateId = toDeliveryDateId(date);
-          const selected = dateId === pendingDateId;
+          const selected = dateId === selectedDateId;
 
           if (!available) {
             return (
@@ -123,9 +126,12 @@ export function DeliveryDateCalendar({
             <button
               key={dateId}
               type="button"
-              onClick={() => setPendingDateId(dateId)}
+              onClick={() => {
+                onSelectDate(dateId);
+                onClose();
+              }}
               className={cn(
-                "rounded-full py-1.5 text-[12px] font-medium transition-colors",
+                "cursor-pointer rounded-full py-1.5 text-[12px] font-medium transition-colors",
                 selected
                   ? "bg-[#6A6A6A] font-semibold text-white"
                   : "text-[#111118] hover:bg-[#F5F5F3]",
@@ -137,21 +143,13 @@ export function DeliveryDateCalendar({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-between gap-3 border-t border-[#00000014] pt-3">
+      <div className="mt-3 flex items-center justify-end border-t border-[#00000014] pt-3">
         <button
           type="button"
           onClick={onClose}
           className="text-[13px] text-[#8A8A8A] hover:text-[#4A4A4A]"
         >
           Close
-        </button>
-        <button
-          type="button"
-          onClick={handleApply}
-          className="rounded-[8px] px-4 py-1.5 text-[13px] font-medium text-white"
-          style={{ backgroundColor: ORANGE }}
-        >
-          Apply
         </button>
       </div>
     </div>

@@ -202,7 +202,7 @@ export default function PushNotificationsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <ScrollTable minWidth={1100} className="rounded-[10px]">
           <table className="w-full table-fixed border-collapse">
             <colgroup>

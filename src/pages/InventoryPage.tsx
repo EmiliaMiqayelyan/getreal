@@ -726,7 +726,7 @@ function StockItemsView({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header title="Stock Items" />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <div className="space-y-8">
           {groupedSections.map((group) => (
             <div key={group.title}>

@@ -1,5 +1,7 @@
 export { cn } from "./cn";
 export {
+  downloadDistributorsCsv,
+  distributorsToCsv,
   filterDistributors,
   getDistributorFullAddress,
   getDistributorLocation,
@@ -14,6 +16,10 @@ export {
   formatClock,
   formatCurrency,
   formatDeliveryLabel,
+  formatPhone,
+  formatPhoneDisplay,
+  formatPhoneInput,
+  formatPhoneValue,
   formatPricePerUnit,
   locationFromAddress,
   resolveFullAddress,
@@ -21,8 +27,11 @@ export {
 } from "./format";
 export { noop } from "./noop";
 export {
+  DISTRIBUTOR_DOCUMENT_ACCEPT,
+  DISTRIBUTOR_DOCUMENT_ERROR,
   firstDistributorFormErrorField,
   hasDistributorFormErrors,
+  isDistributorDocument,
   isValidEmail,
   isValidPhone,
   validateDistributorForm,

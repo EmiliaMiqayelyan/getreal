@@ -309,7 +309,7 @@ function PackingDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -684,7 +684,7 @@ export default function PackingCoolersPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {

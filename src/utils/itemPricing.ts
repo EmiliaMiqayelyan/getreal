@@ -134,6 +134,43 @@ export function formatFinalMarginPercent(value: number) {
   return `${value.toFixed(2)}%`;
 }
 
+function formulaAmount(value: number, forceDecimals = false) {
+  if (!Number.isFinite(value)) return "$ 0.00";
+  const rounded = Math.round(value * 100) / 100;
+  const text =
+    !forceDecimals && Number.isInteger(rounded)
+      ? String(rounded)
+      : rounded.toFixed(2);
+  return `$ ${text}`;
+}
+
+/** Live formula captions from the pricing prototype. */
+export function pricingFormulaLines(
+  input: PricingInputs & { costPerLb: number; costPerPiece: number },
+) {
+  if (input.sourcePer === "Unit") {
+    const ounces = input.pieceWeightOz > 0 ? input.pieceWeightOz : 0;
+    return [
+      `Cost per piece = (Piece weight)/16 × Price per lb (e.g. ${ounces} / 16 × ${formulaAmount(input.buyingPrice)} = ${formulaAmount(input.costPerPiece, true)} )`,
+    ];
+  }
+
+  if (input.sourcePer === "Case" && input.caseBy === "Lbs / case") {
+    return [
+      `Cost per lb = Case price ÷ Total case weight (${formulaAmount(input.buyingPrice)} ÷ ${input.caseWeightLbs || 0} lbs = ${formulaAmount(input.costPerLb, true)} )`,
+      `Cost per piece = Case price ÷ Pieces per case (${formulaAmount(input.buyingPrice)} ÷ ${input.piecesPerCase || 0} = ${formulaAmount(input.costPerPiece, true)} )`,
+    ];
+  }
+
+  if (input.sourcePer === "Case" && input.caseBy === "Units / case") {
+    return [
+      `Cost per piece = Case price ÷ Pieces per case (${formulaAmount(input.buyingPrice)} ÷ ${input.piecesPerCase || 0} = ${formulaAmount(input.costPerPiece, true)} )`,
+    ];
+  }
+
+  return [];
+}
+
 export type PricingSourcePer = "Unit" | "Case";
 export type PricingCaseBy = "Lbs / case" | "Units / case";
 

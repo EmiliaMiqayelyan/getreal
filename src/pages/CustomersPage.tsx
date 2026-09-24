@@ -92,8 +92,10 @@ type SelectedOrder = {
   order: AdminCustomerOrder;
 };
 
-const GRID =
-  "grid grid-cols-[28px_90px_minmax(120px,1.15fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(100px,1fr)_56px_72px_88px_96px] items-center gap-x-3 px-[23px]";
+const GRID_PLAIN =
+  "grid grid-cols-[minmax(0,148px)_minmax(120px,1.15fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(100px,1fr)_56px_72px_88px_96px] items-center gap-x-3 px-4";
+const GRID_ARROW =
+  "grid grid-cols-[28px_minmax(0,148px)_minmax(120px,1.15fr)_minmax(140px,1.3fr)_minmax(110px,1fr)_minmax(100px,1fr)_56px_72px_88px_96px] items-center gap-x-3 px-[23px]";
 
 function OrderDetailDrawer({
   selected,
@@ -440,38 +442,47 @@ function CustomerTable({
     );
   }
 
+  const showArrows = customers.some((customer) => customer.orders.length > 0);
+  const grid = showArrows ? GRID_ARROW : GRID_PLAIN;
+
   return (
     <>
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {customers.map((customer) => {
-          const open = expandedId === customer.id;
+          const canExpand = customer.orders.length > 0;
+          const open = canExpand && expandedId === customer.id;
           return (
             <div
               key={customer.id}
               className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white"
             >
               <div className="flex w-full items-start gap-3 p-3.5">
+                {canExpand ? (
+                  <button
+                    type="button"
+                    aria-label={open ? "Collapse" : "Expand"}
+                    onClick={() => onToggle(customer.id)}
+                    className="mt-1 shrink-0"
+                  >
+                    <ChevronRight
+                      size={14}
+                      className={cn(
+                        "text-[#B0B0B0] transition-transform",
+                        open && "rotate-90 text-[#F57850]",
+                      )}
+                    />
+                  </button>
+                ) : null}
                 <button
                   type="button"
-                  aria-label={open ? "Collapse" : "Expand"}
-                  onClick={() => onToggle(customer.id)}
-                  className="mt-1 shrink-0"
+                  onClick={canExpand ? () => onToggle(customer.id) : undefined}
+                  className={cn(
+                    "min-w-0 flex-1 text-left",
+                    !canExpand && "cursor-default",
+                  )}
                 >
-                  <ChevronRight
-                    size={14}
-                    className={cn(
-                      "text-[#B0B0B0] transition-transform",
-                      open && "rotate-90 text-[#F57850]",
-                    )}
-                  />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onToggle(customer.id)}
-                  className="min-w-0 flex-1 text-left"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <IdPill>{customer.id}</IdPill>
                     <span className="inline-flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                       {customer.firstName} {customer.lastName}
@@ -529,11 +540,11 @@ function CustomerTable({
         <ScrollTable minWidth={1080}>
           <div
             className={cn(
-              GRID,
+              grid,
               "border-b border-[#00000014] bg-white py-[10px] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
             )}
           >
-            <div />
+            {showArrows ? <div /> : null}
             <div className="whitespace-nowrap">ID</div>
             <div className="whitespace-nowrap">Customer</div>
             <div className="whitespace-nowrap">Email</div>
@@ -546,7 +557,8 @@ function CustomerTable({
           </div>
 
           {customers.map((customer, index) => {
-            const open = expandedId === customer.id;
+            const canExpand = customer.orders.length > 0;
+            const open = canExpand && expandedId === customer.id;
             const isLast = index === customers.length - 1;
 
             return (
@@ -554,29 +566,41 @@ function CustomerTable({
                 key={customer.id}
                 className={cn(!isLast || open ? "border-b border-[#00000014]" : "")}
               >
-                <div className={cn(GRID, "py-[10px]")}>
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse" : "Expand"}
-                    onClick={() => onToggle(customer.id)}
-                    className="relative z-[1] flex justify-self-start"
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={cn(
-                        "text-[#B0B0B0] transition-transform",
-                        open && "rotate-90 text-[#F57850]",
-                      )}
-                    />
-                  </button>
+                <div className={cn(grid, "py-[10px]")}>
+                  {showArrows ? (
+                    canExpand ? (
+                      <button
+                        type="button"
+                        aria-label={open ? "Collapse" : "Expand"}
+                        onClick={() => onToggle(customer.id)}
+                        className="relative z-[1] flex justify-self-start"
+                      >
+                        <ChevronRight
+                          size={14}
+                          className={cn(
+                            "text-[#B0B0B0] transition-transform",
+                            open && "rotate-90 text-[#F57850]",
+                          )}
+                        />
+                      </button>
+                    ) : (
+                      <span className="w-3.5" aria-hidden />
+                    )
+                  ) : null}
 
-                  <button
-                    type="button"
-                    onClick={() => onToggle(customer.id)}
-                    className="min-w-0 justify-self-start"
-                  >
-                    <IdPill>{customer.id}</IdPill>
-                  </button>
+                  {canExpand ? (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(customer.id)}
+                      className="flex w-full min-w-0 overflow-hidden text-left"
+                    >
+                      <IdPill>{customer.id}</IdPill>
+                    </button>
+                  ) : (
+                    <div className="flex w-full min-w-0 overflow-hidden">
+                      <IdPill>{customer.id}</IdPill>
+                    </div>
+                  )}
 
                   <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] font-semibold text-[#111118]">
                     <span className="truncate">
@@ -817,7 +841,7 @@ export default function CustomersPage() {
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <div className="flex-1 overflow-auto p-4 md:p-7">
           {loading ? (
             <AppLoader variant="table" label="Loading customers" />
           ) : (

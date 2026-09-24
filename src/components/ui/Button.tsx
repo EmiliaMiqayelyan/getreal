@@ -36,6 +36,7 @@ export function Button({
 }: ButtonProps) {
   const textOnly = isTextOnly(variant);
   const isDark = variant === "dark";
+  const isDanger = variant === "danger";
 
   return (
     <button
@@ -48,6 +49,7 @@ export function Button({
         textOnly && "gap-[5.63px] px-0",
         !textOnly &&
           !isDark &&
+          !isDanger &&
           "h-[30px] gap-[5.63px] rounded-[9.38px] px-[15px]",
         /* Black / dark buttons — Figma Save / Create / Add to List */
         isDark &&
@@ -60,7 +62,8 @@ export function Button({
           "border border-border-strong bg-white text-foreground hover:bg-surface-hover",
         variant === "ghost" &&
           "bg-transparent text-muted hover:text-foreground",
-        variant === "danger" && "bg-danger text-white hover:bg-[#d14d4d]",
+        isDanger &&
+          "h-10 gap-2 rounded-[10px] bg-[#FF2D2D] px-5 text-[14px] text-white hover:bg-[#E01818]",
         variant === "dangerGhost" &&
           "bg-transparent text-danger hover:text-[#c94444]",
         variant === "link" && "bg-transparent text-link hover:underline",
@@ -68,7 +71,7 @@ export function Button({
           "border border-border bg-white text-muted hover:bg-surface-hover hover:text-foreground",
         className,
         /* Force consistent label size — wins over call-site text-* overrides */
-        "!text-[12px]",
+        !isDanger && "!text-[12px]",
       )}
       {...props}
     >

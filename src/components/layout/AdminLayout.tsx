@@ -19,7 +19,7 @@ function AuthenticatedShell() {
     <AdminShell>
       <Suspense
         fallback={
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
             <AppLoader variant="table" label="Loading page" />
           </div>
         }

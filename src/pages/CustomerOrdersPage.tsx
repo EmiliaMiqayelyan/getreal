@@ -146,44 +146,8 @@ function applyPackingHandoff(
 }
 
 function makeSteps(doneCount: number): TimelineStep[] {
-  const meta = [
-    {
-      shortLabel: undefined,
-      person: "Ethan Carter",
-      at: "Jul 16, 12:31 AM",
-    },
-    {
-      shortLabel: "July A",
-      person: "July Anderson",
-      at: "Jul 16, 12:31 AM",
-    },
-    {
-      shortLabel: "James O",
-      person: "James Blazey",
-      at: "Jul 20, 5:24 PM",
-    },
-    {
-      shortLabel: undefined,
-      person: "James Blazey",
-      at: "Jul 20, 5:24 PM",
-    },
-    {
-      shortLabel: "James O",
-      person: "James Blazey",
-      at: "Jul 21, 5:24 PM",
-    },
-    {
-      shortLabel: undefined,
-      person: undefined,
-      at: "Jul 21, 5:24 PM",
-    },
-  ];
-
   return STEPS_META.map((step, index) => ({
     key: step.key,
-    shortLabel: index < doneCount ? meta[index].shortLabel : undefined,
-    person: index < doneCount ? meta[index].person : undefined,
-    at: index < doneCount ? meta[index].at : undefined,
     done: index < doneCount,
     final: step.key === "return" && index < doneCount,
   }));
@@ -210,7 +174,7 @@ function HoverCard({
       <div className="w-[260px] rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl">
         <div className="text-[13px] font-semibold text-[#111118]">Ordered</div>
         <div className="mt-1 text-[12px] text-[#18A34A]">
-          {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
+          {step.at ? `${step.at}, 2026` : "—"}
         </div>
         <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#111118]">
           <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#F57850] text-[9px] font-semibold text-white">
@@ -247,10 +211,14 @@ function HoverCard({
           Cooler Pickup
         </div>
         <div className="mt-1 text-[12px] text-[#18A34A]">
-          {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
+          {step.at ? `${step.at}, 2026` : "—"}
         </div>
         <div className="mt-2">
-          <IdPill>{order.coolerIds?.[0] ?? "BS-402-27"}</IdPill>
+          {order.coolerIds?.[0] ? (
+            <IdPill>{order.coolerIds[0]}</IdPill>
+          ) : (
+            "—"
+          )}
         </div>
       </div>
     );
@@ -269,7 +237,7 @@ function HoverCard({
         {titles[step.key] ?? step.key}
       </div>
       <div className="mt-1 text-[12px] text-[#18A34A]">
-        {step.at ? `${step.at}, 2026` : "Jul 16, 12:31 AM, 2026"}
+        {step.at ? `${step.at}, 2026` : "—"}
       </div>
       {step.person ? (
         <div className="mt-2 flex items-center gap-1.5 text-[12px] text-[#111118]">
@@ -979,18 +947,16 @@ export default function CustomerOrdersPage() {
                 }}
                 className="w-full sm:w-auto"
               />
-              <div className="text-[12px] text-[#8A8A8A]">
-                Today, Tue, Jul 16, 2026
-              </div>
             </div>
           </div>
         }
-        below={
+        center={
           <Tabs
+            embedded
             aria-label="Order views"
             items={[
-              { id: "Orders", label: "Orders" },
-              { id: "Completed", label: "Completed" },
+              { id: "Orders", label: "Orders", width: 103 },
+              { id: "Completed", label: "Completed", width: 118 },
             ]}
             value={activeTab}
             onChange={(id) => {
@@ -1003,7 +969,7 @@ export default function CustomerOrdersPage() {
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-        <div className="flex-1 overflow-auto px-4 py-5 md:px-7">
+        <div className="flex-1 overflow-auto p-4 md:p-7">
           {activeTab === "Orders" ? (
             <div>
               <div className={DATE_CHIP_ROW}>

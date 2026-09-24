@@ -2,18 +2,24 @@ import { useEffect, useRef, useState } from "react";
 import { Download, FileText, Plus, Trash2, Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { Input } from "@/components/ui/Input";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Distributor, DistributorContact } from "@/types/distributor";
 import { cn } from "@/utils/cn";
 import {
+  DISTRIBUTOR_DOCUMENT_ACCEPT,
+  DISTRIBUTOR_DOCUMENT_ERROR,
   firstDistributorFormErrorField,
   hasDistributorFormErrors,
+  isDistributorDocument,
   validateDistributorForm,
   type DistributorFormErrors,
 } from "@/utils/distributorForm";
 import {
   formatDeliveryLabel,
+  formatPhone,
+  formatPhoneInput,
   locationFromAddress,
   WEEK_DAYS,
 } from "@/utils/format";
@@ -30,7 +36,7 @@ function AccentRadio({ checked }: { checked: boolean }) {
         checked ? "border-badge" : "border-[#00000014]",
       )}
     >
-      {checked ? <span className="size-[8px] rounded-full bg-badge" /> : null}
+      {checked ? <span className="bg-badge size-[8px] rounded-full" /> : null}
     </span>
   );
 }
@@ -101,6 +107,8 @@ export function AddDistributorModal({
   const [docs, setDocs] = useState<DocDraft[]>([]);
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<DistributorFormErrors>({});
+  const [docError, setDocError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -109,6 +117,8 @@ export function AddDistributorModal({
     }
 
     setErrors({});
+    setDocError("");
+    setConfirmRemove(false);
 
     if (distributor) {
       setName(distributor.name);
@@ -121,7 +131,10 @@ export function AddDistributorModal({
       setPayment(distributor.paymentTerms);
       setContacts(
         distributor.contacts.length
-          ? distributor.contacts.map((contact) => ({ ...contact }))
+          ? distributor.contacts.map((contact) => ({
+              ...contact,
+              phone: formatPhone(contact.phone),
+            }))
           : [],
       );
       setDocs(
@@ -144,6 +157,8 @@ export function AddDistributorModal({
     setContacts([]);
     setDocs([]);
     setNotes("");
+    setDocError("");
+    setConfirmRemove(false);
     uploadedFilesRef.current.clear();
   }, [distributor, open]);
 
@@ -169,6 +184,10 @@ export function AddDistributorModal({
   }
 
   function handleRemove() {
+    setConfirmRemove(true);
+  }
+
+  function confirmRemoveDistributor() {
     onRemove?.();
     handleClose();
   }
@@ -198,8 +217,14 @@ export function AddDistributorModal({
 
     setErrors({});
 
+    const formattedContacts = contacts.map((contact) => ({
+      ...contact,
+      phone: formatPhone(contact.phone),
+    }));
     const primary =
-      contacts.find((contact) => contact.primary) ?? contacts[0] ?? null;
+      formattedContacts.find((contact) => contact.primary) ??
+      formattedContacts[0] ??
+      null;
     const deliveryDays = WEEK_DAYS.filter((day) => days.includes(day)).map(
       (day) => ({
         day,
@@ -229,7 +254,7 @@ export function AddDistributorModal({
         file: doc.file ?? uploadedFilesRef.current.get(doc.id),
       })),
       notes,
-      contacts,
+      contacts: formattedContacts,
       categories: distributor?.categories ?? [],
       items: distributor?.items ?? 0,
       docs: docs.length ? String(docs.length) : null,
@@ -264,7 +289,7 @@ export function AddDistributorModal({
       >
         <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            {isEdit ? "Edit Distributor" : "Add Distributor"}
+            {isEdit ? "Edit Distributor" : "Create Distributor"}
           </h2>
           <button
             type="button"
@@ -297,10 +322,7 @@ export function AddDistributorModal({
                       setErrors((current) => ({ ...current, name: undefined }));
                     }
                   }}
-                  className={cn(
-                    "w-full",
-                    errors.name && INVALID_BORDER,
-                  )}
+                  className={cn("w-full", errors.name && INVALID_BORDER)}
                 />
                 <FieldError message={errors.name} />
               </div>
@@ -319,10 +341,7 @@ export function AddDistributorModal({
                       }));
                     }
                   }}
-                  className={cn(
-                    "w-full",
-                    errors.address && INVALID_BORDER,
-                  )}
+                  className={cn("w-full", errors.address && INVALID_BORDER)}
                 />
                 <FieldError message={errors.address} />
               </div>
@@ -388,8 +407,9 @@ export function AddDistributorModal({
                                   delete next[day];
                                   return {
                                     ...current,
-                                    deliveryTimeByDay:
-                                      Object.keys(next).length ? next : undefined,
+                                    deliveryTimeByDay: Object.keys(next).length
+                                      ? next
+                                      : undefined,
                                   };
                                 });
                               }
@@ -411,7 +431,10 @@ export function AddDistributorModal({
             </div>
           </section>
 
-          <section data-field="payment" className="mt-8 border-t border-[#00000014] pt-8">
+          <section
+            data-field="payment"
+            className="mt-8 border-t border-[#00000014] pt-8"
+          >
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Payment Terms
             </h3>
@@ -451,7 +474,10 @@ export function AddDistributorModal({
             <FieldError message={errors.payment} />
           </section>
 
-          <section data-field="contacts" className="mt-8 border-t border-[#00000014] pt-8">
+          <section
+            data-field="contacts"
+            className="mt-8 border-t border-[#00000014] pt-8"
+          >
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                 Contact Information
@@ -471,7 +497,7 @@ export function AddDistributorModal({
                     }));
                   }
                 }}
-                className="flex size-7 items-center justify-center rounded-full bg-badge text-white"
+                className="bg-badge flex size-7 items-center justify-center rounded-full text-white"
               >
                 <Plus size={14} />
               </button>
@@ -481,9 +507,7 @@ export function AddDistributorModal({
               <div
                 className={cn(
                   "rounded-[10px] border border-dashed bg-[#FAFAF8] px-4 py-8 text-center text-[13px] text-[#8A8A8A]",
-                  errors.contacts
-                    ? "border-[#E25B5B]"
-                    : "border-[#00000014]",
+                  errors.contacts ? "border-[#E25B5B]" : "border-[#00000014]",
                 )}
               >
                 No contacts yet. Click + to add a supplier contact.
@@ -494,111 +518,129 @@ export function AddDistributorModal({
                   const contactErrors = errors.contactById?.[contact.id];
 
                   return (
-                  <div
-                    key={contact.id}
-                    className={cn(
-                      "rounded-[10px] border p-4",
-                      contact.primary ? "border-badge" : "border-[#00000014]",
-                      contactErrors && "border-[#E25B5B]",
-                    )}
-                  >
-                    <div className="mb-3 flex items-center justify-between">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setContacts((current) =>
-                            current.map((entry) => ({
-                              ...entry,
-                              primary: entry.id === contact.id,
-                            })),
-                          )
-                        }
-                        className={cn(
-                          "inline-flex items-center gap-2 text-[12px] font-medium",
-                          contact.primary ? "text-badge" : "text-[#111118]",
-                        )}
-                      >
-                        <AccentRadio checked={contact.primary} />
-                        {contact.primary ? "Primary contact" : "Set as primary"}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Delete contact"
-                        onClick={() =>
-                          setContacts((current) => {
-                            const next = current.filter(
-                              (entry) => entry.id !== contact.id,
-                            );
-                            if (
-                              next.length &&
-                              !next.some((entry) => entry.primary)
-                            ) {
-                              next[0] = { ...next[0], primary: true };
-                            }
-                            return next;
-                          })
-                        }
-                        className="text-[#B0B0B0] hover:text-[#E25B5B]"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {CONTACT_FIELDS.map(([key, label]) => (
-                        <div
-                          key={key}
-                          data-field={`contact-${contact.id}-${key}`}
-                          className={key === "title" ? "sm:col-span-2" : ""}
+                    <div
+                      key={contact.id}
+                      className={cn(
+                        "rounded-[10px] border p-4",
+                        contact.primary ? "border-badge" : "border-[#00000014]",
+                        contactErrors && "border-[#E25B5B]",
+                      )}
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setContacts((current) =>
+                              current.map((entry) => ({
+                                ...entry,
+                                primary: entry.id === contact.id,
+                              })),
+                            )
+                          }
+                          className={cn(
+                            "inline-flex items-center gap-2 text-[12px] font-medium",
+                            contact.primary ? "text-badge" : "text-[#111118]",
+                          )}
                         >
-                          <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
-                            {label}
-                          </label>
-                          <Input
-                            value={contact[key]}
-                            type={key === "email" ? "email" : "text"}
-                            onChange={(event) => {
-                              const value = event.target.value;
-                              setContacts((current) =>
-                                current.map((entry) =>
-                                  entry.id === contact.id
-                                    ? { ...entry, [key]: value }
-                                    : entry,
-                                ),
+                          <AccentRadio checked={contact.primary} />
+                          {contact.primary
+                            ? "Primary contact"
+                            : "Set as primary"}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete contact"
+                          onClick={() =>
+                            setContacts((current) => {
+                              const next = current.filter(
+                                (entry) => entry.id !== contact.id,
                               );
-                              if (contactErrors?.[key]) {
-                                setErrors((current) => {
-                                  const nextContact = {
-                                    ...current.contactById?.[contact.id],
-                                  };
-                                  delete nextContact[key];
-                                  const nextById = {
-                                    ...current.contactById,
-                                  };
-                                  if (Object.keys(nextContact).length) {
-                                    nextById[contact.id] = nextContact;
-                                  } else {
-                                    delete nextById[contact.id];
-                                  }
-                                  return {
-                                    ...current,
-                                    contactById:
-                                      Object.keys(nextById).length
+                              if (
+                                next.length &&
+                                !next.some((entry) => entry.primary)
+                              ) {
+                                next[0] = { ...next[0], primary: true };
+                              }
+                              return next;
+                            })
+                          }
+                          className="text-[#B0B0B0] hover:text-[#E25B5B]"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {CONTACT_FIELDS.map(([key, label]) => (
+                          <div
+                            key={key}
+                            data-field={`contact-${contact.id}-${key}`}
+                            className={key === "title" ? "sm:col-span-2" : ""}
+                          >
+                            <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
+                              {label}
+                            </label>
+                            <Input
+                              value={contact[key]}
+                              type={
+                                key === "email"
+                                  ? "email"
+                                  : key === "phone"
+                                    ? "tel"
+                                    : "text"
+                              }
+                              inputMode={key === "phone" ? "tel" : undefined}
+                              autoComplete={key === "phone" ? "tel" : undefined}
+                              placeholder={
+                                key === "phone" ? "(555) 555-5555" : undefined
+                              }
+                              onChange={(event) => {
+                                const value =
+                                  key === "phone"
+                                    ? formatPhoneInput(
+                                        contact.phone,
+                                        event.target.value,
+                                      )
+                                    : event.target.value;
+                                setContacts((current) =>
+                                  current.map((entry) =>
+                                    entry.id === contact.id
+                                      ? { ...entry, [key]: value }
+                                      : entry,
+                                  ),
+                                );
+                                if (contactErrors?.[key]) {
+                                  setErrors((current) => {
+                                    const nextContact = {
+                                      ...current.contactById?.[contact.id],
+                                    };
+                                    delete nextContact[key];
+                                    const nextById = {
+                                      ...current.contactById,
+                                    };
+                                    if (Object.keys(nextContact).length) {
+                                      nextById[contact.id] = nextContact;
+                                    } else {
+                                      delete nextById[contact.id];
+                                    }
+                                    return {
+                                      ...current,
+                                      contactById: Object.keys(nextById).length
                                         ? nextById
                                         : undefined,
-                                  };
-                                });
-                              }
-                            }}
-                            className={cn(
-                              "w-full",
-                              contactErrors?.[key] && INVALID_BORDER,
-                            )}
-                          />
-                          <FieldError message={contactErrors?.[key]} />
-                        </div>
-                      ))}
+                                    };
+                                  });
+                                }
+                              }}
+                              className={cn(
+                                "w-full",
+                                contactErrors?.[key] && INVALID_BORDER,
+                              )}
+                            />
+                            <FieldError message={contactErrors?.[key]} />
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>
@@ -623,10 +665,17 @@ export function AddDistributorModal({
               <input
                 ref={fileRef}
                 type="file"
+                accept={DISTRIBUTOR_DOCUMENT_ACCEPT}
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
+                  event.target.value = "";
                   if (!file) return;
+                  if (!isDistributorDocument(file)) {
+                    setDocError(DISTRIBUTOR_DOCUMENT_ERROR);
+                    return;
+                  }
+                  setDocError("");
                   const id = uid();
                   uploadedFilesRef.current.set(id, file);
                   setDocs((current) => [
@@ -639,10 +688,10 @@ export function AddDistributorModal({
                       file,
                     },
                   ]);
-                  event.target.value = "";
                 }}
               />
             </div>
+            <FieldError message={docError} />
             {docs.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 rounded-[10px] border border-dashed border-[#00000014] bg-[#FAFAF8] px-4 py-8 text-center text-[13px] text-[#8A8A8A]">
                 <FileText size={22} className="text-[#C0C0BC]" />
@@ -660,7 +709,9 @@ export function AddDistributorModal({
                       <div className="truncate text-[13px] text-[#111118]">
                         {doc.name}
                       </div>
-                      <div className="text-[11px] text-[#8A8A8A]">{doc.size}</div>
+                      <div className="text-[11px] text-[#8A8A8A]">
+                        {doc.size}
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -676,9 +727,11 @@ export function AddDistributorModal({
                           link.click();
                           return;
                         }
-                        const blob = stored ?? new Blob([""], {
-                          type: "application/octet-stream",
-                        });
+                        const blob =
+                          stored ??
+                          new Blob([""], {
+                            type: "application/octet-stream",
+                          });
                         const url = URL.createObjectURL(blob);
                         const link = document.createElement("a");
                         link.href = url;
@@ -743,11 +796,21 @@ export function AddDistributorModal({
               Cancel
             </Button>
             <Button variant="dark" onClick={handleSave}>
-              Save Distributor
+              {isEdit ? "Save Distributor" : "Create Distributor"}
             </Button>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Delete distributor"
+        message={`Delete ${name.trim() || "this distributor"}?`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onClose={() => setConfirmRemove(false)}
+        onConfirm={confirmRemoveDistributor}
+      />
     </div>
   );
 }

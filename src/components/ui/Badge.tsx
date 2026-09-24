@@ -39,7 +39,7 @@ export function IdPill({ children, className }: BadgeProps) {
 
   return (
     <span className={cn(ID_PILL, className)} title={title}>
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }

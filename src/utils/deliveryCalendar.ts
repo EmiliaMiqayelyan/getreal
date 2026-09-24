@@ -96,6 +96,24 @@ export function isDeliveryWeekday(
   return deliveryWeekdays.has(date.getDay());
 }
 
+export function startOfLocalDay(date: Date) {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+/** Delivery days from today through the next several months. */
+export function getUpcomingDeliveryDates(
+  deliveryWeekdays: Set<number>,
+  from = new Date(),
+  horizonDays = 180,
+) {
+  const start = startOfLocalDay(from);
+  const end = new Date(start);
+  end.setDate(end.getDate() + horizonDays);
+  return getDeliveryDatesInRange(start, end, deliveryWeekdays);
+}
+
 export function getDeliveryDatesInRange(
   start: Date,
   end: Date,

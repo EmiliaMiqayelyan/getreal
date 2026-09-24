@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { AddDistributorModal } from "@/components/distributors/AddDistributorModal";
 import { DistributorFilters } from "@/components/distributors/DistributorFilters";
@@ -6,23 +7,25 @@ import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
-import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   distributorsApi,
-  downloadListExport,
   isApiConfigured,
   mapApiDistributorToDistributor,
 } from "@/lib/api";
-import { toCreateDistributorPayload, resolveDistributorDocuments } from "@/lib/api/payloads";
+import {
+  toCreateDistributorPayload,
+  resolveDistributorDocuments,
+} from "@/lib/api/payloads";
 import type { Distributor } from "@/types/distributor";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import { apiId } from "@/utils/entityIds";
 import {
+  downloadDistributorsCsv,
   filterDistributors,
   getDistributorFullAddress,
   getDistributorLocation,
@@ -216,9 +219,17 @@ function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
   );
 }
 
+const NOTES_PANEL_WIDTH = 360;
+
 function NotesHover({ notes }: { notes: string }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({
+    top: 0,
+    bottom: 0,
+    left: 0,
+    maxHeight: 520,
+    above: false,
+  });
   const btnRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef<number>(0);
 
@@ -228,9 +239,22 @@ function NotesHover({ notes }: { notes: string }) {
     window.clearTimeout(hideTimer.current);
     const rect = btnRef.current?.getBoundingClientRect();
     if (rect) {
+      const margin = 16;
+      const left = Math.min(
+        Math.max(margin, rect.left),
+        window.innerWidth - NOTES_PANEL_WIDTH - margin,
+      );
+      const belowTop = rect.bottom + 8;
+      const spaceBelow = window.innerHeight - belowTop - margin;
+      const spaceAbove = rect.top - margin - 8;
+      const above = spaceBelow < 160 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, Math.min(520, above ? spaceAbove : spaceBelow));
       setPos({
-        top: rect.bottom + 8,
-        left: Math.min(rect.left, window.innerWidth - 260),
+        top: belowTop,
+        bottom: window.innerHeight - rect.top + 8,
+        left,
+        maxHeight,
+        above,
       });
     }
     setOpen(true);
@@ -245,7 +269,11 @@ function NotesHover({ notes }: { notes: string }) {
   }
 
   return (
-    <div className="relative justify-self-start" onMouseEnter={show} onMouseLeave={hide}>
+    <div
+      className="relative justify-self-start"
+      onMouseEnter={show}
+      onMouseLeave={hide}
+    >
       <button
         ref={btnRef}
         type="button"
@@ -255,20 +283,29 @@ function NotesHover({ notes }: { notes: string }) {
       >
         View
       </button>
-      {open ? (
-        <div
-          role="tooltip"
-          className="fixed z-50 w-[240px] rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-          style={{ top: pos.top, left: pos.left }}
-          onMouseEnter={show}
-          onMouseLeave={hide}
-        >
-          <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
-            Notes
-          </div>
-          <p className="text-[12px] leading-relaxed text-[#111118]">{notes}</p>
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="fixed z-50 w-[360px] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              style={{
+                left: pos.left,
+                maxHeight: pos.maxHeight,
+                ...(pos.above ? { bottom: pos.bottom } : { top: pos.top }),
+              }}
+              onMouseEnter={show}
+              onMouseLeave={hide}
+            >
+              <div className="mb-2 shrink-0 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                Notes
+              </div>
+              <p className="text-[13px] leading-relaxed whitespace-pre-wrap text-[#111118]">
+                {notes}
+              </p>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -280,6 +317,8 @@ export default function DistributorsPage() {
     distributors: rows,
     saveDistributor,
     removeDistributor,
+    setItems,
+    setSources,
     isBootstrapping,
   } = useAppCatalog();
   const { notifyApiError, showSuccess } = useApiFeedback();
@@ -321,15 +360,37 @@ export default function DistributorsPage() {
 
   function handleRemoveDistributor() {
     if (!editing) return;
-    const id = editing.id;
     const snapshot = editing;
-    removeDistributor(id);
-    if (isApiConfigured()) {
-      void distributorsApi.remove(apiId(editing)).catch((error) => {
+    const recordId = apiId(snapshot);
+    removeDistributor(snapshot.id);
+    if (!isApiConfigured()) return;
+
+    void distributorsApi
+      .remove(recordId)
+      .then(() => {
+        const stillLinked = (ref?: string, name?: string) =>
+          ref === recordId ||
+          ref === snapshot.id ||
+          (name ? name === snapshot.name : false);
+        setItems((items) =>
+          items.map((item) =>
+            stillLinked(item.distributorId, item.distributor)
+              ? { ...item, distributor: "", distributorId: undefined }
+              : item,
+          ),
+        );
+        setSources((sources) =>
+          sources.map((source) =>
+            stillLinked(source.distributorId, source.distributor)
+              ? { ...source, distributor: "", distributorId: undefined }
+              : source,
+          ),
+        );
+      })
+      .catch((error) => {
         saveDistributor(snapshot, "create");
         notifyApiError(error, "Failed to delete distributor.");
       });
-    }
   }
 
   return (
@@ -348,147 +409,143 @@ export default function DistributorsPage() {
             onWeekdayChange={setWeekdayFilter}
             onAdd={openCreate}
             onExport={async (request: ExportRequest) => {
-              await downloadListExport(
-                "/distributors",
-                {},
-                request.format,
-                "distributors",
-              );
+              const source = request.scope === "all" ? rows : filtered;
+              downloadDistributorsCsv(source);
             }}
           />
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading distributors" />
         ) : (
           <>
-        <div className="space-y-2 md:hidden">
-          {filtered.length === 0 ? (
-            <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
-              No distributors found
-            </div>
-          ) : null}
-          {filtered.map((row) => (
-            <div
-              key={row.id}
-              className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <IdPill>{row.id}</IdPill>
-                  <div className="mt-2 truncate text-[13px] leading-[18px] font-medium text-[#111118]">
-                    {row.name}
-                  </div>
-                  <div className={SECONDARY}>{row.paymentTerms || "—"}</div>
-                  <LocationHover
-                    className="mt-1 text-[12px] text-[#111118]"
-                    fullAddress={getDistributorFullAddress(row)}
-                  >
-                    {getDistributorLocation(row)}
-                  </LocationHover>
-                  <div className="mt-0.5 text-[12px] text-[#111118]">
-                    {getPrimaryContactName(row)}
-                  </div>
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
+              {filtered.length === 0 ? (
+                <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                  No distributors found
                 </div>
-                <button
-                  type="button"
-                  onClick={() => openEdit(row)}
-                  className={EDIT_LINK}
-                >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="hidden w-full md:block">
-          <ScrollTable minWidth={1100} className="w-full">
-            <div
-              className={cn(
-                GRID,
-                TABLE_HEADER,
-                "h-10 border-b border-[#00000014] px-4",
-              )}
-            >
-              <div>Distr. ID</div>
-              <div>Name</div>
-              <div>Location</div>
-              <div>Contact Info</div>
-              <div>Phone</div>
-              <div>Delivery Info</div>
-              <div>Documents</div>
-              <div>Notes</div>
-              <div aria-hidden />
-            </div>
-
-            {filtered.length === 0 ? (
-              <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
-                No distributors found
-              </div>
-            ) : null}
-
-            {filtered.map((row, index) => {
-              const delivery = formatDeliveryLabel(row.deliveryDays);
-              const isLast = index === filtered.length - 1;
-
-              return (
+              ) : null}
+              {filtered.map((row) => (
                 <div
                   key={row.id}
+                  className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <IdPill>{row.id}</IdPill>
+                      <div className="mt-2 truncate text-[13px] leading-[18px] font-medium text-[#111118]">
+                        {row.name}
+                      </div>
+                      <div className={SECONDARY}>{row.paymentTerms || "—"}</div>
+                      <LocationHover
+                        className="mt-1 text-[12px] text-[#111118]"
+                        fullAddress={getDistributorFullAddress(row)}
+                      >
+                        {getDistributorLocation(row)}
+                      </LocationHover>
+                      <div className="mt-0.5 text-[12px] text-[#111118]">
+                        {getPrimaryContactName(row)}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={EDIT_LINK}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
+              <div className="w-full min-w-[1100px]">
+                <div
                   className={cn(
                     GRID,
-                    "h-[100px] px-4",
-                    !isLast && "border-b border-[#00000014]",
+                    TABLE_HEADER,
+                    "sticky top-0 z-20 h-10 border-b border-[#00000014] bg-white px-4",
                   )}
                 >
-                  <IdPill>{row.id}</IdPill>
-
-                  <div className="min-w-0">
-                    <div className={cn(BODY, "truncate")}>
-                      {row.name}
-                    </div>
-                    <div className={cn("mt-1", SECONDARY)}>
-                      {row.paymentTerms || "—"}
-                    </div>
-                  </div>
-
-                  <LocationHover
-                    className={BODY}
-                    fullAddress={getDistributorFullAddress(row)}
-                  >
-                    {getDistributorLocation(row)}
-                  </LocationHover>
-                  <div className={cn(BODY, "min-w-0 truncate")}>
-                    {getPrimaryContactName(row)}
-                  </div>
-                  <div className={cn(BODY, "whitespace-nowrap")}>
-                    {getPrimaryContactPhone(row)}
-                  </div>
-                  <div className="min-w-0">
-                    <div className={cn(BODY, "truncate")}>{delivery.days}</div>
-                    {delivery.time ? (
-                      <div className={cn("mt-1", SECONDARY)}>
-                        {delivery.time}
-                      </div>
-                    ) : null}
-                  </div>
-                  <FilesMenu documents={row.documents} />
-                  <NotesHover notes={row.notes} />
-                  <button
-                    type="button"
-                    onClick={() => openEdit(row)}
-                    className={cn(EDIT_LINK, "justify-self-end")}
-                    aria-label={`Edit ${row.name}`}
-                  >
-                    Edit
-                  </button>
+                  <div>Distr. ID</div>
+                  <div>Name</div>
+                  <div>Location</div>
+                  <div>Contact Info</div>
+                  <div>Phone</div>
+                  <div>Delivery Info</div>
+                  <div>Documents</div>
+                  <div>Notes</div>
+                  <div aria-hidden />
                 </div>
-              );
-            })}
-          </ScrollTable>
-        </div>
+
+                {filtered.length === 0 ? (
+                  <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                    No distributors found
+                  </div>
+                ) : null}
+
+                {filtered.map((row, index) => {
+                  const delivery = formatDeliveryLabel(row.deliveryDays);
+                  const isLast = index === filtered.length - 1;
+
+                  return (
+                    <div
+                      key={row.id}
+                      className={cn(
+                        GRID,
+                        "h-[100px] px-4",
+                        !isLast && "border-b border-[#00000014]",
+                      )}
+                    >
+                      <IdPill>{row.id}</IdPill>
+
+                      <div className="min-w-0">
+                        <div className={cn(BODY, "truncate")}>{row.name}</div>
+                        <div className={cn("mt-1", SECONDARY)}>
+                          {row.paymentTerms || "—"}
+                        </div>
+                      </div>
+
+                      <LocationHover
+                        className={BODY}
+                        fullAddress={getDistributorFullAddress(row)}
+                      >
+                        {getDistributorLocation(row)}
+                      </LocationHover>
+                      <div className={cn(BODY, "min-w-0 truncate")}>
+                        {getPrimaryContactName(row)}
+                      </div>
+                      <div className={cn(BODY, "whitespace-nowrap")}>
+                        {getPrimaryContactPhone(row)}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={cn(BODY, "truncate")}>
+                          {delivery.days}
+                        </div>
+                        {delivery.time ? (
+                          <div className={cn("mt-1", SECONDARY)}>
+                            {delivery.time}
+                          </div>
+                        ) : null}
+                      </div>
+                      <FilesMenu documents={row.documents} />
+                      <NotesHover notes={row.notes} />
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={cn(EDIT_LINK, "justify-self-end")}
+                        aria-label={`Edit ${row.name}`}
+                      >
+                        Edit
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </>
         )}
       </div>

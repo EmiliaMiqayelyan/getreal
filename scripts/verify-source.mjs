@@ -49,7 +49,7 @@ if (viewBox) {
 }
 await page.screenshot({ path: join(outDir, "08-source-desc.png") });
 
-await clickText("Add Source");
+await clickText("Create Source");
 await new Promise((r) => setTimeout(r, 300));
 await page.screenshot({ path: join(outDir, "09-source-add.png") });
 await clickText("Cancel");

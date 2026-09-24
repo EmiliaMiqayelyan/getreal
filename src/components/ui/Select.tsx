@@ -45,9 +45,7 @@ export function Select({
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
 
-  const cleanOptions = options.filter(
-    (option) => option.label.trim().length > 0 || option.value === "",
-  );
+  const cleanOptions = options.filter((option) => option.label.trim().length > 0);
   const selected = cleanOptions.find((option) => option.value === value);
   const displayLabel = selected?.label || placeholder || "";
 

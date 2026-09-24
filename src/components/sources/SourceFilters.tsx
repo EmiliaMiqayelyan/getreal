@@ -88,7 +88,7 @@ export function SourceFilters({
           className="w-full sm:w-auto"
         >
           <Plus size={14} />
-          Add Source
+          Create Source
         </Button>
       </div>
     </div>

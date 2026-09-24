@@ -3,7 +3,7 @@ import { Calendar } from "lucide-react";
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
-import { parseDeliveryDateId } from "@/utils/deliveryCalendar";
+import { parseDeliveryDateId, startOfLocalDay } from "@/utils/deliveryCalendar";
 import { cn } from "@/utils/cn";
 
 type DatePickerProps = {
@@ -55,7 +55,10 @@ export function DatePicker({
     };
   }, [open]);
 
-  const initialMonth = parseDeliveryDateId(value) ?? new Date();
+  const parsed = parseDeliveryDateId(value);
+  const today = startOfLocalDay(new Date());
+  const initialMonth =
+    parsed && parsed.getTime() >= today.getTime() ? parsed : new Date();
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
@@ -82,6 +85,7 @@ export function DatePicker({
 
       {open ? (
         <DeliveryDateCalendar
+          disablePast
           selectedDateId={value}
           onSelectDate={onChange}
           onClose={() => setOpen(false)}

@@ -13,10 +13,7 @@ export type DistributorFormInput = {
 };
 
 export type ContactFieldErrors = Partial<
-  Record<
-    "firstName" | "lastName" | "phone" | "email" | "title",
-    string
-  >
+  Record<"firstName" | "lastName" | "phone" | "email" | "title", string>
 >;
 
 export type DistributorFormErrors = {
@@ -38,6 +35,67 @@ export function isValidPhone(value: string) {
   return (
     digits.length === 10 || (digits.length === 11 && digits.startsWith("1"))
   );
+}
+
+const DOCUMENT_EXTENSIONS = new Set([
+  "pdf",
+  "doc",
+  "docx",
+  "xls",
+  "xlsx",
+  "ppt",
+  "pptx",
+  "txt",
+  "csv",
+  "rtf",
+  "odt",
+  "ods",
+  "odp",
+]);
+
+/** File-picker filter for distributor documents. */
+export const DISTRIBUTOR_DOCUMENT_ACCEPT = [
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
+  ".txt",
+  ".csv",
+  ".rtf",
+  ".odt",
+  ".ods",
+  ".odp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/plain",
+  "text/csv",
+  "application/rtf",
+].join(",");
+
+export const DISTRIBUTOR_DOCUMENT_ERROR =
+  "Upload a document only (PDF, Word, Excel, PowerPoint, or text). Audio, video, and other files are not allowed.";
+
+/** True for office/text documents. Rejects audio, video, images, and other files. */
+export function isDistributorDocument(file: Pick<File, "name" | "type">) {
+  const extension = file.name.split(".").pop()?.toLowerCase() ?? "";
+  if (!DOCUMENT_EXTENSIONS.has(extension)) return false;
+  const type = file.type.toLowerCase();
+  if (
+    type.startsWith("audio/") ||
+    type.startsWith("video/") ||
+    type.startsWith("image/")
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function validateDistributorForm(
@@ -78,7 +136,9 @@ export function validateDistributorForm(
   if (input.contacts.length === 0) {
     errors.contacts = "Add at least one contact.";
   } else {
-    const primaryCount = input.contacts.filter((contact) => contact.primary).length;
+    const primaryCount = input.contacts.filter(
+      (contact) => contact.primary,
+    ).length;
     if (primaryCount !== 1) {
       errors.contacts = "Designate exactly one primary contact.";
     }
@@ -128,7 +188,10 @@ export function hasDistributorFormErrors(errors: DistributorFormErrors) {
     return true;
   }
 
-  if (errors.deliveryTimeByDay && Object.keys(errors.deliveryTimeByDay).length) {
+  if (
+    errors.deliveryTimeByDay &&
+    Object.keys(errors.deliveryTimeByDay).length
+  ) {
     return true;
   }
 

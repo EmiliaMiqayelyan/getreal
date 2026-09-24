@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import {
   FormField,
   INVALID_FIELD_BORDER,
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useScrollLock } from "@/hooks/useScrollLock";
+import { isApiConfigured, isUploadableImage, uploadImage } from "@/lib/api";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import { resolveDistributorId } from "@/utils/distributorSync";
@@ -52,6 +54,10 @@ export function AddSourceModal({
   const [logoName, setLogoName] = useState<string | undefined>();
   const [description, setDescription] = useState("");
   const [errors, setErrors] = useState<SourceFormErrors>({});
+  const [imageError, setImageError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const logoFileRef = useRef<File | null>(null);
 
   const distributorOptions = useMemo(
     () => distributors.map((entry) => entry.name).sort(),
@@ -62,6 +68,10 @@ export function AddSourceModal({
     if (!open) return;
 
     setErrors({});
+    setImageError("");
+    setConfirmRemove(false);
+    setSaving(false);
+    logoFileRef.current = null;
 
     if (source) {
       setName(source.name);
@@ -84,17 +94,32 @@ export function AddSourceModal({
 
   if (!open) return null;
 
+  function clearLogo() {
+    logoFileRef.current = null;
+    setLogoName(undefined);
+    setLogoUrl(null);
+  }
+
+  function rejectImage(message: string) {
+    clearLogo();
+    setImageError(message);
+  }
+
   function handleClose() {
     setErrors({});
     onClose();
   }
 
   function handleRemove() {
+    setConfirmRemove(true);
+  }
+
+  function confirmRemoveSource() {
     onRemove?.();
     handleClose();
   }
 
-  function handleSave() {
+  async function handleSave() {
     const nextErrors = validateSourceForm({
       name,
       address,
@@ -117,6 +142,29 @@ export function AddSourceModal({
 
     setErrors({});
 
+    let nextLogoUrl = logoUrl;
+    const pendingFile = logoFileRef.current;
+    if (pendingFile) {
+      if (!isUploadableImage(pendingFile)) {
+        rejectImage("Upload a JPEG, PNG, or WebP image.");
+        return;
+      }
+      if (isApiConfigured()) {
+        setSaving(true);
+        try {
+          nextLogoUrl = await uploadImage(pendingFile);
+        } catch {
+          rejectImage("This image could not be uploaded and was removed.");
+          return;
+        } finally {
+          setSaving(false);
+        }
+      }
+    } else if (nextLogoUrl?.startsWith("blob:")) {
+      rejectImage("This image could not be uploaded and was removed.");
+      return;
+    }
+
     const hasExternalDistributor = distributor !== SOURCE_NO_DISTRIBUTOR;
 
     onSave({
@@ -129,8 +177,8 @@ export function AddSourceModal({
         ? resolveDistributorId(distributor, distributors)
         : undefined,
       description: description.trim(),
-      logoUrl,
-      logoName: logoUrl ? logoName : undefined,
+      logoUrl: nextLogoUrl,
+      logoName: nextLogoUrl ? logoName : undefined,
     });
   }
 
@@ -151,7 +199,7 @@ export function AddSourceModal({
       >
         <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
-            {isEdit ? "Edit Source" : "Add Source"}
+            {isEdit ? "Edit Source" : "Create Source"}
           </h2>
           <IconButton aria-label="Close" onClick={handleClose}>
             <X size={18} />
@@ -186,6 +234,7 @@ export function AddSourceModal({
                 <div data-field="address">
                   <Input
                     value={address}
+                    placeholder="Street, city, state ZIP"
                     onChange={(event) => {
                       setAddress(event.target.value);
                       if (errors.address) {
@@ -251,15 +300,20 @@ export function AddSourceModal({
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
-                  if (!file) return;
-                  const url = URL.createObjectURL(file);
-                  setLogoUrl(url);
-                  setLogoName(file.name);
                   event.target.value = "";
+                  if (!file) return;
+                  if (!isUploadableImage(file)) {
+                    rejectImage("Upload a JPEG, PNG, or WebP image.");
+                    return;
+                  }
+                  setImageError("");
+                  logoFileRef.current = file;
+                  setLogoUrl(URL.createObjectURL(file));
+                  setLogoName(file.name);
                 }}
               />
             </div>
@@ -271,13 +325,16 @@ export function AddSourceModal({
                     src={logoUrl}
                     alt={logoName || "Source image"}
                     className="max-h-[120px] max-w-full object-contain"
+                    onError={() =>
+                      rejectImage("This image could not be loaded and was removed.")
+                    }
                   />
                 </div>
                 <button
                   type="button"
                   onClick={() => {
-                    setLogoUrl(null);
-                    setLogoName(undefined);
+                    clearLogo();
+                    setImageError("");
                   }}
                   className="mt-2 cursor-pointer text-[13px] font-medium text-[#3B7DC4] hover:underline"
                 >
@@ -293,6 +350,9 @@ export function AddSourceModal({
                 Upload Image
               </button>
             )}
+            {imageError ? (
+              <p className="mt-2 text-[12px] text-[#E25B5B]">{imageError}</p>
+            ) : null}
           </section>
 
           <section className="mt-8 border-t border-[#00000014] pt-8">
@@ -325,12 +385,22 @@ export function AddSourceModal({
             <Button variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button variant="dark" onClick={handleSave}>
-              Save Source
+            <Button variant="dark" disabled={saving} onClick={() => void handleSave()}>
+              {saving ? "Saving..." : isEdit ? "Save Source" : "Create Source"}
             </Button>
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Delete source"
+        message={`Delete ${name.trim() || "this source"}?`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onClose={() => setConfirmRemove(false)}
+        onConfirm={confirmRemoveSource}
+      />
     </div>
   );
 }

@@ -1,5 +1,18 @@
 export const SOURCE_NO_DISTRIBUTOR = "__none__";
 
+/** Street, city, and state, with an optional ZIP on the state segment. */
+export function isFullAddress(value: string) {
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 3) return false;
+  const state = parts[parts.length - 1]
+    .replace(/\b\d{5}(?:-\d{4})?\b/, "")
+    .trim();
+  return Boolean(parts[0] && parts[parts.length - 2] && state);
+}
+
 export type SourceFormInput = {
   name: string;
   address: string;
@@ -22,6 +35,8 @@ export function validateSourceForm(input: SourceFormInput): SourceFormErrors {
 
   if (!input.address.trim()) {
     errors.address = "Full address is required.";
+  } else if (!isFullAddress(input.address)) {
+    errors.address = "Enter the full address (street, city, and state).";
   }
 
   if (!input.distributor) {

@@ -702,7 +702,7 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -1237,19 +1237,17 @@ export default function DistributorDeliveriesPage() {
                   "deliveries",
                 );
               }}
-              className="w-full sm:w-auto"
+              className="w-full sm:ml-auto sm:w-auto"
             />
-            <div className="ml-auto text-[12px] text-[#8A8A8A]">
-              Today, Tue, Jun 22, 2026
-            </div>
           </div>
         }
-        below={
+        center={
           <Tabs
+            embedded
             aria-label="Receiving views"
             items={[
-              { id: "Orders", label: "Orders" },
-              { id: "Received", label: "Received" },
+              { id: "Orders", label: "Orders", width: 103 },
+              { id: "Received", label: "Delivered", width: 93 },
             ]}
             value={activeTab}
             onChange={(id) => setActiveTab(id as "Orders" | "Received")}
@@ -1257,7 +1255,7 @@ export default function DistributorDeliveriesPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] p-4 md:p-7">
           <div className={DATE_CHIP_ROW}>
             <div className={DATE_CHIP_SCROLL}>
               {visibleChips.map((chip) => {

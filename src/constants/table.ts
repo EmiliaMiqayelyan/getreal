@@ -4,7 +4,7 @@ export const TABLE_HEADER =
 
 /** Content-sized ID chip for tables and lists. */
 export const ID_PILL =
-  "inline-flex h-5 w-fit max-w-full shrink-0 items-center justify-start overflow-hidden rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none whitespace-nowrap text-[#6B7180]";
+  "inline-flex h-5 w-max max-w-full min-w-0 items-center overflow-hidden rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none text-[#6B7180]";
 
 /** Nested/expanded sub-row padding (Figma: 10 / 23 / 10 / 23). */
 export const SUB_ROW_PAD = "px-[23px] py-[10px]";

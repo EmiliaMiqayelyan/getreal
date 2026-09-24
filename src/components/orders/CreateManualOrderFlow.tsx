@@ -14,6 +14,7 @@ import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
+import { parseDeliveryDateId, startOfLocalDay } from "@/utils/deliveryCalendar";
 import {
   createManualLines,
   formatManualDeliveryLabel,
@@ -22,6 +23,9 @@ import {
 } from "@/utils/manualOrder";
 
 type Step = "create" | "review";
+
+const REVIEW_LINE_GRID =
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem_7rem] items-center gap-x-8";
 
 type CreateManualOrderFlowProps = {
   onClose: () => void;
@@ -107,10 +111,16 @@ export function CreateManualOrderFlow({
     [deliveryDate, timeSlot],
   );
 
+  const deliveryDateAllowed = useMemo(() => {
+    const date = parseDeliveryDateId(deliveryDate);
+    if (!date) return false;
+    return date.getTime() >= startOfLocalDay(new Date()).getTime();
+  }, [deliveryDate]);
+
   const canReview =
     Boolean(distributor) &&
     selectedLines.length > 0 &&
-    Boolean(deliveryDate) &&
+    deliveryDateAllowed &&
     Boolean(timeSlot);
 
   function selectDistributor(name: string) {
@@ -155,23 +165,33 @@ export function CreateManualOrderFlow({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 py-5 md:px-8">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-semibold tracking-tight text-[#111118]">
-              {step === "review" ? "Review Order" : "Create Manual Order"}
-            </h1>
-            {step === "review" ? (
-              <p className="mt-1 text-[13px] text-[#8A8A8A]">
-                Orders for{" "}
-                <span className="font-semibold text-[#111118]">
-                  {expectedDeliveryLabel} delivery
-                </span>
-              </p>
-            ) : null}
-          </div>
-          <UserMenu className="items-center" />
+      <div
+        className={
+          step === "review"
+            ? "flex h-[77px] shrink-0 items-center justify-between gap-4 border-b-[1.33px] border-[#00000014] bg-white px-4 md:px-8"
+            : "flex shrink-0 items-start justify-between gap-4 border-b border-[#00000014] bg-white px-4 py-5 md:px-8"
+        }
+      >
+        <div>
+          <h1
+            className={
+              step === "review"
+                ? "text-[20px] leading-[30px] font-semibold tracking-normal text-[#111118]"
+                : "text-[28px] font-semibold tracking-tight text-[#111118]"
+            }
+          >
+            {step === "review" ? "Review Order" : "Create Manual Order"}
+          </h1>
+          {step === "review" ? (
+            <p className="text-[13px] leading-[16px] font-medium tracking-normal text-[#8A8A8A]">
+              Orders for{" "}
+              <span className="font-bold text-[#111118]">
+                {expectedDeliveryLabel} delivery
+              </span>
+            </p>
+          ) : null}
         </div>
+        <UserMenu className="items-center" />
       </div>
 
       {step === "create" ? (
@@ -325,44 +345,53 @@ export function CreateManualOrderFlow({
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
           <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
             <div className="rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5">
-              <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
+              <h3 className="mb-3 text-[18px] font-semibold tracking-tight text-[#111118]">
                 {distributor}
               </h3>
               <div>
                 {selectedLines.map((line) => (
                   <div
                     key={line.id}
-                    className="flex items-center gap-6 border-b border-[#00000014] py-2.5 text-[12px]"
+                    className={cn(
+                      REVIEW_LINE_GRID,
+                      "border-b border-[#00000014] py-3 text-[13px]",
+                    )}
                   >
-                    <span className="min-w-0 max-w-[14rem] truncate text-[#111118]">
+                    <span className="min-w-0 truncate text-[#111118]">
                       {line.name}
                     </span>
-                    <span className="shrink-0 truncate text-[#8A8A8A]">
+                    <span className="min-w-0 truncate text-[#8A8A8A]">
                       {line.source}
                     </span>
-                    <div className="flex shrink-0 items-center gap-4">
-                      <span className="w-8 text-right font-medium text-[#111118]">
-                        {line.quantity}x
-                      </span>
-                      <span className="w-[4.75rem] whitespace-nowrap text-right text-[#111118]">
-                        {money(line.price)}
-                        {line.unit ? ` / ${line.unit}` : ""}
-                      </span>
-                      <span className="w-[3.75rem] text-right font-semibold whitespace-nowrap text-[#111118]">
-                        {money(line.price * line.quantity)}
-                      </span>
-                    </div>
+                    <span className="text-right text-[#111118]">
+                      {line.quantity}×
+                    </span>
+                    <span className="text-right whitespace-nowrap text-[#111118]">
+                      {money(line.price)}
+                    </span>
+                    <span className="text-right font-semibold whitespace-nowrap text-[#111118]">
+                      {money(line.price * line.quantity)}
+                    </span>
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
-                <span className="text-[12px] text-[#8A8A8A]">
-                  Expected delivery{" "}
-                  <span className="font-semibold text-[#111118]">
-                    {expectedDeliveryLabel}
+              <div className={cn(REVIEW_LINE_GRID, "pt-3.5")}>
+                <div className="col-span-4 flex min-w-0 flex-wrap items-center gap-3">
+                  <Button
+                    variant="primary"
+                    onClick={createOrder}
+                    className="font-semibold"
+                  >
+                    Order now
+                  </Button>
+                  <span className="text-[13px] text-[#8A8A8A]">
+                    Expected delivery{" "}
+                    <span className="font-semibold text-[#111118]">
+                      {expectedDeliveryLabel}
+                    </span>
                   </span>
-                </span>
-                <span className="w-[3.75rem] text-right text-[16px] font-semibold text-[#111118]">
+                </div>
+                <span className="text-right text-[18px] font-semibold whitespace-nowrap text-[#111118]">
                   {money(total)}
                 </span>
               </div>

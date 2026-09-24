@@ -154,6 +154,14 @@ export function toCreateDistributorPayload(
   };
 }
 
+function persistableLogoUrl(
+  url: string | null | undefined,
+): string | null | undefined {
+  if (url == null || url === "") return url === "" ? undefined : url;
+  if (url.startsWith("blob:") || url.startsWith("data:")) return undefined;
+  return url;
+}
+
 export function toCreateSourcePayload(source: Source): CreateSourcePayload {
   if (!source.distributorId) {
     throw new Error("Source requires a distributorId for the API");
@@ -168,7 +176,7 @@ export function toCreateSourcePayload(source: Source): CreateSourcePayload {
     city: parsed.city,
     state: parsed.state,
     zipCode: parsed.zipCode,
-    logoUrl: source.logoUrl,
+    logoUrl: persistableLogoUrl(source.logoUrl),
   };
 }
 

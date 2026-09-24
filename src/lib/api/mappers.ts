@@ -12,6 +12,7 @@ import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
 import {
   formatDeliveryLabel,
+  formatPhoneValue,
   locationFromAddress,
   WEEK_DAYS,
 } from "@/utils/format";
@@ -67,7 +68,10 @@ export function mapRoleUserTypeToApiRole(type: string): string {
   return "admin";
 }
 
-export function mapApiRoleToManagedRole(role: ApiRole, index: number): ManagedRole {
+export function mapApiRoleToManagedRole(
+  role: ApiRole,
+  index: number,
+): ManagedRole {
   return {
     id: role.id ?? `role-${index}`,
     name: role.name ?? "Role",
@@ -75,7 +79,10 @@ export function mapApiRoleToManagedRole(role: ApiRole, index: number): ManagedRo
   };
 }
 
-export function mapApiUserToAdminCustomer(user: ApiUser, index: number): AdminCustomer {
+export function mapApiUserToAdminCustomer(
+  user: ApiUser,
+  index: number,
+): AdminCustomer {
   const firstName =
     user.firstName?.trim() ||
     (user.name ?? user.email ?? "Customer").trim().split(/\s+/)[0] ||
@@ -87,13 +94,7 @@ export function mapApiUserToAdminCustomer(user: ApiUser, index: number): AdminCu
   const city = user.city?.trim() ?? "";
   const state = user.state?.trim() ?? "";
   const shortLocation = [city, state].filter(Boolean).join(", ");
-  const fullAddress = [
-    user.address,
-    user.aptUnit,
-    city,
-    state,
-    user.zipCode,
-  ]
+  const fullAddress = [user.address, user.aptUnit, city, state, user.zipCode]
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(", ");
@@ -135,7 +136,9 @@ function mapApiItemPhotos(
 ): ItemPhoto[] {
   if (!Array.isArray(photos)) return [];
   return photos
-    .filter((url): url is string => typeof url === "string" && Boolean(url.trim()))
+    .filter(
+      (url): url is string => typeof url === "string" && Boolean(url.trim()),
+    )
     .map((url, photoIndex) => ({
       id: `api-photo-${itemKey}-${photoIndex}`,
       url,
@@ -143,7 +146,9 @@ function mapApiItemPhotos(
     }));
 }
 
-function sourcePerFromBuyingUnit(buyingUnit: string | null | undefined): SourcePer {
+function sourcePerFromBuyingUnit(
+  buyingUnit: string | null | undefined,
+): SourcePer {
   const normalized = buyingUnit?.trim().toLowerCase() ?? "";
   if (normalized === "unit" || normalized === "lb" || normalized === "lbs") {
     return "Unit";
@@ -168,7 +173,8 @@ export function mapApiItemToItem(
     item.category ||
     "Protein";
   const subcategoryName =
-    (item.subcategoryId && options.subcategoriesById?.get(item.subcategoryId)) ||
+    (item.subcategoryId &&
+      options.subcategoriesById?.get(item.subcategoryId)) ||
     item.subcategory ||
     "";
   const distributorName =
@@ -249,9 +255,7 @@ export function mapApiProductToProductForSale(
   catalogItems: Item[] = [],
 ): ProductForSale {
   const linked = catalogItems.find(
-    (item) =>
-      item.recordId === product.itemId ||
-      item.id === product.itemId,
+    (item) => item.recordId === product.itemId || item.id === product.itemId,
   );
   const name = product.merchandisingName ?? product.name ?? "Product";
   const priceCents = product.sellingPrice ?? product.price ?? 0;
@@ -333,7 +337,7 @@ export function mapApiDistributorToDistributor(
       id: `api-contact-${distributor.id ?? index}-${contactIndex}`,
       firstName: contact.firstName ?? "",
       lastName: contact.lastName ?? "",
-      phone: contact.phone ?? "",
+      phone: formatPhoneValue(contact.phone ?? ""),
       email: contact.email ?? "",
       title: contact.title ?? "",
       primary: contactIndex === 0,
@@ -355,7 +359,8 @@ export function mapApiDistributorToDistributor(
 
   const primary = contacts[0];
   const recordId = distributor.id;
-  const distributorKey = recordId ?? distributor.distributorCode ?? String(index);
+  const distributorKey =
+    recordId ?? distributor.distributorCode ?? String(index);
   const deliveryDays = scheduleToDeliveryDays(distributor.deliverySchedule);
   const deliveryLabel = formatDeliveryLabel(deliveryDays);
   const documents = mapApiDocuments(distributor.documents, distributorKey);
@@ -365,13 +370,13 @@ export function mapApiDistributorToDistributor(
     recordId,
     name: distributor.name ?? "Distributor",
     paymentTerms: distributor.paymentTerms ?? "",
-    contact: primary
-      ? `${primary.firstName} ${primary.lastName}`.trim()
-      : "",
+    contact: primary ? `${primary.firstName} ${primary.lastName}`.trim() : "",
     phone: primary?.phone ?? "",
     location,
     fullAddress: distributor.address?.trim() || fullAddress,
-    delivery: [deliveryLabel.days, deliveryLabel.time].filter(Boolean).join(" "),
+    delivery: [deliveryLabel.days, deliveryLabel.time]
+      .filter(Boolean)
+      .join(" "),
     deliveryDays,
     documents,
     notes: distributor.notes ?? "",
@@ -388,18 +393,23 @@ export function mapApiSourceToSource(
   index: number,
   distributorsById: Map<string, string> = new Map(),
 ): Source {
-  const addressParts = [
-    source.address,
-    source.city,
-    source.state,
-    source.zipCode,
-  ]
-    .map((part) => part?.trim())
-    .filter(Boolean);
-  const fullAddress = addressParts.join(", ");
+  const street = source.address?.trim() ?? "";
+  const city = source.city?.trim() ?? "";
+  const state = source.state?.trim() ?? "";
+  const zip = source.zipCode?.trim() ?? "";
+  const region = [[city, state].filter(Boolean).join(", "), zip]
+    .filter(Boolean)
+    .join(" ");
+  const streetAlreadyFull =
+    Boolean(city) &&
+    street.toLowerCase().includes(city.toLowerCase()) &&
+    (!state || street.toLowerCase().includes(state.toLowerCase()));
+  const fullAddress = streetAlreadyFull
+    ? street
+    : [street, region].filter(Boolean).join(", ");
   const location =
-    [source.city, source.state].filter(Boolean).join(", ") ||
-    (fullAddress ? locationFromAddress(fullAddress) : "");
+    (fullAddress ? locationFromAddress(fullAddress) : "") ||
+    [city, state].filter(Boolean).join(", ");
 
   const recordId = source.id;
 
@@ -408,7 +418,7 @@ export function mapApiSourceToSource(
     recordId,
     name: source.name ?? "Source",
     location,
-    fullAddress: source.address?.trim() || fullAddress,
+    fullAddress,
     distributor:
       (source.distributorId && distributorsById.get(source.distributorId)) ||
       "",
@@ -427,8 +437,9 @@ export function findCategoryIdByName(
   name: string,
 ): string | undefined {
   const normalized = name.trim().toLowerCase();
-  return categories.find((category) => category.name?.toLowerCase() === normalized)
-    ?.id;
+  return categories.find(
+    (category) => category.name?.toLowerCase() === normalized,
+  )?.id;
 }
 
 export function findSubcategoryIdByName(
@@ -457,8 +468,7 @@ export function mapApiSubcategoryToCatalog(
     subcategory.category && typeof subcategory.category === "object"
       ? subcategory.category
       : null;
-  const categoryId =
-    subcategory.categoryId ?? nestedCategory?.id ?? undefined;
+  const categoryId = subcategory.categoryId ?? nestedCategory?.id ?? undefined;
   const categoryName =
     (typeof subcategory.category === "string"
       ? subcategory.category

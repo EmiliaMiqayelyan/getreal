@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
@@ -7,13 +8,11 @@ import { SourceFilters } from "@/components/sources/SourceFilters";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
-import { ScrollTable } from "@/components/ui/ScrollTable";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
-  downloadListExport,
   isApiConfigured,
   mapApiSourceToSource,
   sourcesApi,
@@ -29,6 +28,7 @@ import {
   getSourceFullAddress,
   getSourceLocation,
   nextSourceId,
+  downloadSourcesCsv,
   uniqueSourceLocations,
 } from "@/utils/sources";
 
@@ -55,9 +55,11 @@ function SourcePhoto({ logoUrl, name }: { logoUrl: string | null; name: string }
   );
 }
 
+const DESCRIPTION_PANEL_WIDTH = 360;
+
 function DescriptionHover({ description }: { description: string }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, maxHeight: 520 });
   const btnRef = useRef<HTMLButtonElement>(null);
   const hideTimer = useRef<number>(0);
 
@@ -67,10 +69,23 @@ function DescriptionHover({ description }: { description: string }) {
     window.clearTimeout(hideTimer.current);
     const rect = btnRef.current?.getBoundingClientRect();
     if (rect) {
-      setPos({
-        top: rect.bottom + 8,
-        left: Math.min(rect.left, window.innerWidth - 320),
-      });
+      const margin = 16;
+      const left = Math.min(
+        Math.max(margin, rect.left - DESCRIPTION_PANEL_WIDTH + rect.width),
+        window.innerWidth - DESCRIPTION_PANEL_WIDTH - margin,
+      );
+      const belowTop = rect.bottom + 8;
+      const spaceBelow = window.innerHeight - belowTop - margin;
+      const spaceAbove = rect.top - margin - 8;
+      const openBelow = spaceBelow >= 240 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.min(
+        520,
+        Math.max(220, openBelow ? spaceBelow : spaceAbove),
+      );
+      const top = openBelow
+        ? belowTop
+        : Math.max(margin, rect.top - 8 - maxHeight);
+      setPos({ top, left, maxHeight });
     }
     setOpen(true);
   }
@@ -98,22 +113,25 @@ function DescriptionHover({ description }: { description: string }) {
       >
         View
       </button>
-      {open ? (
-        <div
-          role="tooltip"
-          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-          style={{ top: pos.top, left: pos.left }}
-          onMouseEnter={show}
-          onMouseLeave={hide}
-        >
-          <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
-            Description
-          </div>
-          <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
-            {description}
-          </p>
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="fixed z-50 flex w-[360px] flex-col rounded-[10px] border border-[#00000014] bg-white px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
+              onMouseEnter={show}
+              onMouseLeave={hide}
+            >
+              <div className="mb-2 shrink-0 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                Description
+              </div>
+              <p className="min-h-0 overflow-y-auto pr-1 text-[13px] leading-relaxed whitespace-pre-wrap text-[#111118]">
+                {description}
+              </p>
+            </div>,
+            document.body,
+          )
+        : null}
     </div>
   );
 }
@@ -202,23 +220,19 @@ export default function SourcePage() {
             onDistributorChange={setDistributorFilter}
             onAdd={openCreate}
             onExport={async (request: ExportRequest) => {
-              await downloadListExport(
-                "/sources",
-                {},
-                request.format,
-                "sources",
-              );
+              const source = request.scope === "all" ? rows : filtered;
+              downloadSourcesCsv(source);
             }}
           />
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading sources" />
         ) : (
           <>
-        <div className="space-y-2 md:hidden">
+        <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
           {filtered.length === 0 ? (
             <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
               No sources found
@@ -258,13 +272,13 @@ export default function SourcePage() {
           ))}
         </div>
 
-        <div className="hidden md:block">
-          <ScrollTable minWidth={860} className="w-full">
+        <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
+          <div className="w-full min-w-[860px]">
             <div
               className={cn(
                 GRID,
                 TABLE_HEADER,
-                "h-10 border-b border-[#00000014] px-4",
+                "sticky top-0 z-20 h-10 border-b border-[#00000014] bg-white px-4",
               )}
             >
               <div>Source ID</div>
@@ -325,7 +339,7 @@ export default function SourcePage() {
                 </div>
               );
             })}
-          </ScrollTable>
+          </div>
         </div>
           </>
         )}
@@ -362,7 +376,9 @@ export default function SourcePage() {
                             ...mapped,
                             id: editing.id,
                             recordId: mapped.recordId ?? editing.recordId,
-                            logoUrl: source.logoUrl,
+                            fullAddress: source.fullAddress || mapped.fullAddress,
+                            location: source.location || mapped.location,
+                            logoUrl: source.logoUrl ?? mapped.logoUrl,
                             logoName: source.logoName,
                           }
                         : row,
@@ -379,7 +395,9 @@ export default function SourcePage() {
                     {
                       ...source,
                       ...mapped,
-                      logoUrl: source.logoUrl,
+                      fullAddress: source.fullAddress || mapped.fullAddress,
+                      location: source.location || mapped.location,
+                      logoUrl: source.logoUrl ?? mapped.logoUrl,
                       logoName: source.logoName,
                     },
                     ...current,

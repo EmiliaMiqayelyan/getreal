@@ -8,7 +8,6 @@ import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
-import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
@@ -18,7 +17,6 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   categoriesApi,
-  downloadListExport,
   isApiConfigured,
   itemsApi,
   mapApiItemToItem,
@@ -38,6 +36,7 @@ import {
   calcPricingBreakdown,
 } from "@/utils/itemPricing";
 import {
+  downloadItemsCsv,
   getItemDisplayName,
   getItemPrimaryPhoto,
   nextItemId,
@@ -55,6 +54,23 @@ type ItemTab = (typeof TABS)[number];
 
 const GRID =
   "grid grid-cols-[90px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
+
+function upsertCreatedItem(current: Item[], savedItem: Item): Item[] {
+  const recordId = savedItem.recordId;
+  const index = current.findIndex(
+    (row) =>
+      row.id === savedItem.id ||
+      (recordId != null &&
+        (row.recordId === recordId || row.id === recordId)) ||
+      (row.recordId != null && row.recordId === savedItem.id),
+  );
+  if (index >= 0) {
+    return current.map((row, rowIndex) =>
+      rowIndex === index ? savedItem : row,
+    );
+  }
+  return [savedItem, ...current];
+}
 
 function formatSalePrice(value: number) {
   if (!Number.isFinite(value) || value <= 0) return "—";
@@ -228,6 +244,7 @@ export default function ItemsPage() {
   const [tab, setTab] = useState<ItemTab>("All");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
+  const itemSaveLock = useRef(false);
 
   const salePriceByItemRef = useMemo(() => {
     const map = new Map<string, number>();
@@ -253,7 +270,14 @@ export default function ItemsPage() {
   );
 
   const sourceOptions = useMemo(
-    () => Array.from(new Set(rows.map((row) => row.source))).sort(),
+    () =>
+      Array.from(
+        new Set(
+          rows
+            .map((row) => row.source.trim())
+            .filter((source) => source.length > 0 && source !== "—"),
+        ),
+      ).sort((a, b) => a.localeCompare(b)),
     [rows],
   );
 
@@ -414,11 +438,9 @@ export default function ItemsPage() {
                     tab !== "All",
                 )}
                 onExport={async (request: ExportRequest) => {
-                  await downloadListExport(
-                    "/items",
-                    {},
-                    request.format,
-                    "items",
+                  const source = request.scope === "all" ? rows : filtered;
+                  downloadItemsCsv(source, (item) =>
+                    formatSalePrice(displaySalePrice(item)),
                   );
                 }}
                 className="w-full sm:w-auto"
@@ -437,6 +459,7 @@ export default function ItemsPage() {
         below={
           <Tabs
             aria-label="Item categories"
+            variant="category"
             items={TABS.map((entry) => ({ id: entry, label: entry }))}
             value={tab}
             onChange={(id) => selectTab(id as ItemTab)}
@@ -444,12 +467,12 @@ export default function ItemsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading items" />
         ) : (
           <>
-        <div className="space-y-2 md:hidden">
+        <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
           {filtered.length === 0 ? (
             <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
               No items found
@@ -492,13 +515,13 @@ export default function ItemsPage() {
           ))}
         </div>
 
-        <div className="hidden md:block">
-          <ScrollTable minWidth={1100}>
+        <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
+          <div className="w-full min-w-[1100px]">
             <div
               className={cn(
                 GRID,
                 TABLE_HEADER,
-                "border-b border-[#00000014] bg-white px-4 py-2.5",
+                "sticky top-0 z-20 border-b border-[#00000014] bg-white px-4 py-2.5",
               )}
             >
               <div>Item ID</div>
@@ -569,7 +592,7 @@ export default function ItemsPage() {
                 </div>
               );
             })}
-          </ScrollTable>
+          </div>
         </div>
           </>
         )}
@@ -580,8 +603,10 @@ export default function ItemsPage() {
         item={editing}
         onClose={closeModal}
         onRemove={handleRemoveItem}
-        onSave={(item) => {
-          void (async () => {
+        onSave={async (item) => {
+          if (itemSaveLock.current) return;
+          itemSaveLock.current = true;
+          try {
             if (isApiConfigured()) {
               try {
                 const categoryList =
@@ -665,7 +690,7 @@ export default function ItemsPage() {
                     source: item.source || mapped.source,
                     sellingPrice: item.sellingPrice,
                   };
-                  setItems((current) => [savedItem, ...current]);
+                  setItems((current) => upsertCreatedItem(current, savedItem));
                 }
 
                 const itemRecordId = savedItem.recordId ?? apiId(savedItem);
@@ -729,7 +754,9 @@ export default function ItemsPage() {
               return [{ ...item, id: nextItemId(current) }, ...current];
             });
             closeModal();
-          })();
+          } finally {
+            itemSaveLock.current = false;
+          }
         }}
       />
     </div>

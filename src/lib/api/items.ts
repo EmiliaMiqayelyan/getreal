@@ -21,6 +21,8 @@ export type CreateItemPayload = {
 
 export type UpdateItemPayload = Partial<CreateItemPayload>;
 
+const inflightCreates = new Map<string, Promise<ApiItem>>();
+
 export const itemsApi = {
   list() {
     return apiRequest<unknown>("/items", {
@@ -38,13 +40,24 @@ export const itemsApi = {
   },
 
   create(body: CreateItemPayload) {
-    return apiRequest<unknown>("/items", {
+    const key = JSON.stringify(body);
+    const pending = inflightCreates.get(key);
+    if (pending) return pending;
+
+    const request = apiRequest<unknown>("/items", {
       method: "POST",
       body: JSON.stringify(body),
-    }).then(
-      (payload) =>
-        pickNamedEntity<ApiItem>(payload, "item") ?? (payload as ApiItem),
-    );
+    })
+      .then(
+        (payload) =>
+          pickNamedEntity<ApiItem>(payload, "item") ?? (payload as ApiItem),
+      )
+      .finally(() => {
+        inflightCreates.delete(key);
+      });
+
+    inflightCreates.set(key, request);
+    return request;
   },
 
   update(id: string, body: UpdateItemPayload) {

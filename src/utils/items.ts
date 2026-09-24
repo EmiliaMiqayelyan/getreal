@@ -21,3 +21,65 @@ export function nextItemId(rows: Item[]) {
   const max = numbers.length ? Math.max(...numbers) : 0;
   return `IT-${String(max + 1).padStart(6, "0")}`;
 }
+
+const ITEM_EXPORT_HEADERS = [
+  "Item ID",
+  "Photo",
+  "Name",
+  "Description",
+  "Category",
+  "Sub-Category",
+  "Sale Price",
+  "Unit",
+  "Source",
+  "Distributor",
+] as const;
+
+function csvCell(value: string) {
+  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
+}
+
+function itemPhotoExportValue(url: string | undefined) {
+  if (!url || url.startsWith("data:")) return "—";
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return "Image";
+}
+
+/** CSV of the rows and columns shown on the Items screen. */
+export function downloadItemsCsv(
+  items: Item[],
+  salePrice: (item: Item) => string,
+  filename = "items.csv",
+) {
+  const lines = [
+    ITEM_EXPORT_HEADERS.join(","),
+    ...items.map((item) =>
+      [
+        item.id,
+        itemPhotoExportValue(item.photos[0]?.url),
+        getItemDisplayName(item),
+        item.description.trim() || "—",
+        item.category || "—",
+        item.subcategory?.trim() || "—",
+        salePrice(item),
+        item.singleItemUnit?.trim() || "—",
+        item.source?.trim() || "—",
+        item.distributor?.trim() || "—",
+      ]
+        .map(csvCell)
+        .join(","),
+    ),
+  ];
+  const blob = new Blob([`\uFEFF${lines.join("\r\n")}`], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}

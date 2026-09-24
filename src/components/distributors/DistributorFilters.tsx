@@ -84,7 +84,7 @@ export function DistributorFilters({
           className="w-full sm:w-auto"
         >
           <Plus size={14} />
-          Add Distributor
+          Create Distributor
         </Button>
       </div>
     </div>

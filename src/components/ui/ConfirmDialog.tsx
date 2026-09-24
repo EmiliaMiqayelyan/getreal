@@ -37,6 +37,7 @@ export function ConfirmDialog({
           </Button>
           <Button
             variant={confirmVariant}
+            className="ml-3"
             onClick={() => {
               onConfirm();
               onClose();

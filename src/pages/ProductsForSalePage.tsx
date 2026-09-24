@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type DragEvent,
 } from "react";
@@ -13,7 +14,6 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { IconButton } from "@/components/ui/IconButton";
-import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
@@ -61,8 +61,10 @@ const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 
-const GRID =
-  "grid grid-cols-[24px_90px_56px_minmax(0,260px)_minmax(0,140px)_96px_minmax(0,130px)_auto] items-center gap-2";
+const HEAD =
+  "sticky top-0 z-20 bg-white px-2 py-2.5 text-left shadow-[inset_0_-1px_0_#00000014] first:pl-4 last:pr-4";
+const CELL =
+  "border-b border-[#00000014] bg-white px-2 py-3 align-middle first:pl-4 last:pr-4";
 
 function DragHandle() {
   return (
@@ -94,9 +96,22 @@ function ProductDetailDrawer({
 }) {
   const details = resolveProductDetails(product, catalog);
   const logo = sourceLogo(details.source, sources);
+  const panelRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (panelRef.current?.contains(target)) return;
+      onClose();
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [onClose]);
 
   return (
     <aside
+      ref={panelRef}
       className="absolute inset-y-0 right-0 z-50 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]"
       aria-label="Product details"
     >
@@ -175,7 +190,7 @@ function SubcategoryTable({
   catalog,
   onToggleLive,
   onView,
-  onEdit,
+  onRemove,
   onReorder,
 }: {
   title: string;
@@ -183,7 +198,7 @@ function SubcategoryTable({
   catalog: Item[];
   onToggleLive: (id: string, live: boolean) => void;
   onView: (row: ProductForSale) => void;
-  onEdit: (row: ProductForSale) => void;
+  onRemove: (row: ProductForSale) => void;
   onReorder: (
     draggedId: string,
     targetId: string,
@@ -221,7 +236,10 @@ function SubcategoryTable({
     event.dataTransfer.setData("text/plain", id);
   }
 
-  function handleDragOver(event: DragEvent<HTMLDivElement>, targetId: string) {
+  function handleDragOver(
+    event: DragEvent<HTMLTableRowElement>,
+    targetId: string,
+  ) {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
     if (!draggingId || draggingId === targetId || !previewIds) return;
@@ -236,7 +254,7 @@ function SubcategoryTable({
     setPreviewIds(next);
   }
 
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
+  function handleDrop(event: DragEvent<HTMLTableRowElement>) {
     event.preventDefault();
     const draggedId = draggingId ?? event.dataTransfer.getData("text/plain");
     const order = previewIds ?? sourceIds;
@@ -253,88 +271,108 @@ function SubcategoryTable({
   }
 
   return (
-    <ScrollTable minWidth={760} className="rounded-[12px]">
+    <div className="min-w-[760px] rounded-[12px] border border-[#00000014] bg-white">
       <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
         <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
           {title}
         </h3>
       </div>
-      <div
-        className={cn(
-          GRID,
-          TABLE_HEADER,
-          "border-b border-[#00000014] bg-white px-4 py-2.5",
-        )}
-      >
-        <span aria-hidden />
-        <span>ID</span>
-        <span>Live</span>
-        <span>Merchandising Name</span>
-        <span>Source</span>
-        <span className="whitespace-nowrap">Sales Price</span>
-        <span>Unit of Sales</span>
-        <span aria-hidden />
-      </div>
-      {displayRows.map((row) => {
-        const display = resolveProductTableDisplay(row, catalog);
-        const isDragging = draggingId === row.id;
-        return (
-          <div
-            key={row.id}
-            onDragOver={(event) => handleDragOver(event, row.id)}
-            onDrop={handleDrop}
-            className={cn(
-              GRID,
-              "border-b border-[#00000014] bg-white px-4 py-3 last:border-b-0 transition-[background-color,opacity,box-shadow] duration-150 ease-out",
-              draggingId && !isDragging && "bg-[#F7F7F5]",
-              isDragging &&
-                "bg-[#F3F3F1] opacity-55 shadow-[inset_0_0_0_1px_#0000000A]",
-            )}
-          >
-            <button
-              type="button"
-              draggable
-              onDragStart={(event) => handleDragStart(event, row.id)}
-              onDragEnd={clearDragState}
-              className="cursor-grab active:cursor-grabbing"
-              aria-label={`Reorder ${display.merchandisingName}`}
-            >
-              <DragHandle />
-            </button>
-            <IdPill>{row.id}</IdPill>
-            <Switch
-              checked={row.live}
-              label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
-              onCheckedChange={(live) => onToggleLive(row.id, live)}
-            />
-            <span className={cn(BODY, "truncate font-semibold")}>
-              {display.merchandisingName}
-            </span>
-            <span className={cn(BODY, "truncate")}>{display.source}</span>
-            <span className={cn(BODY, "whitespace-nowrap font-semibold")}>
-              {formatSalePrice(display.salesPrice)}
-            </span>
-            <span className={cn(BODY, "truncate")}>{display.unitOfSales}</span>
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                className={EDIT_LINK}
-                onClick={() => onView(row)}
+      <table className="w-full table-fixed border-collapse">
+        <colgroup>
+          <col className="w-10" />
+          <col className="w-[104px]" />
+          <col className="w-16" />
+          <col />
+          <col className="w-[180px]" />
+          <col className="w-[108px]" />
+          <col className="w-[120px]" />
+          <col className="w-[132px]" />
+        </colgroup>
+        <thead>
+          <tr className={TABLE_HEADER}>
+            <th className={HEAD} />
+            <th className={HEAD}>ID</th>
+            <th className={HEAD}>Live</th>
+            <th className={HEAD}>Merchandising Name</th>
+            <th className={HEAD}>Source</th>
+            <th className={cn(HEAD, "whitespace-nowrap")}>Sales Price</th>
+            <th className={HEAD}>Unit of Sales</th>
+            <th className={HEAD} />
+          </tr>
+        </thead>
+        <tbody className="[&>tr:last-child>td]:border-b-0">
+          {displayRows.map((row) => {
+            const display = resolveProductTableDisplay(row, catalog);
+            const isDragging = draggingId === row.id;
+            return (
+              <tr
+                key={row.id}
+                onDragOver={(event) => handleDragOver(event, row.id)}
+                onDrop={handleDrop}
+                className={cn(
+                  "transition-[background-color,opacity,box-shadow] duration-150 ease-out",
+                  draggingId && !isDragging && "bg-[#F7F7F5]",
+                  isDragging &&
+                    "bg-[#F3F3F1] opacity-55 shadow-[inset_0_0_0_1px_#0000000A]",
+                )}
               >
-                View
-              </button>
-              <button
-                type="button"
-                className={EDIT_LINK}
-                onClick={() => onEdit(row)}
-              >
-                Edit
-              </button>
-            </div>
-          </div>
-        );
-      })}
-    </ScrollTable>
+                <td className={CELL}>
+                  <button
+                    type="button"
+                    draggable
+                    onDragStart={(event) => handleDragStart(event, row.id)}
+                    onDragEnd={clearDragState}
+                    className="cursor-grab active:cursor-grabbing"
+                    aria-label={`Reorder ${display.merchandisingName}`}
+                  >
+                    <DragHandle />
+                  </button>
+                </td>
+                <td className={CELL}>
+                  <IdPill>{row.id}</IdPill>
+                </td>
+                <td className={CELL}>
+                  <Switch
+                    checked={row.live}
+                    label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
+                    onCheckedChange={(live) => onToggleLive(row.id, live)}
+                  />
+                </td>
+                <td className={cn(CELL, BODY, "truncate font-semibold")}>
+                  {display.merchandisingName}
+                </td>
+                <td className={cn(CELL, BODY, "truncate")}>{display.source}</td>
+                <td className={cn(CELL, BODY, "whitespace-nowrap font-semibold")}>
+                  {formatSalePrice(display.salesPrice)}
+                </td>
+                <td className={cn(CELL, BODY, "truncate")}>
+                  {display.unitOfSales}
+                </td>
+                <td className={CELL}>
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      className={EDIT_LINK}
+                      onClick={() => onView(row)}
+                    >
+                      View
+                    </button>
+                    <button
+                      type="button"
+                      className={EDIT_LINK}
+                      onClick={() => onRemove(row)}
+                      aria-label={`Remove ${display.merchandisingName}`}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -565,10 +603,10 @@ export default function ProductsForSalePage() {
     })();
   }
 
-  function handleRemoveProduct() {
-    if (!editTarget) return;
-    const id = editTarget.id;
-    const snapshot = editTarget;
+  function handleRemoveProduct(target: ProductForSale | null = editTarget) {
+    if (!target) return;
+    const id = target.id;
+    const snapshot = target;
     setProducts((current) => current.filter((row) => row.id !== id));
     setViewing((current) => (current?.id === id ? null : current));
     setEditTarget(null);
@@ -664,7 +702,7 @@ export default function ProductsForSalePage() {
         }
       />
 
-      <div className="relative min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="relative min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading products" />
         ) : filtered.length === 0 || grouped.length === 0 ? (
@@ -687,7 +725,7 @@ export default function ProductsForSalePage() {
                       catalog={catalog}
                       onToggleLive={toggleLive}
                       onView={setViewing}
-                      onEdit={(row) => {
+                      onRemove={(row) => {
                         setEditTarget(row);
                         setAddOpen(true);
                       }}
@@ -716,7 +754,7 @@ export default function ProductsForSalePage() {
             setEditTarget(null);
           }}
           onAdd={handleAdd}
-          onRemove={handleRemoveProduct}
+          onRemove={() => handleRemoveProduct(editTarget)}
           catalog={catalog}
           existingProducts={products}
           excludedItemIds={excludedItemIds}

@@ -7,7 +7,7 @@ import { TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
 import { getDistributorFullAddress } from "@/utils/distributors";
-import { formatPricePerUnit } from "@/utils/format";
+import { formatPhoneDisplay, formatPricePerUnit } from "@/utils/format";
 
 type DistributorTableProps = {
   distributors: Distributor[];
@@ -49,17 +49,14 @@ export function DistributorTable({ distributors }: DistributorTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-surface">
+    <div className="bg-surface overflow-hidden rounded-xl">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[1100px] border-collapse text-left">
           <thead>
-            <tr className="border-b border-[#00000014] bg-surface">
+            <tr className="bg-surface border-b border-[#00000014]">
               <th className="w-8 px-4 py-3" aria-hidden />
               {COLUMNS.map((column) => (
-                <th
-                  key={column}
-                  className={cn("px-3 py-3", TABLE_HEADER)}
-                >
+                <th key={column} className={cn("px-3 py-3", TABLE_HEADER)}>
                   {column}
                 </th>
               ))}
@@ -82,7 +79,7 @@ export function DistributorTable({ distributors }: DistributorTableProps) {
               <tr>
                 <td
                   colSpan={COLUMNS.length + 1}
-                  className="px-4 py-8 text-center text-sm text-muted"
+                  className="text-muted px-4 py-8 text-center text-sm"
                 >
                   No distributors found
                 </td>
@@ -137,19 +134,19 @@ function DistributorRow({
         </td>
         <td className="px-3 py-3.5">
           <div className="leading-tight">
-            <p className="text-sm font-semibold text-foreground">
+            <p className="text-foreground text-sm font-semibold">
               {distributor.name}
             </p>
-            <p className="mt-0.5 text-xs text-muted">
+            <p className="text-muted mt-0.5 text-xs">
               {distributor.paymentTerms}
             </p>
           </div>
         </td>
-        <td className="px-3 py-3.5 text-sm text-muted-strong">
+        <td className="text-muted-strong px-3 py-3.5 text-sm">
           {distributor.contact}
         </td>
-        <td className="px-3 py-3.5 text-sm text-muted-strong">
-          {distributor.phone}
+        <td className="text-muted-strong px-3 py-3.5 text-sm">
+          {formatPhoneDisplay(distributor.phone)}
         </td>
         <td className="px-3 py-3.5">
           <div className="flex flex-wrap gap-1.5">
@@ -158,21 +155,21 @@ function DistributorRow({
             ))}
           </div>
         </td>
-        <td className="px-3 py-3.5 text-sm text-muted-strong">
+        <td className="text-muted-strong px-3 py-3.5 text-sm">
           <LocationHover
-            className="text-sm text-muted-strong"
+            className="text-muted-strong text-sm"
             fullAddress={getDistributorFullAddress(distributor)}
           >
             {distributor.location}
           </LocationHover>
         </td>
-        <td className="px-3 py-3.5 text-sm text-muted-strong">
+        <td className="text-muted-strong px-3 py-3.5 text-sm">
           {distributor.delivery}
         </td>
-        <td className="px-3 py-3.5 text-sm text-foreground">
+        <td className="text-foreground px-3 py-3.5 text-sm">
           {distributor.items}
         </td>
-        <td className="px-3 py-3.5 text-sm text-muted">
+        <td className="text-muted px-3 py-3.5 text-sm">
           {distributor.docs ?? "—"}
         </td>
       </tr>
@@ -180,7 +177,12 @@ function DistributorRow({
       {expanded ? (
         <tr className="border-b border-[#00000014] last:border-b-0">
           <td colSpan={COLUMNS.length + 1} className="bg-background p-0">
-            <div className={cn("border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
+            <div
+              className={cn(
+                "border-t border-[#00000014] bg-[#FBF9F9]",
+                SUB_ROW_PAD,
+              )}
+            >
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[520px] border-collapse text-left">
                   <thead>
@@ -201,22 +203,22 @@ function DistributorRow({
                         key={product.id}
                         className="border-b border-[#00000014]/70 last:border-b-0"
                       >
-                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                        <td className="text-foreground px-3 py-2.5 text-sm font-semibold">
                           <div>{product.name}</div>
-                          <div className="mt-0.5 text-xs font-normal text-muted">
+                          <div className="text-muted mt-0.5 text-xs font-normal">
                             {product.product}
                           </div>
                         </td>
-                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                        <td className="text-muted-strong px-3 py-2.5 text-sm">
                           {product.source}
                         </td>
-                        <td className="px-3 py-2.5 text-sm font-semibold text-foreground">
+                        <td className="text-foreground px-3 py-2.5 text-sm font-semibold">
                           {formatPricePerUnit(product.price, product.unit)}
                         </td>
-                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                        <td className="text-muted-strong px-3 py-2.5 text-sm">
                           {product.qty}
                         </td>
-                        <td className="px-3 py-2.5 text-sm text-muted-strong">
+                        <td className="text-muted-strong px-3 py-2.5 text-sm">
                           {product.unit}
                         </td>
                       </tr>

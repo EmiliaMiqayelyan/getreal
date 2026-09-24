@@ -7,6 +7,8 @@ import { cn } from "@/utils/cn";
 type HeaderProps = {
   title: string;
   toolbar?: ReactNode;
+  /** Optional content centered in the title row (e.g. page tabs). */
+  center?: ReactNode;
   /** Optional content below the filter subheader (e.g. tabs). */
   below?: ReactNode;
   className?: string;
@@ -33,6 +35,7 @@ const ROW = "flex items-center bg-white px-4 md:px-7";
 export function Header({
   title,
   toolbar,
+  center,
   below,
   className,
   toolbarBorder,
@@ -44,11 +47,16 @@ export function Header({
       <header
         className={cn(
           ROW,
-          "min-h-[52px] justify-between gap-4 border-b border-border md:h-[52px]",
+          "relative min-h-[52px] justify-between gap-4 border-b border-border md:h-[52px]",
         )}
       >
-        <h1 className={cn("min-w-0", PAGE_TITLE)}>{title}</h1>
-        <div className="flex shrink-0 items-center border-l border-border pl-5">
+        <h1 className={cn("relative z-10 min-w-0", PAGE_TITLE)}>{title}</h1>
+        {center ? (
+          <div className="pointer-events-none absolute inset-0 flex items-end justify-center">
+            <div className="pointer-events-auto flex h-7">{center}</div>
+          </div>
+        ) : null}
+        <div className="relative z-10 flex shrink-0 items-center border-l border-border pl-5">
           <UserMenu className="items-center" />
         </div>
       </header>

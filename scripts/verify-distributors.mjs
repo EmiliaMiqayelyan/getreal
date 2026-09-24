@@ -56,10 +56,10 @@ await new Promise((r) => setTimeout(r, 200));
 await page.screenshot({ path: join(outDir, "03-files.png") });
 await page.mouse.click(20, 20);
 
-await clickVisible("Add Distributor");
+await clickVisible("Create Distributor");
 await page.waitForFunction(() =>
   [...document.querySelectorAll("h2")].some(
-    (node) => node.textContent === "Add Distributor",
+    (node) => node.textContent === "Create Distributor",
   ),
 );
 await page.screenshot({ path: join(outDir, "04-add-empty.png") });
@@ -71,7 +71,7 @@ await clickVisible("Cancel");
 await page.waitForFunction(
   () =>
     ![...document.querySelectorAll("h2")].some(
-      (node) => node.textContent === "Add Distributor",
+      (node) => node.textContent === "Create Distributor",
     ),
 );
 

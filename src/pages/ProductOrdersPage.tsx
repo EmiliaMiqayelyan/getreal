@@ -33,12 +33,13 @@ import {
   DELIVERED_ORDER_STATUSES,
   DISTRIBUTOR_EMAILS,
   ORDER_CATEGORIES,
+  ORDER_DEMAND_BY_DATE,
   ORDER_LIST_ITEMS,
 } from "@/constants/distributorOrders";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import { downloadListExport, isApiConfigured, ordersApi } from "@/lib/api";
+import { isApiConfigured, ordersApi } from "@/lib/api";
 import { syncManualDistributorOrder, syncReviewGroupOrder } from "@/lib/api/orderSync";
 import type {
   ManualOrderDraft,
@@ -64,6 +65,8 @@ import {
   getOrderDemandEmptyMessage,
   getOrderDemandForDate,
   groupDeliveredOrders,
+  downloadDeliveredOrdersCsv,
+  downloadDistributorOrdersCsv,
   makeWorkingRowsForDate,
   nextDeliveryId,
   productFilterOptions,
@@ -73,19 +76,16 @@ import {
 import {
   formatDeliveryChipLabel,
   formatExpectedDelivery,
-  getDeliveryDatesInRange,
   getDeliveryWeekdayIndices,
+  getUpcomingDeliveryDates,
   parseDeliveryDateId,
   toDeliveryDateId,
 } from "@/utils/deliveryCalendar";
 
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
-const DEFAULT_DELIVERY_DATE_ID = "2026-07-14";
+const REVIEW_LINE_GRID =
+  "grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem_7rem] items-center gap-x-8";
 const CHIP_WINDOW_SIZE = 3;
-/** Right-side price cluster widths shared by review item rows. */
-const REVIEW_QTY_W = "w-8";
-const REVIEW_UNIT_W = "w-[4.75rem]";
-const REVIEW_LINE_W = "w-[3.75rem]";
 /** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
 const ORDER_PREP_COLS =
   "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
@@ -188,11 +188,11 @@ function ExpandableOrders({
       <table className="w-full table-fixed border-collapse text-left">
         <colgroup>
           <col className="w-10" />
-          <col className="w-[132px]" />
-          <col className="w-[240px]" />
-          <col className="w-[168px]" />
+          <col className="w-[160px]" />
           <col className="w-[220px]" />
-          <col className="w-[140px]" />
+          <col className="w-[200px]" />
+          <col className="w-[150px]" />
+          <col className="w-[200px]" />
           <col />
           <col className="w-[100px]" />
         </colgroup>
@@ -271,19 +271,17 @@ function ExpandableOrders({
                       key={`${order.id}-${item.sku}-${itemIndex}`}
                       className="border-t border-[#00000014] bg-[#FBF9F9]"
                     >
-                      <td
-                        colSpan={2}
-                        className="py-[10px] pl-[23px] align-middle"
-                      >
+                      <td className="py-[10px] pl-[23px]" />
+                      <td className="py-[10px] pr-10 align-middle">
                         <IdPill>{item.sku}</IdPill>
                       </td>
-                      <td className="truncate py-[10px] pr-10 text-[13px] text-[#111118] align-middle">
+                      <td className="max-w-0 truncate py-[10px] pr-10 text-[13px] font-medium text-[#111118] align-middle">
                         {item.itemName}
                       </td>
-                      <td className="truncate py-[10px] pr-10 text-[13px] text-[#8A8A8A] align-middle">
-                        {item.source}
+                      <td className="max-w-0 truncate py-[10px] pr-10 text-[13px] text-[#8A8A8A] align-middle">
+                        {item.source || "—"}
                       </td>
-                      <td className="py-[10px] pr-10 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
+                      <td className="py-[10px] pr-10 text-[13px] font-medium text-[#111118] align-middle whitespace-nowrap">
                         {item.quantity}x
                       </td>
                       <td className="py-[10px] pr-10 pl-6 text-[13px] text-[#111118] align-middle whitespace-nowrap">
@@ -319,8 +317,8 @@ export default function ProductOrdersPage() {
   const [deliveredSort, setDeliveredSort] = useState<
     "newest" | "oldest" | "distributor" | "total"
   >("newest");
-  const [activeDeliveryDateId, setActiveDeliveryDateId] = useState(
-    DEFAULT_DELIVERY_DATE_ID,
+  const [activeDeliveryDateId, setActiveDeliveryDateId] = useState(() =>
+    toDeliveryDateId(new Date()),
   );
   const [chipWindowStart, setChipWindowStart] = useState(0);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -333,7 +331,7 @@ export default function ProductOrdersPage() {
   );
 
   const [rows, setRows] = useState<WorkingOrderRow[]>(() =>
-    makeRows(DEFAULT_DELIVERY_DATE_ID),
+    makeRows(toDeliveryDateId(new Date())),
   );
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
     () => new Set(),
@@ -347,11 +345,10 @@ export default function ProductOrdersPage() {
     [distributors, distributorFilter],
   );
 
-  const deliveryDates = useMemo(() => {
-    const start = new Date(2026, 5, 1);
-    const end = new Date(2026, 7, 31);
-    return getDeliveryDatesInRange(start, end, deliveryWeekdays);
-  }, [deliveryWeekdays]);
+  const deliveryDates = useMemo(
+    () => getUpcomingDeliveryDates(deliveryWeekdays),
+    [deliveryWeekdays],
+  );
 
   const visibleDeliveryChips = useMemo(() => {
     return deliveryDates
@@ -389,10 +386,22 @@ export default function ProductOrdersPage() {
     [orderDemandCriteria, orderDemandRows],
   );
 
-  const productOptions = useMemo(
-    () => productFilterOptions(ORDER_LIST_ITEMS),
-    [],
-  );
+  const productOptions = useMemo(() => {
+    const names = new Set<string>(
+      productFilterOptions(ORDER_LIST_ITEMS).map((option) => option.value),
+    );
+    for (const order of inProgress) {
+      for (const item of order.items) {
+        if (item.itemName.trim()) names.add(item.itemName);
+      }
+    }
+    for (const rows of Object.values(ORDER_DEMAND_BY_DATE)) {
+      for (const row of rows) {
+        if (row.itemName.trim()) names.add(row.itemName);
+      }
+    }
+    return [...names].sort().map((name) => ({ value: name, label: name }));
+  }, [inProgress]);
 
   const showDistributorFilter = inProgress.length > 0;
 
@@ -432,10 +441,7 @@ export default function ProductOrdersPage() {
     );
     if (activeValid) return;
 
-    const fallback =
-      deliveryDates.find(
-        (date) => toDeliveryDateId(date) === DEFAULT_DELIVERY_DATE_ID,
-      ) ?? deliveryDates[0];
+    const fallback = deliveryDates[0];
     const fallbackId = toDeliveryDateId(fallback);
     const fallbackIndex = deliveryDates.indexOf(fallback);
 
@@ -451,6 +457,12 @@ export default function ProductOrdersPage() {
       seen.add(order.id);
       if (distributorFilter && order.distributor !== distributorFilter)
         return false;
+      if (
+        productFilter &&
+        !order.items.some((item) => item.itemName === productFilter)
+      ) {
+        return false;
+      }
       if (!q) return true;
       return (
         order.distributor.toLowerCase().includes(q) ||
@@ -458,7 +470,7 @@ export default function ProductOrdersPage() {
         order.items.some((item) => item.itemName.toLowerCase().includes(q))
       );
     });
-  }, [inProgress, search, distributorFilter]);
+  }, [inProgress, search, distributorFilter, productFilter]);
 
   const deliveredFilterCriteria = useMemo(
     () => ({
@@ -520,7 +532,7 @@ export default function ProductOrdersPage() {
             deliveredZipFilter ||
             deliveredDateFilter ||
             deliveredStatusFilter ||
-            deliveredSort,
+            (deliveredSort !== "newest"),
         );
 
   const groupedRows = useMemo(() => {
@@ -800,12 +812,19 @@ export default function ProductOrdersPage() {
                       recordCount={exportCount}
                       filtersActive={exportFiltersActive}
                       onExport={async (request: ExportRequest) => {
-                        await downloadListExport(
-                          "/orders",
-                          { type: "distributor" },
-                          request.format,
-                          "orders",
-                        );
+                        const orders =
+                          request.scope === "all"
+                            ? inProgress.filter(
+                                (order, index, list) =>
+                                  list.findIndex((row) => row.id === order.id) ===
+                                  index,
+                              )
+                            : filteredInProgress;
+                        const demand =
+                          request.scope === "all"
+                            ? Object.values(ORDER_DEMAND_BY_DATE).flat()
+                            : filteredPreview;
+                        downloadDistributorOrdersCsv(orders, demand);
                       }}
                       className="w-full sm:w-auto"
                     />
@@ -883,12 +902,13 @@ export default function ProductOrdersPage() {
                     recordCount={exportCount}
                     filtersActive={exportFiltersActive}
                     onExport={async (request: ExportRequest) => {
-                      await downloadListExport(
-                        "/orders",
-                        { type: "distributor" },
-                        request.format,
-                        "orders",
-                      );
+                      const groups =
+                        request.scope === "all"
+                          ? groupDeliveredOrders(
+                              sortDeliveredOrders(DELIVERED_ORDERS, "newest"),
+                            )
+                          : deliveredGroups;
+                      downloadDeliveredOrdersCsv(groups);
                     }}
                     className="w-full sm:ml-auto sm:w-auto"
                   />
@@ -896,12 +916,13 @@ export default function ProductOrdersPage() {
               )}
             </div>
           }
-          below={
+          center={
             <Tabs
+              embedded
               aria-label="Order views"
               items={[
-                { id: "Orders", label: "Orders" },
-                { id: "Delivered", label: "Delivered" },
+                { id: "Orders", label: "Orders", width: 103 },
+                { id: "Delivered", label: "Delivered", width: 93 },
               ]}
               value={tab}
               onChange={(id) => setTab(id as "Orders" | "Delivered")}
@@ -909,7 +930,7 @@ export default function ProductOrdersPage() {
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] p-4 md:p-7">
           {tab === "Orders" ? (
             <>
               <div className={DATE_CHIP_ROW}>
@@ -951,6 +972,7 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      disablePast
                       deliveryWeekdays={deliveryWeekdays}
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
@@ -1077,21 +1099,52 @@ export default function ProductOrdersPage() {
 
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
-      <div className="shrink-0 border-b border-[#00000014] bg-white px-4 py-5 md:px-8">
-        <div className="flex items-start justify-between gap-4">
+      <div
+        className={
+          view === "review"
+            ? "flex h-[77px] shrink-0 items-center justify-between gap-4 border-b-[1.33px] border-[#00000014] bg-white px-4 md:px-8"
+            : "shrink-0 border-b border-[#00000014] bg-white px-4 py-5 md:px-8"
+        }
+      >
+        <div
+          className={
+            view === "review"
+              ? undefined
+              : "flex w-full items-start justify-between gap-4"
+          }
+        >
           <div>
-            <h1 className="text-[28px] font-semibold tracking-tight text-[#111118]">
+            <h1
+              className={
+                view === "review"
+                  ? "text-[20px] leading-[30px] font-semibold tracking-normal text-[#111118]"
+                  : "text-[28px] font-semibold tracking-tight text-[#111118]"
+              }
+            >
               {view === "review" ? "Review Order" : "Order List"}
             </h1>
-            <p className="mt-1 text-[13px] text-[#8A8A8A]">
+            <p
+              className={
+                view === "review"
+                  ? "text-[13px] leading-[16px] font-medium tracking-normal text-[#8A8A8A]"
+                  : "mt-1 text-[13px] text-[#8A8A8A]"
+              }
+            >
               {view === "review" ? "Orders for" : "Item orders for"}{" "}
-              <span className="font-semibold text-[#111118]">
+              <span
+                className={
+                  view === "review"
+                    ? "font-bold text-[#111118]"
+                    : "font-semibold text-[#111118]"
+                }
+              >
                 {activeDeliveryLabel} delivery
               </span>
             </p>
           </div>
-          <UserMenu className="items-center" />
+          {view === "review" ? null : <UserMenu className="items-center" />}
         </div>
+        {view === "review" ? <UserMenu className="items-center" /> : null}
       </div>
 
       {view === "orderList" ? (
@@ -1207,46 +1260,31 @@ export default function ProductOrdersPage() {
                       {group.items.map((item) => (
                         <div
                           key={`${group.distributor}-${item.itemName}`}
-                          className="flex items-center gap-3 border-b border-[#00000014] py-2.5 text-[12px]"
+                          className={cn(
+                            REVIEW_LINE_GRID,
+                            "border-b border-[#00000014] py-3 text-[13px]",
+                          )}
                         >
-                          <span className="min-w-0 flex-[1.15] truncate text-[#111118]">
+                          <span className="min-w-0 truncate text-[#111118]">
                             {item.itemName}
                           </span>
-                          <span className="min-w-0 flex-1 truncate text-[#8A8A8A]">
+                          <span className="min-w-0 truncate text-[#8A8A8A]">
                             {item.source}
                           </span>
-                          <div className="ml-auto flex shrink-0 items-center gap-4">
-                            <span
-                              className={cn(
-                                REVIEW_QTY_W,
-                                "text-right font-medium text-[#111118]",
-                              )}
-                            >
-                              {item.quantity}x
-                            </span>
-                            <span
-                              className={cn(
-                                REVIEW_UNIT_W,
-                                "whitespace-nowrap text-right text-[#111118]",
-                              )}
-                            >
-                              {money(item.price)}
-                              {item.unit ? ` / ${item.unit}` : ""}
-                            </span>
-                            <span
-                              className={cn(
-                                REVIEW_LINE_W,
-                                "text-right font-semibold whitespace-nowrap text-[#111118]",
-                              )}
-                            >
-                              {money(item.lineTotal)}
-                            </span>
-                          </div>
+                          <span className="text-right text-[#111118]">
+                            {item.quantity}×
+                          </span>
+                          <span className="text-right whitespace-nowrap text-[#111118]">
+                            {money(item.price)}
+                          </span>
+                          <span className="text-right font-semibold whitespace-nowrap text-[#111118]">
+                            {money(item.lineTotal)}
+                          </span>
                         </div>
                       ))}
                     </div>
-                    <div className="flex items-center justify-between gap-3 pt-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                    <div className={cn(REVIEW_LINE_GRID, "pt-3")}>
+                      <div className="col-span-4 flex min-w-0 flex-wrap items-center gap-2.5">
                         {ordered ? (
                           <div className="flex min-w-0 items-start gap-2">
                             <span className="mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-[#18BC33] text-white">
@@ -1302,12 +1340,7 @@ export default function ProductOrdersPage() {
                           </>
                         )}
                       </div>
-                      <div
-                        className={cn(
-                          REVIEW_LINE_W,
-                          "shrink-0 text-right text-[16px] font-semibold text-[#111118]",
-                        )}
-                      >
+                      <div className="shrink-0 text-right text-[18px] font-semibold text-[#111118]">
                         {money(group.totalPrice)}
                       </div>
                     </div>

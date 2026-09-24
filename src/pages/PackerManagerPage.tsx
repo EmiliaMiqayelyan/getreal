@@ -304,7 +304,7 @@ export default function PackerManagerPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7">
+      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {

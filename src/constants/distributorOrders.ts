@@ -29,9 +29,6 @@ export const DELIVERED_SORT_OPTIONS = [
 
 export const DELIVERED_ORDERS: DeliveredOrder[] = [];
 
-export const EXPECTED_DELIVERY = "Tue, Jul 12, 06:00–08:00 AM";
-export const DELIVERY_LABEL = "Wed, Jul 14";
-
 export const MANUAL_DISTRIBUTORS: readonly string[] = [];
 
 export const MANUAL_TIME_SLOTS = [

@@ -1,5 +1,7 @@
-import { apiRequest } from "./client";
+import { ApiError, apiRequest } from "./client";
+import { itemsApi } from "./items";
 import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { sourcesApi } from "./sources";
 import type { ApiDistributor } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -29,6 +31,55 @@ export type CreateDistributorPayload = {
 };
 
 export type UpdateDistributorPayload = Partial<CreateDistributorPayload>;
+
+function isLinkConstraint(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  return /foreign key|violates .* constraint|still linked/i.test(error.message);
+}
+
+async function unlinkRecord(
+  update: () => Promise<unknown>,
+  remove: () => Promise<unknown>,
+) {
+  try {
+    await update();
+  } catch {
+    await remove();
+  }
+}
+
+/** Drop item and source links so the distributor row can be deleted. */
+async function clearDistributorLinks(distributorId: string) {
+  const [items, sources] = await Promise.all([
+    itemsApi.list().catch(() => []),
+    sourcesApi.list().catch(() => []),
+  ]);
+
+  await Promise.all([
+    ...items
+      .filter((item) => item.id && item.distributorId === distributorId)
+      .map((item) =>
+        unlinkRecord(
+          () =>
+            itemsApi.update(item.id!, {
+              distributorId: null,
+            } as Parameters<typeof itemsApi.update>[1]),
+          () => itemsApi.remove(item.id!),
+        ),
+      ),
+    ...sources
+      .filter((source) => source.id && source.distributorId === distributorId)
+      .map((source) =>
+        unlinkRecord(
+          () =>
+            sourcesApi.update(source.id!, {
+              distributorId: null,
+            } as Parameters<typeof sourcesApi.update>[1]),
+          () => sourcesApi.remove(source.id!),
+        ),
+      ),
+  ]);
+}
 
 export const distributorsApi = {
   list() {
@@ -73,7 +124,13 @@ export const distributorsApi = {
     );
   },
 
-  remove(id: string) {
-    return apiRequest<void>(`/distributors/${id}`, { method: "DELETE" });
+  async remove(id: string) {
+    try {
+      await apiRequest<void>(`/distributors/${id}`, { method: "DELETE" });
+    } catch (error) {
+      if (!isLinkConstraint(error)) throw error;
+      await clearDistributorLinks(id);
+      await apiRequest<void>(`/distributors/${id}`, { method: "DELETE" });
+    }
   },
 };

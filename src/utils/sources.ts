@@ -111,6 +111,62 @@ export function nextSourceId(sources: Source[]) {
   return `SOR-${String(max + 1).padStart(5, "0")}`;
 }
 
+const SOURCE_EXPORT_HEADERS = [
+  "Source ID",
+  "Photo",
+  "Name",
+  "Location",
+  "Distributor",
+  "Description",
+] as const;
+
+function csvCell(value: string) {
+  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
+  return value;
+}
+
+function sourcePhotoExportValue(logoUrl: string | null) {
+  if (!logoUrl) return "—";
+  if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
+    return logoUrl;
+  }
+  return "Image";
+}
+
+/** CSV of the rows and columns shown on the Source screen. */
+export function sourcesToCsv(sources: Source[]) {
+  const lines = [
+    SOURCE_EXPORT_HEADERS.join(","),
+    ...sources.map((source) =>
+      [
+        source.id,
+        sourcePhotoExportValue(source.logoUrl),
+        source.name,
+        getSourceLocation(source),
+        getSourceDistributorDisplay(source),
+        source.description.trim() || "—",
+      ]
+        .map(csvCell)
+        .join(","),
+    ),
+  ];
+  return lines.join("\r\n");
+}
+
+export function downloadSourcesCsv(sources: Source[], filename = "sources.csv") {
+  const blob = new Blob([`\uFEFF${sourcesToCsv(sources)}`], {
+    type: "text/csv;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 type SourceLinked = {
   source: string;
   sourceId?: string;

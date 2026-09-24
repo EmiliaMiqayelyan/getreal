@@ -3,6 +3,7 @@ import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
 import { ManageSubcategoriesModal } from "@/components/items/ManageSubcategoriesModal";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INVALID_FIELD_BORDER } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -44,6 +45,7 @@ import {
   parseContentsInput,
   parseDecimalInput,
   parseMoneyInput,
+  pricingFormulaLines,
   type PricingCaseBy,
   type PricingSourcePer,
 } from "@/utils/itemPricing";
@@ -58,7 +60,7 @@ const READONLY_FIELD =
 type AddItemModalProps = {
   open: boolean;
   onClose: () => void;
-  onSave: (item: Item) => void;
+  onSave: (item: Item) => void | Promise<void>;
   /** Remove the item being edited from the list. Edit mode only. */
   onRemove?: () => void;
   item?: Item | null;
@@ -108,6 +110,9 @@ export function AddItemModal({
   const [singleItemUnit, setSingleItemUnit] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [errors, setErrors] = useState<ItemFormErrors>({});
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [manageSubcategoriesOpen, setManageSubcategoriesOpen] = useState(false);
 
   const distributorOptions = useMemo(
@@ -155,11 +160,24 @@ export function AddItemModal({
   });
   const sell = parseMoneyInput(sellingPrice);
   const finalMargin = calcFinalMarginPercent(sell, pricing.costPerPiece);
+  const formulaLines = pricingFormulaLines({
+    sourcePer: sourcePer as PricingSourcePer | "",
+    caseBy: caseBy as PricingCaseBy | "",
+    buyingPrice: buying,
+    pieceWeightOz: weightOz,
+    caseWeightLbs: caseLbs,
+    piecesPerCase: qty,
+    costPerLb: pricing.costPerLb,
+    costPerPiece: pricing.costPerPiece,
+  });
 
   useEffect(() => {
     if (!open) return;
 
     setErrors({});
+    setConfirmRemove(false);
+    setSaving(false);
+    savingRef.current = false;
 
     if (item) {
       setDistributor(item.distributor);
@@ -219,11 +237,16 @@ export function AddItemModal({
   }
 
   function handleRemove() {
+    setConfirmRemove(true);
+  }
+
+  function confirmRemoveItem() {
     onRemove?.();
     handleClose();
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (savingRef.current) return;
     const nextErrors = validateItemForm({
       name,
       merchandisingName,
@@ -260,10 +283,8 @@ export function AddItemModal({
     }
 
     setErrors({});
-
     const resolvedSourcePer = sourcePer as SourcePer;
-    const resolvedPieceOz =
-      resolvedSourcePer === "Unit" ? weightOz : 0;
+    const resolvedPieceOz = resolvedSourcePer === "Unit" ? weightOz : 0;
     const resolvedCaseBy =
       resolvedSourcePer === "Case" ? (caseBy as CaseBy) : "";
     const resolvedCaseLbs =
@@ -276,33 +297,40 @@ export function AddItemModal({
         ? pieceWeightLabel(resolvedPieceOz) || "Each"
         : singleItemUnit;
 
-    onSave({
-      id: item?.id ?? "IT-TEMP",
-      name: name.trim(),
-      merchandisingName: merchandisingName.trim(),
-      description: description.trim(),
-      preorderInfo: preorderInfo.trim(),
-      category,
-      subcategory,
-      subcategoryId: findSubcategoryIdByName(
-        subcategoryRecords,
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await onSave({
+        id: item?.id ?? "IT-TEMP",
+        name: name.trim(),
+        merchandisingName: merchandisingName.trim(),
+        description: description.trim(),
+        preorderInfo: preorderInfo.trim(),
         category,
         subcategory,
-      ),
-      distributor,
-      distributorId: resolveDistributorId(distributor, distributors),
-      source,
-      sourceId: resolveSourceId(source, catalogSources) ?? item?.sourceId,
-      sourcePer: resolvedSourcePer,
-      caseBy: resolvedCaseBy,
-      pieceWeightOz: resolvedPieceOz,
-      caseWeightLbs: resolvedCaseLbs,
-      buyingPrice: buying,
-      contents: resolvedContents,
-      singleItemUnit: resolvedSingleUnit,
-      sellingPrice: sell,
-      photos,
-    });
+        subcategoryId: findSubcategoryIdByName(
+          subcategoryRecords,
+          category,
+          subcategory,
+        ),
+        distributor,
+        distributorId: resolveDistributorId(distributor, distributors),
+        source,
+        sourceId: resolveSourceId(source, catalogSources) ?? item?.sourceId,
+        sourcePer: resolvedSourcePer,
+        caseBy: resolvedCaseBy,
+        pieceWeightOz: resolvedPieceOz,
+        caseWeightLbs: resolvedCaseLbs,
+        buyingPrice: buying,
+        contents: resolvedContents,
+        singleItemUnit: resolvedSingleUnit,
+        sellingPrice: sell,
+        photos,
+      });
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
   }
 
   return (
@@ -1069,6 +1097,18 @@ export function AddItemModal({
                   </div>
                 </>
               ) : null}
+              {formulaLines.length ? (
+                <div className="space-y-0.5">
+                  {formulaLines.map((line) => (
+                    <p
+                      key={line}
+                      className="text-[11px] leading-[15px] text-[#8A8A8A]"
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </section>
         </div>
@@ -1089,7 +1129,7 @@ export function AddItemModal({
             <Button variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button variant="dark" onClick={handleSave}>
+            <Button variant="dark" onClick={handleSave} disabled={saving}>
               {isEdit ? "Save Item" : "Create Item"}
             </Button>
           </div>
@@ -1110,6 +1150,16 @@ export function AddItemModal({
             }));
           }
         }}
+      />
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Delete item"
+        message={`Delete ${merchandisingName.trim() || name.trim() || "this item"}?`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onClose={() => setConfirmRemove(false)}
+        onConfirm={confirmRemoveItem}
       />
     </div>
   );
