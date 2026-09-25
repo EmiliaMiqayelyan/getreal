@@ -19,7 +19,12 @@ export type CreateItemPayload = {
   photos?: string[];
 };
 
-export type UpdateItemPayload = Partial<CreateItemPayload>;
+export type UpdateItemPayload = Partial<
+  Omit<CreateItemPayload, "distributorId">
+> & {
+  /** Pass null to clear the distributor link. */
+  distributorId?: string | null;
+};
 
 const inflightCreates = new Map<string, Promise<ApiItem>>();
 

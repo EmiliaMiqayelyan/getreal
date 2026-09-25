@@ -15,7 +15,12 @@ export type CreateSourcePayload = {
   logoUrl?: string | null;
 };
 
-export type UpdateSourcePayload = Partial<CreateSourcePayload>;
+export type UpdateSourcePayload = Partial<
+  Omit<CreateSourcePayload, "distributorId">
+> & {
+  /** Pass null to clear the distributor link. */
+  distributorId?: string | null;
+};
 
 export const sourcesApi = {
   list() {

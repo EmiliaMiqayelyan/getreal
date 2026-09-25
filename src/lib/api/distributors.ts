@@ -61,9 +61,7 @@ async function clearDistributorLinks(distributorId: string) {
       .map((item) =>
         unlinkRecord(
           () =>
-            itemsApi.update(item.id!, {
-              distributorId: null,
-            } as Parameters<typeof itemsApi.update>[1]),
+            itemsApi.update(item.id!, { distributorId: null }),
           () => itemsApi.remove(item.id!),
         ),
       ),
@@ -72,9 +70,7 @@ async function clearDistributorLinks(distributorId: string) {
       .map((source) =>
         unlinkRecord(
           () =>
-            sourcesApi.update(source.id!, {
-              distributorId: null,
-            } as Parameters<typeof sourcesApi.update>[1]),
+            sourcesApi.update(source.id!, { distributorId: null }),
           () => sourcesApi.remove(source.id!),
         ),
       ),
