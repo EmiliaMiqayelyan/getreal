@@ -9,6 +9,8 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -343,6 +345,11 @@ export default function DistributorsPage() {
     [locationFilter, query, rows, weekdayFilter],
   );
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${query}|${locationFilter}|${weekdayFilter}`,
+  );
+
   function openCreate() {
     setEditing(null);
     setModalOpen(true);
@@ -427,7 +434,7 @@ export default function DistributorsPage() {
                   No distributors found
                 </div>
               ) : null}
-              {filtered.map((row) => (
+              {listWindow.visible.map((row) => (
                 <div
                   key={row.id}
                   className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
@@ -459,6 +466,11 @@ export default function DistributorsPage() {
                   </div>
                 </div>
               ))}
+              <InfiniteScrollSentinel
+                hasMore={listWindow.hasMore}
+                loadedCount={listWindow.loadedCount}
+                onLoadMore={listWindow.loadMore}
+              />
             </div>
 
             <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
@@ -487,9 +499,9 @@ export default function DistributorsPage() {
                   </div>
                 ) : null}
 
-                {filtered.map((row, index) => {
+                {listWindow.visible.map((row, index) => {
                   const delivery = formatDeliveryLabel(row.deliveryDays);
-                  const isLast = index === filtered.length - 1;
+                  const isLast = index === listWindow.visible.length - 1;
 
                   return (
                     <div
@@ -544,6 +556,11 @@ export default function DistributorsPage() {
                     </div>
                   );
                 })}
+                <InfiniteScrollSentinel
+                  hasMore={listWindow.hasMore}
+                  loadedCount={listWindow.loadedCount}
+                  onLoadMore={listWindow.loadMore}
+                />
               </div>
             </div>
           </>

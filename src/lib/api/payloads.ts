@@ -6,15 +6,10 @@ import { apiId, findByEntityRef } from "@/utils/entityIds";
 
 import type { CreateDistributorPayload } from "./distributors";
 import type { CreateItemPayload } from "./items";
-import {
-  dollarsToCents,
-  findCategoryIdByName,
-  findSubcategoryIdByName,
-} from "./mappers";
+import { dollarsToCents, findSubcategoryIdByName } from "./mappers";
 import type { CreateProductPayload, UpdateProductPayload } from "./products";
 import type { CreateSourcePayload } from "./sources";
 import type {
-  ApiCategory,
   ApiDeliverySchedule,
   ApiDistributorDocument,
   CatalogSubcategory,
@@ -182,14 +177,11 @@ export function toCreateSourcePayload(source: Source): CreateSourcePayload {
 
 export function toCreateItemPayload(
   item: Item,
-  categories: ApiCategory[],
   subcategories: CatalogSubcategory[] = [],
   photoUrls: string[] = [],
 ): CreateItemPayload {
-  const categoryId =
-    findCategoryIdByName(categories, item.category) ??
-    categories[0]?.id;
-  if (!categoryId) {
+  const category = item.category.trim();
+  if (!category) {
     throw new Error("No category available for item create");
   }
   if (!item.distributorId) {
@@ -206,7 +198,7 @@ export function toCreateItemPayload(
 
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
-    categoryId,
+    category,
     subcategoryId,
     distributorId: item.distributorId,
     ...(item.sourceId ? { sourceId: item.sourceId } : {}),

@@ -10,6 +10,8 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -175,6 +177,11 @@ export default function SourcePage() {
     [distributorFilter, locationFilter, query, rows],
   );
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${query}|${locationFilter}|${distributorFilter}`,
+  );
+
   function openCreate() {
     setEditing(null);
     setModalOpen(true);
@@ -238,7 +245,7 @@ export default function SourcePage() {
               No sources found
             </EmptyStateBox>
           ) : null}
-          {filtered.map((row) => (
+          {listWindow.visible.map((row) => (
             <div
               key={row.id}
               className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
@@ -270,6 +277,11 @@ export default function SourcePage() {
               </div>
             </div>
           ))}
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
         </div>
 
         <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
@@ -299,8 +311,8 @@ export default function SourcePage() {
               </EmptyStateBox>
             ) : null}
 
-            {filtered.map((row, index) => {
-              const isLast = index === filtered.length - 1;
+            {listWindow.visible.map((row, index) => {
+              const isLast = index === listWindow.visible.length - 1;
 
               return (
                 <div
@@ -339,6 +351,11 @@ export default function SourcePage() {
                 </div>
               );
             })}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
           </div>
         </div>
           </>

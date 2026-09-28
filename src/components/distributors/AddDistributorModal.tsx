@@ -266,11 +266,11 @@ export function AddDistributorModal({
   const orderedDays = WEEK_DAYS.filter((day) => days.includes(day));
 
   const CONTACT_FIELDS = [
-    ["firstName", "First Name"],
-    ["lastName", "Last Name"],
-    ["phone", "Phone Number"],
-    ["email", "Email Address"],
-    ["title", "Position / Role"],
+    ["firstName", "First Name", true],
+    ["lastName", "Last Name", true],
+    ["phone", "Phone Number", true],
+    ["email", "Email Address", true],
+    ["title", "Position / Role", false],
   ] as const;
 
   return (
@@ -313,6 +313,7 @@ export function AddDistributorModal({
               <div data-field="name">
                 <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
                   Distributor Name
+                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   value={name}
@@ -329,6 +330,7 @@ export function AddDistributorModal({
               <div data-field="address">
                 <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
                   Full Address
+                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   value={address}
@@ -348,6 +350,7 @@ export function AddDistributorModal({
               <div data-field="delivery-days">
                 <label className={cn(FIELD_LABEL, "mb-2 block")}>
                   Delivery Days & Times
+                  <span className="text-danger"> *</span>
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {WEEK_DAYS.map((day) => {
@@ -437,6 +440,7 @@ export function AddDistributorModal({
           >
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Payment Terms
+              <span className="text-danger"> *</span>
             </h3>
             <div
               role="radiogroup"
@@ -481,6 +485,7 @@ export function AddDistributorModal({
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
                 Contact Information
+                <span className="text-danger"> *</span>
               </h3>
               <button
                 type="button"
@@ -570,7 +575,7 @@ export function AddDistributorModal({
                         </button>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-2">
-                        {CONTACT_FIELDS.map(([key, label]) => (
+                        {CONTACT_FIELDS.map(([key, label, required]) => (
                           <div
                             key={key}
                             data-field={`contact-${contact.id}-${key}`}
@@ -578,6 +583,9 @@ export function AddDistributorModal({
                           >
                             <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
                               {label}
+                              {required ? (
+                                <span className="text-danger"> *</span>
+                              ) : null}
                             </label>
                             <Input
                               value={contact[key]}

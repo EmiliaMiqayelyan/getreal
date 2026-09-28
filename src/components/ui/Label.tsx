@@ -4,9 +4,15 @@ import { cn } from "@/utils/cn";
 
 type LabelProps = LabelHTMLAttributes<HTMLLabelElement> & {
   children: ReactNode;
+  required?: boolean;
 };
 
-export function Label({ children, className, ...props }: LabelProps) {
+export function Label({
+  children,
+  className,
+  required,
+  ...props
+}: LabelProps) {
   return (
     <label
       className={cn(
@@ -16,6 +22,7 @@ export function Label({ children, className, ...props }: LabelProps) {
       {...props}
     >
       {children}
+      {required ? <span className="text-danger"> *</span> : null}
     </label>
   );
 }

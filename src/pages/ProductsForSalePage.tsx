@@ -28,6 +28,8 @@ import {
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import {
   isApiConfigured,
   mapApiProductToProductForSale,
@@ -444,9 +446,19 @@ export default function ProductsForSalePage() {
     [catalog, filterCriteria, products],
   );
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${search}|${tab}|${subcategoryFilter}|${distributorFilter}|${sourceFilter}`,
+  );
+
   const grouped = useMemo(
-    () => groupProductsForSale(filtered, catalog, subcategoriesByCategory),
-    [catalog, filtered, subcategoriesByCategory],
+    () =>
+      groupProductsForSale(
+        listWindow.visible,
+        catalog,
+        subcategoriesByCategory,
+      ),
+    [catalog, listWindow.visible, subcategoriesByCategory],
   );
 
   const viewingProduct = useMemo(() => {
@@ -743,6 +755,11 @@ export default function ProductsForSalePage() {
                 </div>
               </section>
             ))}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
           </div>
         )}
 

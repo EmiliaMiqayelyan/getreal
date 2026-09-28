@@ -209,7 +209,7 @@ export function AddSourceModal({
         <div className="flex-1 space-y-0 overflow-auto px-[30px] pt-6 pb-5">
           <section>
             <div className="space-y-5">
-              <FormField label="Source Name" error={errors.name}>
+              <FormField label="Source Name" error={errors.name} required>
                 <div data-field="name">
                   <Input
                     value={name}
@@ -230,7 +230,7 @@ export function AddSourceModal({
                 </div>
               </FormField>
 
-              <FormField label="Full Address" error={errors.address}>
+              <FormField label="Full Address" error={errors.address} required>
                 <div data-field="address">
                   <Input
                     value={address}
@@ -252,7 +252,7 @@ export function AddSourceModal({
                 </div>
               </FormField>
 
-              <FormField label="Distributor" error={errors.distributor}>
+              <FormField label="Distributor" error={errors.distributor} required>
                 <div data-field="distributor">
                   <Select
                     value={distributor}

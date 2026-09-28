@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   Calendar,
@@ -10,7 +10,11 @@ import {
 } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
-import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DateNavButton,
+  CalendarIcon,
+  DATE_NAV_GROUP,
+} from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
   DATE_CHIP_ROW,
@@ -20,7 +24,9 @@ import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
-import { Pagination } from "@/components/ui/Pagination";
+import { Button } from "@/components/ui/Button";
+import { Modal } from "@/components/ui/Modal";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
@@ -30,10 +36,12 @@ import { SUB_ROW_PAD } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
   downloadListExport,
   isApiConfigured,
   ordersApi,
+  type ApiOrder,
 } from "@/lib/api";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
@@ -42,12 +50,7 @@ import { cn } from "@/utils/cn";
 const ORANGE = "#F57850";
 
 type TimelineStepKey =
-  | "requested"
-  | "packing"
-  | "onRoute"
-  | "delivered"
-  | "coolerPickup"
-  | "return";
+  "requested" | "packing" | "onRoute" | "delivered" | "coolerPickup" | "return";
 
 type TimelineStep = {
   key: TimelineStepKey;
@@ -78,6 +81,7 @@ type CustomerOrderRow = {
   deliveryDate: string;
   deliveryLabel: string;
   paymentStatus: "Paid" | "Pending";
+  status?: string;
   total: number;
   items: OrderItem[];
   packerAssigned?: string;
@@ -102,6 +106,8 @@ type CompletedOrder = {
   total: number;
   day: string;
   week: string;
+  /** API status is a finished order (`completed`). */
+  finished?: boolean;
 };
 
 const STEPS_META: { key: TimelineStepKey; header: string }[] = [
@@ -112,6 +118,30 @@ const STEPS_META: { key: TimelineStepKey; header: string }[] = [
   { key: "coolerPickup", header: "Cooler Pickup" },
   { key: "return", header: "Return" },
 ];
+
+const STEP_API_STATUS: Partial<Record<TimelineStepKey, string>> = {
+  requested: "requested",
+  packing: "packing",
+  onRoute: "on_route",
+  delivered: "delivered",
+};
+
+type StatusDirection = "previous" | "next";
+
+function stepHeader(stepKey: TimelineStepKey) {
+  return STEPS_META.find((step) => step.key === stepKey)?.header ?? stepKey;
+}
+
+function statusNeighbors(stepKey: TimelineStepKey) {
+  const index = STEPS_META.findIndex((step) => step.key === stepKey);
+  return {
+    previous: index > 0 ? STEPS_META[index - 1] : null,
+    next:
+      index >= 0 && index < STEPS_META.length - 1
+        ? STEPS_META[index + 1]
+        : null,
+  };
+}
 
 const DELIVERY_CHIPS: DeliveryChip[] = [];
 
@@ -160,6 +190,140 @@ const COMPLETED_ORDERS: CompletedOrder[] = [];
 
 function currency(value: number) {
   return `$${value.toFixed(2)}`;
+}
+
+function isCompletedOrderStatus(status?: string) {
+  const value = (status ?? "").trim().toLowerCase();
+  return value === "completed" || value === "complete";
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readNumber(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function formatOrderStamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function weekAndDay(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return { week: "Completed", day: value || "—" };
+  }
+  const start = new Date(date);
+  const weekday = start.getDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  start.setDate(start.getDate() + mondayOffset);
+  const week = `Week of ${start.getMonth() + 1}/${start.getDate()}/${start.getFullYear()}`;
+  const day = date.toLocaleDateString(undefined, {
+    weekday: "long",
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+  });
+  return { week, day };
+}
+
+function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const customer = asRecord(raw.customer);
+  const customerName =
+    readString(raw.customerName) ||
+    [readString(customer?.firstName), readString(customer?.lastName)]
+      .filter(Boolean)
+      .join(" ") ||
+    readString(customer?.name) ||
+    readString(order.customerId) ||
+    "Customer";
+  const address =
+    readString(raw.address) ||
+    readString(raw.deliveryAddress) ||
+    readString(customer?.address) ||
+    [
+      readString(customer?.street),
+      readString(customer?.city),
+      readString(customer?.state),
+    ]
+      .filter(Boolean)
+      .join(", ");
+  const zip =
+    readString(raw.zip) ||
+    readString(raw.zipCode) ||
+    readString(customer?.zip) ||
+    readString(customer?.zipCode);
+  const lines = order.items ?? [];
+  const itemCount = lines.reduce((sum, line) => {
+    const quantity = readNumber(
+      (line as { quantity?: unknown }).quantity,
+    );
+    return sum + (quantity ?? 0);
+  }, 0);
+  const lineTotal = lines.reduce((sum, line) => {
+    const record = line as {
+      quantity?: unknown;
+      unitPrice?: unknown;
+      price?: unknown;
+    };
+    const quantity = readNumber(record.quantity) ?? 0;
+    const price = readNumber(record.unitPrice) ?? readNumber(record.price) ?? 0;
+    return sum + quantity * price;
+  }, 0);
+  const total =
+    readNumber(raw.total) ??
+    readNumber(raw.totalAmount) ??
+    readNumber(raw.amount) ??
+    lineTotal;
+  const orderDateRaw =
+    readString(order.createdAt) || readString(raw.orderDate);
+  const deliveredRaw =
+    readString(order.deliveryDate) ||
+    readString(raw.deliveredAt) ||
+    readString(order.updatedAt) ||
+    orderDateRaw;
+  const grouped = weekAndDay(deliveredRaw);
+
+  return {
+    id: order.id ?? `API-CO-${index + 1}`,
+    customer: customerName,
+    address,
+    zip,
+    orderDate: orderDateRaw ? formatOrderStamp(orderDateRaw) : "",
+    delivered: deliveredRaw ? formatOrderStamp(deliveredRaw) : "",
+    items: itemCount || lines.length,
+    total,
+    day: grouped.day,
+    week: grouped.week,
+    finished: isCompletedOrderStatus(order.status),
+  };
+}
+
+function display(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : "—";
 }
 
 function HoverCard({
@@ -214,11 +378,7 @@ function HoverCard({
           {step.at ? `${step.at}, 2026` : "—"}
         </div>
         <div className="mt-2">
-          {order.coolerIds?.[0] ? (
-            <IdPill>{order.coolerIds[0]}</IdPill>
-          ) : (
-            "—"
-          )}
+          {order.coolerIds?.[0] ? <IdPill>{order.coolerIds[0]}</IdPill> : "—"}
         </div>
       </div>
     );
@@ -282,6 +442,229 @@ function HoverCard({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function InfoField({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+        {label}
+      </div>
+      <div className="mt-1 text-[13px] text-[#111118]">{children}</div>
+    </div>
+  );
+}
+
+function CoolerIds({ order }: { order: CustomerOrderRow }) {
+  const coolers = order.coolerIds ?? [];
+  if (!coolers.length) {
+    return <span className="text-[#8A8A8A]">—</span>;
+  }
+
+  return (
+    <span className="flex flex-wrap gap-1.5">
+      {coolers.map((coolerId) => (
+        <IdPill key={coolerId}>{coolerId}</IdPill>
+      ))}
+    </span>
+  );
+}
+
+function AddressFields({ order }: { order: CustomerOrderRow }) {
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <InfoField label="Street Address">{display(order.address)}</InfoField>
+      <InfoField label="Apt / Unit">{display(order.apt)}</InfoField>
+      <InfoField label="City">{display(order.city)}</InfoField>
+      <InfoField label="State">{display(order.state)}</InfoField>
+      <InfoField label="Zip">{display(order.zip)}</InfoField>
+      <InfoField label="Delivery date">{display(order.deliveryDate)}</InfoField>
+    </div>
+  );
+}
+
+const STATUS_SUMMARY: Record<
+  TimelineStepKey,
+  Record<StatusDirection, string>
+> = {
+  requested: {
+    next: "The order returns to Requested. Packing and every later step are cleared.",
+    previous:
+      "The order returns to Requested. Packing and every later step are cleared.",
+  },
+  packing: {
+    next: "The order moves into Packing so it can be assigned and loaded into a cooler.",
+    previous:
+      "The order moves back to Packing. Route, delivery, and return progress are cleared.",
+  },
+  onRoute: {
+    next: "The order goes On Route for delivery to the address below.",
+    previous:
+      "The order goes back On Route. Delivery, cooler pickup, and return are cleared.",
+  },
+  delivered: {
+    next: "The order is marked Delivered at the address below.",
+    previous:
+      "The order moves back to Delivered. Cooler pickup and return are cleared.",
+  },
+  coolerPickup: {
+    next: "Cooler pickup is recorded for the coolers on this order.",
+    previous:
+      "The order moves back to Cooler Pickup. The return step is cleared.",
+  },
+  return: {
+    next: "The cooler return is recorded and this order is complete.",
+    previous: "The cooler return is recorded and this order is complete.",
+  },
+};
+
+function StatusChangeDetails({
+  stepKey,
+  order,
+}: {
+  stepKey: TimelineStepKey;
+  order: CustomerOrderRow;
+}) {
+  if (stepKey === "requested") {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <InfoField label="Customer">{display(order.customerName)}</InfoField>
+          <InfoField label="Order date">{display(order.orderDate)}</InfoField>
+          <InfoField label="Payment">{order.paymentStatus}</InfoField>
+          <InfoField label="Items">{order.itemCount}</InfoField>
+        </div>
+        <div className="space-y-1.5 border-t border-[#00000014] pt-3">
+          {order.items.length === 0 ? (
+            <div className="text-[13px] text-[#8A8A8A]">No line items</div>
+          ) : (
+            order.items.map((item) => (
+              <div
+                key={`${item.name}-${item.qty}`}
+                className="grid grid-cols-[1fr_32px_72px] gap-2 text-[13px] text-[#111118]"
+              >
+                <span className="truncate">{item.name}</span>
+                <span className="text-center text-[#8A8A8A]">{item.qty}</span>
+                <span className="text-right font-medium">
+                  {currency(item.qty * item.unitPrice)}
+                </span>
+              </div>
+            ))
+          )}
+          <div className="flex items-center justify-between border-t border-[#00000014] pt-2 text-[13px] font-bold text-[#111118]">
+            <span>Order total</span>
+            <span>{currency(order.total)}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (stepKey === "packing") {
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        <InfoField label="Customer">{display(order.customerName)}</InfoField>
+        <InfoField label="Items">{order.itemCount}</InfoField>
+        <InfoField label="Packer assigned">
+          {display(order.packerAssigned)}
+        </InfoField>
+        <InfoField label="Delivery date">
+          {display(order.deliveryDate)}
+        </InfoField>
+        <InfoField label="Cooler ID(s)">
+          <CoolerIds order={order} />
+        </InfoField>
+      </div>
+    );
+  }
+
+  if (stepKey === "onRoute") {
+    return (
+      <div className="space-y-4">
+        <InfoField label="Customer">{display(order.customerName)}</InfoField>
+        <AddressFields order={order} />
+      </div>
+    );
+  }
+
+  if (stepKey === "delivered") {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <InfoField label="Customer">{display(order.customerName)}</InfoField>
+          <InfoField label="Payment">{order.paymentStatus}</InfoField>
+        </div>
+        <AddressFields order={order} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4">
+      <InfoField label="Customer">{display(order.customerName)}</InfoField>
+      <InfoField label="Items">{order.itemCount}</InfoField>
+      <InfoField label="Delivery date">{display(order.deliveryDate)}</InfoField>
+      <InfoField label="Cooler ID(s)">
+        <CoolerIds order={order} />
+      </InfoField>
+    </div>
+  );
+}
+
+function StatusChangeModal({
+  open,
+  direction,
+  stepKey,
+  order,
+  saving,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  direction: StatusDirection;
+  stepKey: TimelineStepKey;
+  order: CustomerOrderRow | null;
+  saving: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const header = stepHeader(stepKey);
+
+  return (
+    <Modal
+      open={open && Boolean(order)}
+      title={`${direction === "next" ? "Next" : "Previous"} · ${header}`}
+      onClose={onClose}
+      size="sm"
+      zIndexClass="z-[80]"
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            className="ml-3"
+            onClick={onConfirm}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : `Set to ${header}`}
+          </Button>
+        </>
+      }
+    >
+      <p className="mb-4 text-[14px] leading-5 text-[#111118]">
+        {STATUS_SUMMARY[stepKey][direction]}
+      </p>
+      {order ? <StatusChangeDetails stepKey={stepKey} order={order} /> : null}
+    </Modal>
   );
 }
 
@@ -372,7 +755,7 @@ function StepNode({
         ) : null}
       </button>
 
-      <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[11px] font-medium leading-tight text-[#6B7180]">
+      <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[11px] leading-tight font-medium text-[#6B7180]">
         {step.done && step.at ? step.at : null}
       </div>
 
@@ -438,7 +821,6 @@ function OrderTimelineTrack({
   );
 }
 
-
 function DayHeaderIcon() {
   const [useFallback, setUseFallback] = useState(false);
 
@@ -465,161 +847,162 @@ function OrderDetailPanel({
 }) {
   return (
     <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
-        <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <IdPill>{order.id}</IdPill>
-              <span className="text-[12px] text-[#8A8A8A]">
-                Ordered:{" "}
-                <span className="text-[#111118]">{order.orderDate}</span>
-              </span>
-            </div>
-            <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
-              {order.customerName}
-            </h2>
-            <div
-              className={cn(
-                "mt-2 inline-flex rounded-[6px] px-2 py-1 text-[12px] font-medium",
-                order.paymentStatus === "Paid"
-                  ? "bg-[#E8F5EC] text-[#2F8F4E]"
-                  : "bg-[#FFF0E8] text-[#E07A4F]",
-              )}
-            >
-              Payment Status: {order.paymentStatus}
-            </div>
+      <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <IdPill>{order.id}</IdPill>
+            <span className="text-[12px] text-[#8A8A8A]">
+              Ordered: <span className="text-[#111118]">{order.orderDate}</span>
+            </span>
           </div>
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="rounded-md p-1 text-[#A9A9A9] hover:bg-background hover:text-[#6B6B6B]"
+          <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
+            {order.customerName}
+          </h2>
+          <div
+            className={cn(
+              "mt-2 inline-flex rounded-[6px] px-2 py-1 text-[12px] font-medium",
+              order.paymentStatus === "Paid"
+                ? "bg-[#E8F5EC] text-[#2F8F4E]"
+                : "bg-[#FFF0E8] text-[#E07A4F]",
+            )}
           >
-            <X size={18} />
-          </button>
+            Payment Status: {order.paymentStatus}
+          </div>
         </div>
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
+          className="hover:bg-background rounded-md p-1 text-[#A9A9A9] hover:text-[#6B6B6B]"
+        >
+          <X size={18} />
+        </button>
+      </div>
 
-        <div className="flex-1 overflow-auto px-5 py-5">
-          <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
-            Requested Items
-          </h3>
-          <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+      <div className="flex-1 overflow-auto px-5 py-5">
+        <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
+          Requested Items
+        </h3>
+        <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+          <div
+            className={cn(
+              "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+              SUB_ROW_PAD,
+            )}
+          >
+            <div>Item / Order ID</div>
+            <div>Qty</div>
+            <div>Unit Price</div>
+            <div className="text-right">Total</div>
+          </div>
+          {order.items.map((item) => (
             <div
+              key={item.name}
               className={cn(
-                "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
                 SUB_ROW_PAD,
               )}
             >
-              <div>Item / Order ID</div>
-              <div>Qty</div>
-              <div>Unit Price</div>
-              <div className="text-right">Total</div>
-            </div>
-            {order.items.map((item) => (
-              <div
-                key={item.name}
-                className={cn(
-                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
-                  SUB_ROW_PAD,
-                )}
-              >
-                <div className="min-w-0">
-                  <div>{item.name}</div>
-                  <div className="mt-0.5 font-mono text-[11px] text-[#8A8A8A]">
-                    {order.id}
-                  </div>
-                </div>
-                <div>{item.qty}</div>
-                <div className="whitespace-nowrap">
-                  <span>{currency(item.unitPrice)}</span>
-                  <span className="text-[#8A8A8A]"> / {item.unit}</span>
-                </div>
-                <div className="text-right font-bold">
-                  {currency(item.qty * item.unitPrice)}
+              <div className="min-w-0">
+                <div>{item.name}</div>
+                <div className="mt-0.5 font-mono text-[11px] text-[#8A8A8A]">
+                  {order.id}
                 </div>
               </div>
-            ))}
-            <div
-              className={cn(
-                "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
-                SUB_ROW_PAD,
-              )}
-            >
-              <span className="text-[14px] font-semibold">Order Total</span>
-              <span className="text-[18px] font-bold tracking-tight">
-                {currency(order.total)}
-              </span>
+              <div>{item.qty}</div>
+              <div className="whitespace-nowrap">
+                <span>{currency(item.unitPrice)}</span>
+                <span className="text-[#8A8A8A]"> / {item.unit}</span>
+              </div>
+              <div className="text-right font-bold">
+                {currency(item.qty * item.unitPrice)}
+              </div>
             </div>
+          ))}
+          <div
+            className={cn(
+              "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
+              SUB_ROW_PAD,
+            )}
+          >
+            <span className="text-[14px] font-semibold">Order Total</span>
+            <span className="text-[18px] font-bold tracking-tight">
+              {currency(order.total)}
+            </span>
           </div>
+        </div>
 
-          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
-            Packing Information
-          </h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Packer Assigned
-              </div>
-              <div className="mt-1 text-[13px] text-[#99A1AF]">
-                {order.packerAssigned ?? "—"}
-              </div>
+        <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
+          Packing Information
+        </h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              Packer Assigned
             </div>
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Cooler ID(s)
-              </div>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {(order.coolerIds ?? []).map((coolerId) => (
-                  <IdPill key={coolerId}>{coolerId}</IdPill>
-                ))}
-                {!order.coolerIds?.length ? (
-                  <span className="text-[13px] text-[#99A1AF]">—</span>
-                ) : null}
-              </div>
+            <div className="mt-1 text-[13px] text-[#99A1AF]">
+              {order.packerAssigned ?? "—"}
             </div>
           </div>
-
-          <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
-            Delivery Information
-          </h3>
-          <div className="mb-4 inline-flex items-center gap-1.5 rounded-[6px] bg-[#FFF0E8] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
-            <Truck size={12} />
-            {order.deliveryDate}
-          </div>
-          <div className="flex flex-col gap-3 bg-white text-[13px]">
-            <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Street Address
-              </div>
-              <div className="mt-1 font-bold text-[#111118]">{order.address}</div>
+          <div>
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              Cooler ID(s)
             </div>
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                  Apt / Unit
-                </div>
-                <div className="mt-1 font-bold text-[#111118]">{order.apt || "—"}</div>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                  City
-                </div>
-                <div className="mt-1 font-bold text-[#111118]">{order.city}</div>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                  State
-                </div>
-                <div className="mt-1 font-bold text-[#111118]">{order.state}</div>
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                  Zip
-                </div>
-                <div className="mt-1 font-bold text-[#111118]">{order.zip}</div>
-              </div>
+            <div className="mt-1 flex flex-wrap gap-1.5">
+              {(order.coolerIds ?? []).map((coolerId) => (
+                <IdPill key={coolerId}>{coolerId}</IdPill>
+              ))}
+              {!order.coolerIds?.length ? (
+                <span className="text-[13px] text-[#99A1AF]">—</span>
+              ) : null}
             </div>
           </div>
         </div>
+
+        <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
+          Delivery Information
+        </h3>
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded-[6px] bg-[#FFF0E8] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
+          <Truck size={12} />
+          {order.deliveryDate}
+        </div>
+        <div className="flex flex-col gap-3 bg-white text-[13px]">
+          <div>
+            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+              Street Address
+            </div>
+            <div className="mt-1 font-bold text-[#111118]">{order.address}</div>
+          </div>
+          <div className="grid grid-cols-4 gap-4">
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                Apt / Unit
+              </div>
+              <div className="mt-1 font-bold text-[#111118]">
+                {order.apt || "—"}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                City
+              </div>
+              <div className="mt-1 font-bold text-[#111118]">{order.city}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                State
+              </div>
+              <div className="mt-1 font-bold text-[#111118]">{order.state}</div>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                Zip
+              </div>
+              <div className="mt-1 font-bold text-[#111118]">{order.zip}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
   );
 }
@@ -634,6 +1017,9 @@ export default function CustomerOrdersPage() {
   const [orders, setOrders] = useState(() =>
     apiConfigured ? [] : ACTIVE_ORDERS,
   );
+  const [completedOrders, setCompletedOrders] = useState<CompletedOrder[]>(
+    () => (apiConfigured ? [] : COMPLETED_ORDERS),
+  );
   const [loading, setLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [activeChip, setActiveChip] = useState("wed-20");
@@ -645,8 +1031,12 @@ export default function CustomerOrdersPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState(19);
   const [page, setPage] = useState(1);
-  const [pageLimit, setPageLimit] = useState(DEFAULT_PAGE_LIMIT);
   const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [listExhausted, setListExhausted] = useState(false);
+  const loadLock = useRef(false);
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
   const [statusMenu, setStatusMenu] = useState<{
     orderId: string;
     stepKey: TimelineStepKey;
@@ -654,21 +1044,20 @@ export default function CustomerOrdersPage() {
     left: number;
     placeAbove: boolean;
   } | null>(null);
-
-  // Reset to first page when switching tabs (server list is tab-scoped).
-  const [tabForPage, setTabForPage] = useState(activeTab);
-  if (activeTab !== tabForPage) {
-    setTabForPage(activeTab);
-    if (page !== 1) setPage(1);
-  }
+  const [statusChange, setStatusChange] = useState<{
+    orderId: string;
+    stepKey: TimelineStepKey;
+    direction: StatusDirection;
+  } | null>(null);
+  const [statusSaving, setStatusSaving] = useState(false);
 
   useEffect(() => {
-    if (!apiConfigured || activeTab !== "Orders") {
-      if (activeTab !== "Orders") setLoading(false);
-      return;
-    }
+    if (!apiConfigured) return;
     let cancelled = false;
-    setLoading(true);
+    const append = page > 1;
+    loadLock.current = true;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
 
     void ordersApi
       .list({ page, limit: DEFAULT_PAGE_LIMIT, type: "standard" })
@@ -692,7 +1081,7 @@ export default function CustomerOrdersPage() {
             0,
           );
           return {
-            id: order.id ?? `API-CO-${index + 1}`,
+            id: order.id ?? `API-CO-${page}-${index + 1}`,
             customerName: order.customerId ?? "Customer",
             itemCount: itemCount || (order.items?.length ?? 0),
             address: "",
@@ -710,6 +1099,7 @@ export default function CustomerOrdersPage() {
               ? new Date(order.deliveryDate).toLocaleDateString()
               : "",
             paymentStatus: "Pending",
+            status: order.status,
             total: 0,
             items: (order.items ?? []).map((line) => ({
               name: line.productId ?? "Item",
@@ -721,23 +1111,47 @@ export default function CustomerOrdersPage() {
           };
         });
 
-        setOrders(mapped);
+        const known = new Set(ordersRef.current.map((order) => order.id));
+        const extra = mapped.filter((order) => !known.has(order.id));
+        setOrders((current) => {
+          if (!append) return mapped;
+          const seen = new Set(current.map((order) => order.id));
+          return [
+            ...current,
+            ...mapped.filter((order) => !seen.has(order.id)),
+          ];
+        });
+        const completedMapped = result.items.map((order, index) =>
+          mapApiOrderToCompleted(order, (page - 1) * DEFAULT_PAGE_LIMIT + index),
+        );
+        setCompletedOrders((current) => {
+          if (!append) return completedMapped;
+          const seen = new Set(current.map((order) => order.id));
+          return [
+            ...current,
+            ...completedMapped.filter((order) => !seen.has(order.id)),
+          ];
+        });
         setTotal(result.total);
-        setPageLimit(result.limit);
-        if (result.page !== page) setPage(result.page);
+        if (mapped.length < DEFAULT_PAGE_LIMIT || (append && extra.length === 0)) {
+          setListExhausted(true);
+        }
       })
       .catch((error) => {
         if (cancelled) return;
         notifyApiError(error, "Failed to load customer orders.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        loadLock.current = false;
+        setLoading(false);
+        setLoadingMore(false);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [activeTab, apiConfigured, notifyApiError, page]);
+  }, [apiConfigured, notifyApiError, page]);
 
   useEffect(() => {
     if (!statusMenu) return;
@@ -778,6 +1192,7 @@ export default function CustomerOrdersPage() {
   const filteredActive = useMemo(() => {
     const q = search.trim().toLowerCase();
     return ordersWithPacking.filter((order) => {
+      if (isCompletedOrderStatus(order.status)) return false;
       const matchesSearch =
         !q ||
         order.customerName.toLowerCase().includes(q) ||
@@ -793,15 +1208,23 @@ export default function CustomerOrdersPage() {
     });
   }, [ordersWithPacking, search, statusFilter]);
 
-  const pagedActive = useMemo(() => {
-    if (apiConfigured) return filteredActive;
-    const start = (page - 1) * pageLimit;
-    return filteredActive.slice(start, start + pageLimit);
-  }, [apiConfigured, filteredActive, page, pageLimit]);
+  const activeWindow = useLazyWindow(
+    filteredActive,
+    `${search}|${statusFilter}`,
+  );
+  const visibleActive = apiConfigured ? filteredActive : activeWindow.visible;
+
+  const completedForTable = useMemo(() => {
+    if (!apiConfigured) return completedOrders;
+    const finished = completedOrders.filter((order) => order.finished);
+    // Export downloads every standard order. Until one is marked completed,
+    // show that same list so the table is not empty while the file has rows.
+    return finished.length > 0 ? finished : completedOrders;
+  }, [apiConfigured, completedOrders]);
 
   const filteredCompleted = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let next = COMPLETED_ORDERS.filter(
+    let next = completedForTable.filter(
       (order) =>
         (!q ||
           order.customer.toLowerCase().includes(q) ||
@@ -817,36 +1240,60 @@ export default function CustomerOrdersPage() {
     }
 
     return next;
-  }, [search, sortBy, zipFilter]);
+  }, [completedForTable, search, sortBy, zipFilter]);
 
-  const pagedCompleted = useMemo(() => {
-    const start = (page - 1) * pageLimit;
-    return filteredCompleted.slice(start, start + pageLimit);
-  }, [filteredCompleted, page, pageLimit]);
+  const completedWindow = useLazyWindow(
+    filteredCompleted,
+    `${search}|${zipFilter}|${sortBy}`,
+  );
 
   const completedGroups = useMemo(() => {
     const weeks = new Map<string, Map<string, CompletedOrder[]>>();
-    pagedCompleted.forEach((order) => {
+    completedWindow.visible.forEach((order) => {
       if (!weeks.has(order.week)) weeks.set(order.week, new Map());
       const days = weeks.get(order.week)!;
       if (!days.has(order.day)) days.set(order.day, []);
       days.get(order.day)!.push(order);
     });
     return Array.from(weeks.entries());
-  }, [pagedCompleted]);
+  }, [completedWindow.visible]);
 
   const zipOptions = useMemo(
     () =>
-      Array.from(new Set(COMPLETED_ORDERS.map((order) => order.zip))).sort(),
-    [],
+      Array.from(
+        new Set(completedForTable.map((order) => order.zip).filter(Boolean)),
+      ).sort(),
+    [completedForTable],
   );
 
   const selectedOrder =
     ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
+  const statusChangeOrder =
+    ordersWithPacking.find((order) => order.id === statusChange?.orderId) ??
+    null;
+  const statusMenuNeighbors = statusMenu
+    ? statusNeighbors(statusMenu.stepKey)
+    : null;
+  const previousStep = statusMenuNeighbors?.previous ?? null;
+  const nextStep = statusMenuNeighbors?.next ?? null;
 
   const ordersTotal = apiConfigured ? total : filteredActive.length;
   const displayTotal =
     activeTab === "Orders" ? ordersTotal : filteredCompleted.length;
+
+  const ordersHasMore =
+    apiConfigured && !listExhausted && orders.length < total;
+  const activeHasMore = apiConfigured ? ordersHasMore : activeWindow.hasMore;
+
+  function loadMoreActive() {
+    if (apiConfigured) {
+      if (loadLock.current || !ordersHasMore) return;
+      loadLock.current = true;
+      setPage((current) => current + 1);
+      return;
+    }
+    activeWindow.loadMore();
+  }
 
   const exportCount = displayTotal;
   const exportFiltersActive =
@@ -854,15 +1301,41 @@ export default function CustomerOrdersPage() {
       ? Boolean(search.trim() || statusFilter)
       : Boolean(search.trim() || zipFilter || statusFilter || sortBy);
 
-  function advanceStatus(orderId: string, targetDoneCount: number) {
-    setOrders((current) =>
-      current.map((order) =>
-        order.id === orderId
-          ? { ...order, steps: makeSteps(targetDoneCount) }
-          : order,
-      ),
-    );
+  function openStatusChange(
+    orderId: string,
+    stepKey: TimelineStepKey,
+    direction: StatusDirection,
+  ) {
     setStatusMenu(null);
+    setStatusChange({ orderId, stepKey, direction });
+  }
+
+  async function confirmStatusChange() {
+    if (!statusChange || statusSaving) return;
+
+    const { orderId, stepKey } = statusChange;
+    const targetIndex = STEPS_META.findIndex((step) => step.key === stepKey);
+    if (targetIndex < 0) return;
+
+    const apiStatus = STEP_API_STATUS[stepKey];
+    setStatusSaving(true);
+    try {
+      if (apiConfigured && apiStatus) {
+        await ordersApi.updateStatus(orderId, apiStatus);
+      }
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === orderId
+            ? { ...order, steps: makeSteps(targetIndex + 1) }
+            : order,
+        ),
+      );
+      setStatusChange(null);
+    } catch (error) {
+      notifyApiError(error, "Failed to update order status.");
+    } finally {
+      setStatusSaving(false);
+    }
   }
 
   return (
@@ -938,11 +1411,17 @@ export default function CustomerOrdersPage() {
                 recordCount={exportCount}
                 filtersActive={exportFiltersActive}
                 onExport={async (request: ExportRequest) => {
+                  const archiveOnly =
+                    activeTab === "Completed" &&
+                    completedOrders.some((order) => order.finished);
                   await downloadListExport(
                     "/orders",
-                    { type: "standard" },
+                    {
+                      type: "standard",
+                      ...(archiveOnly ? { status: "completed" } : {}),
+                    },
                     request.format,
-                    "orders",
+                    activeTab === "Completed" ? "completed-orders" : "orders",
                   );
                 }}
                 className="w-full sm:w-auto"
@@ -1074,13 +1553,13 @@ export default function CustomerOrdersPage() {
                     ))}
                   </div>
 
-                  {pagedActive.length === 0 ? (
+                  {visibleActive.length === 0 ? (
                     <div className="px-5 py-10 text-center text-[13px] text-[#8A8A8A]">
                       No orders found
                     </div>
                   ) : (
                     <div className="divide-y-[5px] divide-[#00000014]">
-                      {pagedActive.map((order) => (
+                      {visibleActive.map((order) => (
                         <div
                           key={order.id}
                           className="relative bg-white px-4 py-4 sm:px-5"
@@ -1109,8 +1588,8 @@ export default function CustomerOrdersPage() {
                             <OrderTimelineTrack
                               order={order}
                               onStatusClick={(stepKey, anchor) => {
-                                const menuWidth = 220;
-                                const menuHeight = 88;
+                                const menuWidth = 250;
+                                const menuHeight = 112;
                                 const gap = 8;
                                 const spaceBelow =
                                   window.innerHeight - anchor.bottom;
@@ -1150,6 +1629,10 @@ export default function CustomerOrdersPage() {
                 </ScrollTable>
               )}
             </div>
+          ) : loading && completedOrders.length === 0 ? (
+            <AppLoader variant="table" label="Loading completed orders" />
+          ) : completedGroups.length === 0 ? (
+            <p className="text-[14px] text-[#6B7180]">No completed orders yet.</p>
           ) : (
             <div className="space-y-8">
               {completedGroups.map(([week, days]) => (
@@ -1189,7 +1672,9 @@ export default function CustomerOrdersPage() {
                             className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
                           >
                             <IdPill>{order.id}</IdPill>
-                            <div className="font-semibold">{order.customer}</div>
+                            <div className="font-semibold">
+                              {order.customer}
+                            </div>
                             <LocationHover
                               className="text-[13px] text-[#111118]"
                               fullAddress={order.address}
@@ -1197,8 +1682,12 @@ export default function CustomerOrdersPage() {
                               {order.address}
                             </LocationHover>
                             <div>{order.zip}</div>
-                            <div className="text-[#111118]">{order.orderDate}</div>
-                            <div className="text-[#111118]">{order.delivered}</div>
+                            <div className="text-[#111118]">
+                              {order.orderDate}
+                            </div>
+                            <div className="text-[#111118]">
+                              {order.delivered}
+                            </div>
                             <div>{order.items}</div>
                             <div className="font-bold">
                               {currency(order.total)}
@@ -1212,16 +1701,22 @@ export default function CustomerOrdersPage() {
               ))}
             </div>
           )}
-        </div>
 
-        {!loading || activeTab !== "Orders" ? (
-          <Pagination
-            page={page}
-            limit={pageLimit}
-            total={displayTotal}
-            onPageChange={setPage}
+          <InfiniteScrollSentinel
+            hasMore={activeTab === "Orders" ? activeHasMore : completedWindow.hasMore}
+            loading={activeTab === "Orders" && loadingMore}
+            loadedCount={
+              activeTab === "Orders"
+                ? apiConfigured
+                  ? orders.length
+                  : activeWindow.loadedCount
+                : completedWindow.loadedCount
+            }
+            onLoadMore={
+              activeTab === "Orders" ? loadMoreActive : completedWindow.loadMore
+            }
           />
-        ) : null}
+        </div>
 
         {statusMenu
           ? createPortal(
@@ -1240,26 +1735,62 @@ export default function CustomerOrdersPage() {
                   Change Status
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-[12px] text-[#111118]"
-                    onClick={() => advanceStatus(statusMenu.orderId, 1)}
-                  >
-                    Requested
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-[8px] px-3 py-1.5 text-[12px] text-white"
-                    style={{ background: ORANGE }}
-                    onClick={() => advanceStatus(statusMenu.orderId, 3)}
-                  >
-                    On Route
-                  </button>
+                  {previousStep ? (
+                    <button
+                      type="button"
+                      className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-left"
+                      onClick={() =>
+                        openStatusChange(
+                          statusMenu.orderId,
+                          previousStep.key,
+                          "previous",
+                        )
+                      }
+                    >
+                      <div className="text-[10px] font-medium tracking-wide text-[#8A8A8A] uppercase">
+                        Previous
+                      </div>
+                      <div className="text-[12px] text-[#111118]">
+                        {previousStep.header}
+                      </div>
+                    </button>
+                  ) : null}
+                  {nextStep ? (
+                    <button
+                      type="button"
+                      className="rounded-[8px] px-3 py-1.5 text-left text-white"
+                      style={{ background: ORANGE }}
+                      onClick={() =>
+                        openStatusChange(
+                          statusMenu.orderId,
+                          nextStep.key,
+                          "next",
+                        )
+                      }
+                    >
+                      <div className="text-[10px] font-medium tracking-wide text-white/80 uppercase">
+                        Next
+                      </div>
+                      <div className="text-[12px]">{nextStep.header}</div>
+                    </button>
+                  ) : null}
                 </div>
               </div>,
               document.body,
             )
           : null}
+
+        <StatusChangeModal
+          open={Boolean(statusChange)}
+          direction={statusChange?.direction ?? "next"}
+          stepKey={statusChange?.stepKey ?? "requested"}
+          order={statusChangeOrder}
+          saving={statusSaving}
+          onClose={() => {
+            if (!statusSaving) setStatusChange(null);
+          }}
+          onConfirm={() => void confirmStatusChange()}
+        />
 
         {selectedOrder ? (
           <OrderDetailPanel

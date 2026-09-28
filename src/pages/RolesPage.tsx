@@ -15,6 +15,8 @@ import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
   isApiConfigured,
@@ -143,6 +145,8 @@ export default function RolesPage() {
       return matchesQuery && matchesRole;
     });
   }, [query, roleFilter, users]);
+
+  const userWindow = useLazyWindow(filteredUsers, `${query}|${roleFilter}`);
 
   function permissionsFor(user: RoleUser) {
     return draftPermissions[user.id] ?? user.permissions;
@@ -349,6 +353,7 @@ export default function RolesPage() {
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading users" />
         ) : (
+        <>
         <ScrollTable
           minWidth={820}
           className="rounded-[12px] border border-[#00000014] bg-white"
@@ -368,10 +373,10 @@ export default function RolesPage() {
             <div className="text-right" />
           </div>
 
-          {filteredUsers.map((user, index) => {
+          {userWindow.visible.map((user, index) => {
             const open = expandedId === user.id;
             const permissions = permissionsFor(user);
-            const isLast = index === filteredUsers.length - 1;
+            const isLast = index === userWindow.visible.length - 1;
 
             return (
               <div
@@ -488,6 +493,12 @@ export default function RolesPage() {
             );
           })}
         </ScrollTable>
+        <InfiniteScrollSentinel
+          hasMore={userWindow.hasMore}
+          loadedCount={userWindow.loadedCount}
+          onLoadMore={userWindow.loadMore}
+        />
+        </>
         )}
       </div>
 
@@ -528,6 +539,7 @@ export default function RolesPage() {
               <div>
                 <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Name
+                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   value={draft.name}
@@ -548,6 +560,7 @@ export default function RolesPage() {
               <div>
                 <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Email
+                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   type="email"
@@ -569,6 +582,7 @@ export default function RolesPage() {
               <div>
                 <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   {draft.id ? "Set a New Password" : "Set Password"}
+                  {draft.id ? null : <span className="text-danger"> *</span>}
                 </label>
                 <div className="relative">
                   <Input
@@ -610,6 +624,7 @@ export default function RolesPage() {
               <div>
                 <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Phone
+                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   value={draft.phone}
@@ -630,6 +645,7 @@ export default function RolesPage() {
               <div>
                 <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                   Role Name
+                  <span className="text-danger"> *</span>
                 </label>
                 <Select
                   value={draft.type}

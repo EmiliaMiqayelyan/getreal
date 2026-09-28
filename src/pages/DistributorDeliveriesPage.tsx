@@ -29,6 +29,8 @@ import { Tabs } from "@/components/ui/Tabs";
 import { SUB_ROW_PAD } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { downloadListExport } from "@/lib/api";
 import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
@@ -315,6 +317,7 @@ function RejectReasonPopover({
       <div className="border-t border-[#00000014] pt-2.5">
         <div className="mb-2.5 text-[13px] font-semibold text-[#111118]">
           Reason
+          <span className="text-danger"> *</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {REJECT_REASONS.map((reason) => (
@@ -725,9 +728,13 @@ function CheckOrderView({
                   <span>Item Name</span>
                   <span>Qty</span>
                   <span>Unit</span>
-                  <span>Expiration Date</span>
+                  <span>
+                    Expiration Date
+                    <span className="text-danger"> *</span>
+                  </span>
                   <span>
                     {category === "Fruits" ? "Item ID" : "Order ID"}
+                    <span className="text-danger"> *</span>
                   </span>
                   <span aria-hidden />
                   <span className="text-right">Actions</span>
@@ -1075,6 +1082,11 @@ export default function DistributorDeliveriesPage() {
     search,
   ]);
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${search}|${activeTab}|${activeDateId}|${productFilter}|${distributorFilter}`,
+  );
+
   function selectDeliveryDate(dateId: string) {
     setActiveDateId(dateId);
     const index = RECEIVING_DATES.findIndex(
@@ -1332,7 +1344,7 @@ export default function DistributorDeliveriesPage() {
             </div>
 
             <div className="divide-y divide-[#00000014]">
-              {filtered.map((order) => {
+              {listWindow.visible.map((order) => {
                 const open = expanded.has(order.id);
                 const results = itemResults[order.id];
 
@@ -1484,6 +1496,11 @@ export default function DistributorDeliveriesPage() {
               </div>
             ) : null}
           </ScrollTable>
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
 
         {imagePreview ? (
           <RejectImageDrawer

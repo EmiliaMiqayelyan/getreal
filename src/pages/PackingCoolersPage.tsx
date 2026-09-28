@@ -25,6 +25,8 @@ import { Select } from "@/components/ui/Select";
 import { TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
 
@@ -341,11 +343,17 @@ function PackingDetail({
                     <tr className="border-b border-[#00000014]">
                       <th className={cn(th, "pl-5 pr-3")}>Item Name</th>
                       <th className={cn(th, "pr-3")}>Qty</th>
-                      <th className={cn(th, "pr-3")}>Distributor / Source</th>
+                      <th className={cn(th, "pr-3")}>
+                        Distributor / Source
+                        <span className="text-danger"> *</span>
+                      </th>
                       <th className={cn(th, "pr-3")}>Exp Date</th>
                       <th className={cn(th, "pr-3")}>Item ID</th>
                       <th className={cn(th, "pr-3")}>Location</th>
-                      <th className={cn(th, "pr-3")}>Cooler ID</th>
+                      <th className={cn(th, "pr-3")}>
+                        Cooler ID
+                        <span className="text-danger"> *</span>
+                      </th>
                       <th aria-hidden className="p-0" />
                       <th className={cn(th, "pr-5")} />
                     </tr>
@@ -604,6 +612,11 @@ export default function PackingCoolersPage() {
     return next;
   }, [orders, search, sortBy, activeChip, packingByCode]);
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${search}|${sortBy}|${activeChip}`,
+  );
+
   function openPacking(order: PackOrder) {
     markPackingStarted(order.code, formatPackTimestamp());
     setActiveOrderId(order.id);
@@ -803,7 +816,7 @@ export default function PackingCoolersPage() {
             <div>Loading</div>
           </div>
 
-          {filtered.map((order) => {
+          {listWindow.visible.map((order) => {
             const packed = Boolean(order.packedAt);
             const loaded = Boolean(order.loadedAt);
 
@@ -932,6 +945,12 @@ export default function PackingCoolersPage() {
             );
           })}
         </ScrollTable>
+
+        <InfiniteScrollSentinel
+          hasMore={listWindow.hasMore}
+          loadedCount={listWindow.loadedCount}
+          onLoadMore={listWindow.loadMore}
+        />
 
         {!filtered.length ? (
           <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">

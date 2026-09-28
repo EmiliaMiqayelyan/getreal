@@ -5,7 +5,8 @@ import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type CreateItemPayload = {
   name: string;
-  categoryId: string;
+  /** Category name, e.g. Fruits or Vegetables. */
+  category: string;
   subcategoryId?: string | null;
   distributorId: string;
   sourceId?: string;

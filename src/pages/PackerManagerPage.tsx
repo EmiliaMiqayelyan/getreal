@@ -20,6 +20,8 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { cn } from "@/utils/cn";
 
 const MUTED_HEADER =
@@ -250,6 +252,8 @@ export default function PackerManagerPage() {
     return next;
   }, [orders, packingByCode, search, sortBy, activeChip]);
 
+  const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeChip}`);
+
   function cycleChip(delta: number) {
     if (DELIVERY_CHIPS.length === 0) return;
     const index = activeChipIndex >= 0 ? activeChipIndex : 0;
@@ -412,7 +416,7 @@ export default function PackerManagerPage() {
             <div>Loaded</div>
           </div>
 
-          {rows.map((order) => {
+          {listWindow.visible.map((order) => {
             const assigned = packersWithWorkload.find(
               (packer) => packer.id === order.packerId,
             );
@@ -484,6 +488,12 @@ export default function PackerManagerPage() {
             );
           })}
         </ScrollTable>
+
+        <InfiniteScrollSentinel
+          hasMore={listWindow.hasMore}
+          loadedCount={listWindow.loadedCount}
+          onLoadMore={listWindow.loadMore}
+        />
 
         {!rows.length ? (
           <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">

@@ -99,7 +99,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>
-                <Label htmlFor={usernameId}>
+                <Label htmlFor={usernameId} required>
                   {apiMode ? "Email" : "Username"}
                 </Label>
                 <Input
@@ -118,7 +118,9 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <Label htmlFor={passwordId}>Password</Label>
+                <Label htmlFor={passwordId} required>
+                  Password
+                </Label>
                 <Input
                   id={passwordId}
                   name="password"

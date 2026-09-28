@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { Plus } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
@@ -13,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { TABLE_HEADER } from "@/constants/table";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { cn } from "@/utils/cn";
 
 const LINK_BLUE = "#3B82F6";
@@ -96,6 +99,8 @@ export default function PushNotificationsPage() {
       return matchesQuery && matchesTrigger;
     });
   }, [items, query, triggerFilter]);
+
+  const listWindow = useLazyWindow(filtered, `${query}|${triggerFilter}`);
 
   function openCreate() {
     setDraft(emptyDraft());
@@ -226,7 +231,7 @@ export default function PushNotificationsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => (
+              {listWindow.visible.map((item) => (
                 <tr
                   key={item.id}
                   className="border-b border-[#00000014] last:border-b-0"
@@ -274,6 +279,11 @@ export default function PushNotificationsPage() {
             </tbody>
           </table>
         </ScrollTable>
+        <InfiniteScrollSentinel
+          hasMore={listWindow.hasMore}
+          loadedCount={listWindow.loadedCount}
+          onLoadMore={listWindow.loadMore}
+        />
       </div>
 
       <Modal
@@ -306,7 +316,7 @@ export default function PushNotificationsPage() {
       >
         <div className="space-y-4">
           <div>
-            <Label>Data Trigger</Label>
+            <Label required>Data Trigger</Label>
             <Select
               value={draft.trigger}
               onChange={(value) =>
@@ -326,7 +336,7 @@ export default function PushNotificationsPage() {
           </div>
 
           <div>
-            <Label>Scheduled for</Label>
+            <Label required>Scheduled for</Label>
             <Select
               value={draft.scheduledFor}
               onChange={(value) =>
@@ -353,7 +363,7 @@ export default function PushNotificationsPage() {
           </div>
 
           <div>
-            <Label>Header / Subject Line</Label>
+            <Label required>Header / Subject Line</Label>
             <Input
               value={draft.subject}
               onChange={(event) =>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -39,6 +39,9 @@ import {
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 import { isApiConfigured, ordersApi } from "@/lib/api";
 import { syncManualDistributorOrder, syncReviewGroupOrder } from "@/lib/api/orderSync";
 import type {
@@ -325,6 +328,12 @@ export default function ProductOrdersPage() {
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
   const [loading, setLoading] = useState(() => isApiConfigured());
+  const [loadingMoreOrders, setLoadingMoreOrders] = useState(false);
+  const [orderPage, setOrderPage] = useState(1);
+  const [remoteLoaded, setRemoteLoaded] = useState(0);
+  const [remoteTotal, setRemoteTotal] = useState(0);
+  const [remoteExhausted, setRemoteExhausted] = useState(false);
+  const ordersLoadLock = useRef(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
     null,
@@ -384,6 +393,10 @@ export default function ProductOrdersPage() {
   const filteredPreview = useMemo(
     () => filterOrderDemandRows(orderDemandRows, orderDemandCriteria),
     [orderDemandCriteria, orderDemandRows],
+  );
+  const previewWindow = useLazyWindow(
+    filteredPreview,
+    `${search}|${productFilter}|${activeDeliveryDateId}`,
   );
 
   const productOptions = useMemo(() => {
@@ -472,6 +485,11 @@ export default function ProductOrdersPage() {
     });
   }, [inProgress, search, distributorFilter, productFilter]);
 
+  const inProgressWindow = useLazyWindow(
+    filteredInProgress,
+    `${search}|${distributorFilter}|${productFilter}`,
+  );
+
   const deliveredFilterCriteria = useMemo(
     () => ({
       query: search,
@@ -498,25 +516,23 @@ export default function ProductOrdersPage() {
     [],
   );
 
-  const deliveredGroups = useMemo(() => {
+  const deliveredFlat = useMemo(() => {
     const filtered = filterDeliveredOrders(
       DELIVERED_ORDERS,
       deliveredFilterCriteria,
     );
-    const sorted = sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
-    return groupDeliveredOrders(sorted);
+    return sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
   }, [deliveredFilterCriteria]);
-
-  const deliveredCount = useMemo(
-    () =>
-      deliveredGroups.reduce(
-        (sum, group) =>
-          sum +
-          group.days.reduce((daySum, day) => daySum + day.orders.length, 0),
-        0,
-      ),
-    [deliveredGroups],
+  const deliveredWindow = useLazyWindow(
+    deliveredFlat,
+    `${search}|${deliveredZipFilter}|${deliveredDateFilter}|${deliveredStatusFilter}|${deliveredSort}`,
   );
+  const deliveredGroups = useMemo(
+    () => groupDeliveredOrders(deliveredWindow.visible),
+    [deliveredWindow.visible],
+  );
+
+  const deliveredCount = deliveredFlat.length;
 
   const exportCount =
     tab === "Orders"
@@ -581,12 +597,21 @@ export default function ProductOrdersPage() {
     if (isBootstrapping) return;
 
     let cancelled = false;
+    const append = orderPage > 1;
+    ordersLoadLock.current = true;
+    if (append) setLoadingMoreOrders(true);
+    else setLoading(true);
 
     void ordersApi
-      .list({ page: 1, limit: 50, type: "distributor" })
+      .list({ page: orderPage, limit: DEFAULT_PAGE_LIMIT, type: "distributor" })
       .then((result) => {
         if (cancelled) return;
         const remote = result.items;
+        setRemoteTotal(result.total);
+        setRemoteLoaded((current) =>
+          append ? current + remote.length : remote.length,
+        );
+        if (remote.length < DEFAULT_PAGE_LIMIT) setRemoteExhausted(true);
         if (remote.length === 0) return;
 
         const mapped: PlacedOrder[] = remote.map((order, index) => {
@@ -610,8 +635,8 @@ export default function ProductOrdersPage() {
             0,
           );
           return {
-            id: order.id ?? `API-DO-${index + 1}`,
-            deliveryId: order.id ?? `API-DO-${index + 1}`,
+            id: order.id ?? `API-DO-${orderPage}-${index + 1}`,
+            deliveryId: order.id ?? `API-DO-${orderPage}-${index + 1}`,
             distributor: distributorName,
             orderDate: order.createdAt
               ? new Date(order.createdAt).toLocaleDateString()
@@ -631,15 +656,18 @@ export default function ProductOrdersPage() {
         notifyApiError(error, "Failed to load distributor orders.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        ordersLoadLock.current = false;
+        setLoading(false);
+        setLoadingMoreOrders(false);
       });
 
     return () => {
       cancelled = true;
     };
-    // Fetch once after bootstrap. Do not refetch when catalog arrays change identity.
+    // Catalog identity is stable after bootstrap; paging should not refetch on those arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBootstrapping]);
+  }, [isBootstrapping, orderPage]);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -993,7 +1021,7 @@ export default function ProductOrdersPage() {
                     In Progress
                   </h2>
                   <ExpandableOrders
-                    orders={filteredInProgress}
+                    orders={inProgressWindow.visible}
                     expandedId={expandedId}
                     onToggle={(id) =>
                       setExpandedId((cur) => (cur === id ? null : id))
@@ -1029,7 +1057,7 @@ export default function ProductOrdersPage() {
                       {getOrderDemandEmptyMessage(orderDemandCriteria)}
                     </div>
                   ) : (
-                    filteredPreview.map((row) => (
+                    previewWindow.visible.map((row) => (
                       <div
                         key={row.id}
                         className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#00000014] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
@@ -1083,6 +1111,43 @@ export default function ProductOrdersPage() {
               )}
             </div>
           )}
+          <InfiniteScrollSentinel
+            hasMore={
+              tab === "Orders"
+                ? previewWindow.hasMore ||
+                  inProgressWindow.hasMore ||
+                  (!remoteExhausted && remoteLoaded < remoteTotal)
+                : deliveredWindow.hasMore
+            }
+            loading={tab === "Orders" && loadingMoreOrders}
+            loadedCount={
+              tab === "Orders"
+                ? previewWindow.loadedCount +
+                  inProgressWindow.loadedCount +
+                  remoteLoaded
+                : deliveredWindow.loadedCount
+            }
+            onLoadMore={() => {
+              if (tab !== "Orders") {
+                deliveredWindow.loadMore();
+                return;
+              }
+              if (previewWindow.hasMore) previewWindow.loadMore();
+              if (inProgressWindow.hasMore) {
+                inProgressWindow.loadMore();
+                return;
+              }
+              if (
+                ordersLoadLock.current ||
+                remoteExhausted ||
+                remoteLoaded >= remoteTotal
+              ) {
+                return;
+              }
+              ordersLoadLock.current = true;
+              setOrderPage((current) => current + 1);
+            }}
+          />
         </div>
 
         {toast ? (

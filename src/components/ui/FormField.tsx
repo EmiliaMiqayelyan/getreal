@@ -25,9 +25,8 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div className={cn("min-w-0", className)}>
-      <Label htmlFor={htmlFor}>
+      <Label htmlFor={htmlFor} required={required}>
         {label}
-        {required ? <span className="text-danger"> *</span> : null}
       </Label>
       {children}
       {error ? (

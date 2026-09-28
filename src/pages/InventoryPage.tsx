@@ -22,6 +22,8 @@ import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { inventoryApi, isApiConfigured } from "@/lib/api";
 import { cn } from "@/utils/cn";
@@ -780,9 +782,15 @@ function StockItemsView({
                         <span className="min-w-0 truncate">Item Name</span>
                         <span className="min-w-0 truncate">Qty</span>
                         <span className="min-w-0 truncate">Unit</span>
-                        <span className="min-w-0 truncate">Qty After Unpack</span>
+                        <span className="min-w-0 truncate">
+                          Qty After Unpack
+                          <span className="text-danger"> *</span>
+                        </span>
                         <span className="min-w-0 truncate">Exp. Date</span>
-                        <span className="min-w-0 truncate">Enter Location</span>
+                        <span className="min-w-0 truncate">
+                          Enter Location
+                          <span className="text-danger"> *</span>
+                        </span>
                         <span aria-hidden className="min-w-0" />
                         <span aria-hidden className="min-w-0" />
                         <span aria-hidden className="min-w-0" />
@@ -1170,6 +1178,22 @@ export default function InventoryPage() {
     [filteredSections],
   );
 
+  const inventoryProducts = useMemo(
+    () =>
+      filteredGroups.flatMap((group) =>
+        group.sections.flatMap((section) => section.products),
+      ),
+    [filteredGroups],
+  );
+  const listWindow = useLazyWindow(
+    inventoryProducts,
+    `${query}|${itemFilter}|${categoryFilter}|${unitFilter}|${distributorFilter}`,
+  );
+  const visibleProductIds = useMemo(
+    () => new Set(listWindow.visible.map((product) => product.id)),
+    [listWindow.visible],
+  );
+
   function toggleExpanded(id: string) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -1428,14 +1452,25 @@ export default function InventoryPage() {
         ) : (
           <>
         <div className="space-y-8">
-          {filteredGroups.map((group) => (
+          {filteredGroups.map((group) => {
+            const sections = group.sections
+              .map((section) => ({
+                ...section,
+                products: section.products.filter((product) =>
+                  visibleProductIds.has(product.id),
+                ),
+              }))
+              .filter((section) => section.products.length > 0);
+            if (sections.length === 0) return null;
+
+            return (
             <section key={group.title}>
               <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
                 {group.title}
               </h2>
 
               <div className="space-y-5">
-                {group.sections.map((section) => (
+                {sections.map((section) => (
                   <div key={section.title}>
                     <ScrollTable minWidth={1100} className="rounded-[12px]">
                       <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-[23px]">
@@ -1592,7 +1627,13 @@ export default function InventoryPage() {
                 ))}
               </div>
             </section>
-          ))}
+            );
+          })}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
         </div>
 
         {!filteredSections.length ? (

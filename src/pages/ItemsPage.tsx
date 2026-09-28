@@ -13,6 +13,8 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
@@ -334,6 +336,11 @@ export default function ItemsPage() {
     tab,
   ]);
 
+  const listWindow = useLazyWindow(
+    filtered,
+    `${query}|${tab}|${subcategoryFilter}|${distributorFilter}|${sourceFilter}`,
+  );
+
   function selectTab(nextTab: ItemTab) {
     setTab(nextTab);
     setSubcategoryFilter("");
@@ -478,7 +485,7 @@ export default function ItemsPage() {
               No items found
             </EmptyStateBox>
           ) : null}
-          {filtered.map((row) => (
+          {listWindow.visible.map((row) => (
             <div
               key={row.id}
               className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
@@ -513,6 +520,11 @@ export default function ItemsPage() {
               </div>
             </div>
           ))}
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
         </div>
 
         <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
@@ -544,8 +556,8 @@ export default function ItemsPage() {
               </EmptyStateBox>
             ) : null}
 
-            {filtered.map((row, index) => {
-              const isLast = index === filtered.length - 1;
+            {listWindow.visible.map((row, index) => {
+              const isLast = index === listWindow.visible.length - 1;
               return (
                 <div
                   key={row.id}
@@ -592,6 +604,11 @@ export default function ItemsPage() {
                 </div>
               );
             })}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
           </div>
         </div>
           </>
@@ -616,7 +633,6 @@ export default function ItemsPage() {
                 const photoUrls = await resolveItemPhotoUrls(item.photos ?? []);
                 const payload = toCreateItemPayload(
                   item,
-                  categoryList,
                   subcategoryRecords,
                   photoUrls,
                 );

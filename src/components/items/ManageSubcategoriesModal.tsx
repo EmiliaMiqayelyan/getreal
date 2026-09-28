@@ -161,6 +161,7 @@ export function ManageSubcategoriesModal({
           <div>
             <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
               Add subcategory
+              <span className="text-danger"> *</span>
             </label>
             <div className="flex gap-2">
               <Input

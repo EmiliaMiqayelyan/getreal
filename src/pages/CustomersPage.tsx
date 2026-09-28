@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, Flag, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
@@ -6,7 +6,7 @@ import { ExportButton } from "@/components/shared/ExportButton";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
-import { Pagination } from "@/components/ui/Pagination";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
@@ -16,6 +16,7 @@ import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
   downloadListExport,
   isApiConfigured,
@@ -678,23 +679,31 @@ export default function CustomersPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
   const [page, setPage] = useState(1);
-  const [pageLimit, setPageLimit] = useState(DEFAULT_PAGE_LIMIT);
   const [total, setTotal] = useState(() =>
     apiConfigured ? 0 : ADMIN_CUSTOMERS.length,
   );
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [listExhausted, setListExhausted] = useState(false);
+  const loadLock = useRef(false);
+  const customersRef = useRef(customers);
+  customersRef.current = customers;
 
-  // Adjust page during render when server search changes so the fetch effect
-  // runs once with page=1 (avoids filter-change → fetch(page N) → fetch(page 1)).
+  // Restart the list when server search changes so the fetch runs once at page 1.
   const [searchForPage, setSearchForPage] = useState(debouncedQuery);
   if (debouncedQuery !== searchForPage) {
     setSearchForPage(debouncedQuery);
-    if (page !== 1) setPage(1);
+    setPage(1);
+    setListExhausted(false);
+    if (apiConfigured) setCustomers([]);
   }
 
   useEffect(() => {
     if (!apiConfigured) return;
     let cancelled = false;
-    setLoading(true);
+    const append = page > 1;
+    loadLock.current = true;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
 
     void usersApi
       .list({
@@ -705,17 +714,33 @@ export default function CustomersPage() {
       })
       .then((result) => {
         if (cancelled) return;
-        setCustomers(result.items.map(mapApiUserToAdminCustomer));
+        const mapped = result.items.map(mapApiUserToAdminCustomer);
+        setCustomers((current) => {
+          if (!append) return mapped;
+          const seen = new Set(current.map((customer) => customer.id));
+          const extra = mapped.filter((customer) => !seen.has(customer.id));
+          return extra.length === 0 ? current : [...current, ...extra];
+        });
         setTotal(result.total);
-        setPageLimit(result.limit);
-        if (result.page !== page) setPage(result.page);
+        if (
+          mapped.length < DEFAULT_PAGE_LIMIT ||
+          (append &&
+            mapped.every((customer) =>
+              customersRef.current.some((existing) => existing.id === customer.id),
+            ))
+        ) {
+          setListExhausted(true);
+        }
       })
       .catch((error) => {
         if (cancelled) return;
         notifyApiError(error, "Failed to load customers.");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (cancelled) return;
+        loadLock.current = false;
+        setLoading(false);
+        setLoadingMore(false);
       });
 
     return () => {
@@ -762,16 +787,29 @@ export default function CustomersPage() {
     zipFilter,
   ]);
 
-  const pagedCustomers = useMemo(() => {
-    if (apiConfigured) return filtered;
-    const start = (page - 1) * pageLimit;
-    return filtered.slice(start, start + pageLimit);
-  }, [apiConfigured, filtered, page, pageLimit]);
+  const localWindow = useLazyWindow(
+    filtered,
+    `${debouncedQuery}|${zipFilter}|${orderCountFilter}`,
+  );
+  const visibleCustomers = apiConfigured ? filtered : localWindow.visible;
+  const hasMore = apiConfigured
+    ? !listExhausted && customers.length < total
+    : localWindow.hasMore;
+
+  function loadMoreCustomers() {
+    if (apiConfigured) {
+      if (loadLock.current || listExhausted || customers.length >= total) return;
+      loadLock.current = true;
+      setPage((current) => current + 1);
+      return;
+    }
+    localWindow.loadMore();
+  }
 
   const displayTotal = apiConfigured ? total : filtered.length;
 
-  const active = pagedCustomers.filter((customer) => !customer.blocked);
-  const inactive = pagedCustomers.filter((customer) => customer.blocked);
+  const active = visibleCustomers.filter((customer) => !customer.blocked);
+  const inactive = visibleCustomers.filter((customer) => customer.blocked);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -787,10 +825,7 @@ export default function CustomersPage() {
 
             <Select
               value={zipFilter}
-              onChange={(value) => {
-                setZipFilter(value);
-                if (!apiConfigured) setPage(1);
-              }}
+              onChange={setZipFilter}
               className="w-full sm:w-[150px]"
               aria-label="By Zip Code"
               options={[
@@ -801,10 +836,7 @@ export default function CustomersPage() {
 
             <Select
               value={orderCountFilter}
-              onChange={(value) => {
-                setOrderCountFilter(value);
-                if (!apiConfigured) setPage(1);
-              }}
+              onChange={setOrderCountFilter}
               className="w-full sm:w-[170px]"
               aria-label="All Order Counts"
               options={[
@@ -842,7 +874,7 @@ export default function CustomersPage() {
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
         <div className="flex-1 overflow-auto p-4 md:p-7">
-          {loading ? (
+          {loading && customers.length === 0 ? (
             <AppLoader variant="table" label="Loading customers" />
           ) : (
             <>
@@ -883,18 +915,18 @@ export default function CustomersPage() {
                   }
                 />
               </section>
+
+              <InfiniteScrollSentinel
+                hasMore={hasMore}
+                loading={loadingMore}
+                loadedCount={
+                  apiConfigured ? customers.length : localWindow.loadedCount
+                }
+                onLoadMore={loadMoreCustomers}
+              />
             </>
           )}
         </div>
-
-        {!loading ? (
-          <Pagination
-            page={page}
-            limit={pageLimit}
-            total={displayTotal}
-            onPageChange={setPage}
-          />
-        ) : null}
 
         {selected ? (
           <OrderDetailDrawer

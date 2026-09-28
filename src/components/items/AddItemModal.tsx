@@ -370,7 +370,7 @@ export function AddItemModal({
             <div className="space-y-3">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div data-field="distributor">
-                  <Field label="Distributor">
+                  <Field label="Distributor" required>
                     <Select
                       value={distributor}
                       onChange={handleDistributorChange}
@@ -390,7 +390,7 @@ export function AddItemModal({
                   <FieldError message={errors.distributor} />
                 </div>
                 <div data-field="source">
-                  <Field label="Source">
+                  <Field label="Source" required>
                     <Select
                       value={source}
                       onChange={(value) => {
@@ -421,7 +421,7 @@ export function AddItemModal({
                   <FieldError message={errors.source} />
                 </div>
                 <div data-field="category">
-                  <Field label="Category">
+                  <Field label="Category" required>
                     <Select
                       value={category}
                       onChange={(value) => {
@@ -450,7 +450,10 @@ export function AddItemModal({
                 </div>
                 <div data-field="subcategory">
                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <label className={FIELD_LABEL}>Subcategory</label>
+                    <label className={FIELD_LABEL}>
+                      Subcategory
+                      <span className="text-danger"> *</span>
+                    </label>
                     <button
                       type="button"
                       disabled={!category}
@@ -494,7 +497,7 @@ export function AddItemModal({
                 </div>
               </div>
               <div data-field="name">
-                <Field label="Item Name">
+                <Field label="Item Name" required>
                   <Input
                     value={name}
                     onChange={(event) => {
@@ -528,7 +531,7 @@ export function AddItemModal({
             </h3>
             <div className="space-y-3">
               <div data-field="merchandisingName">
-                <Field label="Merchandising Name">
+                <Field label="Merchandising Name" required>
                   <Input
                     value={merchandisingName}
                     onChange={(event) => {
@@ -679,7 +682,7 @@ export function AddItemModal({
               {/* Step 1: Source per always visible. Unit/Case fields reveal after. */}
               <div className="grid gap-3 sm:grid-cols-3">
                 <div data-field="sourcePer">
-                  <Field label="Source per">
+                  <Field label="Source per" required>
                     <Select
                       value={sourcePer}
                       onChange={(value) => {
@@ -716,7 +719,7 @@ export function AddItemModal({
                 {sourcePer === "Unit" ? (
                   <>
                     <div data-field="buyingPrice">
-                      <Field label="Price per lb">
+                      <Field label="Price per lb" required>
                         <MoneyInput
                           value={buyingPrice}
                           placeholder="0.00"
@@ -735,7 +738,7 @@ export function AddItemModal({
                       <FieldError message={errors.buyingPrice} />
                     </div>
                     <div data-field="pieceWeightOz">
-                      <Field label="Piece weight">
+                      <Field label="Piece weight" required>
                         <Select
                           value={pieceWeightOz}
                           onChange={(value) => {
@@ -769,7 +772,7 @@ export function AddItemModal({
 
                 {sourcePer === "Case" ? (
                   <div data-field="caseBy">
-                    <Field label="Case by">
+                    <Field label="Case by" required>
                       <Select
                         value={caseBy}
                         onChange={(value) => {
@@ -805,7 +808,7 @@ export function AddItemModal({
 
                 {sourcePer === "Case" && caseBy ? (
                   <div data-field="buyingPrice">
-                    <Field label="Case price">
+                    <Field label="Case price" required>
                       <MoneyInput
                         value={buyingPrice}
                         placeholder="0.00"
@@ -841,7 +844,7 @@ export function AddItemModal({
                       />
                     </Field>
                     <div data-field="sellingPrice">
-                      <Field label="Selling Price">
+                      <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
@@ -875,7 +878,7 @@ export function AddItemModal({
                 <>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div data-field="caseWeightLbs">
-                      <Field label="Total case weight (lbs)">
+                      <Field label="Total case weight (lbs)" required>
                         <Input
                           value={caseWeightLbs}
                           inputMode="decimal"
@@ -900,7 +903,7 @@ export function AddItemModal({
                       <FieldError message={errors.caseWeightLbs} />
                     </div>
                     <div data-field="contents">
-                      <Field label="Pieces per case">
+                      <Field label="Pieces per case" required>
                         <Input
                           value={contents}
                           inputMode="numeric"
@@ -923,7 +926,7 @@ export function AddItemModal({
                       <FieldError message={errors.contents} />
                     </div>
                     <div data-field="singleItemUnit">
-                      <Field label="Single Item Unit">
+                      <Field label="Single Item Unit" required>
                         <Select
                           value={singleItemUnit}
                           onChange={(value) => {
@@ -972,7 +975,7 @@ export function AddItemModal({
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div data-field="sellingPrice">
-                      <Field label="Selling Price">
+                      <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
@@ -1004,7 +1007,7 @@ export function AddItemModal({
                 <>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div data-field="contents">
-                      <Field label="Pieces per case">
+                      <Field label="Pieces per case" required>
                         <Input
                           value={contents}
                           inputMode="numeric"
@@ -1027,7 +1030,7 @@ export function AddItemModal({
                       <FieldError message={errors.contents} />
                     </div>
                     <div data-field="singleItemUnit">
-                      <Field label="Single Item Unit">
+                      <Field label="Single Item Unit" required>
                         <Select
                           value={singleItemUnit}
                           onChange={(value) => {
@@ -1069,7 +1072,7 @@ export function AddItemModal({
                       />
                     </Field>
                     <div data-field="sellingPrice">
-                      <Field label="Selling Price">
+                      <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
@@ -1165,10 +1168,21 @@ export function AddItemModal({
   );
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: ReactNode;
+}) {
   return (
     <div>
-      <label className={cn(FIELD_LABEL, "mb-1.5 block")}>{label}</label>
+      <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
+        {label}
+        {required ? <span className="text-danger"> *</span> : null}
+      </label>
       {children}
     </div>
   );

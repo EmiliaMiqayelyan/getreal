@@ -57,14 +57,6 @@ export type ItemFormErrors = {
   sellingPrice?: string;
 };
 
-function subcategoryBelongsToCategory(
-  subcategory: string,
-  options: string[],
-) {
-  if (!subcategory.trim()) return true;
-  return options.includes(subcategory);
-}
-
 export function validateItemForm(input: ItemFormInput): ItemFormErrors {
   const errors: ItemFormErrors = {};
 
@@ -97,8 +89,14 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.category = "Select a category.";
   } else if (!(ITEM_CATEGORIES as readonly string[]).includes(input.category)) {
     errors.category = "Select a valid category.";
+  }
+
+  if (!input.subcategory.trim()) {
+    errors.subcategory = "Select a subcategory.";
   } else if (
-    !subcategoryBelongsToCategory(input.subcategory, input.subcategoryOptions)
+    input.category &&
+    (ITEM_CATEGORIES as readonly string[]).includes(input.category) &&
+    !input.subcategoryOptions.includes(input.subcategory)
   ) {
     errors.subcategory = "Select a subcategory for the selected category.";
   }

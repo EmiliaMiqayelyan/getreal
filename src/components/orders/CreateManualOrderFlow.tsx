@@ -201,6 +201,7 @@ export function CreateManualOrderFlow({
               <div className="p-5 md:p-6">
                 <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Distributor
+                  <span className="text-danger"> *</span>
                 </h2>
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <Select
@@ -234,7 +235,10 @@ export function CreateManualOrderFlow({
                 {distributor ? (
                   <div className="p-5 md:p-6">
                     <div className="mb-4">
-                      <div className={TABLE_HEADER}>Select Items From Source</div>
+                      <div className={TABLE_HEADER}>
+                        Select Items From Source
+                        <span className="text-danger"> *</span>
+                      </div>
                     </div>
 
                     <div className="space-y-6">
@@ -287,6 +291,7 @@ export function CreateManualOrderFlow({
               <section className="rounded-[8px] border border-[#00000014] bg-white p-5 md:p-6">
                 <h2 className="mb-4 text-[16px] font-semibold text-[#111118]">
                   Select Delivery Date
+                  <span className="text-danger"> *</span>
                 </h2>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                   <DatePicker
@@ -298,6 +303,7 @@ export function CreateManualOrderFlow({
                   />
                   <span className="text-[13px] font-medium text-[#111118]">
                     Select Time
+                    <span className="text-danger"> *</span>
                   </span>
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
                     {MANUAL_TIME_SLOTS.map((slot) => {

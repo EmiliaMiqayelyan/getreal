@@ -221,6 +221,7 @@ export function AddProductForSaleModal({
         <div className="px-6 py-5">
           <label className="mb-2 block text-[11px] font-semibold text-[#2E2E2E]">
             Item Merchandise Name
+            <span className="text-danger"> *</span>
           </label>
 
           <div className="relative">
