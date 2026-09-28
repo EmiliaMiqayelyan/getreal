@@ -1,7 +1,6 @@
 export { cn } from "./cn";
 export {
   downloadDistributorsCsv,
-  distributorsToCsv,
   filterDistributors,
   getDistributorFullAddress,
   getDistributorLocation,

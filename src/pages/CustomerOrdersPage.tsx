@@ -32,20 +32,24 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
-import { SUB_ROW_PAD } from "@/constants/table";
+import { PINNED_HEADER, SUB_ROW_PAD, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
-  downloadListExport,
+  collectPaginated,
   isApiConfigured,
+  orderModelId,
+  orderRecordId,
   ordersApi,
   type ApiOrder,
 } from "@/lib/api";
+import { publicCode } from "@/utils/entityIds";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 
 const ORANGE = "#F57850";
 
@@ -70,6 +74,8 @@ type OrderItem = {
 
 type CustomerOrderRow = {
   id: string;
+  /** UUID required by PATCH /orders/:id/status. */
+  recordId?: string;
   customerName: string;
   itemCount: number;
   address: string;
@@ -124,6 +130,16 @@ const STEP_API_STATUS: Partial<Record<TimelineStepKey, string>> = {
   packing: "packing",
   onRoute: "on_route",
   delivered: "delivered",
+};
+
+const ORDER_STATUS_DONE_COUNT: Record<string, number> = {
+  requested: 1,
+  packing: 2,
+  cooler_ready: 2,
+  loaded: 2,
+  on_route: 3,
+  delivered: 4,
+  cancelled: 0,
 };
 
 type StatusDirection = "previous" | "next";
@@ -188,8 +204,70 @@ const ACTIVE_ORDERS: CustomerOrderRow[] = [];
 
 const COMPLETED_ORDERS: CompletedOrder[] = [];
 
+const ACTIVE_ORDER_COLUMNS =
+  "grid grid-cols-[160px_repeat(6,minmax(0,1fr))] items-center gap-x-4 px-4";
+const COMPLETED_ORDER_COLUMNS =
+  "grid grid-cols-[112px_minmax(0,1fr)_minmax(0,1.6fr)_90px_minmax(0,1fr)_minmax(0,1fr)_70px_90px] items-center gap-x-4 px-4";
+
 function currency(value: number) {
   return `$${value.toFixed(2)}`;
+}
+
+function mapApiOrderToActive(
+  order: ApiOrder,
+  fallbackId: string,
+): CustomerOrderRow {
+  const doneCount = ORDER_STATUS_DONE_COUNT[order.status ?? "requested"] ?? 1;
+  const itemCount = (order.items ?? []).reduce(
+    (sum, line) => sum + (line.quantity ?? 0),
+    0,
+  );
+  const raw = order as ApiOrder & {
+    customerName?: string;
+    customer?: {
+      firstName?: string;
+      lastName?: string;
+      name?: string;
+      distributorCode?: string;
+    };
+  };
+  const customer = raw.customer;
+  const customerName =
+    raw.customerName?.trim() ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(" ") ||
+    customer?.name ||
+    publicCode(customer?.distributorCode, order.customerId) ||
+    "Customer";
+  return {
+    id: orderModelId(order, fallbackId),
+    recordId: orderRecordId(order),
+    customerName,
+    itemCount: itemCount || (order.items?.length ?? 0),
+    address: "",
+    apt: "",
+    city: "",
+    state: "",
+    zip: "",
+    orderDate: order.createdAt
+      ? new Date(order.createdAt).toLocaleDateString()
+      : "",
+    deliveryDate: order.deliveryDate
+      ? new Date(order.deliveryDate).toLocaleDateString()
+      : "",
+    deliveryLabel: order.deliveryDate
+      ? new Date(order.deliveryDate).toLocaleDateString()
+      : "",
+    paymentStatus: "Pending",
+    status: order.status,
+    total: 0,
+    items: (order.items ?? []).map((line) => ({
+      name: line.productId ?? "Item",
+      qty: line.quantity ?? 0,
+      unit: "Each",
+      unitPrice: 0,
+    })),
+    steps: makeSteps(doneCount),
+  };
 }
 
 function isCompletedOrderStatus(status?: string) {
@@ -248,7 +326,10 @@ function weekAndDay(value: string) {
   return { week, day };
 }
 
-function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder {
+function mapApiOrderToCompleted(
+  order: ApiOrder,
+  index: number,
+): CompletedOrder {
   const raw = order as ApiOrder & Record<string, unknown>;
   const customer = asRecord(raw.customer);
   const customerName =
@@ -277,9 +358,7 @@ function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder 
     readString(customer?.zipCode);
   const lines = order.items ?? [];
   const itemCount = lines.reduce((sum, line) => {
-    const quantity = readNumber(
-      (line as { quantity?: unknown }).quantity,
-    );
+    const quantity = readNumber((line as { quantity?: unknown }).quantity);
     return sum + (quantity ?? 0);
   }, 0);
   const lineTotal = lines.reduce((sum, line) => {
@@ -297,8 +376,7 @@ function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder 
     readNumber(raw.totalAmount) ??
     readNumber(raw.amount) ??
     lineTotal;
-  const orderDateRaw =
-    readString(order.createdAt) || readString(raw.orderDate);
+  const orderDateRaw = readString(order.createdAt) || readString(raw.orderDate);
   const deliveredRaw =
     readString(order.deliveryDate) ||
     readString(raw.deliveredAt) ||
@@ -307,7 +385,7 @@ function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder 
   const grouped = weekAndDay(deliveredRaw);
 
   return {
-    id: order.id ?? `API-CO-${index + 1}`,
+    id: orderModelId(order, `API-CO-${index + 1}`),
     customer: customerName,
     address,
     zip,
@@ -324,6 +402,121 @@ function mapApiOrderToCompleted(order: ApiOrder, index: number): CompletedOrder 
 function display(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : "—";
+}
+
+function completedDataset(orders: CompletedOrder[], fromApi: boolean) {
+  if (!fromApi) return orders;
+  const finished = orders.filter((order) => order.finished);
+  return finished.length > 0 ? finished : orders;
+}
+
+function filterActiveOrders(
+  orders: CustomerOrderRow[],
+  search: string,
+  statusFilter: string,
+) {
+  const q = search.trim().toLowerCase();
+  return orders.filter((order) => {
+    if (isCompletedOrderStatus(order.status)) return false;
+    const matchesSearch =
+      !q ||
+      order.customerName.toLowerCase().includes(q) ||
+      order.id.toLowerCase().includes(q);
+    const doneCount = order.steps.filter((step) => step.done).length;
+    const matchesStatus =
+      !statusFilter ||
+      (statusFilter === "requested" && doneCount === 1) ||
+      (statusFilter === "packing" && doneCount === 2) ||
+      (statusFilter === "onRoute" && doneCount === 3) ||
+      (statusFilter === "delivered" && doneCount >= 4);
+    return matchesSearch && matchesStatus;
+  });
+}
+
+function filterCompletedOrders(
+  orders: CompletedOrder[],
+  search: string,
+  zipFilter: string,
+  sortBy: string,
+) {
+  const q = search.trim().toLowerCase();
+  let next = orders.filter(
+    (order) =>
+      (!q ||
+        order.customer.toLowerCase().includes(q) ||
+        order.id.toLowerCase().includes(q) ||
+        order.zip.includes(q)) &&
+      (!zipFilter || order.zip === zipFilter),
+  );
+
+  if (sortBy === "total") {
+    next = [...next].sort((a, b) => b.total - a.total);
+  } else if (sortBy === "customer") {
+    next = [...next].sort((a, b) => a.customer.localeCompare(b.customer));
+  }
+
+  return next;
+}
+
+function stepExportValue(step: TimelineStep | undefined) {
+  if (!step?.done) return "—";
+  const label = [step.shortLabel, step.at].filter(Boolean).join(", ");
+  return label || "Done";
+}
+
+const ACTIVE_ORDER_EXPORT_HEADERS = [
+  "Customer",
+  "Order ID",
+  "Items",
+  ...STEPS_META.map((step) => step.header),
+] as const;
+
+const COMPLETED_ORDER_EXPORT_HEADERS = [
+  "Week",
+  "Day",
+  "Order ID",
+  "Customer",
+  "Address",
+  "Zip Code",
+  "Order Date",
+  "Delivered",
+  "Items",
+  "Total",
+] as const;
+
+function downloadActiveOrdersCsv(orders: CustomerOrderRow[], filename: string) {
+  downloadCsvFile(filename, [
+    [...ACTIVE_ORDER_EXPORT_HEADERS],
+    ...orders.map((order) => [
+      order.customerName || "—",
+      order.id,
+      String(order.itemCount),
+      ...STEPS_META.map((step) =>
+        stepExportValue(order.steps.find((entry) => entry.key === step.key)),
+      ),
+    ]),
+  ]);
+}
+
+function downloadCompletedOrdersCsv(
+  orders: CompletedOrder[],
+  filename: string,
+) {
+  downloadCsvFile(filename, [
+    [...COMPLETED_ORDER_EXPORT_HEADERS],
+    ...orders.map((order) => [
+      order.week || "—",
+      order.day || "—",
+      order.id,
+      order.customer || "—",
+      order.address || "—",
+      order.zip || "—",
+      order.orderDate || "—",
+      order.delivered || "—",
+      String(order.items),
+      currency(order.total),
+    ]),
+  ]);
 }
 
 function HoverCard({
@@ -1064,65 +1257,22 @@ export default function CustomerOrdersPage() {
       .then((result) => {
         if (cancelled) return;
 
-        const statusToDone: Record<string, number> = {
-          requested: 1,
-          packing: 2,
-          cooler_ready: 2,
-          loaded: 2,
-          on_route: 3,
-          delivered: 4,
-          cancelled: 0,
-        };
-
-        const mapped: CustomerOrderRow[] = result.items.map((order, index) => {
-          const doneCount = statusToDone[order.status ?? "requested"] ?? 1;
-          const itemCount = (order.items ?? []).reduce(
-            (sum, line) => sum + (line.quantity ?? 0),
-            0,
-          );
-          return {
-            id: order.id ?? `API-CO-${page}-${index + 1}`,
-            customerName: order.customerId ?? "Customer",
-            itemCount: itemCount || (order.items?.length ?? 0),
-            address: "",
-            apt: "",
-            city: "",
-            state: "",
-            zip: "",
-            orderDate: order.createdAt
-              ? new Date(order.createdAt).toLocaleDateString()
-              : "",
-            deliveryDate: order.deliveryDate
-              ? new Date(order.deliveryDate).toLocaleDateString()
-              : "",
-            deliveryLabel: order.deliveryDate
-              ? new Date(order.deliveryDate).toLocaleDateString()
-              : "",
-            paymentStatus: "Pending",
-            status: order.status,
-            total: 0,
-            items: (order.items ?? []).map((line) => ({
-              name: line.productId ?? "Item",
-              qty: line.quantity ?? 0,
-              unit: "Each",
-              unitPrice: 0,
-            })),
-            steps: makeSteps(doneCount),
-          };
-        });
+        const mapped: CustomerOrderRow[] = result.items.map((order, index) =>
+          mapApiOrderToActive(order, `API-CO-${page}-${index + 1}`),
+        );
 
         const known = new Set(ordersRef.current.map((order) => order.id));
         const extra = mapped.filter((order) => !known.has(order.id));
         setOrders((current) => {
           if (!append) return mapped;
           const seen = new Set(current.map((order) => order.id));
-          return [
-            ...current,
-            ...mapped.filter((order) => !seen.has(order.id)),
-          ];
+          return [...current, ...mapped.filter((order) => !seen.has(order.id))];
         });
         const completedMapped = result.items.map((order, index) =>
-          mapApiOrderToCompleted(order, (page - 1) * DEFAULT_PAGE_LIMIT + index),
+          mapApiOrderToCompleted(
+            order,
+            (page - 1) * DEFAULT_PAGE_LIMIT + index,
+          ),
         );
         setCompletedOrders((current) => {
           if (!append) return completedMapped;
@@ -1133,7 +1283,10 @@ export default function CustomerOrdersPage() {
           ];
         });
         setTotal(result.total);
-        if (mapped.length < DEFAULT_PAGE_LIMIT || (append && extra.length === 0)) {
+        if (
+          mapped.length < DEFAULT_PAGE_LIMIT ||
+          (append && extra.length === 0)
+        ) {
           setListExhausted(true);
         }
       })
@@ -1189,24 +1342,10 @@ export default function CustomerOrdersPage() {
     [orders, packingByCode],
   );
 
-  const filteredActive = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return ordersWithPacking.filter((order) => {
-      if (isCompletedOrderStatus(order.status)) return false;
-      const matchesSearch =
-        !q ||
-        order.customerName.toLowerCase().includes(q) ||
-        order.id.toLowerCase().includes(q);
-      const doneCount = order.steps.filter((step) => step.done).length;
-      const matchesStatus =
-        !statusFilter ||
-        (statusFilter === "requested" && doneCount === 1) ||
-        (statusFilter === "packing" && doneCount === 2) ||
-        (statusFilter === "onRoute" && doneCount === 3) ||
-        (statusFilter === "delivered" && doneCount >= 4);
-      return matchesSearch && matchesStatus;
-    });
-  }, [ordersWithPacking, search, statusFilter]);
+  const filteredActive = useMemo(
+    () => filterActiveOrders(ordersWithPacking, search, statusFilter),
+    [ordersWithPacking, search, statusFilter],
+  );
 
   const activeWindow = useLazyWindow(
     filteredActive,
@@ -1214,33 +1353,15 @@ export default function CustomerOrdersPage() {
   );
   const visibleActive = apiConfigured ? filteredActive : activeWindow.visible;
 
-  const completedForTable = useMemo(() => {
-    if (!apiConfigured) return completedOrders;
-    const finished = completedOrders.filter((order) => order.finished);
-    // Export downloads every standard order. Until one is marked completed,
-    // show that same list so the table is not empty while the file has rows.
-    return finished.length > 0 ? finished : completedOrders;
-  }, [apiConfigured, completedOrders]);
+  const completedForTable = useMemo(
+    () => completedDataset(completedOrders, apiConfigured),
+    [apiConfigured, completedOrders],
+  );
 
-  const filteredCompleted = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let next = completedForTable.filter(
-      (order) =>
-        (!q ||
-          order.customer.toLowerCase().includes(q) ||
-          order.id.toLowerCase().includes(q) ||
-          order.zip.includes(q)) &&
-        (!zipFilter || order.zip === zipFilter),
-    );
-
-    if (sortBy === "total") {
-      next = [...next].sort((a, b) => b.total - a.total);
-    } else if (sortBy === "customer") {
-      next = [...next].sort((a, b) => a.customer.localeCompare(b.customer));
-    }
-
-    return next;
-  }, [completedForTable, search, sortBy, zipFilter]);
+  const filteredCompleted = useMemo(
+    () => filterCompletedOrders(completedForTable, search, zipFilter, sortBy),
+    [completedForTable, search, sortBy, zipFilter],
+  );
 
   const completedWindow = useLazyWindow(
     filteredCompleted,
@@ -1278,8 +1399,6 @@ export default function CustomerOrdersPage() {
   const nextStep = statusMenuNeighbors?.next ?? null;
 
   const ordersTotal = apiConfigured ? total : filteredActive.length;
-  const displayTotal =
-    activeTab === "Orders" ? ordersTotal : filteredCompleted.length;
 
   const ordersHasMore =
     apiConfigured && !listExhausted && orders.length < total;
@@ -1295,7 +1414,12 @@ export default function CustomerOrdersPage() {
     activeWindow.loadMore();
   }
 
-  const exportCount = displayTotal;
+  const exportCount =
+    activeTab === "Orders"
+      ? search.trim() || statusFilter
+        ? filteredActive.length
+        : ordersTotal
+      : filteredCompleted.length;
   const exportFiltersActive =
     activeTab === "Orders"
       ? Boolean(search.trim() || statusFilter)
@@ -1318,10 +1442,16 @@ export default function CustomerOrdersPage() {
     if (targetIndex < 0) return;
 
     const apiStatus = STEP_API_STATUS[stepKey];
+    const recordId = ordersWithPacking.find(
+      (order) => order.id === orderId,
+    )?.recordId;
     setStatusSaving(true);
     try {
       if (apiConfigured && apiStatus) {
-        await ordersApi.updateStatus(orderId, apiStatus);
+        if (!recordId) {
+          throw new Error("This order is missing a database id.");
+        }
+        await ordersApi.updateStatus(recordId, apiStatus);
       }
       setOrders((current) =>
         current.map((order) =>
@@ -1411,17 +1541,60 @@ export default function CustomerOrdersPage() {
                 recordCount={exportCount}
                 filtersActive={exportFiltersActive}
                 onExport={async (request: ExportRequest) => {
-                  const archiveOnly =
-                    activeTab === "Completed" &&
-                    completedOrders.some((order) => order.finished);
-                  await downloadListExport(
-                    "/orders",
-                    {
-                      type: "standard",
-                      ...(archiveOnly ? { status: "completed" } : {}),
-                    },
-                    request.format,
-                    activeTab === "Completed" ? "completed-orders" : "orders",
+                  let activeRows = ordersWithPacking;
+                  let completedRows = completedOrders;
+                  if (apiConfigured) {
+                    const remote = await collectPaginated((page, limit) =>
+                      ordersApi.list({ page, limit, type: "standard" }),
+                    );
+                    activeRows = remote.map((order, index) => {
+                      const row = mapApiOrderToActive(
+                        order,
+                        `API-CO-${index + 1}`,
+                      );
+                      return applyPackingHandoff(row, packingByCode[row.id]);
+                    });
+                    completedRows = remote.map((order, index) =>
+                      mapApiOrderToCompleted(order, index),
+                    );
+                  }
+
+                  if (activeTab === "Completed") {
+                    const dataset = completedDataset(
+                      completedRows,
+                      apiConfigured,
+                    );
+                    const rows =
+                      request.scope === "all"
+                        ? dataset
+                        : filterCompletedOrders(
+                            dataset,
+                            search,
+                            zipFilter,
+                            sortBy,
+                          );
+                    downloadCompletedOrdersCsv(
+                      rows,
+                      exportFilename(
+                        request.scope === "all"
+                          ? "completed-orders-all"
+                          : "completed-orders",
+                      ),
+                    );
+                    return;
+                  }
+
+                  const rows =
+                    request.scope === "all"
+                      ? filterActiveOrders(activeRows, "", "")
+                      : filterActiveOrders(activeRows, search, statusFilter);
+                  downloadActiveOrdersCsv(
+                    rows,
+                    exportFilename(
+                      request.scope === "all"
+                        ? "customer-orders-all"
+                        : "customer-orders",
+                    ),
                   );
                 }}
                 className="w-full sm:w-auto"
@@ -1448,7 +1621,7 @@ export default function CustomerOrdersPage() {
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-        <div className="flex-1 overflow-auto p-4 md:p-7">
+        <div className="min-h-0 flex-1 overflow-auto p-4 md:p-7">
           {activeTab === "Orders" ? (
             <div>
               <div className={DATE_CHIP_ROW}>
@@ -1543,8 +1716,18 @@ export default function CustomerOrdersPage() {
               {loading ? (
                 <AppLoader variant="table" label="Loading orders" />
               ) : (
-                <ScrollTable minWidth={900} className="rounded-[12px]">
-                  <div className="grid grid-cols-[200px_repeat(6,minmax(0,1fr))] gap-2 border-b border-[#00000014] px-5 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                <ScrollTable
+                  minWidth={1100}
+                  className="mt-4 max-h-[min(720px,calc(100dvh-16rem))]"
+                >
+                  <div
+                    className={cn(
+                      ACTIVE_ORDER_COLUMNS,
+                      TABLE_HEADER,
+                      PINNED_HEADER,
+                      "h-10 border-b border-[#00000014]",
+                    )}
+                  >
                     <div>Order ID</div>
                     {STEPS_META.map((step) => (
                       <div key={step.key} className="text-center">
@@ -1558,73 +1741,74 @@ export default function CustomerOrdersPage() {
                       No orders found
                     </div>
                   ) : (
-                    <div className="divide-y-[5px] divide-[#00000014]">
-                      {visibleActive.map((order) => (
-                        <div
-                          key={order.id}
-                          className="relative bg-white px-4 py-4 sm:px-5"
+                    visibleActive.map((order) => (
+                      <div
+                        key={order.id}
+                        className={cn(
+                          ACTIVE_ORDER_COLUMNS,
+                          "relative bg-white py-4",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className="text-left"
                         >
-                          <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedOrderId(order.id)}
-                              className="text-left"
-                            >
-                              <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
-                                {order.customerName}
-                                <ChevronRight
-                                  size={13}
-                                  className="text-[#A9A9A9]"
-                                />
-                              </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                <IdPill>{order.id}</IdPill>
-                                <span className="text-[12px] text-[#8A8A8A]">
-                                  {order.itemCount} items
-                                </span>
-                              </div>
-                            </button>
-
-                            <OrderTimelineTrack
-                              order={order}
-                              onStatusClick={(stepKey, anchor) => {
-                                const menuWidth = 250;
-                                const menuHeight = 112;
-                                const gap = 8;
-                                const spaceBelow =
-                                  window.innerHeight - anchor.bottom;
-                                const spaceAbove = anchor.top;
-                                const placeAbove =
-                                  spaceBelow < menuHeight + gap &&
-                                  spaceAbove > spaceBelow;
-                                setStatusMenu(
-                                  statusMenu?.orderId === order.id &&
-                                    statusMenu.stepKey === stepKey
-                                    ? null
-                                    : {
-                                        orderId: order.id,
-                                        stepKey,
-                                        placeAbove,
-                                        top: placeAbove
-                                          ? anchor.top - gap
-                                          : anchor.bottom + gap,
-                                        left: Math.max(
-                                          12,
-                                          Math.min(
-                                            anchor.left +
-                                              anchor.width / 2 -
-                                              menuWidth / 2,
-                                            window.innerWidth - menuWidth - 12,
-                                          ),
-                                        ),
-                                      },
-                                );
-                              }}
+                          <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
+                            {order.customerName}
+                            <ChevronRight
+                              size={13}
+                              className="text-[#A9A9A9]"
                             />
                           </div>
+                          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                            <IdPill>{order.id}</IdPill>
+                            <span className="text-[12px] text-[#8A8A8A]">
+                              {order.itemCount} items
+                            </span>
+                          </div>
+                        </button>
+
+                        <div className="col-span-6">
+                          <OrderTimelineTrack
+                            order={order}
+                            onStatusClick={(stepKey, anchor) => {
+                              const menuWidth = 250;
+                              const menuHeight = 112;
+                              const gap = 8;
+                              const spaceBelow =
+                                window.innerHeight - anchor.bottom;
+                              const spaceAbove = anchor.top;
+                              const placeAbove =
+                                spaceBelow < menuHeight + gap &&
+                                spaceAbove > spaceBelow;
+                              setStatusMenu(
+                                statusMenu?.orderId === order.id &&
+                                  statusMenu.stepKey === stepKey
+                                  ? null
+                                  : {
+                                      orderId: order.id,
+                                      stepKey,
+                                      placeAbove,
+                                      top: placeAbove
+                                        ? anchor.top - gap
+                                        : anchor.bottom + gap,
+                                      left: Math.max(
+                                        12,
+                                        Math.min(
+                                          anchor.left +
+                                            anchor.width / 2 -
+                                            menuWidth / 2,
+                                          window.innerWidth - menuWidth - 12,
+                                        ),
+                                      ),
+                                    },
+                              );
+                            }}
+                          />
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))
                   )}
                 </ScrollTable>
               )}
@@ -1632,7 +1816,9 @@ export default function CustomerOrdersPage() {
           ) : loading && completedOrders.length === 0 ? (
             <AppLoader variant="table" label="Loading completed orders" />
           ) : completedGroups.length === 0 ? (
-            <p className="text-[14px] text-[#6B7180]">No completed orders yet.</p>
+            <p className="text-[14px] text-[#6B7180]">
+              No completed orders yet.
+            </p>
           ) : (
             <div className="space-y-8">
               {completedGroups.map(([week, days]) => (
@@ -1656,44 +1842,56 @@ export default function CustomerOrdersPage() {
                         </span>
                       </div>
                       <ScrollTable minWidth={860} bare>
-                        <div className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                          <div>Order ID</div>
-                          <div>Customer</div>
-                          <div>Address</div>
-                          <div>Zip Code</div>
-                          <div>Order Date</div>
-                          <div>Delivered</div>
-                          <div>Items</div>
-                          <div>Total</div>
-                        </div>
-                        {dayOrders.map((order) => (
+                        <div>
                           <div
-                            key={order.id}
-                            className="grid grid-cols-[90px_1fr_1.6fr_90px_1.2fr_1.2fr_70px_90px] gap-3 border-b border-[#00000014] px-4 py-3.5 text-[13px] text-[#111118] last:border-b-0"
+                            className={cn(
+                              COMPLETED_ORDER_COLUMNS,
+                              TABLE_HEADER,
+                              PINNED_HEADER,
+                              "h-10 border-b border-[#00000014]",
+                            )}
                           >
-                            <IdPill>{order.id}</IdPill>
-                            <div className="font-semibold">
-                              {order.customer}
-                            </div>
-                            <LocationHover
-                              className="text-[13px] text-[#111118]"
-                              fullAddress={order.address}
-                            >
-                              {order.address}
-                            </LocationHover>
-                            <div>{order.zip}</div>
-                            <div className="text-[#111118]">
-                              {order.orderDate}
-                            </div>
-                            <div className="text-[#111118]">
-                              {order.delivered}
-                            </div>
-                            <div>{order.items}</div>
-                            <div className="font-bold">
-                              {currency(order.total)}
-                            </div>
+                            <div>Order ID</div>
+                            <div>Customer</div>
+                            <div>Address</div>
+                            <div>Zip Code</div>
+                            <div>Order Date</div>
+                            <div>Delivered</div>
+                            <div>Items</div>
+                            <div>Total</div>
                           </div>
-                        ))}
+                          {dayOrders.map((order) => (
+                            <div
+                              key={order.id}
+                              className={cn(
+                                COMPLETED_ORDER_COLUMNS,
+                                "border-b border-[#00000014] py-3.5 text-[13px] text-[#111118] last:border-b-0",
+                              )}
+                            >
+                              <IdPill>{order.id}</IdPill>
+                              <div className="font-semibold">
+                                {order.customer}
+                              </div>
+                              <LocationHover
+                                className="text-[13px] text-[#111118]"
+                                fullAddress={order.address}
+                              >
+                                {order.address}
+                              </LocationHover>
+                              <div>{order.zip}</div>
+                              <div className="text-[#111118]">
+                                {order.orderDate}
+                              </div>
+                              <div className="text-[#111118]">
+                                {order.delivered}
+                              </div>
+                              <div>{order.items}</div>
+                              <div className="font-bold">
+                                {currency(order.total)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </ScrollTable>
                     </div>
                   ))}
@@ -1703,7 +1901,9 @@ export default function CustomerOrdersPage() {
           )}
 
           <InfiniteScrollSentinel
-            hasMore={activeTab === "Orders" ? activeHasMore : completedWindow.hasMore}
+            hasMore={
+              activeTab === "Orders" ? activeHasMore : completedWindow.hasMore
+            }
             loading={activeTab === "Orders" && loadingMore}
             loadedCount={
               activeTab === "Orders"

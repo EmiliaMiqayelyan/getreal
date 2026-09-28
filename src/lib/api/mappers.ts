@@ -9,11 +9,16 @@ import type {
 import type { Item, ItemPhoto, SourcePer } from "@/types/item";
 import { pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
+import type { PushNotification } from "@/types/notification";
 import type { Source } from "@/types/source";
+import { codeFrom, isUuid, preferModelId, publicCode } from "@/utils/entityIds";
 import {
+  formatCityState,
   formatDeliveryLabel,
+  formatFullAddress,
   formatPhoneValue,
   locationFromAddress,
+  parseAddressParts,
   WEEK_DAYS,
 } from "@/utils/format";
 
@@ -23,6 +28,7 @@ import type {
   ApiDistributor,
   ApiDistributorDocument,
   ApiItem,
+  ApiNotificationRule,
   ApiOrder,
   ApiProduct,
   ApiRole,
@@ -35,21 +41,31 @@ import { normalizeNamedList } from "./normalize";
 
 export type { CatalogSubcategory };
 
-export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
-  const roleName = user.role ?? "Manager";
-  const displayRole =
-    roleName.charAt(0).toUpperCase() + roleName.slice(1).replace(/_/g, " ");
+/** Title-case an API role name and match the labels used on the Roles page. */
+export function formatApiRoleName(roleName: string | null | undefined): string {
+  const raw = roleName?.trim() || "Manager";
+  const display =
+    raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");
+  const lower = display.toLowerCase();
+  if (lower.includes("admin")) return "Superadmin";
+  if (lower.includes("warehouse")) return "Warehouse Worker";
+  if (lower.includes("driver")) return "Driver";
+  return display;
+}
 
-  const type = displayRole.includes("Admin")
-    ? "Superadmin"
-    : displayRole.includes("Warehouse")
-      ? "Warehouse Worker"
-      : displayRole.includes("Driver")
-        ? "Driver"
-        : displayRole;
+export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
+  const type = formatApiRoleName(user.role);
+
+  const roleCode = codeFrom(user, ["roleCode"]);
 
   return {
-    id: user.id ?? `U${String(index + 1).padStart(3, "0")}`,
+    id: preferModelId(
+      user,
+      ["userCode"],
+      user.id ?? `U${String(index + 1).padStart(3, "0")}`,
+    ),
+    roleCode,
+    roleId: user.roleId,
     name: user.name ?? user.email ?? "User",
     email: user.email ?? "",
     phone: user.phoneNumber ?? user.phone ?? "",
@@ -61,22 +77,83 @@ export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
 
 export function mapRoleUserTypeToApiRole(type: string): string {
   const t = type.toLowerCase();
-  if (t.includes("super")) return "admin";
+  if (t.includes("super") || t.includes("admin")) return "admin";
   if (t.includes("warehouse")) return "warehouse";
   if (t.includes("driver")) return "driver";
+  if (t.includes("distributor")) return "distributor";
+  if (t.includes("customer")) return "customer";
   if (t.includes("manager")) return "manager";
-  return "admin";
+  return t.trim() || "admin";
 }
 
 export function mapApiRoleToManagedRole(
   role: ApiRole,
   index: number,
 ): ManagedRole {
+  const roleCode = codeFrom(role, ["roleCode"]);
+  const recordId = role.roleId ?? (publicCode(role.id) ? undefined : role.id);
+  const name = formatApiRoleName(role.roleName ?? role.name);
+
   return {
-    id: role.id ?? `role-${index}`,
-    name: role.name ?? "Role",
-    permissions: permissionsForRoleType(role.name ?? "Role"),
+    id: roleCode ?? role.roleId ?? role.id ?? `role-${index}`,
+    roleCode,
+    recordId,
+    name,
+    permissions: permissionsForRoleType(name),
   };
+}
+
+/** Roles list row → table user. `roleId` is shared, so the row id is the user. */
+export function mapApiRoleAssignmentToRoleUser(
+  role: ApiRole,
+  index: number,
+): RoleUser {
+  const member = role.user ?? {};
+  const type = formatApiRoleName(role.roleName ?? role.name);
+  const email = member.email?.trim() ?? "";
+  const userCode = codeFrom(member, ["userCode"]);
+  const id =
+    userCode ||
+    member.id?.trim() ||
+    member.userId?.trim() ||
+    email ||
+    `role-user-${index + 1}`;
+
+  return {
+    id,
+    roleCode: codeFrom(role, ["roleCode"]),
+    roleId: role.roleId ?? role.id,
+    name: member.name?.trim() || email || "User",
+    email,
+    phone: member.phone?.trim() ?? "",
+    type,
+    password: "",
+    permissions: permissionsForRoleType(type),
+  };
+}
+
+export function mapApiRolesToRoleUsers(roles: ApiRole[]): RoleUser[] {
+  const seen = new Map<string, number>();
+  return roles.map((role, index) => {
+    const user = mapApiRoleAssignmentToRoleUser(role, index);
+    const count = (seen.get(user.id) ?? 0) + 1;
+    seen.set(user.id, count);
+    if (count === 1) return user;
+    return { ...user, id: `${user.id}#${count}` };
+  });
+}
+
+/** One template per role. The list repeats a role once for every assigned user. */
+export function uniqueManagedRoles(roles: ApiRole[]): ManagedRole[] {
+  const seen = new Set<string>();
+  const result: ManagedRole[] = [];
+  roles.forEach((role, index) => {
+    const mapped = mapApiRoleToManagedRole(role, index);
+    if (seen.has(mapped.id)) return;
+    seen.add(mapped.id);
+    result.push(mapped);
+  });
+  return result;
 }
 
 export function mapApiUserToAdminCustomer(
@@ -100,7 +177,11 @@ export function mapApiUserToAdminCustomer(
     .join(", ");
 
   return {
-    id: user.id ?? `C${String(index + 1).padStart(3, "0")}`,
+    id: preferModelId(
+      user,
+      ["customerCode"],
+      user.id ?? `C${String(index + 1).padStart(3, "0")}`,
+    ),
     firstName,
     lastName,
     email: user.email ?? "",
@@ -194,7 +275,7 @@ export function mapApiItemToItem(
   const buyingPrice = centsToDollars(item.buyingPrice);
 
   return {
-    id: item.itemCode ?? recordId ?? `API-ITEM-${index + 1}`,
+    id: preferModelId(item, ["itemCode"], recordId ?? `API-ITEM-${index + 1}`),
     recordId,
     name: item.name ?? "Item",
     merchandisingName: item.merchandisingName ?? item.name ?? "Item",
@@ -227,7 +308,7 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
   const recordId = product.itemId ?? product.id;
 
   return {
-    id: product.productId ?? recordId ?? `API-${index + 1}`,
+    id: preferModelId(product, ["productId"], recordId ?? `API-${index + 1}`),
     recordId,
     name,
     merchandisingName: name,
@@ -262,10 +343,13 @@ export function mapApiProductToProductForSale(
   const recordId = product.id;
 
   return {
-    id: product.productId ?? recordId ?? `API-PFS-${index + 1}`,
+    id: preferModelId(
+      product,
+      ["productId"],
+      recordId ?? `API-PFS-${index + 1}`,
+    ),
     recordId,
-    // Prefer the item business code for UI linking; fall back to API itemId (UUID).
-    itemId: linked?.id ?? product.itemId ?? "",
+    itemId: publicCode(linked?.id) ?? linked?.id ?? product.itemId ?? "",
     sortOrder: product.position ?? index,
     live: Boolean(product.isLive),
     merchandisingName: name,
@@ -328,6 +412,55 @@ export function mapApiDocuments(
     .filter((doc) => Boolean(doc.url));
 }
 
+const STATE_CODE = /^[A-Za-z]{2}$/;
+
+function distributorAddressFields(distributor: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+}) {
+  const raw = distributor.address?.trim() ?? "";
+  const city = distributor.city?.trim() ?? "";
+  const state = distributor.state?.trim() ?? "";
+  const zip = distributor.zipCode?.trim() ?? "";
+
+  if (!city && !state && !zip) return parseAddressParts(raw);
+
+  // Older saves stored the state code in `city` and left the city name in `address`.
+  if (STATE_CODE.test(city) && !state && raw.includes(",")) {
+    return parseAddressParts([raw, city, zip].filter(Boolean).join(", "));
+  }
+
+  if (
+    raw &&
+    ((city && raw.toLowerCase().includes(city.toLowerCase())) ||
+      (zip && raw.includes(zip)))
+  ) {
+    const parsed = parseAddressParts(raw);
+    return {
+      street: parsed.street,
+      apt: parsed.apt,
+      city: city || parsed.city,
+      state: state || parsed.state,
+      zip: zip || parsed.zip,
+    };
+  }
+
+  const comma = raw.indexOf(",");
+  if (comma >= 0) {
+    return {
+      street: raw.slice(0, comma).trim(),
+      apt: raw.slice(comma + 1).trim(),
+      city,
+      state,
+      zip,
+    };
+  }
+
+  return { street: raw, apt: "", city, state, zip };
+}
+
 export function mapApiDistributorToDistributor(
   distributor: ApiDistributor,
   index: number,
@@ -344,17 +477,10 @@ export function mapApiDistributorToDistributor(
     }),
   );
 
-  const addressParts = [
-    distributor.address,
-    distributor.city,
-    distributor.state,
-    distributor.zipCode,
-  ]
-    .map((part) => part?.trim())
-    .filter(Boolean);
-  const fullAddress = addressParts.join(", ");
+  const addressFields = distributorAddressFields(distributor);
+  const fullAddress = formatFullAddress(addressFields);
   const location =
-    [distributor.city, distributor.state].filter(Boolean).join(", ") ||
+    formatCityState(addressFields.city, addressFields.state) ||
     (fullAddress ? locationFromAddress(fullAddress) : "");
 
   const primary = contacts[0];
@@ -366,14 +492,23 @@ export function mapApiDistributorToDistributor(
   const documents = mapApiDocuments(distributor.documents, distributorKey);
 
   return {
-    id: distributor.distributorCode ?? recordId ?? `DIS-API-${index + 1}`,
+    id: preferModelId(
+      distributor,
+      ["distributorCode"],
+      recordId ?? `DIS-API-${index + 1}`,
+    ),
     recordId,
     name: distributor.name ?? "Distributor",
     paymentTerms: distributor.paymentTerms ?? "",
     contact: primary ? `${primary.firstName} ${primary.lastName}`.trim() : "",
     phone: primary?.phone ?? "",
     location,
-    fullAddress: distributor.address?.trim() || fullAddress,
+    fullAddress,
+    street: addressFields.street,
+    apt: addressFields.apt,
+    city: addressFields.city,
+    state: addressFields.state,
+    zip: addressFields.zip,
     delivery: [deliveryLabel.days, deliveryLabel.time]
       .filter(Boolean)
       .join(" "),
@@ -393,32 +528,29 @@ export function mapApiSourceToSource(
   index: number,
   distributorsById: Map<string, string> = new Map(),
 ): Source {
-  const street = source.address?.trim() ?? "";
-  const city = source.city?.trim() ?? "";
-  const state = source.state?.trim() ?? "";
-  const zip = source.zipCode?.trim() ?? "";
-  const region = [[city, state].filter(Boolean).join(", "), zip]
-    .filter(Boolean)
-    .join(" ");
-  const streetAlreadyFull =
-    Boolean(city) &&
-    street.toLowerCase().includes(city.toLowerCase()) &&
-    (!state || street.toLowerCase().includes(state.toLowerCase()));
-  const fullAddress = streetAlreadyFull
-    ? street
-    : [street, region].filter(Boolean).join(", ");
+  const addressFields = distributorAddressFields(source);
+  const fullAddress = formatFullAddress(addressFields);
   const location =
-    (fullAddress ? locationFromAddress(fullAddress) : "") ||
-    [city, state].filter(Boolean).join(", ");
+    formatCityState(addressFields.city, addressFields.state) ||
+    (fullAddress ? locationFromAddress(fullAddress) : "");
 
   const recordId = source.id;
 
   return {
-    id: source.sourceCode ?? recordId ?? `SRC-API-${index + 1}`,
+    id: preferModelId(
+      source,
+      ["sourceCode"],
+      recordId ?? `SRC-API-${index + 1}`,
+    ),
     recordId,
     name: source.name ?? "Source",
     location,
     fullAddress,
+    street: addressFields.street,
+    apt: addressFields.apt,
+    city: addressFields.city,
+    state: addressFields.state,
+    zip: addressFields.zip,
     distributor:
       (source.distributorId && distributorsById.get(source.distributorId)) ||
       "",
@@ -437,9 +569,11 @@ export function findCategoryIdByName(
   name: string,
 ): string | undefined {
   const normalized = name.trim().toLowerCase();
-  return categories.find(
+  const match = categories.find(
     (category) => category.name?.toLowerCase() === normalized,
-  )?.id;
+  );
+  if (!match) return undefined;
+  return publicCode(match.categoryCode) ?? match.id;
 }
 
 export function findSubcategoryIdByName(
@@ -479,11 +613,25 @@ export function mapApiSubcategoryToCatalog(
   if (!categoryName) return null;
 
   return {
-    id: subcategory.id,
+    id: preferModelId(subcategory, ["subcategoryCode"], subcategory.id ?? name),
     name,
     category: categoryName,
-    categoryId,
+    categoryId: publicCode(categoryId) ?? categoryId,
   };
+}
+
+/** Public order code shown in lists. Prefers orderCode over the UUID. */
+export function orderModelId(
+  order: { id?: string; orderCode?: string; code?: string },
+  fallback: string,
+): string {
+  return preferModelId(order, ["orderCode", "code"], order.id ?? fallback);
+}
+
+/** Database id for order routes that look the row up by UUID. */
+export function orderRecordId(order: { id?: string }): string | undefined {
+  const id = order.id?.trim();
+  return id && isUuid(id) ? id : undefined;
 }
 
 export function normalizeUsersList(payload: unknown): ApiUser[] {
@@ -520,6 +668,37 @@ export function normalizeOrdersList(payload: unknown): ApiOrder[] {
     "data",
     "results",
   ]);
+}
+
+function readScheduleDelay(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return 0;
+}
+
+export function mapApiNotificationRule(
+  rule: ApiNotificationRule,
+  index: number,
+): PushNotification {
+  const recordId = rule.id;
+  return {
+    id: preferModelId(
+      rule,
+      ["notificationRuleCode", "ruleCode", "code"],
+      recordId ?? `PN-${String(index + 1).padStart(3, "0")}`,
+    ),
+    recordId,
+    action: rule.action?.trim() || rule.actionEndpoint?.trim() || "",
+    httpMethod:
+      (rule.httpMethod ?? rule.triggerMethod)?.trim().toUpperCase() || "",
+    title: rule.title?.trim() || "",
+    body: rule.subtext?.trim() || "",
+    scheduleDelay: readScheduleDelay(rule.scheduleDelay),
+    scheduleUnit: rule.scheduleUnit?.trim().toLowerCase() || "minutes",
+  };
 }
 
 export function normalizeCategoriesList(payload: unknown): ApiCategory[] {

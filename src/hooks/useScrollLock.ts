@@ -95,7 +95,7 @@ function onWheel(event: WheelEvent) {
     return;
   }
 
-  const allowRoot = target.closest("[data-scroll-lock-allow]");
+  const allowRoot = target.closest("[data-scroll-lock-allow], .ui-select-menu");
   if (!allowRoot) {
     event.preventDefault();
     return;
@@ -114,7 +114,7 @@ function onTouchMove(event: TouchEvent) {
     return;
   }
 
-  const allowRoot = target.closest("[data-scroll-lock-allow]");
+  const allowRoot = target.closest("[data-scroll-lock-allow], .ui-select-menu");
   if (!allowRoot) {
     event.preventDefault();
     return;

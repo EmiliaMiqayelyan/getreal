@@ -17,10 +17,12 @@ import {
   type DistributorFormErrors,
 } from "@/utils/distributorForm";
 import {
+  formatCityState,
   formatDeliveryLabel,
+  formatFullAddress,
   formatPhone,
   formatPhoneInput,
-  locationFromAddress,
+  parseAddressParts,
   WEEK_DAYS,
 } from "@/utils/format";
 
@@ -99,7 +101,11 @@ export function AddDistributorModal({
   useScrollLock(open);
 
   const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
+  const [street, setStreet] = useState("");
+  const [apt, setApt] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
   const [days, setDays] = useState<string[]>([]);
   const [dayTimes, setDayTimes] = useState<Record<string, string>>({});
   const [payment, setPayment] = useState("");
@@ -121,8 +127,14 @@ export function AddDistributorModal({
     setConfirmRemove(false);
 
     if (distributor) {
+      const fromFull = parseAddressParts(distributor.fullAddress || "");
+      const fromLocation = parseAddressParts(distributor.location || "");
       setName(distributor.name);
-      setAddress(distributor.fullAddress || distributor.location);
+      setStreet(distributor.street || fromFull.street);
+      setApt(distributor.apt || fromFull.apt);
+      setCity(distributor.city || fromFull.city || fromLocation.city);
+      setState(distributor.state || fromFull.state || fromLocation.state);
+      setZip(distributor.zip || fromFull.zip || fromLocation.zip);
       const slots = distributor.deliveryDays ?? [];
       setDays(slots.map((slot) => slot.day));
       setDayTimes(
@@ -150,7 +162,11 @@ export function AddDistributorModal({
     }
 
     setName("");
-    setAddress("");
+    setStreet("");
+    setApt("");
+    setCity("");
+    setState("");
+    setZip("");
     setDays([]);
     setDayTimes({});
     setPayment("");
@@ -195,7 +211,11 @@ export function AddDistributorModal({
   function handleSave() {
     const nextErrors = validateDistributorForm({
       name,
-      address,
+      street,
+      apt,
+      city,
+      state,
+      zip,
       days,
       dayTimes,
       payment,
@@ -236,14 +256,23 @@ export function AddDistributorModal({
       ? `${primary.firstName} ${primary.lastName}`.trim() || "—"
       : "—";
 
+    const addressParts = {
+      street: street.trim(),
+      apt: apt.trim(),
+      city: city.trim(),
+      state: state.trim().toUpperCase(),
+      zip: zip.trim(),
+    };
+
     onSave?.({
       id: distributor?.id ?? "",
       name: name.trim(),
       paymentTerms: payment,
       contact: contactName,
       phone: primary?.phone || "—",
-      location: locationFromAddress(address),
-      fullAddress: address.trim(),
+      location: formatCityState(addressParts.city, addressParts.state) || "—",
+      fullAddress: formatFullAddress(addressParts),
+      ...addressParts,
       delivery: [delivery.days, delivery.time].filter(Boolean).join(" "),
       deliveryDays,
       documents: docs.map((doc) => ({
@@ -327,25 +356,124 @@ export function AddDistributorModal({
                 />
                 <FieldError message={errors.name} />
               </div>
-              <div data-field="address">
-                <label className={cn(FIELD_LABEL, "mb-1.5 block")}>
-                  Full Address
+              <div data-field="street">
+                <label
+                  className={cn(
+                    FIELD_LABEL,
+                    "mb-1.5 block tracking-[0.06em] uppercase",
+                  )}
+                >
+                  Street Address
                   <span className="text-danger"> *</span>
                 </label>
                 <Input
-                  value={address}
+                  value={street}
                   onChange={(event) => {
-                    setAddress(event.target.value);
-                    if (errors.address) {
+                    setStreet(event.target.value);
+                    if (errors.street) {
                       setErrors((current) => ({
                         ...current,
-                        address: undefined,
+                        street: undefined,
                       }));
                     }
                   }}
-                  className={cn("w-full", errors.address && INVALID_BORDER)}
+                  className={cn("w-full", errors.street && INVALID_BORDER)}
                 />
-                <FieldError message={errors.address} />
+                <FieldError message={errors.street} />
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <div>
+                  <label
+                    className={cn(
+                      FIELD_LABEL,
+                      "mb-1.5 block tracking-[0.06em] uppercase",
+                    )}
+                  >
+                    Apt / Unit
+                  </label>
+                  <Input
+                    value={apt}
+                    onChange={(event) => setApt(event.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div data-field="city">
+                  <label
+                    className={cn(
+                      FIELD_LABEL,
+                      "mb-1.5 block tracking-[0.06em] uppercase",
+                    )}
+                  >
+                    City
+                    <span className="text-danger"> *</span>
+                  </label>
+                  <Input
+                    value={city}
+                    onChange={(event) => {
+                      setCity(event.target.value);
+                      if (errors.city) {
+                        setErrors((current) => ({
+                          ...current,
+                          city: undefined,
+                        }));
+                      }
+                    }}
+                    className={cn("w-full", errors.city && INVALID_BORDER)}
+                  />
+                  <FieldError message={errors.city} />
+                </div>
+                <div data-field="state">
+                  <label
+                    className={cn(
+                      FIELD_LABEL,
+                      "mb-1.5 block tracking-[0.06em] uppercase",
+                    )}
+                  >
+                    State
+                    <span className="text-danger"> *</span>
+                  </label>
+                  <Input
+                    value={state}
+                    maxLength={2}
+                    onChange={(event) => {
+                      setState(event.target.value.toUpperCase());
+                      if (errors.state) {
+                        setErrors((current) => ({
+                          ...current,
+                          state: undefined,
+                        }));
+                      }
+                    }}
+                    className={cn("w-full", errors.state && INVALID_BORDER)}
+                  />
+                  <FieldError message={errors.state} />
+                </div>
+                <div data-field="zip">
+                  <label
+                    className={cn(
+                      FIELD_LABEL,
+                      "mb-1.5 block tracking-[0.06em] uppercase",
+                    )}
+                  >
+                    Zip
+                    <span className="text-danger"> *</span>
+                  </label>
+                  <Input
+                    value={zip}
+                    inputMode="numeric"
+                    onChange={(event) => {
+                      setZip(event.target.value);
+                      if (errors.zip) {
+                        setErrors((current) => ({
+                          ...current,
+                          zip: undefined,
+                        }));
+                      }
+                    }}
+                    className={cn("w-full", errors.zip && INVALID_BORDER)}
+                  />
+                  <FieldError message={errors.zip} />
+                </div>
               </div>
               <div data-field="delivery-days">
                 <label className={cn(FIELD_LABEL, "mb-2 block")}>

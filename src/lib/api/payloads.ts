@@ -2,7 +2,8 @@ import type { Distributor, DistributorDocument } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import { apiId, findByEntityRef, publicCode } from "@/utils/entityIds";
+import { parseAddressParts } from "@/utils/format";
 
 import type { CreateDistributorPayload } from "./distributors";
 import type { CreateItemPayload } from "./items";
@@ -17,9 +18,9 @@ import type {
 import { persistDocumentFile } from "./upload";
 
 function businessCodeOrUndefined(id: string | undefined) {
-  const trimmed = id?.trim() ?? "";
-  if (!trimmed || trimmed.endsWith("-TEMP")) return undefined;
-  return trimmed;
+  const code = publicCode(id);
+  if (!code || code.endsWith("-TEMP")) return undefined;
+  return code;
 }
 
 function splitAddress(fullAddress: string): {
@@ -28,34 +29,31 @@ function splitAddress(fullAddress: string): {
   state?: string;
   zipCode?: string;
 } {
-  const parts = fullAddress
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  if (parts.length === 0) return { address: "" };
-  if (parts.length === 1) return { address: parts[0] };
-
-  const zipMatch = parts[parts.length - 1]?.match(/\b(\d{5}(?:-\d{4})?)\b/);
-  const zipCode = zipMatch?.[1];
-  let state: string | undefined;
-  let city: string | undefined;
-
-  if (parts.length >= 3) {
-    city = parts[parts.length - 2];
-    const stateZip = parts[parts.length - 1];
-    state = stateZip.replace(/\b\d{5}(?:-\d{4})?\b/, "").trim() || undefined;
-  } else if (parts.length === 2) {
-    city = parts[0];
-    const stateZip = parts[1];
-    state = stateZip.replace(/\b\d{5}(?:-\d{4})?\b/, "").trim() || undefined;
-  }
-
+  const parsed = parseAddressParts(fullAddress);
+  const address = [parsed.street, parsed.apt].filter(Boolean).join(", ");
   return {
-    address: parts.slice(0, Math.max(1, parts.length - 2)).join(", ") || parts[0],
-    city,
-    state,
-    zipCode,
+    address,
+    city: parsed.city || undefined,
+    state: parsed.state || undefined,
+    zipCode: parsed.zip || undefined,
   };
+}
+
+function distributorAddressPayload(distributor: Distributor) {
+  const street = distributor.street?.trim() ?? "";
+  const apt = distributor.apt?.trim() ?? "";
+  const city = distributor.city?.trim() ?? "";
+  const state = distributor.state?.trim() ?? "";
+  const zip = distributor.zip?.trim() ?? "";
+  if (street || apt || city || state || zip) {
+    return {
+      address: [street, apt].filter(Boolean).join(", ") || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zipCode: zip || undefined,
+    };
+  }
+  return splitAddress(distributor.fullAddress || distributor.location);
 }
 
 export function deliveryDaysToSchedule(
@@ -124,7 +122,7 @@ function toApiDocuments(
 export function toCreateDistributorPayload(
   distributor: Distributor,
 ): CreateDistributorPayload {
-  const parsed = splitAddress(distributor.fullAddress || distributor.location);
+  const parsed = distributorAddressPayload(distributor);
   const deliverySchedule = deliveryDaysToSchedule(
     distributor.deliveryDays ?? [],
   );
@@ -157,17 +155,34 @@ function persistableLogoUrl(
   return url;
 }
 
+function sourceAddressPayload(source: Source) {
+  const street = source.street?.trim() ?? "";
+  const apt = source.apt?.trim() ?? "";
+  const city = source.city?.trim() ?? "";
+  const state = source.state?.trim() ?? "";
+  const zip = source.zip?.trim() ?? "";
+  if (street || apt || city || state || zip) {
+    return {
+      address: [street, apt].filter(Boolean).join(", ") || undefined,
+      city: city || undefined,
+      state: state || undefined,
+      zipCode: zip || undefined,
+    };
+  }
+  return splitAddress(source.fullAddress || source.location);
+}
+
 export function toCreateSourcePayload(source: Source): CreateSourcePayload {
   if (!source.distributorId) {
     throw new Error("Source requires a distributorId for the API");
   }
-  const parsed = splitAddress(source.fullAddress || source.location);
+  const parsed = sourceAddressPayload(source);
   return {
     name: source.name.trim(),
     sourceCode: businessCodeOrUndefined(source.id),
     distributorId: source.distributorId,
     description: source.description || undefined,
-    address: parsed.address || source.fullAddress || undefined,
+    address: parsed.address || undefined,
     city: parsed.city,
     state: parsed.state,
     zipCode: parsed.zipCode,
@@ -198,6 +213,7 @@ export function toCreateItemPayload(
 
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
+    itemCode: businessCodeOrUndefined(item.id),
     category,
     subcategoryId,
     distributorId: item.distributorId,

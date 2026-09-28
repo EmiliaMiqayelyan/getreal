@@ -15,6 +15,7 @@ export {
   invalidateCacheForUrl,
 } from "./requestDedupe";
 export { downloadListExport } from "./exportDownload";
+export { collectPaginated } from "./collectPages";
 export { authApi } from "./auth";
 export { productsApi } from "./products";
 export { categoriesApi } from "./categories";
@@ -27,6 +28,11 @@ export { itemsApi } from "./items";
 export { distributorsApi } from "./distributors";
 export { sourcesApi } from "./sources";
 export { inventoryApi } from "./inventory";
+export { notificationRulesApi } from "./notifications";
+export type {
+  NotificationRulePayload,
+  UpdateNotificationRulePayload,
+} from "./notifications";
 export { getQuickBooksAuthUrl, getQuickBooksCallbackUrl } from "./quickbooks";
 export { mapApiRoleToAppRole, usernameToLoginEmail } from "./session";
 export {
@@ -37,7 +43,11 @@ export {
 export type { ApiFieldErrors } from "./errors";
 export * from "./types";
 export * from "./mappers";
-export { normalizeNamedList, normalizePaginatedList, pickNamedEntity } from "./normalize";
+export {
+  normalizeNamedList,
+  normalizePaginatedList,
+  pickNamedEntity,
+} from "./normalize";
 export {
   toCreateDistributorPayload,
   toCreateItemPayload,
@@ -47,4 +57,9 @@ export {
   resolveDistributorDocuments,
   deliveryDaysToSchedule,
 } from "./payloads";
-export { uploadImage, persistDocumentFile, isUploadableImage, resolveItemPhotoUrls } from "./upload";
+export {
+  uploadImage,
+  persistDocumentFile,
+  isUploadableImage,
+  resolveItemPhotoUrls,
+} from "./upload";

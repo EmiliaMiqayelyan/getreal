@@ -23,7 +23,7 @@ type HeaderProps = {
  * Shared page chrome. Layer heights (desktop):
  * - L1 title + UserMenu: 52px
  * - L2 toolbar (filters / actions): 64px when present
- * - L3 tabs: 28px (h-7) when present
+ * - L3 tabs: 36px (h-9) when present
  *
  * Section order stays title → filters → tabs. No spacer when tabs are absent.
  *

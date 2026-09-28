@@ -170,6 +170,9 @@ export type RolePermissions = {
 
 export type RoleUser = {
   id: string;
+  /** Business code shown in the Roles ID column. */
+  roleCode?: string;
+  roleId?: string;
   name: string;
   email: string;
   phone: string;
@@ -182,6 +185,8 @@ export type RoleUser = {
 /** Named role template editable in Role Management modal. */
 export type ManagedRole = {
   id: string;
+  roleCode?: string;
+  recordId?: string;
   name: string;
   permissions: RolePermissions;
 };

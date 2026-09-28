@@ -8,10 +8,11 @@ import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
+import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
-import { TABLE_HEADER } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
@@ -29,10 +30,11 @@ import {
 } from "@/lib/api";
 import { dollarsToCents } from "@/lib/api/mappers";
 import type { ExportRequest } from "@/types/export";
+import { exportFilename } from "@/utils/csvExport";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import { apiId, findByEntityRef, publicCode } from "@/utils/entityIds";
 import {
   calcFinalMarginPercent,
   calcPricingBreakdown,
@@ -46,8 +48,7 @@ import {
 import { subcategoriesForCategory } from "@/utils/subcategories";
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
-const SECONDARY =
-  "text-[12px] font-medium leading-[18px] text-[#6B718099]";
+const SECONDARY = "text-[12px] font-medium leading-[18px] text-[#6B718099]";
 const VIEW_DESCRIPTION_LINK =
   "cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] font-medium italic underline leading-[18px] text-[#6B718099] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
@@ -55,7 +56,7 @@ const TABS = ["All", ...ITEM_CATEGORIES] as const;
 type ItemTab = (typeof TABS)[number];
 
 const GRID =
-  "grid grid-cols-[90px_64px_1.5fr_0.9fr_0.95fr_0.85fr_1.1fr_1.1fr_minmax(48px,1fr)] items-center gap-3";
+  "grid grid-cols-[112px_64px_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(48px,1fr)] items-center gap-3";
 
 function upsertCreatedItem(current: Item[], savedItem: Item): Item[] {
   const recordId = savedItem.recordId;
@@ -101,7 +102,7 @@ async function upsertItemSaleProduct(
   );
 
   const body = {
-    itemId: itemRecordId,
+    itemId: publicCode(item.id) ?? itemRecordId,
     merchandisingName:
       item.merchandisingName.trim() || item.name.trim() || "Item",
     sellingPrice: dollarsToCents(item.sellingPrice),
@@ -185,7 +186,7 @@ function DescriptionHover({ description }: { description: string }) {
       {open ? (
         <div
           role="tooltip"
-          className="fixed z-50 w-[300px] max-h-[min(280px,calc(100dvh-24px))] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          className="fixed z-50 max-h-[min(280px,calc(100dvh-24px))] w-[300px] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
           style={{ top: pos.top, left: pos.left }}
           onMouseEnter={show}
           onMouseLeave={hide}
@@ -290,17 +291,12 @@ export default function ItemsPage() {
       return subcategoriesForCategory(subcategoriesByCategory, activeCategory);
     }
     return Array.from(
-      new Set(
-        Object.values(subcategoriesByCategory).flatMap((names) => names),
-      ),
+      new Set(Object.values(subcategoriesByCategory).flatMap((names) => names)),
     ).sort((a, b) => a.localeCompare(b));
   }, [activeCategory, subcategoriesByCategory]);
 
   useEffect(() => {
-    if (
-      subcategoryFilter &&
-      !subcategoryOptions.includes(subcategoryFilter)
-    ) {
+    if (subcategoryFilter && !subcategoryOptions.includes(subcategoryFilter)) {
       setSubcategoryFilter("");
     }
   }, [subcategoryFilter, subcategoryOptions]);
@@ -327,14 +323,7 @@ export default function ItemsPage() {
         matchesSource
       );
     });
-  }, [
-    distributorFilter,
-    query,
-    rows,
-    sourceFilter,
-    subcategoryFilter,
-    tab,
-  ]);
+  }, [distributorFilter, query, rows, sourceFilter, subcategoryFilter, tab]);
 
   const listWindow = useLazyWindow(
     filtered,
@@ -439,15 +428,23 @@ export default function ItemsPage() {
                 recordCount={filtered.length}
                 filtersActive={Boolean(
                   query.trim() ||
-                    subcategoryFilter ||
-                    distributorFilter ||
-                    sourceFilter ||
-                    tab !== "All",
+                  subcategoryFilter ||
+                  distributorFilter ||
+                  sourceFilter ||
+                  tab !== "All",
                 )}
                 onExport={async (request: ExportRequest) => {
                   const source = request.scope === "all" ? rows : filtered;
-                  downloadItemsCsv(source, (item) =>
-                    formatSalePrice(displaySalePrice(item)),
+                  const slug =
+                    request.scope === "all"
+                      ? "items-all"
+                      : tab === "All"
+                        ? "items"
+                        : `items-${tab}`;
+                  downloadItemsCsv(
+                    source,
+                    (item) => formatSalePrice(displaySalePrice(item)),
+                    exportFilename(slug),
                   );
                 }}
                 className="w-full sm:w-auto"
@@ -466,7 +463,6 @@ export default function ItemsPage() {
         below={
           <Tabs
             aria-label="Item categories"
-            variant="category"
             items={TABS.map((entry) => ({ id: entry, label: entry }))}
             value={tab}
             onChange={(id) => selectTab(id as ItemTab)}
@@ -479,138 +475,150 @@ export default function ItemsPage() {
           <AppLoader variant="table" label="Loading items" />
         ) : (
           <>
-        <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
-          {filtered.length === 0 ? (
-            <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
-              No items found
-            </EmptyStateBox>
-          ) : null}
-          {listWindow.visible.map((row) => (
-            <div
-              key={row.id}
-              className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <PhotoThumb item={row} />
-                  <div className="min-w-0">
-                    <IdPill>{row.id}</IdPill>
-                    <div className={cn(BODY, "mt-2 font-semibold")}>
-                      {getItemDisplayName(row)}
-                    </div>
-                    <div className="mt-1 text-[12px] text-[#6B6B6B]">
-                      {row.category}
-                      {row.subcategory ? ` · ${row.subcategory}` : ""}
-                    </div>
-                    <div className="mt-0.5 text-[13px] font-semibold text-[#111118]">
-                      {formatSalePrice(displaySalePrice(row))}
-                    </div>
-                    <div className={cn(SECONDARY, "mt-0.5")}>
-                      {row.singleItemUnit || "—"}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openEdit(row)}
-                  className={EDIT_LINK}
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
+              {filtered.length === 0 ? (
+                <EmptyStateBox
+                  variant="solid"
+                  className="rounded-[12px] px-4 py-10 text-[13px]"
                 >
-                  Edit
-                </button>
-              </div>
-            </div>
-          ))}
-          <InfiniteScrollSentinel
-            hasMore={listWindow.hasMore}
-            loadedCount={listWindow.loadedCount}
-            onLoadMore={listWindow.loadMore}
-          />
-        </div>
-
-        <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
-          <div className="w-full min-w-[1100px]">
-            <div
-              className={cn(
-                GRID,
-                TABLE_HEADER,
-                "sticky top-0 z-20 border-b border-[#00000014] bg-white px-4 py-2.5",
-              )}
-            >
-              <div>Item ID</div>
-              <div>Photo</div>
-              <div>Name / Description</div>
-              <div>Category</div>
-              <div>Sub-Category</div>
-              <div>Sale Price</div>
-              <div className="min-w-0 truncate pl-[13px] text-[#111118]">Source</div>
-              <div className="min-w-0 truncate text-[#111118]">Distributor</div>
-              <div aria-hidden />
-            </div>
-
-            {filtered.length === 0 ? (
-              <EmptyStateBox
-                variant="solid"
-                className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
-              >
-                No items found
-              </EmptyStateBox>
-            ) : null}
-
-            {listWindow.visible.map((row, index) => {
-              const isLast = index === listWindow.visible.length - 1;
-              return (
+                  No items found
+                </EmptyStateBox>
+              ) : null}
+              {listWindow.visible.map((row) => (
                 <div
                   key={row.id}
-                  className={cn(
-                    GRID,
-                    "px-4 py-3.5",
-                    !isLast && "border-b border-[#00000014]",
-                  )}
+                  className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
                 >
-                  <IdPill>{row.id}</IdPill>
-                  <PhotoThumb item={row} />
-                  <div className="min-w-0">
-                    <div className={cn(BODY, "truncate font-semibold")}>
-                      {getItemDisplayName(row)}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <PhotoThumb item={row} />
+                      <div className="min-w-0">
+                        <IdPill>{row.id}</IdPill>
+                        <div className={cn(BODY, "mt-2 font-semibold")}>
+                          {getItemDisplayName(row)}
+                        </div>
+                        <div className="mt-1 text-[12px] text-[#6B6B6B]">
+                          {row.category}
+                          {row.subcategory ? ` · ${row.subcategory}` : ""}
+                        </div>
+                        <div className="mt-0.5 text-[13px] font-semibold text-[#111118]">
+                          {formatSalePrice(displaySalePrice(row))}
+                        </div>
+                        <div className={cn(SECONDARY, "mt-0.5")}>
+                          {row.singleItemUnit || "—"}
+                        </div>
+                      </div>
                     </div>
-                    <div className="mt-0.5">
-                      <DescriptionHover description={row.description} />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={EDIT_LINK}
+                    >
+                      Edit
+                    </button>
                   </div>
-                  <div className={cn(BODY, "min-w-0 truncate")}>{row.category}</div>
-                  <div className={cn(BODY, "min-w-0 truncate")}>
-                    {row.subcategory || "—"}
-                  </div>
-                  <div>
-                    <div className={cn(BODY, "font-semibold")}>
-                      {formatSalePrice(displaySalePrice(row))}
-                    </div>
-                    <div className={cn(SECONDARY, "mt-0.5")}>
-                      {row.singleItemUnit || "—"}
-                    </div>
-                  </div>
-                  <SourceCell>{row.source || "—"}</SourceCell>
-                  <div className={cn(BODY, "min-w-0 truncate")}>
-                    {row.distributor || "—"}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(row)}
-                    className={cn(EDIT_LINK, "justify-self-end")}
-                    aria-label={`Edit ${getItemDisplayName(row)}`}
-                  >
-                    Edit
-                  </button>
                 </div>
-              );
-            })}
-            <InfiniteScrollSentinel
-              hasMore={listWindow.hasMore}
-              loadedCount={listWindow.loadedCount}
-              onLoadMore={listWindow.loadMore}
-            />
-          </div>
-        </div>
+              ))}
+              <InfiniteScrollSentinel
+                hasMore={listWindow.hasMore}
+                loadedCount={listWindow.loadedCount}
+                onLoadMore={listWindow.loadMore}
+              />
+            </div>
+
+            <ScrollTable fill minWidth={1100} className="hidden md:block">
+              <div
+                className={cn(
+                  GRID,
+                  TABLE_HEADER,
+                  PINNED_HEADER,
+                  "border-b border-[#00000014] px-4 py-2.5",
+                )}
+              >
+                <div>Item ID</div>
+                <div>Photo</div>
+                <div>Name / Description</div>
+                <div>Category</div>
+                <div>Sub-Category</div>
+                <div>Sale Price</div>
+                <div className="min-w-0 truncate pl-[13px] text-[#111118]">
+                  Source
+                </div>
+                <div className="min-w-0 truncate text-[#111118]">
+                  Distributor
+                </div>
+                <div aria-hidden />
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="col-span-full">
+                  <EmptyStateBox
+                    variant="solid"
+                    className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
+                  >
+                    No items found
+                  </EmptyStateBox>
+                </div>
+              ) : null}
+
+              {listWindow.visible.map((row, index) => {
+                const isLast = index === listWindow.visible.length - 1;
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      GRID,
+                      "px-4 py-3.5",
+                      !isLast && "border-b border-[#00000014]",
+                    )}
+                  >
+                    <IdPill>{row.id}</IdPill>
+                    <PhotoThumb item={row} />
+                    <div className="min-w-0">
+                      <div className={cn(BODY, "truncate font-semibold")}>
+                        {getItemDisplayName(row)}
+                      </div>
+                      <div className="mt-0.5">
+                        <DescriptionHover description={row.description} />
+                      </div>
+                    </div>
+                    <div className={cn(BODY, "min-w-0 truncate")}>
+                      {row.category}
+                    </div>
+                    <div className={cn(BODY, "min-w-0 truncate")}>
+                      {row.subcategory || "—"}
+                    </div>
+                    <div>
+                      <div className={cn(BODY, "font-semibold")}>
+                        {formatSalePrice(displaySalePrice(row))}
+                      </div>
+                      <div className={cn(SECONDARY, "mt-0.5")}>
+                        {row.singleItemUnit || "—"}
+                      </div>
+                    </div>
+                    <SourceCell>{row.source || "—"}</SourceCell>
+                    <div className={cn(BODY, "min-w-0 truncate")}>
+                      {row.distributor || "—"}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={cn(EDIT_LINK, "justify-self-end")}
+                      aria-label={`Edit ${getItemDisplayName(row)}`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="col-span-full">
+                <InfiniteScrollSentinel
+                  hasMore={listWindow.hasMore}
+                  loadedCount={listWindow.loadedCount}
+                  onLoadMore={listWindow.loadMore}
+                />
+              </div>
+            </ScrollTable>
           </>
         )}
       </div>

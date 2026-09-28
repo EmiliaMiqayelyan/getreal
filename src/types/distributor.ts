@@ -36,7 +36,7 @@ export type DistributorDeliverySlot = {
 
 export type Distributor = {
   id: string;
-  /** Backend record UUID when known; used for API paths and FK payloads. */
+  /** Backend record UUID when known. API paths use the business code in `id`. */
   recordId?: string;
   name: string;
   paymentTerms: string;
@@ -44,6 +44,11 @@ export type Distributor = {
   phone: string;
   location: string;
   fullAddress: string;
+  street?: string;
+  apt?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   delivery: string;
   deliveryDays: DistributorDeliverySlot[];
   documents: DistributorDocument[];

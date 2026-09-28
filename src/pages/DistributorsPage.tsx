@@ -7,12 +7,14 @@ import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
-import { TABLE_HEADER } from "@/constants/table";
+import { ScrollTable } from "@/components/ui/ScrollTable";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import {
   distributorsApi,
   isApiConfigured,
@@ -25,6 +27,8 @@ import {
 import type { Distributor } from "@/types/distributor";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
+import { exportFilename } from "@/utils/csvExport";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 import { apiId } from "@/utils/entityIds";
 import {
   downloadDistributorsCsv,
@@ -47,7 +51,7 @@ const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 const SECONDARY = "text-[12px] leading-[16px] font-medium text-[#6B718099]";
 
 const GRID =
-  "grid grid-cols-[90px_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_92px_56px_48px] items-center gap-x-4";
+  "grid grid-cols-[112px_minmax(0,1.2fr)_minmax(0,1.3fr)_minmax(0,1.15fr)_minmax(0,1.1fr)_minmax(0,1.2fr)_92px_56px_48px] items-center gap-x-4";
 
 function FilesChevron({ open }: { open: boolean }) {
   return (
@@ -135,9 +139,14 @@ function openDistributorDocument(doc: Distributor["documents"][number]) {
 
 function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const menuBox = useFloatingMenu(open, triggerRef, menuRef, {
+    width: 280,
+    maxHeight: 280,
+    gap: 8,
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -168,14 +177,11 @@ function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
   return (
     <div ref={rootRef} className="relative justify-self-start">
       <button
+        ref={triggerRef}
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        onClick={(event) => {
-          const rect = event.currentTarget.getBoundingClientRect();
-          setPos({ top: rect.bottom + 8, left: rect.left });
-          setOpen((current) => !current);
-        }}
+        onClick={() => setOpen((current) => !current)}
         className={FILES_TRIGGER}
       >
         <FilesChevron open={open} />
@@ -185,8 +191,9 @@ function FilesMenu({ documents }: { documents: Distributor["documents"] }) {
         <div
           ref={menuRef}
           role="menu"
-          className="fixed z-50 flex min-w-[240px] flex-col gap-2"
-          style={{ top: pos.top, left: pos.left }}
+          data-scroll-lock-allow
+          className="ui-select-menu fixed z-50 flex min-w-[240px] flex-col gap-2 overflow-x-hidden overflow-y-auto overscroll-contain"
+          style={floatingMenuStyle(menuBox)}
         >
           {documents.length ? (
             documents.map((doc) => (
@@ -250,7 +257,10 @@ function NotesHover({ notes }: { notes: string }) {
       const spaceBelow = window.innerHeight - belowTop - margin;
       const spaceAbove = rect.top - margin - 8;
       const above = spaceBelow < 160 && spaceAbove > spaceBelow;
-      const maxHeight = Math.max(120, Math.min(520, above ? spaceAbove : spaceBelow));
+      const maxHeight = Math.max(
+        120,
+        Math.min(520, above ? spaceAbove : spaceBelow),
+      );
       setPos({
         top: belowTop,
         bottom: window.innerHeight - rect.top + 8,
@@ -417,7 +427,12 @@ export default function DistributorsPage() {
             onAdd={openCreate}
             onExport={async (request: ExportRequest) => {
               const source = request.scope === "all" ? rows : filtered;
-              downloadDistributorsCsv(source);
+              downloadDistributorsCsv(
+                source,
+                exportFilename(
+                  request.scope === "all" ? "distributors-all" : "distributors",
+                ),
+              );
             }}
           />
         }
@@ -473,96 +488,97 @@ export default function DistributorsPage() {
               />
             </div>
 
-            <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
-              <div className="w-full min-w-[1100px]">
-                <div
-                  className={cn(
-                    GRID,
-                    TABLE_HEADER,
-                    "sticky top-0 z-20 h-10 border-b border-[#00000014] bg-white px-4",
-                  )}
-                >
-                  <div>Distr. ID</div>
-                  <div>Name</div>
-                  <div>Location</div>
-                  <div>Contact Info</div>
-                  <div>Phone</div>
-                  <div>Delivery Info</div>
-                  <div>Documents</div>
-                  <div>Notes</div>
-                  <div aria-hidden />
+            <ScrollTable fill minWidth={1100} className="hidden md:block">
+              <div
+                className={cn(
+                  GRID,
+                  TABLE_HEADER,
+                  PINNED_HEADER,
+                  "h-10 border-b border-[#00000014] px-4",
+                )}
+              >
+                <div>Distr. ID</div>
+                <div>Name</div>
+                <div>Location</div>
+                <div>Contact Info</div>
+                <div>Phone</div>
+                <div>Delivery Info</div>
+                <div>Documents</div>
+                <div>Notes</div>
+                <div aria-hidden />
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="col-span-full px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
+                  No distributors found
                 </div>
+              ) : null}
 
-                {filtered.length === 0 ? (
-                  <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
-                    No distributors found
-                  </div>
-                ) : null}
+              {listWindow.visible.map((row, index) => {
+                const delivery = formatDeliveryLabel(row.deliveryDays);
+                const isLast = index === listWindow.visible.length - 1;
 
-                {listWindow.visible.map((row, index) => {
-                  const delivery = formatDeliveryLabel(row.deliveryDays);
-                  const isLast = index === listWindow.visible.length - 1;
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      GRID,
+                      "h-[100px] px-4",
+                      !isLast && "border-b border-[#00000014]",
+                    )}
+                  >
+                    <IdPill>{row.id}</IdPill>
 
-                  return (
-                    <div
-                      key={row.id}
-                      className={cn(
-                        GRID,
-                        "h-[100px] px-4",
-                        !isLast && "border-b border-[#00000014]",
-                      )}
-                    >
-                      <IdPill>{row.id}</IdPill>
-
-                      <div className="min-w-0">
-                        <div className={cn(BODY, "truncate")}>{row.name}</div>
-                        <div className={cn("mt-1", SECONDARY)}>
-                          {row.paymentTerms || "—"}
-                        </div>
+                    <div className="min-w-0">
+                      <div className={cn(BODY, "truncate")}>{row.name}</div>
+                      <div className={cn("mt-1", SECONDARY)}>
+                        {row.paymentTerms || "—"}
                       </div>
-
-                      <LocationHover
-                        className={BODY}
-                        fullAddress={getDistributorFullAddress(row)}
-                      >
-                        {getDistributorLocation(row)}
-                      </LocationHover>
-                      <div className={cn(BODY, "min-w-0 truncate")}>
-                        {getPrimaryContactName(row)}
-                      </div>
-                      <div className={cn(BODY, "whitespace-nowrap")}>
-                        {getPrimaryContactPhone(row)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className={cn(BODY, "truncate")}>
-                          {delivery.days}
-                        </div>
-                        {delivery.time ? (
-                          <div className={cn("mt-1", SECONDARY)}>
-                            {delivery.time}
-                          </div>
-                        ) : null}
-                      </div>
-                      <FilesMenu documents={row.documents} />
-                      <NotesHover notes={row.notes} />
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className={cn(EDIT_LINK, "justify-self-end")}
-                        aria-label={`Edit ${row.name}`}
-                      >
-                        Edit
-                      </button>
                     </div>
-                  );
-                })}
+
+                    <LocationHover
+                      className={BODY}
+                      fullAddress={getDistributorFullAddress(row)}
+                    >
+                      {getDistributorLocation(row)}
+                    </LocationHover>
+                    <div className={cn(BODY, "min-w-0 truncate")}>
+                      {getPrimaryContactName(row)}
+                    </div>
+                    <div className={cn(BODY, "whitespace-nowrap")}>
+                      {getPrimaryContactPhone(row)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className={cn(BODY, "truncate")}>
+                        {delivery.days}
+                      </div>
+                      {delivery.time ? (
+                        <div className={cn("mt-1", SECONDARY)}>
+                          {delivery.time}
+                        </div>
+                      ) : null}
+                    </div>
+                    <FilesMenu documents={row.documents} />
+                    <NotesHover notes={row.notes} />
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={cn(EDIT_LINK, "justify-self-end")}
+                      aria-label={`Edit ${row.name}`}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                );
+              })}
+              <div className="col-span-full">
                 <InfiniteScrollSentinel
                   hasMore={listWindow.hasMore}
                   loadedCount={listWindow.loadedCount}
                   onLoadMore={listWindow.loadMore}
                 />
               </div>
-            </div>
+            </ScrollTable>
           </>
         )}
       </div>

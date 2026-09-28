@@ -103,7 +103,7 @@ function postDistributorOrder(input: {
 
 /**
  * Push a distributor review group to POST /orders.
- * Uses product record UUIDs as `productId` (backend expects product UUIDs).
+ * `productId` and `distributorId` are model codes, not record UUIDs.
  */
 export function syncReviewGroupOrder(
   group: ReviewGroup,

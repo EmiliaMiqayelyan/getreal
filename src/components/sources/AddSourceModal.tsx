@@ -16,11 +16,13 @@ import { isApiConfigured, isUploadableImage, uploadImage } from "@/lib/api";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import { resolveDistributorId } from "@/utils/distributorSync";
-import { locationFromAddress } from "@/utils/format";
 import {
+  composeSourceFullAddress,
+  composeSourceLocation,
   firstSourceFormErrorField,
   hasSourceFormErrors,
   SOURCE_NO_DISTRIBUTOR,
+  sourceAddressFromRecord,
   validateSourceForm,
   type SourceFormErrors,
 } from "@/utils/sourceForm";
@@ -48,7 +50,11 @@ export function AddSourceModal({
   const { distributors } = useAppCatalog();
 
   const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
+  const [street, setStreet] = useState("");
+  const [apt, setApt] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zip, setZip] = useState("");
   const [distributor, setDistributor] = useState("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoName, setLogoName] = useState<string | undefined>();
@@ -74,8 +80,16 @@ export function AddSourceModal({
     logoFileRef.current = null;
 
     if (source) {
+      const address = sourceAddressFromRecord(
+        source.fullAddress || "",
+        source.location,
+      );
       setName(source.name);
-      setAddress(source.fullAddress || source.location);
+      setStreet(source.street || address.street);
+      setApt(source.apt || address.apt);
+      setCity(source.city || address.city);
+      setState(source.state || address.state);
+      setZip(source.zip || address.zip);
       const selection = getSourceDistributorSelection(source);
       setDistributor(selection || SOURCE_NO_DISTRIBUTOR);
       setLogoUrl(source.logoUrl);
@@ -85,7 +99,11 @@ export function AddSourceModal({
     }
 
     setName("");
-    setAddress("");
+    setStreet("");
+    setApt("");
+    setCity("");
+    setState("");
+    setZip("");
     setDistributor("");
     setLogoUrl(null);
     setLogoName(undefined);
@@ -122,7 +140,11 @@ export function AddSourceModal({
   async function handleSave() {
     const nextErrors = validateSourceForm({
       name,
-      address,
+      street,
+      apt,
+      city,
+      state,
+      zip,
       distributor,
       distributorOptions,
     });
@@ -166,12 +188,20 @@ export function AddSourceModal({
     }
 
     const hasExternalDistributor = distributor !== SOURCE_NO_DISTRIBUTOR;
+    const addressParts = {
+      street: street.trim(),
+      apt: apt.trim(),
+      city: city.trim(),
+      state: state.trim().toUpperCase(),
+      zip: zip.trim(),
+    };
 
     onSave({
       id: source?.id ?? "SOR-TEMP",
       name: name.trim(),
-      fullAddress: address.trim(),
-      location: locationFromAddress(address) || source?.location || "—",
+      ...addressParts,
+      fullAddress: composeSourceFullAddress(addressParts),
+      location: composeSourceLocation(addressParts),
       distributor: hasExternalDistributor ? distributor : "",
       distributorId: hasExternalDistributor
         ? resolveDistributorId(distributor, distributors)
@@ -195,7 +225,7 @@ export function AddSourceModal({
         role="dialog"
         aria-modal="true"
         data-scroll-lock-allow
-        className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[560px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
+        className="relative z-10 my-4 flex max-h-[calc(100dvh-3rem)] w-full max-w-[640px] flex-col overflow-hidden overscroll-contain rounded-[14px] bg-white shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-[#00000014] px-[30px] py-[18.75px]">
           <h2 className="text-[22px] font-semibold tracking-tight text-[#111118]">
@@ -230,27 +260,120 @@ export function AddSourceModal({
                 </div>
               </FormField>
 
-              <FormField label="Full Address" error={errors.address} required>
-                <div data-field="address">
+              <FormField
+                label="Street Address"
+                error={errors.street}
+                required
+                labelClassName="uppercase tracking-[0.06em]"
+              >
+                <div data-field="street">
                   <Input
-                    value={address}
-                    placeholder="Street, city, state ZIP"
+                    value={street}
                     onChange={(event) => {
-                      setAddress(event.target.value);
-                      if (errors.address) {
+                      setStreet(event.target.value);
+                      if (errors.street) {
                         setErrors((current) => ({
                           ...current,
-                          address: undefined,
+                          street: undefined,
                         }));
                       }
                     }}
                     className={cn(
                       "w-full",
-                      errors.address && INVALID_FIELD_BORDER,
+                      errors.street && INVALID_FIELD_BORDER,
                     )}
                   />
                 </div>
               </FormField>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                <FormField
+                  label="Apt / Unit"
+                  labelClassName="uppercase tracking-[0.06em]"
+                >
+                  <Input
+                    value={apt}
+                    onChange={(event) => setApt(event.target.value)}
+                    className="w-full"
+                  />
+                </FormField>
+                <FormField
+                  label="City"
+                  error={errors.city}
+                  required
+                  labelClassName="uppercase tracking-[0.06em]"
+                >
+                  <div data-field="city">
+                    <Input
+                      value={city}
+                      onChange={(event) => {
+                        setCity(event.target.value);
+                        if (errors.city) {
+                          setErrors((current) => ({
+                            ...current,
+                            city: undefined,
+                          }));
+                        }
+                      }}
+                      className={cn(
+                        "w-full",
+                        errors.city && INVALID_FIELD_BORDER,
+                      )}
+                    />
+                  </div>
+                </FormField>
+                <FormField
+                  label="State"
+                  error={errors.state}
+                  required
+                  labelClassName="uppercase tracking-[0.06em]"
+                >
+                  <div data-field="state">
+                    <Input
+                      value={state}
+                      maxLength={2}
+                      onChange={(event) => {
+                        setState(event.target.value.toUpperCase());
+                        if (errors.state) {
+                          setErrors((current) => ({
+                            ...current,
+                            state: undefined,
+                          }));
+                        }
+                      }}
+                      className={cn(
+                        "w-full",
+                        errors.state && INVALID_FIELD_BORDER,
+                      )}
+                    />
+                  </div>
+                </FormField>
+                <FormField
+                  label="Zip"
+                  error={errors.zip}
+                  required
+                  labelClassName="uppercase tracking-[0.06em]"
+                >
+                  <div data-field="zip">
+                    <Input
+                      value={zip}
+                      inputMode="numeric"
+                      onChange={(event) => {
+                        setZip(event.target.value);
+                        if (errors.zip) {
+                          setErrors((current) => ({
+                            ...current,
+                            zip: undefined,
+                          }));
+                        }
+                      }}
+                      className={cn(
+                        "w-full",
+                        errors.zip && INVALID_FIELD_BORDER,
+                      )}
+                    />
+                  </div>
+                </FormField>
+              </div>
 
               <FormField label="Distributor" error={errors.distributor} required>
                 <div data-field="distributor">

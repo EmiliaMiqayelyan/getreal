@@ -2,9 +2,24 @@
 export const TABLE_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
-/** Content-sized ID chip for tables and lists. */
+/**
+ * Pins a column-header row to the top of the page scroller.
+ * The scroller itself must not have padding — padding insets the stick
+ * point and leaves a row visible above the header. Put padding on an
+ * inner wrapper instead.
+ */
+export const PINNED_HEADER = "sticky top-0 z-20 bg-white";
+
+/**
+ * Fixed column tracks. `border-separate` is required so sticky header
+ * cells stay on the header row instead of sliding between body rows.
+ */
+export const DATA_TABLE =
+  "w-full table-fixed border-separate border-spacing-0 text-left";
+
+/** Content-sized ID chip. Width follows the full id; never ellipsizes. */
 export const ID_PILL =
-  "inline-flex h-5 w-max max-w-full min-w-0 items-center overflow-hidden rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none text-[#6B7180]";
+  "inline-flex h-5 w-max shrink-0 items-center whitespace-nowrap rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none text-[#6B7180]";
 
 /** Nested/expanded sub-row padding (Figma: 10 / 23 / 10 / 23). */
 export const SUB_ROW_PAD = "px-[23px] py-[10px]";

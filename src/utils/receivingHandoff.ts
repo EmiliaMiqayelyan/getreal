@@ -1,4 +1,10 @@
+import type { Item } from "@/types/item";
 import type { ReceivingHandoffLine, ReceivingHandoffOrder } from "@/types/receiving";
+import {
+  catalogItemUuid,
+  findCatalogItem,
+  parentCategory,
+} from "@/utils/inventoryView";
 
 export function formatReceivedAt(date = new Date()) {
   return date.toLocaleString("en-US", {
@@ -28,10 +34,19 @@ export function formatExpirationLabel(iso: string) {
   });
 }
 
+export type StockHandoffSection = {
+  id: string;
+  group: string;
+  title: string;
+  items: StockHandoffItem[];
+};
+
 export type StockHandoffItem = {
   id: string;
   orderId: string;
   deliveryId: string;
+  /** Catalog item UUID for POST /inventory. */
+  catalogItemId: string;
   itemName: string;
   source: string;
   qty: number;
@@ -39,6 +54,7 @@ export type StockHandoffItem = {
   purchased: string;
   qtyAfterUnpack: string;
   expDate: string;
+  expirationIso: string;
   location: string;
   splits: Array<{ qty: number; location: string }>;
 };
@@ -47,33 +63,43 @@ export type StockHandoffItem = {
 export function handoffToStockSections(
   deliveryId: string,
   items: ReceivingHandoffLine[],
-): Array<{ title: string; items: StockHandoffItem[] }> {
-  const map = new Map<string, StockHandoffItem[]>();
+  catalog: Item[] = [],
+): StockHandoffSection[] {
+  const sections = new Map<string, StockHandoffSection>();
 
   for (const item of items) {
     if (item.status !== "accepted") continue;
-    const list = map.get(item.category) ?? [];
-    list.push({
-      id: `${item.lineId}-stock`,
+    const linked = findCatalogItem(catalog, item.catalogItemId || item.itemId, item.itemName);
+    const group = parentCategory(linked?.category || item.category || "");
+    const title = linked?.subcategory?.trim() || item.category?.trim() || group;
+    const id = `${group}::${title}`;
+    const section = sections.get(id) ?? {
+      id,
+      group,
+      title,
+      items: [],
+    };
+    const preservedUnpack = item.qtyAfterUnpack?.trim();
+    section.items.push({
+      id: item.lineId.includes("-stock") ? item.lineId : `${item.lineId}-stock`,
       orderId: item.itemId,
       deliveryId,
-      itemName: item.itemName,
-      source: item.source,
+      catalogItemId: catalogItemUuid(linked, item.catalogItemId || item.itemId),
+      itemName: linked?.merchandisingName?.trim() || item.itemName,
+      source: item.source || linked?.source || "",
       qty: item.quantity,
       unit: item.unit,
       purchased: item.priceLabel,
-      qtyAfterUnpack: String(item.quantity),
+      qtyAfterUnpack: preservedUnpack ?? "0",
       expDate: formatExpirationLabel(item.expiration),
-      location: "",
-      splits: [],
+      expirationIso: item.expiration,
+      location: item.location?.trim() ?? "",
+      splits: item.splits ?? [],
     });
-    map.set(item.category, list);
+    sections.set(id, section);
   }
 
-  return Array.from(map.entries()).map(([title, sectionItems]) => ({
-    title,
-    items: sectionItems,
-  }));
+  return [...sections.values()];
 }
 
 export function printItemLabel(params: {

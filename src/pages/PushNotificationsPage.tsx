@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { Plus } from "lucide-react";
@@ -8,81 +8,143 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Modal } from "@/components/ui/Modal";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
-import { TABLE_HEADER } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
+import {
+  isApiConfigured,
+  mapApiNotificationRule,
+  notificationRulesApi,
+} from "@/lib/api";
+import type { NotificationRulePayload } from "@/lib/api/notifications";
+import type { PushNotification } from "@/types/notification";
 import { cn } from "@/utils/cn";
+import { apiId } from "@/utils/entityIds";
 
 const LINK_BLUE = "#3B82F6";
 
-type PushNotification = {
-  id: string;
-  trigger: string;
-  scheduledFor: string;
-  subject: string;
-  body: string;
-};
+const NOTIFICATION_COLUMNS =
+  "grid grid-cols-[260px_minmax(0,1.1fr)_minmax(0,0.75fr)_minmax(0,1fr)_minmax(0,1.4fr)_48px] items-center gap-x-4";
 
-const TRIGGER_OPTIONS = [
-  "Order Confirmation",
-  "Delivery Alert",
-  "Order Locked",
-  "Cooler Ready",
-  "Payment Reminder",
+const METHOD_OPTIONS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+
+const UNIT_OPTIONS = [
+  { value: "minutes", label: "Minutes" },
+  { value: "hours", label: "Hours" },
+  { value: "days", label: "Days" },
 ];
-
-const SCHEDULE_OPTIONS = [
-  "After Order Confirmed",
-  "1 day before order lock",
-  "3 hrs after order arrived",
-  "On delivery day morning",
-  "When cooler is ready",
-];
-
-/** Temporary seed - one notification sample until Push API is wired. */
-const INITIAL: PushNotification[] = [];
 
 type Draft = {
   id?: string;
-  trigger: string;
-  scheduledFor: string;
+  recordId?: string;
+  action: string;
+  httpMethod: string;
+  scheduleDelay: string;
+  scheduleUnit: string;
   subject: string;
   body: string;
 };
 
 function emptyDraft(): Draft {
   return {
-    trigger: "",
-    scheduledFor: "",
+    action: "",
+    httpMethod: "",
+    scheduleDelay: "0",
+    scheduleUnit: "minutes",
     subject: "",
     body: "",
   };
 }
 
-function nextId(items: PushNotification[]) {
-  const max = items.reduce((acc, item) => {
-    const n = Number(item.id.replace(/\D/g, ""));
-    return Number.isFinite(n) ? Math.max(acc, n) : acc;
-  }, 0);
-  return `PN-${String(max + 1).padStart(3, "0")}`;
+function triggerLabel(httpMethod: string, action: string): string {
+  return [httpMethod, action].filter(Boolean).join(" ");
+}
+
+function formatSchedule(delay: number, unit: string): string {
+  const label = unit.trim() || "minutes";
+  return `${delay} ${label}`;
+}
+
+function withCurrent(
+  options: { value: string; label: string }[],
+  current: string,
+) {
+  if (!current || options.some((option) => option.value === current)) {
+    return options;
+  }
+  return [{ value: current, label: current }, ...options];
+}
+
+function toPayload(draft: Draft): NotificationRulePayload | null {
+  const scheduleDelay = Number(draft.scheduleDelay);
+  if (!Number.isFinite(scheduleDelay) || scheduleDelay < 0) return null;
+  return {
+    action: draft.action.trim(),
+    httpMethod: draft.httpMethod,
+    title: draft.subject.trim(),
+    subtext: draft.body.trim(),
+    scheduleDelay,
+    scheduleUnit: draft.scheduleUnit,
+  };
 }
 
 export default function PushNotificationsPage() {
   useDocumentTitle("Push Notifications");
 
-  const [items, setItems] = useState(INITIAL);
+  const apiConfigured = isApiConfigured();
+  const { notifyApiError, showSuccess } = useApiFeedback();
+  const [items, setItems] = useState<PushNotification[]>([]);
+  const [loading, setLoading] = useState(apiConfigured);
+  const [pending, setPending] = useState<null | "save" | "remove">(null);
   const [query, setQuery] = useState("");
   const [triggerFilter, setTriggerFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [draft, setDraft] = useState<Draft>(emptyDraft);
 
+  const loadRules = useCallback(() => {
+    if (!apiConfigured) {
+      setItems([]);
+      setLoading(false);
+      return () => undefined;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void notificationRulesApi
+      .list()
+      .then((rules) => {
+        if (cancelled) return;
+        setItems(rules.map(mapApiNotificationRule));
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load notifications.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfigured, notifyApiError]);
+
+  useEffect(() => loadRules(), [loadRules]);
+
   const triggers = useMemo(
-    () => Array.from(new Set(items.map((item) => item.trigger))).sort(),
+    () =>
+      Array.from(
+        new Set(items.map((item) => triggerLabel(item.httpMethod, item.action))),
+      )
+        .filter(Boolean)
+        .sort(),
     [items],
   );
 
@@ -92,10 +154,12 @@ export default function PushNotificationsPage() {
       const matchesQuery =
         !q ||
         item.id.toLowerCase().includes(q) ||
-        item.trigger.toLowerCase().includes(q) ||
-        item.subject.toLowerCase().includes(q) ||
+        triggerLabel(item.httpMethod, item.action).toLowerCase().includes(q) ||
+        item.title.toLowerCase().includes(q) ||
         item.body.toLowerCase().includes(q);
-      const matchesTrigger = !triggerFilter || item.trigger === triggerFilter;
+      const matchesTrigger =
+        !triggerFilter ||
+        triggerLabel(item.httpMethod, item.action) === triggerFilter;
       return matchesQuery && matchesTrigger;
     });
   }, [items, query, triggerFilter]);
@@ -110,64 +174,98 @@ export default function PushNotificationsPage() {
   function openEdit(item: PushNotification) {
     setDraft({
       id: item.id,
-      trigger: item.trigger,
-      scheduledFor: item.scheduledFor,
-      subject: item.subject,
+      recordId: item.recordId,
+      action: item.action,
+      httpMethod: item.httpMethod,
+      scheduleDelay: String(item.scheduleDelay),
+      scheduleUnit: item.scheduleUnit,
+      subject: item.title,
       body: item.body,
     });
     setModalOpen(true);
   }
 
   function closeModal() {
+    if (pending) return;
     setModalOpen(false);
     setDraft(emptyDraft());
   }
 
-  function removeNotification() {
-    if (!draft.id) return;
-    setItems((current) => current.filter((item) => item.id !== draft.id));
-    closeModal();
+  const payload = toPayload(draft);
+  const canSave = Boolean(
+    payload &&
+      payload.action &&
+      payload.httpMethod &&
+      payload.title &&
+      payload.subtext &&
+      payload.scheduleUnit,
+  );
+
+  async function refreshRules() {
+    const rules = await notificationRulesApi.list({ fresh: true });
+    setItems(rules.map(mapApiNotificationRule));
   }
 
-  function save() {
-    if (!draft.trigger || !draft.scheduledFor || !draft.subject.trim()) return;
-
-    if (draft.id) {
-      setItems((current) =>
-        current.map((item) =>
-          item.id === draft.id
-            ? {
-                ...item,
-                trigger: draft.trigger,
-                scheduledFor: draft.scheduledFor,
-                subject: draft.subject.trim(),
-                body: draft.body.trim(),
-              }
-            : item,
-        ),
+  async function removeNotification() {
+    if (!draft.id || pending) return;
+    setPending("remove");
+    try {
+      await notificationRulesApi.remove(
+        apiId({ id: draft.id, recordId: draft.recordId }),
       );
-    } else {
-      setItems((current) => [
-        {
-          id: nextId(current),
-          trigger: draft.trigger,
-          scheduledFor: draft.scheduledFor,
-          subject: draft.subject.trim(),
-          body: draft.body.trim(),
-        },
-        ...current,
-      ]);
+      showSuccess("Notification removed.");
+      setModalOpen(false);
+      setDraft(emptyDraft());
+      try {
+        await refreshRules();
+      } catch (error) {
+        notifyApiError(error, "Failed to refresh notifications.");
+      }
+    } catch (error) {
+      notifyApiError(error, "Failed to delete notification.");
+    } finally {
+      setPending(null);
     }
-    closeModal();
   }
 
-  const canSave =
-    Boolean(draft.trigger) &&
-    Boolean(draft.scheduledFor) &&
-    Boolean(draft.subject.trim());
+  async function save() {
+    if (!payload || !canSave || pending) return;
+    setPending("save");
+    try {
+      if (draft.id) {
+        await notificationRulesApi.update(
+          apiId({ id: draft.id, recordId: draft.recordId }),
+          payload,
+        );
+        showSuccess("Notification updated.");
+      } else {
+        await notificationRulesApi.create(payload);
+        showSuccess("Notification created.");
+      }
+      setModalOpen(false);
+      setDraft(emptyDraft());
+      try {
+        await refreshRules();
+      } catch (error) {
+        notifyApiError(error, "Failed to refresh notifications.");
+      }
+    } catch (error) {
+      notifyApiError(
+        error,
+        draft.id
+          ? "Failed to update notification."
+          : "Failed to create notification.",
+      );
+    } finally {
+      setPending(null);
+    }
+  }
 
-  const th = cn("px-0 py-3 text-left", TABLE_HEADER);
-  const td = "px-0 py-[18px] align-middle text-[13px] leading-5 text-[#111118]";
+  const unitOptions = withCurrent(UNIT_OPTIONS, draft.scheduleUnit);
+  const methodOptions = withCurrent(
+    METHOD_OPTIONS.map((method) => ({ value: method, label: method })),
+    draft.httpMethod,
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -185,7 +283,7 @@ export default function PushNotificationsPage() {
               value={triggerFilter}
               onChange={setTriggerFilter}
               aria-label="All Triggers"
-              className="w-[160px]"
+              className="w-[220px]"
               options={[
                 { value: "", label: "All Triggers" },
                 ...triggers.map((trigger) => ({
@@ -207,83 +305,75 @@ export default function PushNotificationsPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
-        <ScrollTable minWidth={1100} className="rounded-[10px]">
-          <table className="w-full table-fixed border-collapse">
-            <colgroup>
-              <col style={{ width: "122px" }} />
-              <col style={{ width: "180px" }} />
-              <col style={{ width: "180px" }} />
-              <col style={{ width: "200px" }} />
-              <col style={{ width: "280px" }} />
-              <col />
-              <col style={{ width: "64px" }} />
-            </colgroup>
-            <thead>
-              <tr className="border-b border-[#00000014] bg-[#FAFAF8]">
-                <th className={cn(th, "pl-5 pr-3")}>ID</th>
-                <th className={cn(th, "pr-3")}>Data Trigger</th>
-                <th className={cn(th, "pr-3")}>Scheduled For</th>
-                <th className={cn(th, "pr-3")}>Header / Subject Line</th>
-                <th className={cn(th, "pr-4")}>Content Body</th>
-                <th aria-hidden className="p-0" />
-                <th className={cn(th, "pr-5")} />
-              </tr>
-            </thead>
-            <tbody>
-              {listWindow.visible.map((item) => (
-                <tr
-                  key={item.id}
-                  className="border-b border-[#00000014] last:border-b-0"
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
+        {loading ? (
+          <AppLoader variant="table" label="Loading notifications" />
+        ) : (
+          <ScrollTable fill minWidth={1280}>
+            <div
+              className={cn(
+                NOTIFICATION_COLUMNS,
+                TABLE_HEADER,
+                PINNED_HEADER,
+                "h-10 border-b border-[#00000014] px-4",
+              )}
+            >
+              <div>ID</div>
+              <div>Data Trigger</div>
+              <div>Scheduled For</div>
+              <div>Header / Subject Line</div>
+              <div>Content Body</div>
+              <div aria-hidden />
+            </div>
+            {listWindow.visible.map((item, index) => {
+              const isLast = index === listWindow.visible.length - 1;
+              return (
+                <div
+                  key={item.recordId ?? item.id}
+                  className={cn(
+                    NOTIFICATION_COLUMNS,
+                    "px-4 py-3.5",
+                    !isLast && "border-b border-[#00000014]",
+                  )}
                 >
-                  <td className={cn(td, "pl-5 pr-3")}>
+                  <div className="min-w-0 overflow-hidden">
                     <IdPill>{item.id}</IdPill>
-                  </td>
-                  <td className={cn(td, "pr-3 font-semibold")}>
-                    <span className="block truncate">{item.trigger}</span>
-                  </td>
-                  <td className={cn(td, "pr-3")}>
-                    <span className="block truncate">{item.scheduledFor}</span>
-                  </td>
-                  <td className={cn(td, "pr-3")}>
-                    <span className="block truncate">{item.subject}</span>
-                  </td>
-                  <td className={cn(td, "pr-4")}>
-                    <span className="block truncate text-[13px] leading-5 text-[#111118]">
-                      {item.body}
-                    </span>
-                  </td>
-                  <td aria-hidden className="p-0" />
-                  <td className={cn(td, "pr-5 text-right")}>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(item)}
-                      className="whitespace-nowrap text-[13px] font-medium"
-                      style={{ color: LINK_BLUE }}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {!filtered.length ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-5 py-12 text-center text-[13px] text-[#8A8A8A]"
+                  </div>
+                  <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                    {triggerLabel(item.httpMethod, item.action)}
+                  </div>
+                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
+                    {formatSchedule(item.scheduleDelay, item.scheduleUnit)}
+                  </div>
+                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
+                    {item.title}
+                  </div>
+                  <div className="min-w-0 truncate text-[13px] leading-5 text-[#111118]">
+                    {item.body}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => openEdit(item)}
+                    className="justify-self-end text-[13px] font-medium whitespace-nowrap"
+                    style={{ color: LINK_BLUE }}
                   >
-                    No push notifications found
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </ScrollTable>
-        <InfiniteScrollSentinel
-          hasMore={listWindow.hasMore}
-          loadedCount={listWindow.loadedCount}
-          onLoadMore={listWindow.loadMore}
-        />
+                    Edit
+                  </button>
+                </div>
+              );
+            })}
+            {!filtered.length ? (
+              <div className="px-4 py-12 text-center text-[13px] text-[#8A8A8A]">
+                No push notifications found
+              </div>
+            ) : null}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
+          </ScrollTable>
+        )}
       </div>
 
       <Modal
@@ -292,74 +382,107 @@ export default function PushNotificationsPage() {
           draft.id ? "Edit Push Notification" : "Create Push Notification"
         }
         onClose={closeModal}
-        size="sm"
-        className="max-w-[480px]"
+        size="md"
         footer={
           <div className="flex w-full items-center justify-between gap-4">
             {draft.id ? (
-              <Button variant="dangerGhost" onClick={removeNotification}>
-                Remove Notification
+              <Button
+                variant="dangerGhost"
+                onClick={() => void removeNotification()}
+                disabled={pending !== null}
+              >
+                {pending === "remove" ? "Removing..." : "Remove Notification"}
               </Button>
             ) : (
               <span />
             )}
             <div className="flex items-center gap-4">
-              <Button variant="ghost" onClick={closeModal}>
+              <Button
+                variant="ghost"
+                onClick={closeModal}
+                disabled={pending !== null}
+              >
                 Cancel
               </Button>
-              <Button variant="dark" disabled={!canSave} onClick={save}>
-                Save
+              <Button
+                variant="dark"
+                disabled={!canSave || pending !== null}
+                onClick={() => void save()}
+              >
+                {pending === "save" ? "Saving..." : "Save"}
               </Button>
             </div>
           </div>
         }
       >
         <div className="space-y-4">
-          <div>
-            <Label required>Data Trigger</Label>
-            <Select
-              value={draft.trigger}
-              onChange={(value) =>
-                setDraft((current) => ({ ...current, trigger: value }))
-              }
-              placeholder="Select"
-              aria-label="Data Trigger"
-              options={[
-                { value: "", label: "Select", disabled: true },
-                ...TRIGGER_OPTIONS.map((option) => ({
-                  value: option,
-                  label: option,
-                })),
-              ]}
-              size="md"
-            />
+          <div className="grid grid-cols-[140px_minmax(0,1fr)] gap-3">
+            <div>
+              <Label required>Trigger Method</Label>
+              <Select
+                value={draft.httpMethod}
+                onChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    httpMethod: value,
+                  }))
+                }
+                placeholder="Select"
+                aria-label="Trigger Method"
+                options={[
+                  { value: "", label: "Select", disabled: true },
+                  ...methodOptions,
+                ]}
+                size="md"
+              />
+            </div>
+            <div>
+              <Label required>Data Trigger</Label>
+              <Input
+                value={draft.action}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    action: event.target.value,
+                  }))
+                }
+                placeholder="/api/v1/orders"
+                aria-label="Data Trigger"
+                className="w-full"
+              />
+            </div>
           </div>
 
           <div>
             <Label required>Scheduled for</Label>
-            <Select
-              value={draft.scheduledFor}
-              onChange={(value) =>
-                setDraft((current) => ({
-                  ...current,
-                  scheduledFor: value,
-                }))
-              }
-              placeholder="Select time and case"
-              aria-label="Scheduled for"
-              options={[
-                {
-                  value: "",
-                  label: "Select time and case",
-                  disabled: true,
-                },
-                ...SCHEDULE_OPTIONS.map((option) => ({
-                  value: option,
-                  label: option,
-                })),
-              ]}
-              size="md"
-            />
+            <div className="grid grid-cols-[120px_minmax(0,1fr)] gap-3">
+              <Input
+                type="number"
+                min={0}
+                step={1}
+                value={draft.scheduleDelay}
+                onChange={(event) =>
+                  setDraft((current) => ({
+                    ...current,
+                    scheduleDelay: event.target.value,
+                  }))
+                }
+                aria-label="Schedule delay"
+                className="w-full"
+              />
+              <Select
+                value={draft.scheduleUnit}
+                onChange={(value) =>
+                  setDraft((current) => ({
+                    ...current,
+                    scheduleUnit: value,
+                  }))
+                }
+                aria-label="Schedule unit"
+                options={unitOptions}
+                size="md"
+              />
+            </div>
           </div>
 
           <div>
@@ -377,7 +500,7 @@ export default function PushNotificationsPage() {
           </div>
 
           <div>
-            <Label>Content Body</Label>
+            <Label required>Content Body</Label>
             <Textarea
               value={draft.body}
               onChange={(event) =>

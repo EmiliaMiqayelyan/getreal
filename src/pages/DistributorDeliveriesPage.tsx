@@ -13,7 +13,11 @@ import {
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
-import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DateNavButton,
+  CalendarIcon,
+  DATE_NAV_GROUP,
+} from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
   DATE_CHIP_ROW,
@@ -26,15 +30,17 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
-import { SUB_ROW_PAD } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { downloadListExport } from "@/lib/api";
 import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
 import { cn } from "@/utils/cn";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   formatDeliveryChipLabel,
   parseDeliveryDateId,
@@ -74,11 +80,7 @@ type DeliveryOrder = {
   items: LineItem[];
 };
 
-type RejectReason =
-  | "Wrong Item"
-  | "Damaged"
-  | "Not Fresh"
-  | "Missing Exp Date";
+type RejectReason = "Wrong Item" | "Damaged" | "Not Fresh" | "Missing Exp Date";
 
 type ItemCheckState = {
   status: "pending" | "accepted" | "rejected";
@@ -215,36 +217,15 @@ function RejectReasonPopover({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const menuBox = useFloatingMenu(true, anchorRef, panelRef, {
+    width: 248,
+    maxHeight: 360,
+    gap: 8,
+  });
   const [photoTaken, setPhotoTaken] = useState(hasPhoto);
   const [photoError, setPhotoError] = useState(false);
-
-  useEffect(() => {
-    function place() {
-      const rect = anchor.getBoundingClientRect();
-      const width = 248;
-      const height = panelRef.current?.offsetHeight ?? 200;
-      const gap = 8;
-      let top = rect.bottom + gap;
-      if (top + height > window.innerHeight - 12) {
-        top = Math.max(12, rect.top - height - gap);
-      }
-      let left = rect.left;
-      if (left + width > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - width);
-      }
-      setPos({ top, left });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [anchor]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -276,8 +257,9 @@ function RejectReasonPopover({
       ref={panelRef}
       role="dialog"
       aria-label="Reject reason"
-      className="fixed z-[80] w-[248px] rounded-[12px] border border-[#00000014] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-      style={{ top: pos.top, left: pos.left }}
+      data-scroll-lock-allow
+      className="ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[12px] border border-[#00000014] bg-white p-3 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      style={floatingMenuStyle(menuBox)}
     >
       <div className="mb-2.5">
         <input
@@ -300,7 +282,7 @@ function RejectReasonPopover({
           className={cn(
             "inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[10px] text-[12px] font-medium hover:bg-[#ECECEA]",
             photoError
-              ? "border border-danger bg-[#FDECEC] text-[#E25B5B]"
+              ? "border-danger border bg-[#FDECEC] text-[#E25B5B]"
               : "bg-[#F3F3F1] text-[#111118]",
           )}
           onClick={() => photoInputRef.current?.click()}
@@ -354,7 +336,11 @@ function ExpirationDatePicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const menuBox = useFloatingMenu(open, triggerRef, panelRef, {
+    width: 280,
+    maxHeight: 420,
+    gap: 8,
+  });
   const selected = parseIsoDate(value);
   const initial = selected ?? new Date();
   const [viewYear, setViewYear] = useState(initial.getFullYear());
@@ -372,37 +358,10 @@ function ExpirationDatePicker({
     const anchor = triggerRef.current;
     if (!anchor) return;
 
-    function place() {
-      if (!anchor) return;
-      const rect = anchor.getBoundingClientRect();
-      const width = 280;
-      const gap = 8;
-      const top = rect.bottom + gap;
-      let left = rect.left;
-      if (left + width > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - width);
-      }
-      setPos({ top, left });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const anchor = triggerRef.current;
-    if (!anchor) return;
-
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
-      if (panelRef.current?.contains(target) || anchor?.contains(target)) return;
+      if (panelRef.current?.contains(target) || anchor?.contains(target))
+        return;
       setOpen(false);
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -429,7 +388,7 @@ function ExpirationDatePicker({
 
   if (readOnly) {
     return (
-      <div className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-[#F9FAFB] px-2.5 text-[13px] text-[#111118]">
+      <div className="inline-flex h-10 w-full max-w-[160px] min-w-[140px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-[#F9FAFB] px-2.5 text-[13px] text-[#111118]">
         <Calendar size={14} className="shrink-0 text-[#8A8A8A]" />
         <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
         <span className="min-w-0 truncate">
@@ -448,7 +407,7 @@ function ExpirationDatePicker({
         aria-expanded={open}
         aria-label="Expiration date"
         onClick={() => setOpen((current) => !current)}
-        className="inline-flex h-10 w-full min-w-[140px] max-w-[160px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-white px-2.5 text-left text-[13px] outline-none"
+        className="inline-flex h-10 w-full max-w-[160px] min-w-[140px] items-center gap-2 rounded-[8px] border border-[#00000014] bg-white px-2.5 text-left text-[13px] outline-none"
       >
         <Calendar size={14} className="shrink-0 text-[#6A6A6A]" />
         <span className="h-4 w-px shrink-0 bg-[#E0E0DE]" aria-hidden />
@@ -468,8 +427,9 @@ function ExpirationDatePicker({
               ref={panelRef}
               role="dialog"
               aria-label="Select expiration date"
-              className="fixed z-[80] w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-              style={{ top: pos.top, left: pos.left }}
+              data-scroll-lock-allow
+              className="ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[12px] border border-[#00000014] bg-white p-4 shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+              style={floatingMenuStyle(menuBox)}
             >
               <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
                 <span>{monthLabel(viewYear, viewMonth)}</span>
@@ -549,6 +509,27 @@ function currency(value: number) {
   })}`;
 }
 
+const DELIVERY_EXPORT_HEADERS = [
+  "Delivery ID",
+  "Distributor",
+  "Order Date",
+  "Expected Delivery",
+  "Total Price",
+] as const;
+
+function downloadDeliveriesCsv(orders: DeliveryOrder[], filename: string) {
+  downloadCsvFile(filename, [
+    [...DELIVERY_EXPORT_HEADERS],
+    ...orders.map((order) => [
+      order.id,
+      order.distributor || "—",
+      order.orderDate || "—",
+      order.expectedDelivery || "—",
+      currency(order.totalPrice),
+    ]),
+  ]);
+}
+
 function emptyChecks(items: LineItem[]): Record<string, ItemCheckState> {
   return Object.fromEntries(
     items.map((item) => [
@@ -600,11 +581,7 @@ function validateChecks(
     if (state.status === "rejected" && !state.reason) {
       errors.push(`${item.name}: rejection reason required`);
     }
-    if (
-      state.status === "rejected" &&
-      !state.photoName &&
-      !state.photoUrl
-    ) {
+    if (state.status === "rejected" && !state.photoName && !state.photoUrl) {
       errors.push(`${item.name}: problem photo required`);
     }
   }
@@ -672,7 +649,9 @@ function CheckOrderView({
   function handleAcceptOrder() {
     const errors = validateChecks(order.items, checks);
     if (errors.length) {
-      setValidationError(errors[0] ?? "Complete all required receiving fields.");
+      setValidationError(
+        errors[0] ?? "Complete all required receiving fields.",
+      );
       setPhase("check");
       return;
     }
@@ -681,7 +660,7 @@ function CheckOrderView({
 
   // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right
   const col =
-    "grid-cols-[minmax(140px,220px)_40px_52px_148px_auto_minmax(16px,1fr)_auto]";
+    "grid grid-cols-[minmax(0,1.4fr)_40px_52px_148px_minmax(180px,auto)_minmax(0,1fr)_auto] items-center gap-x-4 px-4";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -692,7 +671,9 @@ function CheckOrderView({
               {readOnly ? "View Order" : "Check Order"}
             </h1>
             <p className="mt-1 text-[13px] text-[#8A8A8A]">
-              {readOnly ? "Processed Receiving From" : "Delivery Validation From"}{" "}
+              {readOnly
+                ? "Processed Receiving From"
+                : "Delivery Validation From"}{" "}
               <span className="font-medium text-[#111118]">
                 {order.distributor}
               </span>
@@ -705,7 +686,7 @@ function CheckOrderView({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -721,7 +702,9 @@ function CheckOrderView({
               <ScrollTable minWidth={900} className="rounded-[12px]">
                 <div
                   className={cn(
-                    "grid items-center gap-x-3 border-b border-[#00000014] bg-white px-4 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                    PINNED_HEADER,
+                    TABLE_HEADER,
+                    "h-10 border-b border-[#00000014]",
                     col,
                   )}
                 >
@@ -746,7 +729,7 @@ function CheckOrderView({
                     <div
                       key={item.id}
                       className={cn(
-                        "relative grid items-center gap-x-3 border-b border-[#00000014] bg-white px-4 py-3.5 last:border-b-0",
+                        "relative border-b border-[#00000014] bg-white py-3.5 last:border-b-0",
                         col,
                         state.status === "accepted" &&
                           "border-l-[3px] border-l-[#2F8F4E]",
@@ -825,7 +808,9 @@ function CheckOrderView({
                               </span>
                             </div>
                           ) : (
-                            <span className="text-[12px] text-[#8A8A8A]">—</span>
+                            <span className="text-[12px] text-[#8A8A8A]">
+                              —
+                            </span>
                           )
                         ) : state.status === "accepted" ? (
                           <>
@@ -972,7 +957,7 @@ function CheckOrderView({
 }
 
 const ROW_GRID =
-  "grid grid-cols-[18px_90px_220px_150px_150px_100px_minmax(0,1fr)_88px] items-center gap-x-5";
+  "grid grid-cols-[18px_112px_minmax(0,1.2fr)_150px_150px_100px_minmax(0,1fr)_88px] items-center gap-x-4 px-4";
 
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
@@ -996,10 +981,8 @@ export default function DistributorDeliveriesPage() {
     null,
   );
 
-  const checkingOrder =
-    orders.find((order) => order.id === checkingId) ?? null;
-  const viewingOrder =
-    orders.find((order) => order.id === viewingId) ?? null;
+  const checkingOrder = orders.find((order) => order.id === checkingId) ?? null;
+  const viewingOrder = orders.find((order) => order.id === viewingId) ?? null;
 
   const productOptions = useMemo(
     () =>
@@ -1012,8 +995,7 @@ export default function DistributorDeliveriesPage() {
   );
 
   const distributorOptions = useMemo(
-    () =>
-      Array.from(new Set(orders.map((order) => order.distributor))).sort(),
+    () => Array.from(new Set(orders.map((order) => order.distributor))).sort(),
     [orders],
   );
 
@@ -1201,11 +1183,11 @@ export default function DistributorDeliveriesPage() {
         title="Distributor Receiving"
         toolbar={
           <div className="flex w-full flex-wrap items-center gap-2 md:flex-nowrap">
-              <SearchField
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search"
-              />
+            <SearchField
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search"
+            />
 
             <Select
               value={productFilter}
@@ -1242,12 +1224,14 @@ export default function DistributorDeliveriesPage() {
                 search.trim() || productFilter || distributorFilter,
               )}
               onExport={async (request: ExportRequest) => {
-                await downloadListExport(
-                  "/orders",
-                  { type: "distributor" },
-                  request.format,
-                  "deliveries",
-                );
+                const source = request.scope === "all" ? orders : filtered;
+                const filename =
+                  request.scope === "all"
+                    ? exportFilename("distributor-deliveries-all")
+                    : activeTab === "Received"
+                      ? `received-deliveries-${activeDateId}.csv`
+                      : `distributor-deliveries-${activeDateId}.csv`;
+                downloadDeliveriesCsv(source, filename);
               }}
               className="w-full sm:ml-auto sm:w-auto"
             />
@@ -1268,69 +1252,71 @@ export default function DistributorDeliveriesPage() {
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] p-4 md:p-7">
-          <div className={DATE_CHIP_ROW}>
-            <div className={DATE_CHIP_SCROLL}>
-              {visibleChips.map((chip) => {
-                const active = activeDateId === chip.id;
-                return (
-                  <DeliveryDateChip
-                    key={chip.id}
-                    label={chip.label}
-                    count={chip.count}
-                    active={active}
-                    onClick={() => selectDeliveryDate(chip.id)}
-                  />
-                );
-              })}
-            </div>
-
-            <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
-              <DateNavButton
-                aria-label="Previous dates"
-                disabled={!canShiftBack}
-                onClick={() => shiftChipWindow(-1)}
-              >
-                <ChevronLeft size={14} />
-              </DateNavButton>
-              <DateNavButton
-                aria-label="Next dates"
-                disabled={!canShiftForward}
-                onClick={() => shiftChipWindow(1)}
-              >
-                <ChevronRight size={14} />
-              </DateNavButton>
-              <DateNavButton
-                aria-label="Open calendar"
-                aria-expanded={calendarOpen}
-                onClick={() => setCalendarOpen((open) => !open)}
-              >
-                <CalendarIcon />
-              </DateNavButton>
-              {calendarOpen ? (
-                <DeliveryDateCalendar
-                  selectedDateId={activeDateId}
-                  initialMonth={
-                    parseDeliveryDateId(activeDateId) ?? RECEIVING_DATES[0]
-                  }
-                  onSelectDate={(dateId) => {
-                    selectDeliveryDate(dateId);
-                  }}
-                  onClose={() => setCalendarOpen(false)}
+        <div className={DATE_CHIP_ROW}>
+          <div className={DATE_CHIP_SCROLL}>
+            {visibleChips.map((chip) => {
+              const active = activeDateId === chip.id;
+              return (
+                <DeliveryDateChip
+                  key={chip.id}
+                  label={chip.label}
+                  count={chip.count}
+                  active={active}
+                  onClick={() => selectDeliveryDate(chip.id)}
                 />
-              ) : null}
-            </div>
+              );
+            })}
           </div>
 
-          <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
-            Receiving Log
-          </h2>
+          <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
+            <DateNavButton
+              aria-label="Previous dates"
+              disabled={!canShiftBack}
+              onClick={() => shiftChipWindow(-1)}
+            >
+              <ChevronLeft size={14} />
+            </DateNavButton>
+            <DateNavButton
+              aria-label="Next dates"
+              disabled={!canShiftForward}
+              onClick={() => shiftChipWindow(1)}
+            >
+              <ChevronRight size={14} />
+            </DateNavButton>
+            <DateNavButton
+              aria-label="Open calendar"
+              aria-expanded={calendarOpen}
+              onClick={() => setCalendarOpen((open) => !open)}
+            >
+              <CalendarIcon />
+            </DateNavButton>
+            {calendarOpen ? (
+              <DeliveryDateCalendar
+                selectedDateId={activeDateId}
+                initialMonth={
+                  parseDeliveryDateId(activeDateId) ?? RECEIVING_DATES[0]
+                }
+                onSelectDate={(dateId) => {
+                  selectDeliveryDate(dateId);
+                }}
+                onClose={() => setCalendarOpen(false)}
+              />
+            ) : null}
+          </div>
+        </div>
 
-          <ScrollTable minWidth={920} className="rounded-[12px]">
+        <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
+          Receiving Log
+        </h2>
+
+        <ScrollTable minWidth={920} className="rounded-[12px]">
+          <div>
             <div
               className={cn(
                 ROW_GRID,
-                SUB_ROW_PAD,
-                "border-b border-[#00000014] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                PINNED_HEADER,
+                TABLE_HEADER,
+                "h-10 border-b border-[#00000014]",
               )}
             >
               <div />
@@ -1343,164 +1329,159 @@ export default function DistributorDeliveriesPage() {
               <div>Action</div>
             </div>
 
-            <div className="divide-y divide-[#00000014]">
-              {listWindow.visible.map((order) => {
-                const open = expanded.has(order.id);
-                const results = itemResults[order.id];
+            {listWindow.visible.map((order) => {
+              const open = expanded.has(order.id);
+              const results = itemResults[order.id];
 
-                return (
-                  <div key={order.id} className="bg-white">
-                    <div
-                      className={cn(
-                        ROW_GRID,
-                        SUB_ROW_PAD,
-                        open && "border-b border-[#00000014]",
-                      )}
+              return (
+                <div key={order.id} className="contents">
+                  <div
+                    className={cn(
+                      ROW_GRID,
+                      "border-b border-[#00000014] bg-white py-3.5",
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-label={open ? "Collapse" : "Expand"}
+                      onClick={() => toggleExpanded(order.id)}
+                      className="flex items-center justify-self-start"
                     >
-                      <button
-                        type="button"
-                        aria-label={open ? "Collapse" : "Expand"}
-                        onClick={() => toggleExpanded(order.id)}
-                        className="flex items-center justify-self-start"
-                      >
-                        <ChevronDown
-                          size={15}
-                          className={cn(
-                            "shrink-0 transition-transform",
-                            open
-                              ? "rotate-0 text-[#E25B5B]"
-                              : "-rotate-90 text-[#6A6A6A]",
-                          )}
-                        />
-                      </button>
-
-                      <IdPill>{order.id}</IdPill>
-                      <span className="truncate text-[14px] font-semibold text-[#111118]">
-                        {order.distributor}
-                      </span>
-                      <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                        {order.orderDate}
-                      </span>
-                      <span className="whitespace-nowrap text-[13px] text-[#4A4A4A]">
-                        {order.expectedDelivery}
-                      </span>
-                      <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
-                        {currency(order.totalPrice)}
-                      </span>
-                      <div aria-hidden />
-                      <div>
-                        {order.checked ? (
-                          <button
-                            type="button"
-                            onClick={() => setViewingId(order.id)}
-                            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2.5 text-[13px] font-medium"
-                            style={{ color: LINK_BLUE }}
-                          >
-                            View
-                            <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                              <Check size={10} strokeWidth={3} />
-                            </span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setCheckingId(order.id)}
-                            className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
-                            style={{ color: LINK_BLUE }}
-                          >
-                            Validate
-                          </button>
+                      <ChevronDown
+                        size={15}
+                        className={cn(
+                          "shrink-0 transition-transform",
+                          open
+                            ? "rotate-0 text-[#E25B5B]"
+                            : "-rotate-90 text-[#6A6A6A]",
                         )}
-                      </div>
+                      />
+                    </button>
+
+                    <IdPill>{order.id}</IdPill>
+                    <span className="truncate text-[14px] font-semibold text-[#111118]">
+                      {order.distributor}
+                    </span>
+                    <span className="text-[13px] whitespace-nowrap text-[#4A4A4A]">
+                      {order.orderDate}
+                    </span>
+                    <span className="text-[13px] whitespace-nowrap text-[#4A4A4A]">
+                      {order.expectedDelivery}
+                    </span>
+                    <span className="text-[13px] font-semibold whitespace-nowrap text-[#111118]">
+                      {currency(order.totalPrice)}
+                    </span>
+                    <div aria-hidden />
+                    <div>
+                      {order.checked ? (
+                        <button
+                          type="button"
+                          onClick={() => setViewingId(order.id)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-[8px] px-2.5 text-[13px] font-medium"
+                          style={{ color: LINK_BLUE }}
+                        >
+                          View
+                          <span className="inline-flex size-4 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                            <Check size={10} strokeWidth={3} />
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCheckingId(order.id)}
+                          className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
+                          style={{ color: LINK_BLUE }}
+                        >
+                          Validate
+                        </button>
+                      )}
                     </div>
+                  </div>
 
-                    {open
-                      ? order.items.map((item, itemIndex) => {
-                          const result = results?.[item.id];
-                          const rejected = result?.status === "rejected";
-                          const hasPhoto = Boolean(
-                            result?.photoUrl || result?.photoName,
-                          );
+                  {open
+                    ? order.items.map((item, itemIndex) => {
+                        const result = results?.[item.id];
+                        const rejected = result?.status === "rejected";
+                        const hasPhoto = Boolean(
+                          result?.photoUrl || result?.photoName,
+                        );
 
-                          return (
+                        return (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              ROW_GRID,
+                              "bg-[#FBF9F9] py-2.5 text-[13px]",
+                              itemIndex < order.items.length - 1 &&
+                                "border-b border-[#00000014]",
+                            )}
+                          >
+                            <div className="col-span-2 min-w-0 justify-self-start">
+                              <IdPill>{item.itemCode}</IdPill>
+                            </div>
                             <div
-                              key={item.id}
                               className={cn(
-                                ROW_GRID,
-                                SUB_ROW_PAD,
-                                "bg-[#FBF9F9] text-[13px]",
-                                itemIndex < order.items.length - 1 &&
-                                  "border-b border-[#00000014]",
+                                "min-w-0 truncate",
+                                rejected ? "text-[#E25B5B]" : "text-[#111118]",
                               )}
                             >
-                              <div className="col-span-2 min-w-0 justify-self-start">
-                                <IdPill>{item.itemCode}</IdPill>
-                              </div>
-                              <div
-                                className={cn(
-                                  "min-w-0 truncate",
-                                  rejected
-                                    ? "text-[#E25B5B]"
-                                    : "text-[#111118]",
-                                )}
-                              >
-                                {item.name}
-                              </div>
-                              <div className="min-w-0 truncate text-[#8A8A8A]">
-                                {item.source}
-                              </div>
-                              <div className="whitespace-nowrap text-[#111118]">
-                                {item.quantity}
-                                {item.unit ? ` ${item.unit}` : ""}
-                              </div>
-                              <div className="whitespace-nowrap">
-                                {rejected && result?.reason ? (
-                                  <span className="font-medium text-[#E25B5B]">
-                                    Rejected · {result.reason}
-                                  </span>
-                                ) : (
-                                  <span className="text-[#111118]">
-                                    {item.priceLabel}
-                                  </span>
-                                )}
-                              </div>
-                              <div aria-hidden />
-                              <div>
-                                {rejected && hasPhoto ? (
-                                  <button
-                                    type="button"
-                                    className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
-                                    style={{ color: LINK_BLUE }}
-                                    onClick={() =>
-                                      result
-                                        ? setImagePreview({ item, result })
-                                        : undefined
-                                    }
-                                  >
-                                    Image
-                                  </button>
-                                ) : null}
-                              </div>
+                              {item.name}
                             </div>
-                          );
-                        })
-                      : null}
-                  </div>
-                );
-              })}
-            </div>
+                            <div className="min-w-0 truncate text-[#8A8A8A]">
+                              {item.source}
+                            </div>
+                            <div className="whitespace-nowrap text-[#111118]">
+                              {item.quantity}
+                              {item.unit ? ` ${item.unit}` : ""}
+                            </div>
+                            <div className="whitespace-nowrap">
+                              {rejected && result?.reason ? (
+                                <span className="font-medium text-[#E25B5B]">
+                                  Rejected · {result.reason}
+                                </span>
+                              ) : (
+                                <span className="text-[#111118]">
+                                  {item.priceLabel}
+                                </span>
+                              )}
+                            </div>
+                            <div aria-hidden />
+                            <div>
+                              {rejected && hasPhoto ? (
+                                <button
+                                  type="button"
+                                  className="inline-flex h-8 items-center rounded-[8px] px-2.5 text-[13px] font-medium"
+                                  style={{ color: LINK_BLUE }}
+                                  onClick={() =>
+                                    result
+                                      ? setImagePreview({ item, result })
+                                      : undefined
+                                  }
+                                >
+                                  Image
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })
+                    : null}
+                </div>
+              );
+            })}
 
             {!filtered.length ? (
-              <div className="px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+              <div className="col-span-full px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
                 No deliveries match your filters.
               </div>
             ) : null}
-          </ScrollTable>
-          <InfiniteScrollSentinel
-            hasMore={listWindow.hasMore}
-            loadedCount={listWindow.loadedCount}
-            onLoadMore={listWindow.loadMore}
-          />
+          </div>
+        </ScrollTable>
+        <InfiniteScrollSentinel
+          hasMore={listWindow.hasMore}
+          loadedCount={listWindow.loadedCount}
+          onLoadMore={listWindow.loadMore}
+        />
 
         {imagePreview ? (
           <RejectImageDrawer

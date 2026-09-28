@@ -11,6 +11,7 @@ type FormFieldProps = {
   helper?: string;
   children: ReactNode;
   className?: string;
+  labelClassName?: string;
 };
 
 /** Label + control + error/helper for consistent form fields. */
@@ -22,10 +23,11 @@ export function FormField({
   helper,
   children,
   className,
+  labelClassName,
 }: FormFieldProps) {
   return (
     <div className={cn("min-w-0", className)}>
-      <Label htmlFor={htmlFor} required={required}>
+      <Label htmlFor={htmlFor} required={required} className={labelClassName}>
         {label}
       </Label>
       {children}

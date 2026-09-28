@@ -6,7 +6,7 @@ import {
 } from "@/components/icons";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
-import { TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
+import { DATA_TABLE, PINNED_HEADER, TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
 import type { Customer } from "@/types/customer";
 import { cn } from "@/utils/cn";
 import { formatCurrency } from "@/utils/format";
@@ -44,16 +44,15 @@ export function CustomerTable({ customers }: CustomerTableProps) {
   }
 
   return (
-    <div className="overflow-hidden rounded-xl bg-surface">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[960px] border-collapse text-left">
+    <div className="w-full min-w-[960px] rounded-xl bg-surface">
+        <table className={DATA_TABLE}>
           <thead>
             <tr className="border-b border-[#00000014] bg-surface">
-              <th className="w-8 px-4 py-3" aria-hidden />
+              <th className={cn("w-8 px-4 py-3", PINNED_HEADER)} aria-hidden />
               {COLUMNS.map((column) => (
                 <th
                   key={column}
-                  className={cn("px-3 py-3", TABLE_HEADER)}
+                  className={cn("px-3 py-3", TABLE_HEADER, PINNED_HEADER)}
                 >
                   {column}
                 </th>
@@ -85,7 +84,6 @@ export function CustomerTable({ customers }: CustomerTableProps) {
             ) : null}
           </tbody>
         </table>
-      </div>
     </div>
   );
 }

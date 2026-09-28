@@ -18,16 +18,103 @@ export function formatClock(value: string) {
   return `${hour}:${String(minutes).padStart(2, "0")} ${suffix}`;
 }
 
-export function locationFromAddress(address: string) {
-  const parts = address
+export type AddressParts = {
+  street: string;
+  apt: string;
+  city: string;
+  state: string;
+  zip: string;
+};
+
+const ZIP_PATTERN = /^\d{5}(?:-\d{4})?$/;
+const STATE_PATTERN = /^[A-Za-z]{2}$/;
+const STATE_ZIP_PATTERN = /^([A-Za-z]{2})\s+(\d{5}(?:-\d{4})?)$/;
+
+/**
+ * Splits a US address into street, apt, city, state, and ZIP.
+ * Accepts "1523 Astoria Blvd, 748, Queens, NY, 11102" and
+ * "123 Main St, Queens, NY 11102".
+ */
+export function parseAddressParts(value: string, location = ""): AddressParts {
+  const parts = value
     .split(",")
     .map((part) => part.trim())
     .filter(Boolean);
-  if (parts.length >= 3) {
-    const city = parts[parts.length - 2];
-    const state = (parts[parts.length - 1] ?? "").split(/\s+/)[0];
-    return [city, state].filter(Boolean).join(", ");
+
+  const empty: AddressParts = {
+    street: "",
+    apt: "",
+    city: "",
+    state: "",
+    zip: "",
+  };
+  if (parts.length === 0) {
+    if (!location.trim()) return empty;
+    return parseAddressParts(location);
   }
+
+  const working = [...parts];
+  let state = "";
+  let zip = "";
+  const last = working[working.length - 1] ?? "";
+  const stateZip = last.match(STATE_ZIP_PATTERN);
+
+  if (stateZip) {
+    state = stateZip[1].toUpperCase();
+    zip = stateZip[2];
+    working.pop();
+  } else if (ZIP_PATTERN.test(last)) {
+    zip = last;
+    working.pop();
+    const maybeState = working[working.length - 1] ?? "";
+    if (STATE_PATTERN.test(maybeState)) {
+      state = maybeState.toUpperCase();
+      working.pop();
+    }
+  } else if (STATE_PATTERN.test(last) && working.length >= 2) {
+    state = last.toUpperCase();
+    working.pop();
+  }
+
+  let city = "";
+  if (state && working.length >= 1) {
+    city = working.pop() ?? "";
+  }
+
+  const street = working[0] ?? "";
+  const apt = working.slice(1).join(", ");
+  const parsed = { street, apt, city, state, zip };
+  if (parsed.city || parsed.state || !location.trim()) return parsed;
+
+  const fromLocation = parseAddressParts(location);
+  return {
+    ...parsed,
+    city: fromLocation.city,
+    state: fromLocation.state,
+    zip: parsed.zip || fromLocation.zip,
+  };
+}
+
+export function formatCityState(city: string, state: string) {
+  return [city.trim(), state.trim()].filter(Boolean).join(", ");
+}
+
+/** "1523 Astoria Blvd, 748, Queens, NY, 11102" */
+export function formatAddressParts(parts: Partial<AddressParts>) {
+  return [parts.street, parts.apt, parts.city, parts.state, parts.zip]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+export function formatFullAddress(parts: Partial<AddressParts>) {
+  return formatAddressParts(parts);
+}
+
+export function locationFromAddress(address: string) {
+  const { city, state } = parseAddressParts(address);
+  const location = formatCityState(city, state);
+  if (location) return location;
   return address.trim() || "—";
 }
 

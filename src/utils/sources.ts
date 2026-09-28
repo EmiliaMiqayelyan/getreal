@@ -1,6 +1,12 @@
 import type { Source } from "@/types/source";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { apiId, findByEntityRef } from "@/utils/entityIds";
-import { locationFromAddress, resolveFullAddress } from "@/utils/format";
+import {
+  formatCityState,
+  formatFullAddress,
+  parseAddressParts,
+  resolveFullAddress,
+} from "@/utils/format";
 
 export type SourceFilterCriteria = {
   query?: string;
@@ -80,21 +86,52 @@ export function filterSources(
   return sources.filter((source) => {
     const matchesName =
       !normalized || source.name.toLowerCase().includes(normalized);
-    const matchesLocation =
-      !location || getSourceLocation(source) === location;
+    const matchesLocation = !location || getSourceLocation(source) === location;
     const matchesDistributor =
       !distributor || getSourceDistributorDisplay(source) === distributor;
     return matchesName && matchesLocation && matchesDistributor;
   });
 }
 
-export function getSourceLocation(source: Source) {
-  return locationFromAddress(source.fullAddress) || source.location || "—";
+function cityStateFrom(value: string) {
+  const { city, state } = parseAddressParts(value);
+  return formatCityState(city, state);
 }
 
-/** Street-level address for hover tooltips (falls back to city/state). */
+/** City and state only, e.g. "Queens, NY". */
+export function getSourceLocation(source: Source) {
+  const fromParts = formatCityState(source.city ?? "", source.state ?? "");
+  if (fromParts) return fromParts;
+
+  const fromAddress = cityStateFrom(source.fullAddress ?? "");
+  if (fromAddress) return fromAddress;
+
+  const stored = source.location.trim();
+  const fromLocation = cityStateFrom(stored);
+  if (fromLocation) return fromLocation;
+  return stored || "—";
+}
+
+/** Whole address for hover, e.g. "1523 Astoria Blvd, 748, Queens, NY, 11102". */
 export function getSourceFullAddress(source: Source) {
-  return resolveFullAddress(source.fullAddress, getSourceLocation(source));
+  const composed = formatFullAddress({
+    street: source.street,
+    apt: source.apt,
+    city: source.city,
+    state: source.state,
+    zip: source.zip,
+  });
+  const stored = source.fullAddress?.trim() ?? "";
+  const normalizedStored = stored
+    ? formatFullAddress(parseAddressParts(stored)) || stored
+    : "";
+  if (composed && normalizedStored) {
+    return composed.length >= normalizedStored.length
+      ? composed
+      : normalizedStored;
+  }
+  if (composed) return composed;
+  return resolveFullAddress(normalizedStored, getSourceLocation(source));
 }
 
 export function uniqueSourceLocations(sources: Source[]) {
@@ -120,11 +157,6 @@ const SOURCE_EXPORT_HEADERS = [
   "Description",
 ] as const;
 
-function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
-}
-
 function sourcePhotoExportValue(logoUrl: string | null) {
   if (!logoUrl) return "—";
   if (logoUrl.startsWith("http://") || logoUrl.startsWith("https://")) {
@@ -134,37 +166,21 @@ function sourcePhotoExportValue(logoUrl: string | null) {
 }
 
 /** CSV of the rows and columns shown on the Source screen. */
-export function sourcesToCsv(sources: Source[]) {
-  const lines = [
-    SOURCE_EXPORT_HEADERS.join(","),
-    ...sources.map((source) =>
-      [
-        source.id,
-        sourcePhotoExportValue(source.logoUrl),
-        source.name,
-        getSourceLocation(source),
-        getSourceDistributorDisplay(source),
-        source.description.trim() || "—",
-      ]
-        .map(csvCell)
-        .join(","),
-    ),
-  ];
-  return lines.join("\r\n");
-}
-
-export function downloadSourcesCsv(sources: Source[], filename = "sources.csv") {
-  const blob = new Blob([`\uFEFF${sourcesToCsv(sources)}`], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+export function downloadSourcesCsv(
+  sources: Source[],
+  filename = exportFilename("sources"),
+) {
+  downloadCsvFile(filename, [
+    [...SOURCE_EXPORT_HEADERS],
+    ...sources.map((source) => [
+      source.id,
+      sourcePhotoExportValue(source.logoUrl),
+      source.name,
+      getSourceLocation(source),
+      getSourceDistributorDisplay(source),
+      source.description.trim() || "—",
+    ]),
+  ]);
 }
 
 type SourceLinked = {
@@ -198,7 +214,9 @@ export function findSourceForRecord(
     return findByEntityRef(sources, record.sourceId);
   }
 
-  const previousById = new Map(previousSources.map((source) => [source.id, source]));
+  const previousById = new Map(
+    previousSources.map((source) => [source.id, source]),
+  );
 
   return sources.find((source) => {
     if (source.name === record.source) return true;

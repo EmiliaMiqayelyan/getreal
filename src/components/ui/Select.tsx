@@ -1,8 +1,10 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { cn } from "@/utils/cn";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 export type SelectOption = {
   value: string;
@@ -39,46 +41,18 @@ export function Select({
   "aria-label": ariaLabel,
 }: SelectProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const listId = useId();
+  const menuBox = useFloatingMenu(open, buttonRef, listRef, {
+    minWidth: 240,
+    maxHeight: 240,
+  });
 
   const cleanOptions = options.filter((option) => option.label.trim().length > 0);
   const selected = cleanOptions.find((option) => option.value === value);
   const displayLabel = selected?.label || placeholder || "";
-
-  useLayoutEffect(() => {
-    if (!open) return;
-
-    function place() {
-      const button = buttonRef.current;
-      if (!button) return;
-      const rect = button.getBoundingClientRect();
-      const gap = 6;
-      // Wide enough that filter labels (e.g. "Angus Chuck Ground Beef")
-      // stay on one line instead of wrapping into uneven multi-line rows.
-      const width = Math.min(
-        Math.max(rect.width, 240),
-        Math.max(160, window.innerWidth - 24),
-      );
-      let left = rect.left;
-      if (left + width > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - width);
-      }
-      setPos({ top: rect.bottom + gap, left, width });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -163,12 +137,13 @@ export function Select({
               id={listId}
               role="listbox"
               aria-label={ariaLabel ?? displayLabel}
+              data-scroll-lock-allow
               className={cn(
-                "ui-select-menu fixed z-[80] max-h-60 overflow-x-hidden overflow-y-auto overscroll-contain",
+                "ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain",
                 "flex flex-col gap-0 rounded-[8px] border border-[#00000014] bg-white p-0",
                 "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
               )}
-              style={{ top: pos.top, left: pos.left, width: pos.width }}
+              style={floatingMenuStyle(menuBox)}
             >
               {cleanOptions.map((option, index) => {
                 const isSelected = option.value === value;

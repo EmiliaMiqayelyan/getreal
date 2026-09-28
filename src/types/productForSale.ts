@@ -2,7 +2,7 @@ import type { ItemPhoto } from "@/types/item";
 
 export type ProductForSale = {
   id: string;
-  /** Backend record UUID when known; used for API paths and FK payloads. */
+  /** Backend record UUID when known. API paths use the business code in `id`. */
   recordId?: string;
   itemId: string;
   sortOrder: number;

@@ -5,6 +5,7 @@ import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useToast } from "@/context/ToastContext";
 import {
   categoriesApi,
+  collectPaginated,
   distributorsApi,
   formatApiError,
   isApiConfigured,
@@ -12,11 +13,11 @@ import {
   mapApiDistributorToDistributor,
   mapApiItemToItem,
   mapApiProductToProductForSale,
-  mapApiRoleToManagedRole,
+  mapApiRolesToRoleUsers,
   mapApiSourceToSource,
+  uniqueManagedRoles,
   mapApiSubcategoryToCatalog,
   mapApiUserToRoleUser,
-  normalizeRolesList,
   productsApi,
   rolesApi,
   sourcesApi,
@@ -88,7 +89,9 @@ export function ApiBootstrap() {
           loadOne(categoriesApi.list()),
           loadOne(subcategoriesApi.list()),
           loadOne(usersApi.list({ page: 1, limit: 100 })),
-          loadOne(rolesApi.list()),
+          loadOne(
+            collectPaginated((page, limit) => rolesApi.list({ page, limit })),
+          ),
         ]);
 
         if (cancelled) return;
@@ -201,16 +204,12 @@ export function ApiBootstrap() {
         }
 
         const apiUsers = usersPayload?.items ?? [];
-        if (apiUsers.length > 0) {
+        if (rolesPayload.length > 0) {
+          setUsers(mapApiRolesToRoleUsers(rolesPayload));
+          setManagedRoles(uniqueManagedRoles(rolesPayload));
+        } else if (apiUsers.length > 0) {
           setUsers((current) =>
             mergeById(current, apiUsers.map(mapApiUserToRoleUser)),
-          );
-        }
-
-        const apiRoles = normalizeRolesList(rolesPayload);
-        if (apiRoles.length > 0) {
-          setManagedRoles((current) =>
-            mergeById(current, apiRoles.map(mapApiRoleToManagedRole)),
           );
         }
 

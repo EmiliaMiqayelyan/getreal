@@ -5,7 +5,11 @@ const PAYMENT_TERMS = ["NET-15", "NET-30", "NET-35"] as const;
 
 export type DistributorFormInput = {
   name: string;
-  address: string;
+  street: string;
+  apt: string;
+  city: string;
+  state: string;
+  zip: string;
   days: string[];
   dayTimes: Record<string, string>;
   payment: string;
@@ -18,7 +22,11 @@ export type ContactFieldErrors = Partial<
 
 export type DistributorFormErrors = {
   name?: string;
-  address?: string;
+  street?: string;
+  apt?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   deliveryDays?: string;
   deliveryTimeByDay?: Record<string, string>;
   payment?: string;
@@ -107,8 +115,21 @@ export function validateDistributorForm(
     errors.name = "Distributor name is required.";
   }
 
-  if (!input.address.trim()) {
-    errors.address = "Full address is required.";
+  if (!input.street.trim()) {
+    errors.street = "Street address is required.";
+  }
+  if (!input.city.trim()) {
+    errors.city = "City is required.";
+  }
+  if (!input.state.trim()) {
+    errors.state = "State is required.";
+  } else if (!/^[A-Za-z]{2}$/.test(input.state.trim())) {
+    errors.state = "Enter a 2-letter state.";
+  }
+  if (!input.zip.trim()) {
+    errors.zip = "ZIP code is required.";
+  } else if (!/^\d{5}(?:-\d{4})?$/.test(input.zip.trim())) {
+    errors.zip = "Enter a valid ZIP code.";
   }
 
   if (input.days.length === 0) {
@@ -180,7 +201,10 @@ export function validateDistributorForm(
 export function hasDistributorFormErrors(errors: DistributorFormErrors) {
   if (
     errors.name ||
-    errors.address ||
+    errors.street ||
+    errors.city ||
+    errors.state ||
+    errors.zip ||
     errors.deliveryDays ||
     errors.payment ||
     errors.contacts
@@ -206,7 +230,10 @@ export function firstDistributorFormErrorField(
   errors: DistributorFormErrors,
 ): string | null {
   if (errors.name) return "name";
-  if (errors.address) return "address";
+  if (errors.street) return "street";
+  if (errors.city) return "city";
+  if (errors.state) return "state";
+  if (errors.zip) return "zip";
   if (errors.deliveryDays) return "delivery-days";
   if (errors.deliveryTimeByDay) {
     const day = WEEK_DAYS.find((entry) => errors.deliveryTimeByDay?.[entry]);

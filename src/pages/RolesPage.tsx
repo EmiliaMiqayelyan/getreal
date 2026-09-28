@@ -10,7 +10,7 @@ import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { SUB_ROW_PAD } from "@/constants/table";
+import { PINNED_HEADER, SUB_ROW_PAD, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -24,8 +24,9 @@ import {
   rolesApi,
   usersApi,
 } from "@/lib/api";
-import type { RolePermissions, RoleUser } from "@/types/admin";
+import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
+import { publicCode } from "@/utils/entityIds";
 import {
   ROLE_PERMISSION_GROUPS,
   permissionsForRoleType,
@@ -34,6 +35,17 @@ import {
   type UserFormErrors,
   validateUserForm,
 } from "@/utils/rolesUsers";
+
+function rolePreviewId(user: RoleUser, roles: ManagedRole[]) {
+  const type = user.type.trim().toLowerCase();
+  const match = roles.find((role) => {
+    if (user.roleId && (role.recordId === user.roleId || role.id === user.roleId)) {
+      return true;
+    }
+    return role.name.trim().toLowerCase() === type;
+  });
+  return publicCode(user.roleCode, match?.roleCode, match?.id) ?? user.id;
+}
 
 const FALLBACK_ROLE_OPTIONS = [
   "Superadmin",
@@ -102,6 +114,9 @@ function PermissionCheckbox({
   );
 }
 
+const ROLE_ROW =
+  "grid grid-cols-[24px_112px_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_56px] items-center gap-x-4 px-4";
+
 export default function RolesPage() {
   useDocumentTitle("Roles");
 
@@ -137,6 +152,8 @@ export default function RolesPage() {
       const matchesQuery =
         !normalized ||
         user.id.toLowerCase().includes(normalized) ||
+        user.roleCode?.toLowerCase().includes(normalized) ||
+        user.roleId?.toLowerCase().includes(normalized) ||
         user.name.toLowerCase().includes(normalized) ||
         user.email.toLowerCase().includes(normalized) ||
         user.phone.includes(normalized);
@@ -249,7 +266,7 @@ export default function RolesPage() {
             name: draft.name.trim(),
             role: mapRoleUserTypeToApiRole(draft.type),
           });
-          createdId = created.id;
+          createdId = publicCode(created.userCode) ?? created.id;
         } catch (error) {
           notifyApiError(error, "Failed to create user on server.");
         }
@@ -349,19 +366,19 @@ export default function RolesPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading users" />
         ) : (
         <>
-        <ScrollTable
-          minWidth={820}
-          className="rounded-[12px] border border-[#00000014] bg-white"
-        >
+        <ScrollTable fill minWidth={1280}>
+          <div>
           <div
             className={cn(
-              "grid grid-cols-[24px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3 border-b border-[#00000014] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
-              SUB_ROW_PAD,
+              PINNED_HEADER,
+              ROLE_ROW,
+              TABLE_HEADER,
+              "h-10 border-b border-[#00000014]",
             )}
           >
             <div />
@@ -379,14 +396,12 @@ export default function RolesPage() {
             const isLast = index === userWindow.visible.length - 1;
 
             return (
-              <div
-                key={user.id}
-                className={cn(!isLast || open ? "border-b border-[#00000014]" : "")}
-              >
+              <div key={user.id} className="contents">
                 <div
                   className={cn(
-                    "grid grid-cols-[24px_90px_minmax(120px,1fr)_minmax(160px,1.2fr)_minmax(120px,0.9fr)_minmax(120px,0.9fr)_56px] items-center gap-x-3",
-                    SUB_ROW_PAD,
+                    ROLE_ROW,
+                    "py-3.5",
+                    !isLast || open ? "border-b border-[#00000014]" : "",
                   )}
                 >
                   <button
@@ -407,19 +422,21 @@ export default function RolesPage() {
                   <button
                     type="button"
                     onClick={() => toggleExpand(user.id)}
-                    className="justify-self-start"
+                    className="min-w-0 justify-self-start overflow-hidden text-left"
                   >
-                    <IdPill>{user.id}</IdPill>
+                    <IdPill>{rolePreviewId(user, managedRoles)}</IdPill>
                   </button>
 
-                  <div className="truncate text-[13px] font-semibold text-[#111118]">
+                  <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                     {user.name}
                   </div>
 
-                  <div className="truncate text-[13px] text-[#111118]">
+                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
                     {user.email}
                   </div>
-                  <div className="text-[13px] text-[#111118]">{user.phone}</div>
+                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
+                    {user.phone}
+                  </div>
                   <div>
                     <span className="inline-flex rounded-[6px] bg-id-pill px-2 py-1 text-[12px] font-medium text-[#111118]">
                       {user.type}
@@ -437,7 +454,7 @@ export default function RolesPage() {
                 </div>
 
                 {open ? (
-                  <div className={cn("border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
+                  <div className={cn("col-span-full border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                         {ROLE_PERMISSION_GROUPS.map((group) => (
@@ -492,12 +509,13 @@ export default function RolesPage() {
               </div>
             );
           })}
+          </div>
+          <InfiniteScrollSentinel
+            hasMore={userWindow.hasMore}
+            loadedCount={userWindow.loadedCount}
+            onLoadMore={userWindow.loadMore}
+          />
         </ScrollTable>
-        <InfiniteScrollSentinel
-          hasMore={userWindow.hasMore}
-          loadedCount={userWindow.loadedCount}
-          onLoadMore={userWindow.loadMore}
-        />
         </>
         )}
       </div>
@@ -701,17 +719,30 @@ export default function RolesPage() {
             for (const role of next) {
               const isLocal = role.id.startsWith("role-");
               if (isLocal) {
+                const roleCode = role.id.startsWith("role-")
+                  ? undefined
+                  : publicCode(role.id);
                 void rolesApi
                   .create({
                     name: role.name,
+                    ...(roleCode ? { roleCode } : {}),
                     permissions: [],
+                  })
+                  .then((created) => {
+                    const code = publicCode(created.roleCode);
+                    if (!code || code === role.id) return;
+                    setManagedRoles((current) =>
+                      current.map((entry) =>
+                        entry.id === role.id ? { ...entry, id: code } : entry,
+                      ),
+                    );
                   })
                   .catch((error) => {
                     notifyApiError(error, `Failed to create role "${role.name}".`);
                   });
               } else {
                 void rolesApi
-                  .update(role.id, { name: role.name })
+                  .update(publicCode(role.id) ?? role.id, { name: role.name })
                   .catch((error) => {
                     notifyApiError(error, `Failed to update role "${role.name}".`);
                   });

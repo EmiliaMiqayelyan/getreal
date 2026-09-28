@@ -12,6 +12,7 @@ import type {
   ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 
 export type OrderDemandFilterCriteria = {
   query: string;
@@ -282,7 +283,9 @@ export function sortDeliveredOrders(
   return sorted;
 }
 
-export function groupDeliveredOrders(orders: DeliveredOrder[]): DeliveredGroup[] {
+export function groupDeliveredOrders(
+  orders: DeliveredOrder[],
+): DeliveredGroup[] {
   const weeks = new Map<string, Map<string, DeliveredOrder[]>>();
 
   for (const order of orders) {
@@ -317,30 +320,11 @@ export function getDeliveredEmptyMessage(criteria: DeliveredFilterCriteria) {
   return "No delivered orders yet.";
 }
 
-function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
-}
-
-function csvMoney(value: number) {
+/** Matches the price text in the distributor order tables. */
+function tableMoney(value: number) {
   if (!Number.isFinite(value)) return "—";
   if (Number.isInteger(value)) return `$${value}`;
-  return `$${value.toFixed(2)}`;
-}
-
-function downloadCsv(filename: string, sections: string[][]) {
-  const lines = sections.map((row) => row.map(csvCell).join(","));
-  const blob = new Blob([`\uFEFF${lines.join("\r\n")}`], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
 }
 
 const IN_PROGRESS_HEADERS = [
@@ -373,7 +357,7 @@ const DELIVERED_HEADERS = [
 export function downloadDistributorOrdersCsv(
   inProgress: PlacedOrder[],
   orderList: PreviewRow[],
-  filename = "distributor-orders.csv",
+  filename = exportFilename("distributor-orders"),
 ) {
   const rows: string[][] = [
     ["In Progress"],
@@ -383,7 +367,7 @@ export function downloadDistributorOrdersCsv(
       order.distributor,
       order.orderDate || "—",
       order.deliveryDate || "—",
-      csvMoney(order.totalPrice),
+      tableMoney(order.totalPrice),
     ]),
     [],
     ["Order List"],
@@ -396,13 +380,13 @@ export function downloadDistributorOrdersCsv(
       row.dateReceivingBy || "—",
     ]),
   ];
-  downloadCsv(filename, rows);
+  downloadCsvFile(filename, rows);
 }
 
 /** CSV of the Delivered tab, including the week and day headings. */
 export function downloadDeliveredOrdersCsv(
   groups: DeliveredGroup[],
-  filename = "delivered-orders.csv",
+  filename = exportFilename("delivered-orders"),
 ) {
   const rows: string[][] = [[...DELIVERED_HEADERS]];
   for (const group of groups) {
@@ -415,10 +399,10 @@ export function downloadDeliveredOrdersCsv(
           order.distributor,
           order.orderDate || "—",
           order.deliveryDate || "—",
-          csvMoney(order.totalPrice),
+          tableMoney(order.totalPrice),
         ]);
       }
     }
   }
-  downloadCsv(filename, rows);
+  downloadCsvFile(filename, rows);
 }

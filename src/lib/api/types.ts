@@ -8,6 +8,7 @@ export type ApiEnvelope<T> = {
 
 export type ApiProduct = {
   id?: string;
+  /** Business code, e.g. PR-A724549F. This is the public product id. */
   productId?: string;
   itemId?: string;
   merchandisingName?: string;
@@ -28,6 +29,7 @@ export type ApiProduct = {
 
 export type ApiCategory = {
   id?: string;
+  categoryCode?: string;
   name?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -35,6 +37,7 @@ export type ApiCategory = {
 
 export type ApiSubcategory = {
   id?: string;
+  subcategoryCode?: string;
   name?: string;
   categoryId?: string;
   category?: string | { id?: string; name?: string };
@@ -129,9 +132,13 @@ export type ApiSource = {
 
 export type ApiInventory = {
   id?: string;
+  inventoryCode?: string;
   itemId?: string;
   quantity?: number;
   location?: string | null;
+  distributorOrderId?: string | null;
+  expirationDate?: string | null;
+  status?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -144,6 +151,8 @@ export type ApiOrderItem = {
 
 export type ApiOrder = {
   id?: string;
+  orderCode?: string;
+  code?: string;
   type?: string;
   status?: string;
   distributorId?: string;
@@ -166,6 +175,12 @@ export type ApiChartPoint = {
 
 export type ApiUser = {
   id?: string;
+  userCode?: string;
+  roleCode?: string;
+  distributorCode?: string;
+  /** Public customer id shown in the Customers ID column. */
+  customerCode?: string;
+  distributor?: { distributorCode?: string; id?: string; name?: string } | string;
   email?: string;
   name?: string;
   role?: string;
@@ -184,11 +199,44 @@ export type ApiUser = {
   heardFrom?: string | null;
 };
 
+export type ApiRoleUser = {
+  id?: string;
+  userId?: string;
+  userCode?: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+};
+
+/** One roles-list row: a role plus the user assigned to it. */
 export type ApiRole = {
   id?: string;
+  roleId?: string;
+  roleCode?: string;
   name?: string;
+  roleName?: string;
   description?: string;
   permissions?: string[];
+  user?: ApiRoleUser | null;
+};
+
+export type ApiNotificationRule = {
+  id?: string;
+  notificationRuleCode?: string;
+  ruleCode?: string;
+  code?: string;
+  /** Event path that fires the rule, e.g. `/api/v1/orders`. */
+  action?: string;
+  actionEndpoint?: string;
+  /** HTTP method that fires the rule. */
+  httpMethod?: string;
+  triggerMethod?: string;
+  title?: string;
+  subtext?: string;
+  scheduleDelay?: number | string;
+  scheduleUnit?: string;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type LoginResponse = {

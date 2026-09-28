@@ -1,4 +1,5 @@
 import type { Item } from "@/types/item";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 
 const PLACEHOLDER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="12" fill="#F3E6A8"/><path d="M28 62l12-16 10 12 8-8 14 12H28z" fill="#D4C56A"/><circle cx="38" cy="36" r="6" fill="#D4C56A"/></svg>`;
 
@@ -25,20 +26,13 @@ export function nextItemId(rows: Item[]) {
 const ITEM_EXPORT_HEADERS = [
   "Item ID",
   "Photo",
-  "Name",
-  "Description",
+  "Name / Description",
   "Category",
   "Sub-Category",
   "Sale Price",
-  "Unit",
   "Source",
   "Distributor",
 ] as const;
-
-function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
-}
 
 function itemPhotoExportValue(url: string | undefined) {
   if (!url || url.startsWith("data:")) return "—";
@@ -50,36 +44,20 @@ function itemPhotoExportValue(url: string | undefined) {
 export function downloadItemsCsv(
   items: Item[],
   salePrice: (item: Item) => string,
-  filename = "items.csv",
+  filename = exportFilename("items"),
 ) {
-  const lines = [
-    ITEM_EXPORT_HEADERS.join(","),
-    ...items.map((item) =>
-      [
-        item.id,
-        itemPhotoExportValue(item.photos[0]?.url),
-        getItemDisplayName(item),
-        item.description.trim() || "—",
-        item.category || "—",
-        item.subcategory?.trim() || "—",
-        salePrice(item),
-        item.singleItemUnit?.trim() || "—",
-        item.source?.trim() || "—",
-        item.distributor?.trim() || "—",
-      ]
-        .map(csvCell)
-        .join(","),
-    ),
+  const rows: string[][] = [
+    [...ITEM_EXPORT_HEADERS],
+    ...items.map((item) => [
+      item.id,
+      itemPhotoExportValue(item.photos[0]?.url),
+      `${getItemDisplayName(item)}\n${item.description.trim() || "—"}`,
+      item.category || "—",
+      item.subcategory?.trim() || "—",
+      `${salePrice(item)}\n${item.singleItemUnit?.trim() || "—"}`,
+      item.source?.trim() || "—",
+      item.distributor?.trim() || "—",
+    ]),
   ];
-  const blob = new Blob([`\uFEFF${lines.join("\r\n")}`], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadCsvFile(filename, rows);
 }

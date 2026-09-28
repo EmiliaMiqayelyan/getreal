@@ -1,3 +1,5 @@
+import { publicCode } from "@/utils/entityIds";
+
 import { ApiError, apiRequest } from "./client";
 import { itemsApi } from "./items";
 import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
@@ -49,31 +51,45 @@ async function unlinkRecord(
 }
 
 /** Drop item and source links so the distributor row can be deleted. */
-async function clearDistributorLinks(distributorId: string) {
-  const [items, sources] = await Promise.all([
+async function clearDistributorLinks(distributorRef: string) {
+  const [items, sources, distributors] = await Promise.all([
     itemsApi.list().catch(() => []),
     sourcesApi.list().catch(() => []),
+    distributorsApi.list().catch(() => []),
   ]);
+
+  const match = distributors.find(
+    (entry) =>
+      entry.id === distributorRef || entry.distributorCode === distributorRef,
+  );
+  const refs = new Set(
+    [distributorRef, match?.id, match?.distributorCode].filter(
+      (value): value is string => Boolean(value),
+    ),
+  );
 
   await Promise.all([
     ...items
-      .filter((item) => item.id && item.distributorId === distributorId)
-      .map((item) =>
-        unlinkRecord(
-          () =>
-            itemsApi.update(item.id!, { distributorId: null }),
-          () => itemsApi.remove(item.id!),
-        ),
-      ),
+      .filter((item) => item.id && item.distributorId && refs.has(item.distributorId))
+      .map((item) => {
+        const id = publicCode(item.itemCode) ?? item.id!;
+        return unlinkRecord(
+          () => itemsApi.update(id, { distributorId: null }),
+          () => itemsApi.remove(id),
+        );
+      }),
     ...sources
-      .filter((source) => source.id && source.distributorId === distributorId)
-      .map((source) =>
-        unlinkRecord(
-          () =>
-            sourcesApi.update(source.id!, { distributorId: null }),
-          () => sourcesApi.remove(source.id!),
-        ),
-      ),
+      .filter(
+        (source) =>
+          source.id && source.distributorId && refs.has(source.distributorId),
+      )
+      .map((source) => {
+        const id = publicCode(source.sourceCode) ?? source.id!;
+        return unlinkRecord(
+          () => sourcesApi.update(id, { distributorId: null }),
+          () => sourcesApi.remove(id),
+        );
+      }),
   ]);
 }
 

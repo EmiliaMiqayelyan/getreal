@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -20,9 +20,12 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { PINNED_HEADER } from "@/constants/table";
 import { cn } from "@/utils/cn";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 const MUTED_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
@@ -59,7 +62,7 @@ const ELIGIBLE_PACKERS: Packer[] = [];
 const INITIAL_ORDERS: ManagerOrder[] = [];
 
 const ROW_GRID =
-  "grid grid-cols-[220px_180px_140px_140px_140px] items-center gap-x-5";
+  "grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] items-center gap-x-4 px-4";
 
 const ASSIGN_PANEL_WIDTH = 300;
 
@@ -75,8 +78,13 @@ function AssignPackerMenu({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const menuBox = useFloatingMenu(true, anchorRef, panelRef, {
+    width: ASSIGN_PANEL_WIDTH,
+    maxHeight: 320,
+  });
 
   const filtered = packers.filter((packer) => {
     const q = query.trim().toLowerCase();
@@ -86,27 +94,6 @@ function AssignPackerMenu({
       packer.code.toLowerCase().includes(q)
     );
   });
-
-  useLayoutEffect(() => {
-    function place() {
-      const rect = anchor.getBoundingClientRect();
-      const gap = 6;
-      let left = rect.left;
-      if (left + ASSIGN_PANEL_WIDTH > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - ASSIGN_PANEL_WIDTH);
-      }
-      setPos({ top: rect.bottom + gap, left });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [anchor]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -130,8 +117,9 @@ function AssignPackerMenu({
       ref={panelRef}
       role="listbox"
       aria-label="Assign packer"
-      className="fixed z-[80] max-h-[320px] w-[300px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-      style={{ top: pos.top, left: pos.left }}
+      data-scroll-lock-allow
+      className="ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      style={floatingMenuStyle(menuBox)}
     >
       <div className="sticky top-0 border-b border-[#00000014] bg-white p-2.5">
         <div className="relative">
@@ -308,7 +296,7 @@ export default function PackerManagerPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {
@@ -398,15 +386,13 @@ export default function PackerManagerPage() {
           </div>
         </div>
 
-        <ScrollTable
-          minWidth={860}
-          className="rounded-[12px] border border-[#00000014] bg-white"
-        >
+        <ScrollTable fill minWidth={960} className="mt-4">
           <div
             className={cn(
               ROW_GRID,
               MUTED_HEADER,
-              "border-b border-[#00000014] bg-white px-5 py-2.5",
+              PINNED_HEADER,
+              "h-10 border-b border-[#00000014]",
             )}
           >
             <div>Customer Order ID</div>
@@ -426,7 +412,7 @@ export default function PackerManagerPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "min-h-[88px] border-b border-[#00000014] px-5 py-4 last:border-b-0",
+                  "min-h-[88px] border-b border-[#00000014] py-4 last:border-b-0",
                 )}
               >
                 <div className="min-w-0">
@@ -486,14 +472,13 @@ export default function PackerManagerPage() {
                 </div>
               </div>
             );
-          })}
+            })}
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
         </ScrollTable>
-
-        <InfiniteScrollSentinel
-          hasMore={listWindow.hasMore}
-          loadedCount={listWindow.loadedCount}
-          onLoadMore={listWindow.loadMore}
-        />
 
         {!rows.length ? (
           <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">

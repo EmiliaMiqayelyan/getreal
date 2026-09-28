@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -17,17 +17,25 @@ import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER, ID_PILL, SUB_ROW_PAD } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { inventoryApi, isApiConfigured } from "@/lib/api";
+import type { ApiInventory } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
-import { findByEntityRef } from "@/utils/entityIds";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
+import { isUuid } from "@/utils/entityIds";
+import {
+  buildInventorySections,
+  groupInventorySections,
+  type InventoryProduct,
+} from "@/utils/inventoryView";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
@@ -45,31 +53,6 @@ const LOCATION_OPTIONS = [
   "Dry Shelf 3",
 ] as const;
 
-type InventoryLot = {
-  orderId: string;
-  /** Distributor delivery ID preserved from receiving (DP-xxxx). */
-  deliveryId?: string;
-  distributor: string;
-  source: string;
-  deliveryDate: string;
-  purchased: string;
-  qty: number;
-  unit: string;
-  location: string;
-};
-
-type InventoryProduct = {
-  id: string;
-  name: string;
-  lots: InventoryLot[];
-};
-
-type InventorySection = {
-  title: string;
-  sourceLabel: "FARMER" | "SOURCE" | "API";
-  products: InventoryProduct[];
-};
-
 type LocationSplit = {
   qty: number;
   location: string;
@@ -79,6 +62,7 @@ type StockItem = {
   id: string;
   orderId: string;
   deliveryId?: string;
+  catalogItemId: string;
   itemName: string;
   source?: string;
   purchased?: string;
@@ -86,11 +70,14 @@ type StockItem = {
   unit: string;
   qtyAfterUnpack: string;
   expDate: string;
+  expirationIso: string;
   location: string;
   splits: LocationSplit[];
 };
 
 type StockSection = {
+  id: string;
+  group: string;
   title: string;
   items: StockItem[];
 };
@@ -104,45 +91,9 @@ type ReceivedOrder = {
 };
 
 type DistributeTarget = {
-  sectionTitle: string;
+  sectionId: string;
   itemId: string;
 };
-
-/** Temporary seed - one product per inventory section. */
-const INITIAL_SECTIONS: InventorySection[] = [];
-
-const CATEGORY_GROUPS: { title: string; sections: string[] }[] = [
-  { title: "API", sections: ["API Stock"] },
-  { title: "Protein", sections: ["Meat", "Poultry"] },
-  { title: "Produce", sections: ["Fruits"] },
-];
-
-/** Temporary seed - one received order sample. */
-const RECEIVED_ORDERS: ReceivedOrder[] = [];
-
-const PRODUCT_MATCH: Record<string, string> = {
-  "Angus Chuck Ground Beef": "angus",
-  "Wagyu Aged Tenderloin Steak": "wagyu",
-  "Rib-eye Steak": "ribeye",
-  "NY Strip Steak": "nystrip",
-  "Whole Chicken": "whole-chicken",
-  "Legion Fields Whole Chicken": "whole-chicken",
-  Drumsticks: "drumsticks",
-  Thighs: "thighs",
-  Breasts: "breasts",
-  Blueberries: "blueberries",
-  Strawberries: "strawberries",
-  Lemons: "lemons",
-};
-
-function sectionSourceFor(title: string, itemName: string) {
-  if (title === "Poultry") return "Legion Fields";
-  if (title === "Fruits") {
-    if (itemName === "Lemons") return "Citrus Grove Co";
-    return "Berry Fields Farm";
-  }
-  return "FreshAlley Meat Co";
-}
 
 function stockItemLocation(item: StockItem) {
   const direct = item.location.trim();
@@ -198,12 +149,10 @@ function nextUnusedLocation(used: string[]) {
 }
 
 const GRID =
-  "grid grid-cols-[90px_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3";
+  "grid grid-cols-[minmax(150px,1.15fr)_minmax(130px,1.2fr)_minmax(130px,1.1fr)_minmax(160px,1.2fr)_minmax(88px,0.8fr)_96px_72px_minmax(120px,1fr)] items-center gap-x-4 px-4";
 
-// ORDER ID | ITEM NAME | QTY | UNIT | QTY AFTER UNPACK | EXP. DATE | ENTER LOCATION | gap | distribute | Print Label
-// Only the right-side gap is `1fr` so free width never opens a void between ITEM NAME and QTY.
 const STOCK_GRID =
-  "grid grid-cols-[104px_minmax(160px,240px)_40px_52px_152px_100px_152px_minmax(72px,1fr)_40px_124px] items-center gap-x-4";
+  "grid grid-cols-[300px_minmax(0,1.4fr)_40px_52px_152px_100px_minmax(0,1fr)_minmax(72px,1fr)_40px_124px] items-center gap-x-4 px-4";
 
 function stockTotal(product: InventoryProduct) {
   return product.lots.reduce((sum, lot) => sum + lot.qty, 0);
@@ -329,40 +278,20 @@ function FlatLocationSelect({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const menuBox = useFloatingMenu(open, buttonRef, listRef, {
+    minWidth: 240,
+    maxHeight: 240,
+  });
   const label = value || "Select Location";
-
-  useLayoutEffect(() => {
-    if (!open) return;
-
-    function place() {
-      const button = buttonRef.current;
-      if (!button) return;
-      const rect = button.getBoundingClientRect();
-      const gap = 6;
-      const width = Math.min(
-        Math.max(rect.width, 240),
-        Math.max(160, window.innerWidth - 24),
-      );
-      let left = rect.left;
-      if (left + width > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - width);
-      }
-      setPos({ top: rect.bottom + gap, left, width });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [open]);
+  const options = [
+    ...(value && !(LOCATION_OPTIONS as readonly string[]).includes(value)
+      ? [value]
+      : []),
+    ...LOCATION_OPTIONS,
+  ];
 
   useEffect(() => {
     if (!open) return;
@@ -418,15 +347,16 @@ function FlatLocationSelect({
               ref={listRef}
               role="listbox"
               aria-label="Location"
+              data-scroll-lock-allow
               className={cn(
-                "ui-select-menu fixed z-[80] flex max-h-60 flex-col gap-0",
+                "ui-select-menu fixed z-[80] flex flex-col gap-0",
                 "overflow-x-hidden overflow-y-auto overscroll-contain",
                 "rounded-[8px] border border-[#00000014] bg-white p-0",
                 "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
               )}
-              style={{ top: pos.top, left: pos.left, width: pos.width }}
+              style={floatingMenuStyle(menuBox)}
             >
-              {LOCATION_OPTIONS.map((location) => {
+              {options.map((location) => {
                 const selected = value === location;
                 return (
                   <li
@@ -477,6 +407,7 @@ function SplitModal({
   onChangeSplits,
   onClose,
   onConfirm,
+  confirming = false,
 }: {
   open: boolean;
   title: string;
@@ -487,6 +418,7 @@ function SplitModal({
   onChangeSplits: (next: LocationSplit[]) => void;
   onClose: () => void;
   onConfirm: () => void;
+  confirming?: boolean;
 }) {
   useScrollLock(open);
 
@@ -580,7 +512,7 @@ function SplitModal({
           <Button
             variant="dark"
             onClick={onConfirm}
-            disabled={!canConfirm}
+            disabled={!canConfirm || confirming}
             size="sm"
             className="rounded-[10px] px-5 text-[14px] font-semibold"
           >
@@ -599,19 +531,20 @@ function StockItemsView({
 }: {
   order: ReceivedOrder;
   onClose: () => void;
-  onComplete: (order: ReceivedOrder) => void;
+  onComplete: (order: ReceivedOrder) => Promise<{ ok: boolean; storedIds: string[] }>;
 }) {
   const [draft, setDraft] = useState(order);
   const [distributeTarget, setDistributeTarget] =
     useState<DistributeTarget | null>(null);
   const [distributeSplits, setDistributeSplits] = useState<LocationSplit[]>([]);
   const [storageError, setStorageError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const activeItem =
     distributeTarget == null
       ? null
       : (draft.sections
-          .find((section) => section.title === distributeTarget.sectionTitle)
+          .find((section) => section.id === distributeTarget.sectionId)
           ?.items.find((item) => item.id === distributeTarget.itemId) ?? null);
 
   const distributeTotal = activeItem
@@ -622,15 +555,17 @@ function StockItemsView({
     section.items.every(stockItemReady),
   );
 
-  const groupedSections = CATEGORY_GROUPS.map((group) => ({
-    ...group,
-    sections: draft.sections.filter((section) =>
-      group.sections.includes(section.title),
-    ),
-  })).filter((group) => group.sections.length > 0);
+  const groupedSections = draft.sections.reduce<
+    Array<{ title: string; sections: StockSection[] }>
+  >((groups, section) => {
+    const current = groups.find((group) => group.title === section.group);
+    if (current) current.sections.push(section);
+    else groups.push({ title: section.group, sections: [section] });
+    return groups;
+  }, []);
 
   function updateItem(
-    sectionTitle: string,
+    sectionId: string,
     itemId: string,
     patch: Partial<StockItem>,
   ) {
@@ -638,7 +573,7 @@ function StockItemsView({
     setDraft((current) => ({
       ...current,
       sections: current.sections.map((section) =>
-        section.title !== sectionTitle
+        section.id !== sectionId
           ? section
           : {
               ...section,
@@ -650,8 +585,12 @@ function StockItemsView({
     }));
   }
 
-  function openDistribute(sectionTitle: string, item: StockItem) {
-    const unpack = parseUnpackQty(item.qtyAfterUnpack) || item.qty;
+  function openDistribute(sectionId: string, item: StockItem) {
+    const unpack = parseUnpackQty(item.qtyAfterUnpack);
+    if (unpack <= 0) {
+      setStorageError("Enter Qty After Unpack before distributing this item.");
+      return;
+    }
     const existing =
       item.splits.length > 1
         ? item.splits
@@ -668,14 +607,14 @@ function StockItemsView({
             ]
           : defaultSplits(unpack || 1);
 
-    setDistributeTarget({ sectionTitle, itemId: item.id });
+    setDistributeTarget({ sectionId, itemId: item.id });
     setDistributeSplits(existing);
   }
 
   function confirmDistribute() {
     if (!distributeTarget || !activeItem) return;
 
-    const target = parseUnpackQty(activeItem.qtyAfterUnpack) || activeItem.qty;
+    const target = parseUnpackQty(activeItem.qtyAfterUnpack);
     const valid = distributeSplits.filter(
       (row) => row.qty > 0 && row.location.trim(),
     );
@@ -685,7 +624,7 @@ function StockItemsView({
     setDraft((current) => ({
       ...current,
       sections: current.sections.map((section) => {
-        if (section.title !== distributeTarget.sectionTitle) return section;
+        if (section.id !== distributeTarget.sectionId) return section;
 
         const nextItems: StockItem[] = [];
         for (const item of section.items) {
@@ -710,7 +649,7 @@ function StockItemsView({
     setDistributeTarget(null);
   }
 
-  function handleComplete() {
+  async function handleComplete() {
     const remaining = incompleteStorageCount(draft.sections);
     if (remaining > 0) {
       setStorageError(
@@ -721,29 +660,56 @@ function StockItemsView({
       return;
     }
     setStorageError(null);
-    onComplete(draft);
+    setSaving(true);
+    try {
+      const result = await onComplete(draft);
+      if (result.ok) return;
+      const stored = new Set(result.storedIds);
+      if (stored.size === 0) return;
+      setDraft((current) => ({
+        ...current,
+        sections: current.sections
+          .map((section) => ({
+            ...section,
+            items: section.items.filter((item) => !stored.has(item.id)),
+          }))
+          .filter((section) => section.items.length > 0),
+      }));
+      setStorageError(
+        "Some items were stored. Finish the remaining items to complete this order.",
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header title="Stock Items" />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         <div className="space-y-8">
-          {groupedSections.map((group) => (
+          {groupedSections.map((group) => {
+            const showHeading =
+              group.sections.length > 1 ||
+              group.sections[0]?.title !== group.title;
+            return (
             <div key={group.title}>
-              <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
-                {group.title}
-              </h2>
+              {showHeading ? (
+                <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+                  {group.title}
+                </h2>
+              ) : null}
               <div className="space-y-5">
                 {group.sections.map((section) => (
-                  <div key={section.title}>
-                    <ScrollTable minWidth={1240} className="rounded-[12px]">
+                  <div key={section.id}>
+                    <ScrollTable minWidth={1440} className="rounded-[12px]">
+                      <div>
                       {/* Meta: category | IN STOCK over unpack+exp | DATE RECEIVING BY over print */}
                       <div
                         className={cn(
                           STOCK_GRID,
-                          "h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4",
+                          "h-10 items-center border-b border-[#00000014] bg-[#FBF9F9]",
                         )}
                       >
                         <span className="col-span-2 min-w-0 text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
@@ -774,7 +740,8 @@ function StockItemsView({
                       <div
                         className={cn(
                           STOCK_GRID,
-                          "border-b border-[#00000014] bg-white px-4 py-2",
+                          PINNED_HEADER,
+                          "h-10 border-b border-[#00000014]",
                           TABLE_HEADER,
                         )}
                       >
@@ -804,7 +771,7 @@ function StockItemsView({
                             key={item.id}
                             className={cn(
                               STOCK_GRID,
-                              "group border-b border-[#00000014] bg-white px-4 py-3 text-[13px] text-[#111118] last:border-b-0",
+                              "group border-b border-[#00000014] bg-white py-3 text-[13px] text-[#111118] last:border-b-0",
                               storageError && !rowReady && "bg-[#FFF8F6]",
                             )}
                           >
@@ -812,9 +779,7 @@ function StockItemsView({
                               className={cn(ID_PILL, "justify-self-start")}
                               title={item.orderId}
                             >
-                              <span className="block min-w-0 truncate text-left">
-                                {item.orderId}
-                              </span>
+                              {item.orderId}
                             </span>
                             <span className="min-w-0 truncate font-semibold">
                               {item.itemName}
@@ -825,7 +790,7 @@ function StockItemsView({
                               <Input
                                 value={item.qtyAfterUnpack}
                                 onChange={(event) =>
-                                  updateItem(section.title, item.id, {
+                                  updateItem(section.id, item.id, {
                                     qtyAfterUnpack: event.target.value,
                                     splits: [],
                                   })
@@ -840,7 +805,7 @@ function StockItemsView({
                               <LocationSelect
                                 value={item.location}
                                 onChange={(location) =>
-                                  updateItem(section.title, item.id, {
+                                  updateItem(section.id, item.id, {
                                     location,
                                     splits:
                                       location &&
@@ -864,7 +829,7 @@ function StockItemsView({
                               type="button"
                               aria-label="Distribute item"
                               onClick={() =>
-                                openDistribute(section.title, item)
+                                openDistribute(section.id, item)
                               }
                               className="inline-flex size-9 shrink-0 items-center justify-center justify-self-center rounded-[8px] bg-[#F5F5F3] opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                             >
@@ -891,12 +856,14 @@ function StockItemsView({
                           </div>
                         );
                       })}
+                      </div>
                     </ScrollTable>
                   </div>
                 ))}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -914,15 +881,16 @@ function StockItemsView({
           </button>
           <button
             type="button"
-            onClick={handleComplete}
-            aria-disabled={!canCompleteStorage}
+            onClick={() => void handleComplete()}
+            disabled={saving}
+            aria-disabled={!canCompleteStorage || saving}
             className={cn(
               "inline-flex h-10 items-center rounded-[10px] px-6 text-[14px] font-semibold text-white transition-opacity",
-              !canCompleteStorage && "opacity-50",
+              (!canCompleteStorage || saving) && "opacity-50",
             )}
             style={{ background: ORANGE }}
           >
-            Complete Storage
+            {saving ? "Storing…" : "Complete Storage"}
           </button>
         </div>
       </div>
@@ -943,14 +911,51 @@ function StockItemsView({
 }
 
 type EditLocationTarget = {
-  sectionTitle: string;
+  sectionId: string;
   productId: string;
   lotIndex: number;
 };
 
+function placementsFor(item: StockItem): LocationSplit[] {
+  const unpack = parseUnpackQty(item.qtyAfterUnpack);
+  const splitPlacements = item.splits.filter(
+    (row) => row.qty > 0 && row.location.trim(),
+  );
+  if (splitPlacements.length > 0) return splitPlacements;
+  const location = stockItemLocation(item);
+  return location ? [{ qty: unpack, location }] : [];
+}
+
+function handoffFromRemaining(order: ReceivedOrder) {
+  return {
+    deliveryId: order.id,
+    distributor: order.supplier,
+    receivedAt: order.receivedAt,
+    items: order.sections.flatMap((section) =>
+      section.items.map((item) => ({
+        lineId: item.id,
+        itemId: item.orderId,
+        catalogItemId: item.catalogItemId,
+        itemName: item.itemName,
+        category: section.title,
+        source: item.source ?? "",
+        quantity: item.qty,
+        unit: item.unit,
+        unitPrice: 0,
+        priceLabel: item.purchased ?? "",
+        expiration: item.expirationIso,
+        status: "accepted" as const,
+        qtyAfterUnpack: item.qtyAfterUnpack,
+        location: item.location,
+        splits: item.splits,
+      })),
+    ),
+  };
+}
+
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
-  const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
+  const { pendingHandoffs, removeHandoff, pushHandoff } = useReceivingHandoff();
   const { items: catalogItems, isBootstrapping } = useAppCatalog();
   const { notifyApiError } = useApiFeedback();
 
@@ -959,14 +964,19 @@ export default function InventoryPage() {
   const [categoryFilter, setCategoryFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
-  const [sections, setSections] = useState(INITIAL_SECTIONS);
-  const [seedOrders, setSeedOrders] = useState(RECEIVED_ORDERS);
+  const [inventoryRows, setInventoryRows] = useState<ApiInventory[]>([]);
   const [loading, setLoading] = useState(() => isApiConfigured());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
+  const [savingLocation, setSavingLocation] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
+
+  const sections = useMemo(
+    () => buildInventorySections(catalogItems, inventoryRows),
+    [catalogItems, inventoryRows],
+  );
 
   useEffect(() => {
     if (!isApiConfigured()) {
@@ -980,43 +990,7 @@ export default function InventoryPage() {
     void inventoryApi
       .list()
       .then((rows) => {
-        if (cancelled || rows.length === 0) return;
-
-        const products: InventoryProduct[] = rows.map((row, index) => {
-          const item = findByEntityRef(catalogItems, row.itemId);
-          return {
-            id: row.id ?? `inv-${index}`,
-            name: item?.merchandisingName || item?.name || row.itemId || "Item",
-            lots: [
-              {
-                orderId: row.id ?? `INV-${index}`,
-                distributor: item?.distributor || "—",
-                source: item?.source || "—",
-                deliveryDate: row.updatedAt
-                  ? new Date(row.updatedAt).toLocaleString()
-                  : "",
-                purchased: item
-                  ? `$${item.buyingPrice.toFixed(2)}`
-                  : "—",
-                qty: row.quantity ?? 0,
-                unit: item?.singleItemUnit || "Each",
-                location: row.location || "Unassigned",
-              },
-            ],
-          };
-        });
-
-        setSections((current) => {
-          const withoutApi = current.filter((section) => section.title !== "API Stock");
-          return [
-            {
-              title: "API Stock",
-              sourceLabel: "API",
-              products,
-            },
-            ...withoutApi,
-          ];
-        });
+        if (!cancelled) setInventoryRows(rows);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -1038,6 +1012,7 @@ export default function InventoryPage() {
       const sectionsFromHandoff = handoffToStockSections(
         handoff.deliveryId,
         handoff.items,
+        catalogItems,
       );
       const itemCount = handoff.items.length;
       return {
@@ -1048,15 +1023,9 @@ export default function InventoryPage() {
         sections: sectionsFromHandoff,
       };
     });
-  }, [pendingHandoffs]);
+  }, [catalogItems, pendingHandoffs]);
 
-  const orders = useMemo(() => {
-    const seedIds = new Set(seedOrders.map((order) => order.id));
-    const uniqueHandoffs = handoffOrders.filter(
-      (order) => !seedIds.has(order.id),
-    );
-    return [...uniqueHandoffs, ...seedOrders];
-  }, [handoffOrders, seedOrders]);
+  const orders = handoffOrders;
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
 
@@ -1064,7 +1033,7 @@ export default function InventoryPage() {
     editTarget == null
       ? null
       : (sections
-          .find((section) => section.title === editTarget.sectionTitle)
+          .find((section) => section.id === editTarget.sectionId)
           ?.products.find((product) => product.id === editTarget.productId) ??
         null);
   const editLot =
@@ -1086,7 +1055,7 @@ export default function InventoryPage() {
   );
 
   const categoryOptions = useMemo(
-    () => sections.map((section) => section.title),
+    () => Array.from(new Set(sections.map((section) => section.category))),
     [sections],
   );
 
@@ -1095,12 +1064,15 @@ export default function InventoryPage() {
       Array.from(
         new Set(
           sections.flatMap((section) =>
-            section.products.flatMap((product) =>
-              product.lots.map((lot) => lot.unit),
-            ),
+            section.products.flatMap((product) => [
+              product.unit,
+              ...product.lots.map((lot) => lot.unit),
+            ]),
           ),
         ),
-      ).sort(),
+      )
+        .filter((unit) => unit && unit !== "—")
+        .sort(),
     [sections],
   );
 
@@ -1109,12 +1081,15 @@ export default function InventoryPage() {
       Array.from(
         new Set(
           sections.flatMap((section) =>
-            section.products.flatMap((product) =>
-              product.lots.map((lot) => lot.distributor),
-            ),
+            section.products.flatMap((product) => [
+              product.distributor,
+              ...product.lots.map((lot) => lot.distributor),
+            ]),
           ),
         ),
-      ).sort(),
+      )
+        .filter((distributor) => distributor && distributor !== "—")
+        .sort(),
     [sections],
   );
 
@@ -1137,11 +1112,14 @@ export default function InventoryPage() {
 
           const matchesItem = !itemFilter || product.name === itemFilter;
           const matchesCategory =
-            !categoryFilter || section.title === categoryFilter;
+            !categoryFilter || section.category === categoryFilter;
           const matchesUnit =
-            !unitFilter || product.lots.some((lot) => lot.unit === unitFilter);
+            !unitFilter ||
+            product.unit === unitFilter ||
+            product.lots.some((lot) => lot.unit === unitFilter);
           const matchesDistributor =
             !distributorFilter ||
+            product.distributor === distributorFilter ||
             product.lots.some((lot) => lot.distributor === distributorFilter);
 
           return (
@@ -1156,7 +1134,7 @@ export default function InventoryPage() {
       .filter(
         (section) =>
           section.products.length > 0 &&
-          (!categoryFilter || section.title === categoryFilter),
+          (!categoryFilter || section.category === categoryFilter),
       );
   }, [
     categoryFilter,
@@ -1168,13 +1146,7 @@ export default function InventoryPage() {
   ]);
 
   const filteredGroups = useMemo(
-    () =>
-      CATEGORY_GROUPS.map((group) => ({
-        ...group,
-        sections: filteredSections.filter((section) =>
-          group.sections.includes(section.title),
-        ),
-      })).filter((group) => group.sections.length > 0),
+    () => groupInventorySections(filteredSections),
     [filteredSections],
   );
 
@@ -1204,137 +1176,185 @@ export default function InventoryPage() {
   }
 
   function openEditLocation(
-    sectionTitle: string,
+    sectionId: string,
     productId: string,
     lotIndex: number,
   ) {
-    const section = sections.find((entry) => entry.title === sectionTitle);
+    const section = sections.find((entry) => entry.id === sectionId);
     const product = section?.products.find((entry) => entry.id === productId);
     const lot = product?.lots[lotIndex];
     if (!lot) return;
+    if (lot.qty < 1) {
+      notifyApiError(
+        new Error("This lot has no quantity to move."),
+        "This lot has no quantity to move.",
+      );
+      return;
+    }
 
-    setEditTarget({ sectionTitle, productId, lotIndex });
+    const currentLocation = lot.location === "—" ? "" : lot.location;
+    setEditTarget({ sectionId, productId, lotIndex });
     setEditSplits([
-      { qty: lot.qty, location: lot.location },
-      { qty: 0, location: nextUnusedLocation([lot.location]) },
+      { qty: lot.qty, location: currentLocation },
+      {
+        qty: 0,
+        location: nextUnusedLocation(currentLocation ? [currentLocation] : []),
+      },
     ]);
   }
 
-  function confirmEditLocation() {
+  async function confirmEditLocation() {
     if (!editTarget || !editLot || !editProduct) return;
 
     const valid = editSplits.filter(
-      (row) => row.qty > 0 && row.location.trim(),
+      (row) => row.qty > 0 && row.location.trim() && row.location !== "—",
     );
     if (!valid.length || splitsTotal(valid) !== editLot.qty) return;
 
-    setSections((current) =>
-      current.map((section) => {
-        if (section.title !== editTarget.sectionTitle) return section;
-        return {
-          ...section,
-          products: section.products.map((product) => {
-            if (product.id !== editTarget.productId) return product;
-            const nextLots = [...product.lots];
-            const base = nextLots[editTarget.lotIndex];
-            if (!base) return product;
-            nextLots.splice(
-              editTarget.lotIndex,
-              1,
-              ...valid.map((split) => ({
-                ...base,
-                qty: split.qty,
-                location: split.location,
-              })),
+    if (isApiConfigured() && isUuid(editLot.recordId)) {
+      setSavingLocation(true);
+      let mutated = false;
+      try {
+        const first = valid[0];
+        if (!first) return;
+        await inventoryApi.update(editLot.recordId, {
+          quantity: Math.round(first.qty),
+          location: first.location,
+        });
+        mutated = true;
+        if (valid.length > 1) {
+          if (!isUuid(editLot.catalogItemId)) {
+            throw new Error(
+              "This item is not linked to a catalog item, so the extra location could not be saved.",
             );
-            return { ...product, lots: nextLots };
-          }),
-        };
-      }),
-    );
+          }
+          for (const split of valid.slice(1)) {
+            await inventoryApi.create({
+              itemId: editLot.catalogItemId,
+              quantity: Math.round(split.qty),
+              location: split.location,
+            });
+          }
+        }
+        setInventoryRows(await inventoryApi.list());
+        setEditTarget(null);
+      } catch (error) {
+        notifyApiError(error, "Failed to update location.");
+        if (mutated) {
+          try {
+            setInventoryRows(await inventoryApi.list());
+          } catch {
+            // The first error is already shown.
+          }
+        }
+      } finally {
+        setSavingLocation(false);
+      }
+      return;
+    }
+
+    setInventoryRows((current) => {
+      const next: ApiInventory[] = [];
+      let replaced = false;
+      for (const row of current) {
+        if ((row.id ?? "") !== editLot.recordId) {
+          next.push(row);
+          continue;
+        }
+        replaced = true;
+        valid.forEach((split, index) => {
+          next.push({
+            ...row,
+            id: index === 0 ? row.id : `local-${row.id}-${index}`,
+            quantity: split.qty,
+            location: split.location,
+          });
+        });
+      }
+      return replaced ? next : current;
+    });
     setEditTarget(null);
   }
 
-  function completeStorage(order: ReceivedOrder) {
-    const deliveryDate = order.receivedAt
-      .replace(" · ", ", ")
-      .replace(" PM", "")
-      .replace(" AM", "");
-    const storedProductIds = new Set<string>();
+  async function completeStorage(order: ReceivedOrder) {
+    const ready = order.sections.flatMap((section) =>
+      section.items.filter(stockItemReady),
+    );
+    const storedIds: string[] = [];
 
-    for (const section of order.sections) {
-      for (const item of section.items) {
-        if (!stockItemReady(item)) continue;
-        const productId = PRODUCT_MATCH[item.itemName];
-        if (productId) storedProductIds.add(productId);
+    try {
+      for (const item of ready) {
+        const placements = placementsFor(item);
+        if (!placements.length) continue;
+        if (isApiConfigured()) {
+          if (!isUuid(item.catalogItemId)) {
+            throw new Error(
+              `${item.itemName} is not linked to a catalog item, so it cannot be stored.`,
+            );
+          }
+          for (const placement of placements) {
+            await inventoryApi.create({
+              itemId: item.catalogItemId,
+              quantity: Math.round(placement.qty),
+              location: placement.location,
+            });
+          }
+        } else {
+          setInventoryRows((current) => [
+            ...current,
+            ...placements.map((placement, index) => ({
+              id: `local-${item.id}-${index}-${Date.now()}`,
+              itemId: item.catalogItemId || item.orderId,
+              inventoryCode: item.orderId,
+              quantity: placement.qty,
+              location: placement.location,
+              createdAt: new Date().toISOString(),
+            })),
+          ]);
+        }
+        storedIds.push(item.id);
+      }
+    } catch (error) {
+      notifyApiError(error, "Failed to store items.");
+    }
+
+    if (isApiConfigured() && storedIds.length > 0) {
+      try {
+        setInventoryRows(await inventoryApi.list());
+      } catch (error) {
+        notifyApiError(error, "Stored items, but inventory could not be refreshed.");
       }
     }
 
-    setSeedOrders((current) => current.filter((item) => item.id !== order.id));
-    removeHandoff(order.id);
-
-    setSections((current) => {
-      const next = current.map((section) => ({
-        ...section,
-        products: section.products.map((product) => ({
-          ...product,
-          lots: [...product.lots],
-        })),
-      }));
-
-      for (const section of order.sections) {
-        for (const item of section.items) {
-          if (!stockItemReady(item)) continue;
-
-          const productId = PRODUCT_MATCH[item.itemName];
-          if (!productId) continue;
-
-          const unpack = parseUnpackQty(item.qtyAfterUnpack);
-          // Each Stock Items row is already a location portion after distribute.
-          const splitPlacements = item.splits.filter(
-            (row) => row.qty > 0 && row.location.trim(),
-          );
-          const placements =
-            splitPlacements.length > 0
-              ? splitPlacements
-              : [{ qty: unpack, location: stockItemLocation(item) }];
-
-          for (const inventorySection of next) {
-            const product = inventorySection.products.find(
-              (entry) => entry.id === productId,
-            );
-            if (!product) continue;
-
-            for (const placement of placements) {
-              product.lots.push({
-                orderId: item.orderId,
-                deliveryId: item.deliveryId ?? order.id,
-                distributor: order.supplier,
-                source:
-                  item.source ??
-                  sectionSourceFor(inventorySection.title, item.itemName),
-                deliveryDate,
-                purchased: item.purchased ?? "$125/case",
-                qty: placement.qty,
-                location: placement.location,
-                unit: item.unit === "Case" ? "1lb" : item.unit,
-              });
-            }
-          }
+    const ok = ready.length > 0 && storedIds.length === ready.length;
+    if (ok) {
+      removeHandoff(order.id);
+      setExpanded((current) => {
+        const next = new Set(current);
+        for (const item of ready) {
+          if (item.catalogItemId) next.add(item.catalogItemId);
         }
-      }
+        return next;
+      });
+      setStoringId(null);
+      setShowToast(true);
+      window.setTimeout(() => setShowToast(false), 2500);
+    } else if (storedIds.length > 0) {
+      const stored = new Set(storedIds);
+      pushHandoff(
+        handoffFromRemaining({
+          ...order,
+          sections: order.sections
+            .map((section) => ({
+              ...section,
+              items: section.items.filter((item) => !stored.has(item.id)),
+            }))
+            .filter((section) => section.items.length > 0),
+        }),
+      );
+    }
 
-      return next;
-    });
-
-    setExpanded((current) => {
-      const next = new Set(current);
-      storedProductIds.forEach((id) => next.add(id));
-      return next;
-    });
-    setStoringId(null);
-    setShowToast(true);
-    window.setTimeout(() => setShowToast(false), 2500);
+    return { ok, storedIds };
   }
 
   if (activeOrder) {
@@ -1409,7 +1429,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] px-4 pt-8 pb-5 md:px-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] px-4 pt-8 pb-5 md:px-7">
         {orders.length ? (
           <div className="mb-5 space-y-2.5">
             {orders.map((order) => (
@@ -1463,27 +1483,45 @@ export default function InventoryPage() {
               .filter((section) => section.products.length > 0);
             if (sections.length === 0) return null;
 
+            const showHeading =
+              sections.length > 1 || sections[0]?.title !== group.title;
+
             return (
             <section key={group.title}>
-              <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
-                {group.title}
-              </h2>
+              {showHeading ? (
+                <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+                  {group.title}
+                </h2>
+              ) : null}
 
               <div className="space-y-5">
                 {sections.map((section) => (
-                  <div key={section.title}>
-                    <ScrollTable minWidth={1100} className="rounded-[12px]">
-                      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-[23px]">
-                        <span className="text-[14px] font-semibold text-[#111118]">
-                          {section.title}
-                        </span>
-                      </div>
-
+                  <div key={section.id}>
+                    <ScrollTable minWidth={1300} className="rounded-[12px]">
                       <div
                         className={cn(
                           GRID,
-                          SUB_ROW_PAD,
-                          "border-b border-[#00000014] bg-white",
+                          "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
+                        )}
+                      >
+                        <span className="col-span-5 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
+                          {section.title}
+                        </span>
+                        <span className={cn(TABLE_HEADER, "text-center")}>
+                          In Stock
+                        </span>
+                        <span />
+                        <span className={cn(TABLE_HEADER, "whitespace-nowrap")}>
+                          Date Receiving By
+                        </span>
+                      </div>
+
+                      <div>
+                      <div
+                        className={cn(
+                          GRID,
+                          PINNED_HEADER,
+                          "h-10 border-b border-[#00000014]",
                           TABLE_HEADER,
                         )}
                       >
@@ -1505,61 +1543,54 @@ export default function InventoryPage() {
                         const isLast = index === section.products.length - 1;
 
                         return (
-                          <div
-                            key={product.id}
-                            className={cn(
-                              !isLast || open
-                                ? "border-b border-[#00000014]"
-                                : "",
-                            )}
-                          >
+                          <div key={product.id} className="contents">
                             <button
                               type="button"
                               onClick={() => toggleExpanded(product.id)}
                               className={cn(
                                 GRID,
-                                SUB_ROW_PAD,
+                                "py-3.5",
                                 "w-full bg-white text-left hover:bg-[#FAFAF8]",
-                                open && "border-b border-[#00000014]",
+                                (!isLast || open) && "border-b border-[#00000014]",
                               )}
                             >
-                              <span className="flex justify-self-start text-[#8A8A8A]">
+                              <span className="col-span-5 flex min-w-0 items-center gap-2 text-[#111118]">
                                 <ChevronDown
                                   size={14}
                                   className={cn(
-                                    "transition-transform",
+                                    "shrink-0 transition-transform",
                                     open
                                       ? "rotate-0 text-[#E25B5B]"
-                                      : "-rotate-90",
+                                      : "-rotate-90 text-[#8A8A8A]",
                                   )}
                                 />
+                                <span className="truncate text-[13px] font-semibold">
+                                  {product.name}
+                                </span>
                               </span>
-                              <div className="col-span-4 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
-                                {product.name}
-                              </div>
-                              <div
+                              <span
                                 className={cn(
-                                  "text-[13px] font-semibold whitespace-nowrap",
+                                  "text-center text-[13px] font-semibold whitespace-nowrap",
                                   total === 0
                                     ? "text-[#E25B5B]"
                                     : "text-[#111118]",
                                 )}
                               >
                                 {total === 0 ? "Empty" : total}
-                              </div>
-                              <div />
-                              <div />
+                              </span>
+                              <span />
+                              <span />
                             </button>
 
                             {open ? (
-                              <div>
+                              <div className="contents">
                                 {product.lots.length ? (
                                   product.lots.map((lot, lotIndex) => (
                                     <div
-                                      key={`${product.id}-${lot.orderId}-${lot.location}-${lotIndex}`}
+                                      key={`${product.id}-${lot.recordId}-${lotIndex}`}
                                       className={cn(
                                         GRID,
-                                        SUB_ROW_PAD,
+                                        "py-3.5",
                                         "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
                                       )}
                                     >
@@ -1567,9 +1598,7 @@ export default function InventoryPage() {
                                         className={cn(ID_PILL, "justify-self-start")}
                                         title={lot.orderId}
                                       >
-                                        <span className="block min-w-0 truncate text-left">
-                                          {lot.orderId}
-                                        </span>
+                                        {lot.orderId}
                                       </span>
                                       <div className="min-w-0 truncate">
                                         {lot.distributor}
@@ -1583,8 +1612,13 @@ export default function InventoryPage() {
                                       <div className="whitespace-nowrap">
                                         {lot.purchased}
                                       </div>
-                                      <div className="font-semibold">
-                                        {lot.qty}
+                                      <div
+                                        className={cn(
+                                          "text-center font-semibold",
+                                          lot.qty === 0 && "text-[#E25B5B]",
+                                        )}
+                                      >
+                                        {lot.qty === 0 ? "Empty" : lot.qty}
                                       </div>
                                       <div className="whitespace-nowrap">
                                         {lot.unit}
@@ -1593,7 +1627,7 @@ export default function InventoryPage() {
                                         location={lot.location}
                                         onEditLocation={() =>
                                           openEditLocation(
-                                            section.title,
+                                            section.id,
                                             product.id,
                                             lotIndex,
                                           )
@@ -1605,7 +1639,7 @@ export default function InventoryPage() {
                                   <div
                                     className={cn(
                                       GRID,
-                                      SUB_ROW_PAD,
+                                      "py-3.5",
                                       "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
                                     )}
                                   >
@@ -1622,6 +1656,7 @@ export default function InventoryPage() {
                           </div>
                         );
                       })}
+                      </div>
                     </ScrollTable>
                   </div>
                 ))}
@@ -1653,8 +1688,11 @@ export default function InventoryPage() {
         confirmLabel="Edit"
         splits={editSplits}
         onChangeSplits={setEditSplits}
-        onClose={() => setEditTarget(null)}
-        onConfirm={confirmEditLocation}
+        onClose={() => {
+          if (!savingLocation) setEditTarget(null);
+        }}
+        onConfirm={() => void confirmEditLocation()}
+        confirming={savingLocation}
       />
 
       {showToast ? (

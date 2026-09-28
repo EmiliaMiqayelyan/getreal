@@ -4,10 +4,12 @@ import { Search, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 import { getItemDisplayName } from "@/utils/items";
 import { validateAddProductForSale } from "@/utils/productForSaleForm";
 
@@ -43,22 +45,14 @@ export function AddProductForSaleModal({
   const [query, setQuery] = useState("");
   const [itemError, setItemError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const menuBox = useFloatingMenu(menuOpen, triggerRef, menuRef, {
+    maxHeight: 372,
+  });
   useScrollLock(open);
-
-  function updateMenuPos() {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    setMenuPos({
-      top: rect.bottom + 6,
-      left: rect.left,
-      width: rect.width,
-    });
-  }
 
   useEffect(() => {
     if (!open) return;
@@ -83,7 +77,6 @@ export function AddProductForSaleModal({
 
   useEffect(() => {
     if (!menuOpen) return;
-    updateMenuPos();
 
     function onPointer(e: MouseEvent) {
       const target = e.target as Node;
@@ -96,18 +89,8 @@ export function AddProductForSaleModal({
       setMenuOpen(false);
     }
 
-    function onReposition() {
-      updateMenuPos();
-    }
-
     document.addEventListener("mousedown", onPointer);
-    window.addEventListener("resize", onReposition);
-    window.addEventListener("scroll", onReposition, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointer);
-      window.removeEventListener("resize", onReposition);
-      window.removeEventListener("scroll", onReposition, true);
-    };
+    return () => document.removeEventListener("mousedown", onPointer);
   }, [menuOpen]);
 
   useEffect(() => {
@@ -233,15 +216,7 @@ export function AddProductForSaleModal({
             <button
               ref={triggerRef}
               type="button"
-              onClick={() => {
-                setMenuOpen((v) => {
-                  const next = !v;
-                  if (next) {
-                    window.requestAnimationFrame(updateMenuPos);
-                  }
-                  return next;
-                });
-              }}
+              onClick={() => setMenuOpen((v) => !v)}
               className={cn(
                 "flex h-11 w-full cursor-pointer items-center justify-between rounded-[8px] border bg-white px-3 text-left text-[14px] transition-colors",
                 itemError
@@ -323,14 +298,10 @@ export function AddProductForSaleModal({
         <div
           ref={menuRef}
           data-scroll-lock-allow
-          className="fixed z-[60] overflow-hidden rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-          style={{
-            top: menuPos.top,
-            left: menuPos.left,
-            width: menuPos.width,
-          }}
+          className="ui-select-menu fixed z-[60] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+          style={floatingMenuStyle(menuBox)}
         >
-          <div className="border-b border-[#00000014] p-2">
+          <div className="sticky top-0 border-b border-[#00000014] bg-white p-2">
             <div className="relative">
               <Search
                 size={INPUT_LEADING_ICON_SIZE}
@@ -346,7 +317,7 @@ export function AddProductForSaleModal({
               />
             </div>
           </div>
-          <ul className="max-h-[320px] overflow-y-auto py-1">
+          <ul className="py-1">
             {filtered.length === 0 ? (
               <li className="px-3 py-3 text-[13px] text-[#8A8A8A]">
                 No items found

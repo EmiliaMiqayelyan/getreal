@@ -1,10 +1,15 @@
 export type Source = {
   id: string;
-  /** Backend record UUID when known; used for API paths and FK payloads. */
+  /** Backend record UUID when known. API paths use the business code in `id`. */
   recordId?: string;
   name: string;
   location: string;
   fullAddress: string;
+  street?: string;
+  apt?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
   distributor: string;
   distributorId?: string;
   description: string;

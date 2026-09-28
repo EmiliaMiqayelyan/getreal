@@ -20,6 +20,12 @@ export type ReceivingHandoffLine = {
   status: ReceivingLineStatus;
   reason?: ReceivingRejectReason;
   photoUrl?: string;
+  /** Catalog UUID when the line was rebuilt from an in-progress stock draft. */
+  catalogItemId?: string;
+  /** Preserved when a stock session is saved back onto the handoff. */
+  qtyAfterUnpack?: string;
+  location?: string;
+  splits?: Array<{ qty: number; location: string }>;
 };
 
 /** Payload handed from Distributor Receiving → Inventory (accepted lines only). */

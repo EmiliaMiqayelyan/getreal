@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   Check,
@@ -22,13 +22,15 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
-import { TABLE_HEADER } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 const ORANGE = "#F57850";
 const PACKED_GREEN = "#3AA149";
@@ -125,8 +127,13 @@ function SourcePicker({
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef(anchor);
+  anchorRef.current = anchor;
+  const menuBox = useFloatingMenu(true, anchorRef, panelRef, {
+    width: SOURCE_PANEL_WIDTH,
+    maxHeight: 320,
+  });
 
   const filtered = options.filter((option) => {
     const q = query.trim().toLowerCase();
@@ -136,27 +143,6 @@ function SourcePicker({
       option.source.toLowerCase().includes(q)
     );
   });
-
-  useLayoutEffect(() => {
-    function place() {
-      const rect = anchor.getBoundingClientRect();
-      const gap = 6;
-      let left = rect.left;
-      if (left + SOURCE_PANEL_WIDTH > window.innerWidth - 12) {
-        left = Math.max(12, rect.right - SOURCE_PANEL_WIDTH);
-      }
-      setPos({ top: rect.bottom + gap, left });
-    }
-
-    place();
-    requestAnimationFrame(place);
-    window.addEventListener("resize", place);
-    window.addEventListener("scroll", place, true);
-    return () => {
-      window.removeEventListener("resize", place);
-      window.removeEventListener("scroll", place, true);
-    };
-  }, [anchor]);
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -180,8 +166,9 @@ function SourcePicker({
       ref={panelRef}
       role="listbox"
       aria-label="Distributor / Source"
-      className="fixed z-[80] max-h-[320px] w-[460px] overflow-hidden overflow-y-auto rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
-      style={{ top: pos.top, left: pos.left }}
+      data-scroll-lock-allow
+      className="ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
+      style={floatingMenuStyle(menuBox)}
     >
       <div className="sticky top-0 bg-white px-3 pt-3 pb-2">
         <div className="relative">
@@ -286,8 +273,7 @@ function PackingDetail({
     });
   }
 
-  const th = cn("px-0 py-2.5 text-left", TABLE_HEADER);
-  const td = "px-0 py-3.5 align-middle text-[13px] text-[#111118]";
+  const cell = "min-w-0 text-[13px] text-[#111118]";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -311,7 +297,7 @@ function PackingDetail({
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
         {validationError ? (
           <div className="mb-4 rounded-[10px] border border-[#F5C2C2] bg-[#FDECEC] px-4 py-3 text-[13px] font-medium text-[#E25B5B]">
             {validationError}
@@ -321,63 +307,56 @@ function PackingDetail({
         <div className="space-y-5">
           {groups.map(([title, items]) => (
             <section key={title}>
-              <ScrollTable minWidth={960} className="rounded-[10px]">
+              <ScrollTable minWidth={1100}>
                 <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
                   <span className="text-[14px] font-semibold text-[#111118]">
                     {title}
                   </span>
                 </div>
-                <table className="w-full table-fixed border-collapse">
-                  <colgroup>
-                    <col style={{ width: "22%" }} />
-                    <col style={{ width: "48px" }} />
-                    <col style={{ width: "18%" }} />
-                    <col style={{ width: "11%" }} />
-                    <col style={{ width: "11%" }} />
-                    <col style={{ width: "10%" }} />
-                    <col style={{ width: "12%" }} />
-                    <col />
-                    <col style={{ width: "110px" }} />
-                  </colgroup>
-                  <thead>
-                    <tr className="border-b border-[#00000014]">
-                      <th className={cn(th, "pl-5 pr-3")}>Item Name</th>
-                      <th className={cn(th, "pr-3")}>Qty</th>
-                      <th className={cn(th, "pr-3")}>
-                        Distributor / Source
-                        <span className="text-danger"> *</span>
-                      </th>
-                      <th className={cn(th, "pr-3")}>Exp Date</th>
-                      <th className={cn(th, "pr-3")}>Item ID</th>
-                      <th className={cn(th, "pr-3")}>Location</th>
-                      <th className={cn(th, "pr-3")}>
-                        Cooler ID
-                        <span className="text-danger"> *</span>
-                      </th>
-                      <th aria-hidden className="p-0" />
-                      <th className={cn(th, "pr-5")} />
-                    </tr>
-                  </thead>
-                  <tbody>
+                <div
+                  className={cn(
+                    PACK_COLUMNS,
+                    TABLE_HEADER,
+                    PINNED_HEADER,
+                    "h-10 border-b border-[#00000014]",
+                  )}
+                >
+                  <div>Item Name</div>
+                  <div>Qty</div>
+                  <div>
+                    Distributor / Source
+                    <span className="text-danger"> *</span>
+                  </div>
+                  <div>Exp Date</div>
+                  <div>Item ID</div>
+                  <div>Location</div>
+                  <div>
+                    Cooler ID
+                    <span className="text-danger"> *</span>
+                  </div>
+                  <div aria-hidden />
+                </div>
+                <div>
                     {items.map((item) => {
                       const canPack =
                         Boolean(item.selected) &&
                         coolerAssigned(item.coolerId);
 
                       return (
-                        <tr
+                        <div
                           key={item.id}
-                          className="border-b border-[#00000014] last:border-b-0"
+                          className={cn(
+                            PACK_COLUMNS,
+                            "border-b border-[#00000014] py-3.5 last:border-b-0",
+                          )}
                         >
-                          <td className={cn(td, "pl-5 pr-3")}>
-                            <span className="block truncate font-medium">
-                              {item.name}
-                            </span>
-                          </td>
-                          <td className={cn(td, "pr-3 font-semibold")}>
+                          <div className={cn(cell, "truncate font-medium")}>
+                            {item.name}
+                          </div>
+                          <div className={cn(cell, "font-semibold")}>
                             {item.qty}
-                          </td>
-                          <td className={cn(td, "pr-3")}>
+                          </div>
+                          <div className={cell}>
                             <button
                               type="button"
                               onClick={(event) => {
@@ -422,16 +401,14 @@ function PackingDetail({
                                 }}
                               />
                             ) : null}
-                          </td>
-                          <td className={cn(td, "pr-3")}>
+                          </div>
+                          <div className={cn(cell, "truncate")}>
                             {item.selected?.expDate ?? ""}
-                          </td>
-                          <td className={cn(td, "pr-3")}>
-                            <span className="block truncate">
-                              {item.selected?.itemId ?? ""}
-                            </span>
-                          </td>
-                          <td className={cn(td, "pr-3")}>
+                          </div>
+                          <div className={cn(cell, "truncate")}>
+                            {item.selected?.itemId ?? ""}
+                          </div>
+                          <div className={cell}>
                             <LocationHover
                               className="text-[13px] text-[#111118]"
                               fullAddress={item.selected?.location ?? ""}
@@ -439,8 +416,8 @@ function PackingDetail({
                             >
                               {item.selected?.location ?? ""}
                             </LocationHover>
-                          </td>
-                          <td className={cn(td, "pr-3")}>
+                          </div>
+                          <div className={cell}>
                             <Select
                               value={item.coolerId}
                               onChange={(value) =>
@@ -468,9 +445,8 @@ function PackingDetail({
                                 })),
                               ]}
                             />
-                          </td>
-                          <td aria-hidden className="p-0" />
-                          <td className={cn(td, "pr-5 text-right")}>
+                          </div>
+                          <div className="text-right">
                             {item.packed ? (
                               <span className="inline-flex items-center justify-end gap-2">
                                 <span className="text-[13px] font-medium text-[#2F8F4E]">
@@ -492,12 +468,11 @@ function PackingDetail({
                                 Item Packed
                               </button>
                             )}
-                          </td>
-                        </tr>
+                          </div>
+                        </div>
                       );
                     })}
-                  </tbody>
-                </table>
+                </div>
               </ScrollTable>
             </section>
           ))}
@@ -537,9 +512,11 @@ function PackingDetail({
   );
 }
 
-// Fixed tracks so columns stay packed left (no fr stretch gaps)
 const ROW_GRID =
-  "grid grid-cols-[220px_260px_160px_260px] items-center gap-x-5";
+  "grid grid-cols-[minmax(0,1.3fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1fr)] items-center gap-x-4 px-4";
+
+const PACK_COLUMNS =
+  "grid grid-cols-[minmax(0,1.3fr)_48px_minmax(0,1.2fr)_minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,0.7fr)_minmax(0,0.9fr)_120px] items-center gap-x-4 px-4";
 
 export default function PackingCoolersPage() {
   useDocumentTitle("Cooler Packing");
@@ -697,7 +674,7 @@ export default function PackingCoolersPage() {
         }
       />
 
-      <div className="flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {DELIVERY_CHIPS.map((chip) => {
@@ -802,12 +779,13 @@ export default function PackingCoolersPage() {
           </div>
         </div>
 
-        <ScrollTable minWidth={860} className="rounded-[12px] border border-[#00000014] bg-white">
+        <ScrollTable fill minWidth={960} className="mt-4">
           <div
             className={cn(
               ROW_GRID,
               MUTED_HEADER,
-              "border-b border-[#00000014] bg-white px-5 py-2.5",
+              PINNED_HEADER,
+              "h-10 border-b border-[#00000014]",
             )}
           >
             <div>Customer Order ID</div>
@@ -825,13 +803,13 @@ export default function PackingCoolersPage() {
                 key={order.id}
                 className={cn(
                   ROW_GRID,
-                  "min-h-[88px] border-b border-[#00000014] px-5 py-4 last:border-b-0",
+                  "min-h-[88px] border-b border-[#00000014] py-4 last:border-b-0",
                 )}
               >
                 <button
                   type="button"
                   onClick={() => openPacking(order)}
-                  className="max-w-[280px] text-left"
+                  className="min-w-0 text-left"
                 >
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
@@ -944,13 +922,12 @@ export default function PackingCoolersPage() {
               </div>
             );
           })}
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
         </ScrollTable>
-
-        <InfiniteScrollSentinel
-          hasMore={listWindow.hasMore}
-          loadedCount={listWindow.loadedCount}
-          onLoadMore={listWindow.loadMore}
-        />
 
         {!filtered.length ? (
           <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">

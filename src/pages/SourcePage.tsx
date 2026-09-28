@@ -8,21 +8,19 @@ import { SourceFilters } from "@/components/sources/SourceFilters";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
-import { TABLE_HEADER } from "@/constants/table";
+import { ScrollTable } from "@/components/ui/ScrollTable";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
-import {
-  isApiConfigured,
-  mapApiSourceToSource,
-  sourcesApi,
-} from "@/lib/api";
+import { isApiConfigured, mapApiSourceToSource, sourcesApi } from "@/lib/api";
 import { toCreateSourcePayload } from "@/lib/api/payloads";
 import type { ExportRequest } from "@/types/export";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
+import { exportFilename } from "@/utils/csvExport";
 import { apiId } from "@/utils/entityIds";
 import {
   filterSources,
@@ -41,17 +39,19 @@ const NOTES_LINK =
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 
 const GRID =
-  "grid grid-cols-[90px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
+  "grid grid-cols-[112px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
 
-function SourcePhoto({ logoUrl, name }: { logoUrl: string | null; name: string }) {
+function SourcePhoto({
+  logoUrl,
+  name,
+}: {
+  logoUrl: string | null;
+  name: string;
+}) {
   return (
     <div className="flex h-[46px] w-[67px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[#F3F3F1]">
       {logoUrl ? (
-        <img
-          src={logoUrl}
-          alt={name}
-          className="size-full object-contain"
-        />
+        <img src={logoUrl} alt={name} className="size-full object-contain" />
       ) : null}
     </div>
   );
@@ -154,10 +154,7 @@ export default function SourcePage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Source | null>(null);
 
-  const locationOptions = useMemo(
-    () => uniqueSourceLocations(rows),
-    [rows],
-  );
+  const locationOptions = useMemo(() => uniqueSourceLocations(rows), [rows]);
 
   const distributorOptions = useMemo(() => {
     const names = new Set([
@@ -228,7 +225,12 @@ export default function SourcePage() {
             onAdd={openCreate}
             onExport={async (request: ExportRequest) => {
               const source = request.scope === "all" ? rows : filtered;
-              downloadSourcesCsv(source);
+              downloadSourcesCsv(
+                source,
+                exportFilename(
+                  request.scope === "all" ? "sources-all" : "sources",
+                ),
+              );
             }}
           />
         }
@@ -239,125 +241,133 @@ export default function SourcePage() {
           <AppLoader variant="table" label="Loading sources" />
         ) : (
           <>
-        <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
-          {filtered.length === 0 ? (
-            <EmptyStateBox variant="solid" className="rounded-[12px] px-4 py-10 text-[13px]">
-              No sources found
-            </EmptyStateBox>
-          ) : null}
-          {listWindow.visible.map((row) => (
-            <div
-              key={row.id}
-              className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                  <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
-                  <div className="min-w-0">
+            <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
+              {filtered.length === 0 ? (
+                <EmptyStateBox
+                  variant="solid"
+                  className="rounded-[12px] px-4 py-10 text-[13px]"
+                >
+                  No sources found
+                </EmptyStateBox>
+              ) : null}
+              {listWindow.visible.map((row) => (
+                <div
+                  key={row.id}
+                  className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
+                      <div className="min-w-0">
+                        <IdPill>{row.id}</IdPill>
+                        <div className={cn(BODY, "mt-2 truncate")}>
+                          {row.name}
+                        </div>
+                        <LocationHover
+                          className={cn(BODY, "mt-1")}
+                          fullAddress={getSourceFullAddress(row)}
+                        >
+                          {getSourceLocation(row)}
+                        </LocationHover>
+                        <div className={cn(BODY, "mt-0.5 truncate")}>
+                          {getSourceDistributorDisplay(row)}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={EDIT_LINK}
+                    >
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <InfiniteScrollSentinel
+                hasMore={listWindow.hasMore}
+                loadedCount={listWindow.loadedCount}
+                onLoadMore={listWindow.loadMore}
+              />
+            </div>
+
+            <ScrollTable fill minWidth={860} className="hidden md:block">
+              <div
+                className={cn(
+                  GRID,
+                  TABLE_HEADER,
+                  PINNED_HEADER,
+                  "h-10 border-b border-[#00000014] px-4",
+                )}
+              >
+                <div>Source ID</div>
+                <div>Photo</div>
+                <div className="pl-3">Name</div>
+                <div>Location</div>
+                <div>Distributor</div>
+                <div>Description</div>
+                <div aria-hidden />
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="col-span-full">
+                  <EmptyStateBox
+                    variant="solid"
+                    className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
+                  >
+                    No sources found
+                  </EmptyStateBox>
+                </div>
+              ) : null}
+
+              {listWindow.visible.map((row, index) => {
+                const isLast = index === listWindow.visible.length - 1;
+
+                return (
+                  <div
+                    key={row.id}
+                    className={cn(
+                      GRID,
+                      "h-[78px] px-4",
+                      !isLast && "border-b border-[#00000014]",
+                    )}
+                  >
                     <IdPill>{row.id}</IdPill>
-                    <div className={cn(BODY, "mt-2 truncate")}>{row.name}</div>
+
+                    <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
+
+                    <div className={cn(BODY, "min-w-0 truncate pl-3")}>
+                      {row.name}
+                    </div>
                     <LocationHover
-                      className={cn(BODY, "mt-1")}
+                      className={BODY}
                       fullAddress={getSourceFullAddress(row)}
                     >
                       {getSourceLocation(row)}
                     </LocationHover>
-                    <div className={cn(BODY, "mt-0.5 truncate")}>
+                    <div className={cn(BODY, "min-w-0 truncate")}>
                       {getSourceDistributorDisplay(row)}
                     </div>
+                    <DescriptionHover description={row.description} />
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={cn(EDIT_LINK, "justify-self-end")}
+                      aria-label={`Edit ${row.name}`}
+                    >
+                      Edit
+                    </button>
                   </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => openEdit(row)}
-                  className={EDIT_LINK}
-                >
-                  Edit
-                </button>
+                );
+              })}
+              <div className="col-span-full">
+                <InfiniteScrollSentinel
+                  hasMore={listWindow.hasMore}
+                  loadedCount={listWindow.loadedCount}
+                  onLoadMore={listWindow.loadMore}
+                />
               </div>
-            </div>
-          ))}
-          <InfiniteScrollSentinel
-            hasMore={listWindow.hasMore}
-            loadedCount={listWindow.loadedCount}
-            onLoadMore={listWindow.loadMore}
-          />
-        </div>
-
-        <div className="hidden min-h-0 w-full flex-1 overflow-auto rounded-[12px] border border-[#00000014] bg-white md:block">
-          <div className="w-full min-w-[860px]">
-            <div
-              className={cn(
-                GRID,
-                TABLE_HEADER,
-                "sticky top-0 z-20 h-10 border-b border-[#00000014] bg-white px-4",
-              )}
-            >
-              <div>Source ID</div>
-              <div>Photo</div>
-              <div className="pl-3">Name</div>
-              <div>Location</div>
-              <div>Distributor</div>
-              <div>Description</div>
-              <div aria-hidden />
-            </div>
-
-            {filtered.length === 0 ? (
-              <EmptyStateBox
-                variant="solid"
-                className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
-              >
-                No sources found
-              </EmptyStateBox>
-            ) : null}
-
-            {listWindow.visible.map((row, index) => {
-              const isLast = index === listWindow.visible.length - 1;
-
-              return (
-                <div
-                  key={row.id}
-                  className={cn(
-                    GRID,
-                    "h-[78px] px-4",
-                    !isLast && "border-b border-[#00000014]",
-                  )}
-                >
-                  <IdPill>{row.id}</IdPill>
-
-                  <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
-
-                  <div className={cn(BODY, "min-w-0 truncate pl-3")}>
-                    {row.name}
-                  </div>
-                  <LocationHover
-                    className={BODY}
-                    fullAddress={getSourceFullAddress(row)}
-                  >
-                    {getSourceLocation(row)}
-                  </LocationHover>
-                  <div className={cn(BODY, "min-w-0 truncate")}>
-                    {getSourceDistributorDisplay(row)}
-                  </div>
-                  <DescriptionHover description={row.description} />
-                  <button
-                    type="button"
-                    onClick={() => openEdit(row)}
-                    className={cn(EDIT_LINK, "justify-self-end")}
-                    aria-label={`Edit ${row.name}`}
-                  >
-                    Edit
-                  </button>
-                </div>
-              );
-            })}
-            <InfiniteScrollSentinel
-              hasMore={listWindow.hasMore}
-              loadedCount={listWindow.loadedCount}
-              onLoadMore={listWindow.loadMore}
-            />
-          </div>
-        </div>
+            </ScrollTable>
           </>
         )}
       </div>
@@ -372,14 +382,19 @@ export default function SourcePage() {
             if (isApiConfigured()) {
               if (!source.distributorId) {
                 notifyApiError(
-                  new Error("Select a distributor before saving to the server."),
+                  new Error(
+                    "Select a distributor before saving to the server.",
+                  ),
                 );
                 return;
               }
               try {
                 const payload = toCreateSourcePayload(source);
                 if (editing) {
-                  const updated = await sourcesApi.update(apiId(editing), payload);
+                  const updated = await sourcesApi.update(
+                    apiId(editing),
+                    payload,
+                  );
                   const mapped = mapApiSourceToSource(
                     updated,
                     0,
@@ -393,8 +408,14 @@ export default function SourcePage() {
                             ...mapped,
                             id: editing.id,
                             recordId: mapped.recordId ?? editing.recordId,
-                            fullAddress: source.fullAddress || mapped.fullAddress,
+                            fullAddress:
+                              source.fullAddress || mapped.fullAddress,
                             location: source.location || mapped.location,
+                            street: mapped.street || source.street,
+                            apt: mapped.apt || source.apt,
+                            city: mapped.city || source.city,
+                            state: mapped.state || source.state,
+                            zip: mapped.zip || source.zip,
                             logoUrl: source.logoUrl ?? mapped.logoUrl,
                             logoName: source.logoName,
                           }
@@ -414,6 +435,11 @@ export default function SourcePage() {
                       ...mapped,
                       fullAddress: source.fullAddress || mapped.fullAddress,
                       location: source.location || mapped.location,
+                      street: mapped.street || source.street,
+                      apt: mapped.apt || source.apt,
+                      city: mapped.city || source.city,
+                      state: mapped.state || source.state,
+                      zip: mapped.zip || source.zip,
                       logoUrl: source.logoUrl ?? mapped.logoUrl,
                       logoName: source.logoName,
                     },

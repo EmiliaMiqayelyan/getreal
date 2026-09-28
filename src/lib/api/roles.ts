@@ -1,10 +1,18 @@
+import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
+
 import { apiRequest } from "./client";
 import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
 import type { ApiRole } from "./types";
-import { normalizeNamedList, pickNamedEntity } from "./normalize";
+import { normalizePaginatedList, pickNamedEntity } from "./normalize";
+
+export type RolesListParams = {
+  page?: number;
+  limit?: number;
+};
 
 export type CreateRolePayload = {
   name: string;
+  roleCode?: string;
   description?: string;
   permissions: string[];
 };
@@ -16,11 +24,21 @@ export type UpdateRolePayload = {
 };
 
 export const rolesApi = {
-  list() {
-    return apiRequest<unknown>("/roles", {
+  list(params: RolesListParams = {}) {
+    const page = params.page ?? 1;
+    const limit = params.limit ?? DEFAULT_PAGE_LIMIT;
+    const search = new URLSearchParams();
+    search.set("page", String(page));
+    search.set("limit", String(limit));
+    return apiRequest<unknown>(`/roles?${search.toString()}`, {
       cacheTtlMs: CATALOG_LIST_CACHE_MS,
+      preserveEnvelope: true,
     }).then((payload) =>
-      normalizeNamedList<ApiRole>(payload, ["roles", "items", "data", "results"]),
+      normalizePaginatedList<ApiRole>(
+        payload,
+        ["roles", "items", "data", "results"],
+        { page, limit },
+      ),
     );
   },
 

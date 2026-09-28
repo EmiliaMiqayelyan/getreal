@@ -12,7 +12,11 @@ import { CreateManualOrderFlow } from "@/components/orders/CreateManualOrderFlow
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
-import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DateNavButton,
+  CalendarIcon,
+  DATE_NAV_GROUP,
+} from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
   DATE_CHIP_ROW,
@@ -36,14 +40,25 @@ import {
   ORDER_DEMAND_BY_DATE,
   ORDER_LIST_ITEMS,
 } from "@/constants/distributorOrders";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
-import { isApiConfigured, ordersApi } from "@/lib/api";
-import { syncManualDistributorOrder, syncReviewGroupOrder } from "@/lib/api/orderSync";
+import {
+  collectPaginated,
+  isApiConfigured,
+  orderModelId,
+  ordersApi,
+  type ApiOrder,
+} from "@/lib/api";
+import {
+  syncManualDistributorOrder,
+  syncReviewGroupOrder,
+} from "@/lib/api/orderSync";
+import type { Distributor } from "@/types/distributor";
 import type {
   ManualOrderDraft,
   OrderCategory,
@@ -51,9 +66,11 @@ import type {
   ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
+import type { ProductForSale } from "@/types/productForSale";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
-import { findByEntityRef } from "@/utils/entityIds";
+import { exportFilename } from "@/utils/csvExport";
+import { findByEntityRef, publicCode } from "@/utils/entityIds";
 import {
   appendInProgressOrders,
   applyCalculatedQuantitiesForCategory,
@@ -92,6 +109,10 @@ const CHIP_WINDOW_SIZE = 3;
 /** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
 const ORDER_PREP_COLS =
   "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
+const PLACED_ORDER_COLUMNS =
+  "grid grid-cols-[28px_112px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_100px] items-center gap-x-4 px-4";
+const PREVIEW_COLUMNS =
+  "grid grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.3fr)] items-center gap-x-4 px-4";
 
 type View = "list" | "orderList" | "review" | "manual";
 type Tab = "Orders" | "Delivered";
@@ -99,6 +120,83 @@ type Tab = "Orders" | "Delivered";
 function money(value: number) {
   if (Number.isInteger(value)) return `$${value}`;
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
+}
+
+function mapDistributorApiOrder(
+  order: ApiOrder,
+  index: number,
+  catalogs: { distributors: Distributor[]; products: ProductForSale[] },
+  page = 1,
+): PlacedOrder {
+  const distributorName =
+    findByEntityRef(catalogs.distributors, order.distributorId)?.name ??
+    order.distributorId ??
+    "Distributor";
+  const lines = (order.items ?? []).map((line) => {
+    const product = findByEntityRef(catalogs.products, line.productId);
+    return {
+      sku: product
+        ? (publicCode(product.id) ?? product.id)
+        : (publicCode(line.productId) ?? ""),
+      itemName: product?.merchandisingName ?? line.productId ?? "Item",
+      source: product?.source ?? "",
+      quantity: line.quantity ?? 0,
+      price: product?.salesPrice ?? 0,
+      unit: product?.unitOfSales ?? "Each",
+    };
+  });
+  const totalPrice = lines.reduce(
+    (sum, line) => sum + line.price * line.quantity,
+    0,
+  );
+  const orderCode = orderModelId(order, `API-DO-${page}-${index + 1}`);
+  return {
+    id: orderCode,
+    deliveryId: orderCode,
+    distributor: distributorName,
+    orderDate: order.createdAt
+      ? new Date(order.createdAt).toLocaleDateString()
+      : "",
+    deliveryDate: order.deliveryDate
+      ? new Date(order.deliveryDate).toLocaleDateString()
+      : "",
+    totalPrice,
+    items: lines,
+  };
+}
+
+function filterPlacedOrders(
+  orders: PlacedOrder[],
+  criteria: {
+    search: string;
+    productFilter: string;
+    distributorFilter: string;
+  },
+) {
+  const q = criteria.search.trim().toLowerCase();
+  const seen = new Set<string>();
+  return orders.filter((order) => {
+    if (seen.has(order.id)) return false;
+    seen.add(order.id);
+    if (
+      criteria.distributorFilter &&
+      order.distributor !== criteria.distributorFilter
+    ) {
+      return false;
+    }
+    if (
+      criteria.productFilter &&
+      !order.items.some((item) => item.itemName === criteria.productFilter)
+    ) {
+      return false;
+    }
+    if (!q) return true;
+    return (
+      order.distributor.toLowerCase().includes(q) ||
+      order.deliveryId.includes(q) ||
+      order.items.some((item) => item.itemName.toLowerCase().includes(q))
+    );
+  });
 }
 
 function makeRows(dateId: string): WorkingOrderRow[] {
@@ -187,119 +285,111 @@ function ExpandableOrders({
   onToggle: (id: string) => void;
 }) {
   return (
-    <ScrollTable minWidth={920}>
-      <table className="w-full table-fixed border-collapse text-left">
-        <colgroup>
-          <col className="w-10" />
-          <col className="w-[160px]" />
-          <col className="w-[220px]" />
-          <col className="w-[200px]" />
-          <col className="w-[150px]" />
-          <col className="w-[200px]" />
-          <col />
-          <col className="w-[100px]" />
-        </colgroup>
-        <thead>
-          <tr className="border-b border-[#00000014] bg-white text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-            <th className="py-[10px] pl-[23px] font-semibold" />
-            <th className="py-[10px] pr-10 font-semibold">Delivery ID</th>
-            <th className="py-[10px] pr-10 font-semibold">Distributor</th>
-            <th className="py-[10px] pr-10 font-semibold">Order Date</th>
-            <th className="py-[10px] pr-10 font-semibold">Delivery Date</th>
-            <th className="py-[10px] pr-10 pl-6 font-semibold">Total Price</th>
-            <th aria-hidden className="py-[10px]" />
-            <th className="py-[10px] pr-[23px] text-right font-semibold">
-              Invoice
-            </th>
-          </tr>
-        </thead>
-        {orders.map((order, orderIndex) => {
-          const open = expandedId === order.id;
-          return (
-            <tbody
-              key={`${order.id}-${order.deliveryId}-${orderIndex}`}
+    <ScrollTable minWidth={1100}>
+      <div
+        className={cn(
+          PLACED_ORDER_COLUMNS,
+          TABLE_HEADER,
+          PINNED_HEADER,
+          "h-10 border-b border-[#00000014]",
+        )}
+      >
+        <div />
+        <div>Delivery ID</div>
+        <div>Distributor</div>
+        <div>Order Date</div>
+        <div>Delivery Date</div>
+        <div>Total Price</div>
+        <div aria-hidden />
+        <div className="text-right">Invoice</div>
+      </div>
+      {orders.map((order, orderIndex) => {
+        const open = expandedId === order.id;
+        return (
+          <div key={`${order.id}-${order.deliveryId}-${orderIndex}`}>
+            <div
               className={cn(
-                "border-b border-[#00000014]",
+                PLACED_ORDER_COLUMNS,
+                "border-b border-[#00000014] py-3",
                 open && "bg-[#F7F7F5]",
               )}
             >
-              <tr>
-                <td className="py-[10px] pl-[23px] align-middle">
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse" : "Expand"}
-                    onClick={() => onToggle(order.id)}
-                    className="flex items-center justify-center"
+              <button
+                type="button"
+                aria-label={open ? "Collapse" : "Expand"}
+                onClick={() => onToggle(order.id)}
+                className="flex items-center justify-center"
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 shrink-0 transition-transform",
+                    open
+                      ? "rotate-0 text-[#E25B5B]"
+                      : "-rotate-90 text-[#6A6A6A]",
+                  )}
+                />
+              </button>
+              <div className="min-w-0 overflow-hidden">
+                <IdPill>{order.deliveryId}</IdPill>
+              </div>
+              <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                {order.distributor}
+              </div>
+              <div className="text-[13px] whitespace-nowrap text-[#4A4A4A]">
+                {order.orderDate}
+              </div>
+              <div className="text-[13px] whitespace-nowrap text-[#4A4A4A]">
+                {order.deliveryDate}
+              </div>
+              <div className="text-[13px] font-semibold whitespace-nowrap text-[#111118]">
+                {money(order.totalPrice)}
+              </div>
+              <div aria-hidden />
+              <div className="text-right">
+                <button
+                  type="button"
+                  className={LINK}
+                  aria-label={`Download invoice for ${order.distributor}`}
+                  onClick={() => downloadOrderInvoice(order)}
+                >
+                  Download
+                </button>
+              </div>
+            </div>
+            {open
+              ? order.items.map((item, itemIndex) => (
+                  <div
+                    key={`${order.id}-${item.sku}-${itemIndex}`}
+                    className={cn(
+                      PLACED_ORDER_COLUMNS,
+                      "border-b border-[#00000014] bg-[#FBF9F9] py-2.5",
+                    )}
                   >
-                    <ChevronDown
-                      className={cn(
-                        "size-3.5 shrink-0 transition-transform",
-                        open
-                          ? "rotate-0 text-[#E25B5B]"
-                          : "-rotate-90 text-[#6A6A6A]",
-                      )}
-                    />
-                  </button>
-                </td>
-                <td className="py-[10px] pr-10 align-middle">
-                  <IdPill>{order.deliveryId}</IdPill>
-                </td>
-                <td className="truncate py-[10px] pr-10 text-[13px] font-semibold text-[#111118] align-middle">
-                  {order.distributor}
-                </td>
-                <td className="py-[10px] pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
-                  {order.orderDate}
-                </td>
-                <td className="py-[10px] pr-10 text-[13px] text-[#4A4A4A] align-middle whitespace-nowrap">
-                  {order.deliveryDate}
-                </td>
-                <td className="py-[10px] pr-10 pl-6 text-[13px] font-semibold text-[#111118] align-middle whitespace-nowrap">
-                  {money(order.totalPrice)}
-                </td>
-                <td aria-hidden className="py-[10px]" />
-                <td className="py-[10px] pr-[23px] text-right align-middle">
-                  <button
-                    type="button"
-                    className={LINK}
-                    aria-label={`Download invoice for ${order.distributor}`}
-                    onClick={() => downloadOrderInvoice(order)}
-                  >
-                    Download
-                  </button>
-                </td>
-              </tr>
-              {open
-                ? order.items.map((item, itemIndex) => (
-                    <tr
-                      key={`${order.id}-${item.sku}-${itemIndex}`}
-                      className="border-t border-[#00000014] bg-[#FBF9F9]"
-                    >
-                      <td className="py-[10px] pl-[23px]" />
-                      <td className="py-[10px] pr-10 align-middle">
-                        <IdPill>{item.sku}</IdPill>
-                      </td>
-                      <td className="max-w-0 truncate py-[10px] pr-10 text-[13px] font-medium text-[#111118] align-middle">
-                        {item.itemName}
-                      </td>
-                      <td className="max-w-0 truncate py-[10px] pr-10 text-[13px] text-[#8A8A8A] align-middle">
-                        {item.source || "—"}
-                      </td>
-                      <td className="py-[10px] pr-10 text-[13px] font-medium text-[#111118] align-middle whitespace-nowrap">
-                        {item.quantity}x
-                      </td>
-                      <td className="py-[10px] pr-10 pl-6 text-[13px] text-[#111118] align-middle whitespace-nowrap">
-                        {money(item.price)}
-                        {item.unit ? ` / ${item.unit}` : ""}
-                      </td>
-                      <td aria-hidden className="py-[10px]" />
-                      <td className="py-[10px] pr-[23px]" />
-                    </tr>
-                  ))
-                : null}
-            </tbody>
-          );
-        })}
-      </table>
+                    <div />
+                    <div className="min-w-0 overflow-hidden">
+                      <IdPill>{item.sku}</IdPill>
+                    </div>
+                    <div className="min-w-0 truncate text-[13px] font-medium text-[#111118]">
+                      {item.itemName}
+                    </div>
+                    <div className="min-w-0 truncate text-[13px] text-[#8A8A8A]">
+                      {item.source || "—"}
+                    </div>
+                    <div className="text-[13px] font-medium whitespace-nowrap text-[#111118]">
+                      {item.quantity}x
+                    </div>
+                    <div className="text-[13px] whitespace-nowrap text-[#111118]">
+                      {money(item.price)}
+                      {item.unit ? ` / ${item.unit}` : ""}
+                    </div>
+                    <div aria-hidden />
+                    <div />
+                  </div>
+                ))
+              : null}
+          </div>
+        );
+      })}
     </ScrollTable>
   );
 }
@@ -347,7 +437,9 @@ export default function ProductOrdersPage() {
   );
   const [confirmClose, setConfirmClose] = useState(false);
   const [toast, setToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState("Orders created successfully");
+  const [toastMessage, setToastMessage] = useState(
+    "Orders created successfully",
+  );
 
   const deliveryWeekdays = useMemo(
     () => getDeliveryWeekdayIndices(distributors, distributorFilter),
@@ -424,16 +516,16 @@ export default function ProductOrdersPage() {
 
   function selectDeliveryDate(dateId: string) {
     setActiveDeliveryDateId(dateId);
-    const index = deliveryDates.findIndex((date) => toDeliveryDateId(date) === dateId);
+    const index = deliveryDates.findIndex(
+      (date) => toDeliveryDateId(date) === dateId,
+    );
     if (index === -1) return;
     if (index < chipWindowStart) {
       setChipWindowStart(index);
       return;
     }
     if (index >= chipWindowStart + CHIP_WINDOW_SIZE) {
-      setChipWindowStart(
-        Math.max(0, index - CHIP_WINDOW_SIZE + 1),
-      );
+      setChipWindowStart(Math.max(0, index - CHIP_WINDOW_SIZE + 1));
     }
   }
 
@@ -462,28 +554,15 @@ export default function ProductOrdersPage() {
     setChipWindowStart(Math.max(0, fallbackIndex - 1));
   }, [deliveryDates, activeDeliveryDateId]);
 
-  const filteredInProgress = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const seen = new Set<string>();
-    return inProgress.filter((order) => {
-      if (seen.has(order.id)) return false;
-      seen.add(order.id);
-      if (distributorFilter && order.distributor !== distributorFilter)
-        return false;
-      if (
-        productFilter &&
-        !order.items.some((item) => item.itemName === productFilter)
-      ) {
-        return false;
-      }
-      if (!q) return true;
-      return (
-        order.distributor.toLowerCase().includes(q) ||
-        order.deliveryId.includes(q) ||
-        order.items.some((item) => item.itemName.toLowerCase().includes(q))
-      );
-    });
-  }, [inProgress, search, distributorFilter, productFilter]);
+  const filteredInProgress = useMemo(
+    () =>
+      filterPlacedOrders(inProgress, {
+        search,
+        productFilter,
+        distributorFilter,
+      }),
+    [distributorFilter, inProgress, productFilter, search],
+  );
 
   const inProgressWindow = useLazyWindow(
     filteredInProgress,
@@ -545,10 +624,10 @@ export default function ProductOrdersPage() {
       ? Boolean(search.trim() || productFilter || distributorFilter)
       : Boolean(
           search.trim() ||
-            deliveredZipFilter ||
-            deliveredDateFilter ||
-            deliveredStatusFilter ||
-            (deliveredSort !== "newest"),
+          deliveredZipFilter ||
+          deliveredDateFilter ||
+          deliveredStatusFilter ||
+          deliveredSort !== "newest",
         );
 
   const groupedRows = useMemo(() => {
@@ -571,7 +650,10 @@ export default function ProductOrdersPage() {
       ),
     [orderedDistributors, reviewGroups],
   );
-  const grandTotal = reviewGroups.reduce((sum, group) => sum + group.totalPrice, 0);
+  const grandTotal = reviewGroups.reduce(
+    (sum, group) => sum + group.totalPrice,
+    0,
+  );
   const pendingTotal = pendingReviewGroups.reduce(
     (sum, group) => sum + group.totalPrice,
     0,
@@ -614,40 +696,14 @@ export default function ProductOrdersPage() {
         if (remote.length < DEFAULT_PAGE_LIMIT) setRemoteExhausted(true);
         if (remote.length === 0) return;
 
-        const mapped: PlacedOrder[] = remote.map((order, index) => {
-          const distributorName =
-            findByEntityRef(distributors, order.distributorId)?.name ??
-            order.distributorId ??
-            "Distributor";
-          const lines = (order.items ?? []).map((line) => {
-            const product = findByEntityRef(products, line.productId);
-            return {
-              sku: line.productId ?? "",
-              itemName: product?.merchandisingName ?? line.productId ?? "Item",
-              source: product?.source ?? "",
-              quantity: line.quantity ?? 0,
-              price: product?.salesPrice ?? 0,
-              unit: product?.unitOfSales ?? "Each",
-            };
-          });
-          const totalPrice = lines.reduce(
-            (sum, line) => sum + line.price * line.quantity,
-            0,
-          );
-          return {
-            id: order.id ?? `API-DO-${orderPage}-${index + 1}`,
-            deliveryId: order.id ?? `API-DO-${orderPage}-${index + 1}`,
-            distributor: distributorName,
-            orderDate: order.createdAt
-              ? new Date(order.createdAt).toLocaleDateString()
-              : "",
-            deliveryDate: order.deliveryDate
-              ? new Date(order.deliveryDate).toLocaleDateString()
-              : "",
-            totalPrice,
-            items: lines,
-          };
-        });
+        const mapped: PlacedOrder[] = remote.map((order, index) =>
+          mapDistributorApiOrder(
+            order,
+            index,
+            { distributors, products },
+            orderPage,
+          ),
+        );
 
         setInProgress((prev) => appendInProgressOrders(prev, mapped));
       })
@@ -704,9 +760,7 @@ export default function ProductOrdersPage() {
       draft,
       nextDeliveryId(inProgress),
     );
-    setInProgress((prev) =>
-      appendInProgressOrders(prev, [order]),
-    );
+    setInProgress((prev) => appendInProgressOrders(prev, [order]));
     syncManualDistributorOrder(draft, distributors, products, items);
     setExpandedId(order.id);
     showToast("Order created successfully");
@@ -728,7 +782,9 @@ export default function ProductOrdersPage() {
   function submitDistributorOrder(distributor: string) {
     if (orderedDistributors.has(distributor)) return;
 
-    const group = reviewGroups.find((entry) => entry.distributor === distributor);
+    const group = reviewGroups.find(
+      (entry) => entry.distributor === distributor,
+    );
     if (!group) return;
 
     const order = createPlacedOrderFromReviewGroup(
@@ -737,9 +793,7 @@ export default function ProductOrdersPage() {
       expectedDeliveryLabel,
     );
 
-    setInProgress((prev) =>
-      appendInProgressOrders(prev, [order]),
-    );
+    setInProgress((prev) => appendInProgressOrders(prev, [order]));
     syncReviewGroupOrder(group, distributors, products, items);
     setOrderedDistributors((prev) => new Set(prev).add(distributor));
     setExpandedId(order.id);
@@ -764,13 +818,13 @@ export default function ProductOrdersPage() {
       return order;
     });
 
-    setInProgress((prev) =>
-      appendInProgressOrders(prev, created),
-    );
+    setInProgress((prev) => appendInProgressOrders(prev, created));
     for (const group of remaining) {
       syncReviewGroupOrder(group, distributors, products, items);
     }
-    setOrderedDistributors(new Set(reviewGroups.map((group) => group.distributor)));
+    setOrderedDistributors(
+      new Set(reviewGroups.map((group) => group.distributor)),
+    );
     setExpandedId(created[0]?.id ?? null);
     showToast("Orders created successfully");
     resetToList();
@@ -840,19 +894,44 @@ export default function ProductOrdersPage() {
                       recordCount={exportCount}
                       filtersActive={exportFiltersActive}
                       onExport={async (request: ExportRequest) => {
+                        let source = inProgress;
+                        if (isApiConfigured()) {
+                          const remote = await collectPaginated((page, limit) =>
+                            ordersApi.list({
+                              page,
+                              limit,
+                              type: "distributor",
+                            }),
+                          );
+                          const mapped = remote.map((order, index) =>
+                            mapDistributorApiOrder(order, index, {
+                              distributors,
+                              products,
+                            }),
+                          );
+                          source = appendInProgressOrders(mapped, inProgress);
+                        }
                         const orders =
                           request.scope === "all"
-                            ? inProgress.filter(
-                                (order, index, list) =>
-                                  list.findIndex((row) => row.id === order.id) ===
-                                  index,
-                              )
-                            : filteredInProgress;
+                            ? filterPlacedOrders(source, {
+                                search: "",
+                                productFilter: "",
+                                distributorFilter: "",
+                              })
+                            : filterPlacedOrders(source, {
+                                search,
+                                productFilter,
+                                distributorFilter,
+                              });
                         const demand =
                           request.scope === "all"
                             ? Object.values(ORDER_DEMAND_BY_DATE).flat()
                             : filteredPreview;
-                        downloadDistributorOrdersCsv(orders, demand);
+                        const filename =
+                          request.scope === "all"
+                            ? exportFilename("distributor-orders-all")
+                            : `distributor-orders-${activeDeliveryDateId}.csv`;
+                        downloadDistributorOrdersCsv(orders, demand, filename);
                       }}
                       className="w-full sm:w-auto"
                     />
@@ -935,8 +1014,15 @@ export default function ProductOrdersPage() {
                           ? groupDeliveredOrders(
                               sortDeliveredOrders(DELIVERED_ORDERS, "newest"),
                             )
-                          : deliveredGroups;
-                      downloadDeliveredOrdersCsv(groups);
+                          : groupDeliveredOrders(deliveredFlat);
+                      downloadDeliveredOrdersCsv(
+                        groups,
+                        exportFilename(
+                          request.scope === "all"
+                            ? "delivered-orders-all"
+                            : "delivered-orders",
+                        ),
+                      );
                     }}
                     className="w-full sm:ml-auto sm:w-auto"
                   />
@@ -1015,63 +1101,73 @@ export default function ProductOrdersPage() {
                 <AppLoader variant="table" label="Loading orders" />
               ) : (
                 <>
-              {filteredInProgress.length > 0 ? (
-                <section className="mb-8">
-                  <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
-                    In Progress
-                  </h2>
-                  <ExpandableOrders
-                    orders={inProgressWindow.visible}
-                    expandedId={expandedId}
-                    onToggle={(id) =>
-                      setExpandedId((cur) => (cur === id ? null : id))
-                    }
-                  />
-                </section>
-              ) : null}
+                  {filteredInProgress.length > 0 ? (
+                    <section className="mb-8">
+                      <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
+                        In Progress
+                      </h2>
+                      <ExpandableOrders
+                        orders={inProgressWindow.visible}
+                        expandedId={expandedId}
+                        onToggle={(id) =>
+                          setExpandedId((cur) => (cur === id ? null : id))
+                        }
+                      />
+                    </section>
+                  ) : null}
 
-              <section>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
-                    Order List
-                  </h2>
-                  <Button
-                    variant="dark"
-                    onClick={openOrderFlow}
-                    disabled={filteredPreview.length === 0}
-                    size="sm"
-                  >
-                    Order now
-                  </Button>
-                </div>
-                <ScrollTable minWidth={860}>
-                  <div className="grid grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#00000014] bg-[#FAFAF8] px-5 py-2.5 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                    <span>Item Name</span>
-                    <span>Cust. Order Total</span>
-                    <span>In Stock</span>
-                    <span>Quantity Receiving</span>
-                    <span>Date Receiving By</span>
-                  </div>
-                  {filteredPreview.length === 0 ? (
-                    <div className="px-5 py-12 text-center text-[14px] text-[#8A8A8A]">
-                      {getOrderDemandEmptyMessage(orderDemandCriteria)}
-                    </div>
-                  ) : (
-                    previewWindow.visible.map((row) => (
-                      <div
-                        key={row.id}
-                        className="grid min-h-[48px] grid-cols-[2fr_1.1fr_0.8fr_1.2fr_1.3fr] items-center gap-4 border-b border-[#00000014] px-5 text-[13px] font-medium text-[#111118] last:border-b-0"
+                  <section>
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
+                        Order List
+                      </h2>
+                      <Button
+                        variant="dark"
+                        onClick={openOrderFlow}
+                        disabled={filteredPreview.length === 0}
+                        size="sm"
                       >
-                        <span>{row.itemName}</span>
-                        <span>{row.custOrderTotal}</span>
-                        <span>{row.inStock ?? "—"}</span>
-                        <span>{row.qtyReceiving}</span>
-                        <span>{row.dateReceivingBy}</span>
+                        Order now
+                      </Button>
+                    </div>
+                    <ScrollTable minWidth={960}>
+                      <div
+                        className={cn(
+                          PREVIEW_COLUMNS,
+                          TABLE_HEADER,
+                          PINNED_HEADER,
+                          "h-10 border-b border-[#00000014] bg-[#FAFAF8]",
+                        )}
+                      >
+                        <span>Item Name</span>
+                        <span>Cust. Order Total</span>
+                        <span>In Stock</span>
+                        <span>Quantity Receiving</span>
+                        <span>Date Receiving By</span>
                       </div>
-                    ))
-                  )}
-                </ScrollTable>
-              </section>
+                      {filteredPreview.length === 0 ? (
+                        <div className="px-5 py-12 text-center text-[14px] text-[#8A8A8A]">
+                          {getOrderDemandEmptyMessage(orderDemandCriteria)}
+                        </div>
+                      ) : (
+                        previewWindow.visible.map((row) => (
+                          <div
+                            key={row.id}
+                            className={cn(
+                              PREVIEW_COLUMNS,
+                              "min-h-[48px] border-b border-[#00000014] text-[13px] font-medium text-[#111118] last:border-b-0",
+                            )}
+                          >
+                            <span>{row.itemName}</span>
+                            <span>{row.custOrderTotal}</span>
+                            <span>{row.inStock ?? "—"}</span>
+                            <span>{row.qtyReceiving}</span>
+                            <span>{row.dateReceivingBy}</span>
+                          </div>
+                        ))
+                      )}
+                    </ScrollTable>
+                  </section>
                 </>
               )}
             </>
@@ -1222,87 +1318,86 @@ export default function ProductOrdersPage() {
                 <h2 className="mb-3 text-[22px] font-semibold tracking-tight text-[#111118]">
                   {section}
                 </h2>
-                <div className="overflow-x-auto overscroll-x-contain">
-                  <div className="w-full" style={{ minWidth: 980 }}>
-                    <div
-                      className={cn(
-                        "mb-1.5 grid items-center gap-3 px-4",
-                        ORDER_PREP_COLS,
-                      )}
-                    >
-                      <span aria-hidden />
-                      <span aria-hidden />
-                      <span aria-hidden />
-                      <span aria-hidden />
-                      <span aria-hidden />
-                      <span aria-hidden />
-                      <button
-                        type="button"
-                        onClick={() => calculateQty(section)}
-                        className="w-[120px] text-center text-[13px] font-medium text-[#4E7CFF]"
-                      >
-                        Calculate QTY
-                      </button>
-                    </div>
-                    <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white">
+                <div
+                  className={cn(
+                    "mb-1.5 grid items-center gap-x-4 px-4",
+                    ORDER_PREP_COLS,
+                  )}
+                >
+                  <span aria-hidden />
+                  <span aria-hidden />
+                  <span aria-hidden />
+                  <span aria-hidden />
+                  <span aria-hidden />
+                  <span aria-hidden />
+                  <button
+                    type="button"
+                    onClick={() => calculateQty(section)}
+                    className="w-[120px] text-center text-[13px] font-medium text-[#4E7CFF]"
+                  >
+                    Calculate QTY
+                  </button>
+                </div>
+                <ScrollTable minWidth={980}>
+                  <div
+                    className={cn(
+                      "grid items-center gap-x-4 border-b border-[#00000014] px-4",
+                      ORDER_PREP_COLS,
+                      TABLE_HEADER,
+                      PINNED_HEADER,
+                      "h-10",
+                    )}
+                  >
+                    <span>Item Name</span>
+                    <span>Distributor / Source</span>
+                    <span>Price</span>
+                    <span>QTY per Unit</span>
+                    <span>Cust. Order Total</span>
+                    <span>In Stock</span>
+                    <span className="w-[120px] text-center">QTY Needed</span>
+                  </div>
+                  {sectionRows.map((row) => {
+                    const option = row.options[0];
+                    return (
                       <div
+                        key={row.id}
                         className={cn(
-                          "grid gap-3 border-b border-[#00000014] px-4 py-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                          "grid items-center gap-x-4 border-b border-[#00000014] px-4 py-3.5 last:border-b-0",
                           ORDER_PREP_COLS,
                         )}
                       >
-                        <span>Item Name</span>
-                        <span>Distributor / Source</span>
-                        <span>Price</span>
-                        <span>QTY per Unit</span>
-                        <span>Cust. Order Total</span>
-                        <span>In Stock</span>
-                        <span className="w-[120px] text-center">QTY Needed</span>
+                        <span className="min-w-0 truncate text-[14px] text-[#111118]">
+                          {row.itemName}
+                        </span>
+                        <span className="min-w-0 truncate text-[13px] text-[#111118]">
+                          {option
+                            ? `${option.distributor} / ${option.source}`
+                            : "—"}
+                        </span>
+                        <span className="min-w-0 truncate text-[13px] text-[#111118]">
+                          {option
+                            ? `${money(option.price)} / ${option.unit}`
+                            : "—"}
+                        </span>
+                        <span className="text-[13px] text-[#111118]">
+                          {option?.qtyPerUnit ?? "—"}
+                        </span>
+                        <span className="text-[13px] text-[#111118]">
+                          {row.custOrderTotal}
+                        </span>
+                        <span className="text-[13px] text-[#111118]">
+                          {row.inStock ?? "—"}
+                        </span>
+                        <div className="flex w-[120px] justify-center">
+                          <QtyStepper
+                            value={row.quantity}
+                            onChange={(q) => setQty(row.id, q)}
+                          />
+                        </div>
                       </div>
-                      {sectionRows.map((row) => {
-                        const option = row.options[0];
-                        return (
-                          <div
-                            key={row.id}
-                            className={cn(
-                              "grid items-center gap-3 border-b border-[#00000014] px-4 py-3.5 last:border-b-0",
-                              ORDER_PREP_COLS,
-                            )}
-                          >
-                            <span className="min-w-0 truncate text-[14px] text-[#111118]">
-                              {row.itemName}
-                            </span>
-                            <span className="min-w-0 truncate text-[13px] text-[#111118]">
-                              {option
-                                ? `${option.distributor} / ${option.source}`
-                                : "—"}
-                            </span>
-                            <span className="min-w-0 truncate text-[13px] text-[#111118]">
-                              {option
-                                ? `${money(option.price)} / ${option.unit}`
-                                : "—"}
-                            </span>
-                            <span className="text-[13px] text-[#111118]">
-                              {option?.qtyPerUnit ?? "—"}
-                            </span>
-                            <span className="text-[13px] text-[#111118]">
-                              {row.custOrderTotal}
-                            </span>
-                            <span className="text-[13px] text-[#111118]">
-                              {row.inStock ?? "—"}
-                            </span>
-                            <div className="flex w-[120px] justify-center">
-                              <QtyStepper
-                                value={row.quantity}
-                                onChange={(q) => setQty(row.id, q)}
-                              />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
+                    );
+                  })}
+                </ScrollTable>
               </section>
             );
           })}
@@ -1373,10 +1468,9 @@ export default function ProductOrdersPage() {
                                 type="button"
                                 className={LINK}
                                 onClick={() => {
-                                  const placed =
-                                    findPlacedOrderForDistributor(
-                                      group.distributor,
-                                    );
+                                  const placed = findPlacedOrderForDistributor(
+                                    group.distributor,
+                                  );
                                   if (placed) downloadOrderInvoice(placed);
                                 }}
                               >

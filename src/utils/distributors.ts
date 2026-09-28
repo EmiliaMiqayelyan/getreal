@@ -1,8 +1,11 @@
 import type { Distributor, DistributorContact } from "@/types/distributor";
+import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import {
+  formatCityState,
   formatDeliveryLabel,
+  formatFullAddress,
   formatPhoneDisplay,
-  locationFromAddress,
+  parseAddressParts,
   resolveFullAddress,
 } from "@/utils/format";
 
@@ -23,19 +26,43 @@ export function getPrimaryContact(
   return contacts.find((contact) => contact.primary) ?? contacts[0] ?? null;
 }
 
-/** City and state derived from the distributor's saved full address. */
-export function getDistributorLocation(distributor: Distributor) {
-  const address = distributor.fullAddress?.trim();
-  if (address) return locationFromAddress(address);
-  return distributor.location.trim() || "—";
+function cityStateFrom(value: string) {
+  const { city, state } = parseAddressParts(value);
+  return formatCityState(city, state);
 }
 
-/** Street-level address for hover tooltips (falls back to city/state). */
-export function getDistributorFullAddress(distributor: Distributor) {
-  return resolveFullAddress(
-    distributor.fullAddress,
-    getDistributorLocation(distributor),
+/** City and state only, e.g. "Queens, NY". */
+export function getDistributorLocation(distributor: Distributor) {
+  const fromParts = formatCityState(
+    distributor.city ?? "",
+    distributor.state ?? "",
   );
+  if (fromParts) return fromParts;
+
+  const fromAddress = cityStateFrom(distributor.fullAddress ?? "");
+  if (fromAddress) return fromAddress;
+
+  const stored = distributor.location.trim();
+  const fromLocation = cityStateFrom(stored);
+  if (fromLocation) return fromLocation;
+  return stored || "—";
+}
+
+/** Whole address for hover, e.g. "1523 Astoria Blvd, 748, Queens, NY, 11102". */
+export function getDistributorFullAddress(distributor: Distributor) {
+  const composed = formatFullAddress({
+    street: distributor.street,
+    apt: distributor.apt,
+    city: distributor.city,
+    state: distributor.state,
+    zip: distributor.zip,
+  });
+  const stored = distributor.fullAddress?.trim() ?? "";
+  if (composed && stored) {
+    return composed.length >= stored.length ? composed : stored;
+  }
+  if (composed) return composed;
+  return resolveFullAddress(stored, getDistributorLocation(distributor));
 }
 
 export function getPrimaryContactName(distributor: Distributor) {
@@ -99,16 +126,11 @@ const DISTRIBUTOR_EXPORT_HEADERS = [
   "Notes",
 ] as const;
 
-function csvCell(value: string) {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
-}
-
 function distributorExportCells(distributor: Distributor) {
   const delivery = formatDeliveryLabel(distributor.deliveryDays ?? []);
   const deliveryInfo = [delivery.days, delivery.time]
     .filter((part) => part && part !== "—")
-    .join(" ");
+    .join("\n");
   const documents = (distributor.documents ?? [])
     .map((doc) => doc.name.trim())
     .filter(Boolean);
@@ -130,29 +152,12 @@ function distributorExportCells(distributor: Distributor) {
 }
 
 /** CSV of the rows and columns shown on the Distributors screen. */
-export function distributorsToCsv(distributors: Distributor[]) {
-  const lines = [
-    DISTRIBUTOR_EXPORT_HEADERS.join(","),
-    ...distributors.map((distributor) =>
-      distributorExportCells(distributor).map(csvCell).join(","),
-    ),
-  ];
-  return lines.join("\r\n");
-}
-
 export function downloadDistributorsCsv(
   distributors: Distributor[],
-  filename = "distributors.csv",
+  filename = exportFilename("distributors"),
 ) {
-  const blob = new Blob([`\uFEFF${distributorsToCsv(distributors)}`], {
-    type: "text/csv;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadCsvFile(filename, [
+    [...DISTRIBUTOR_EXPORT_HEADERS],
+    ...distributors.map((distributor) => distributorExportCells(distributor)),
+  ]);
 }

@@ -81,6 +81,11 @@ export type ApiRequestOptions = RequestInit & {
   cacheTtlMs?: number;
   /** Skip in-flight / response-cache sharing for this call. */
   dedupe?: boolean;
+  /**
+   * Keep the raw JSON body. List endpoints put `total` next to `data`,
+   * and the default unwrap drops that pagination field.
+   */
+  preserveEnvelope?: boolean;
 };
 
 function withCallerSignal<T>(
@@ -140,6 +145,7 @@ async function executeFetch<T>(
     auth: _auth,
     cacheTtlMs: _cacheTtlMs,
     dedupe: _dedupe,
+    preserveEnvelope,
     signal,
     ...fetchOptions
   } = options;
@@ -212,6 +218,7 @@ async function executeFetch<T>(
     throw new ApiError(message || "Request failed", response.status, json);
   }
 
+  if (preserveEnvelope) return json as T;
   return unwrapData<T>(json);
 }
 

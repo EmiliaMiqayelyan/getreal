@@ -3,10 +3,18 @@ import { useState } from "react";
 import { ChevronDownIcon, ChevronRightIcon } from "@/components/icons";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill, Tag } from "@/components/ui/Badge";
-import { TABLE_HEADER, SUB_ROW_PAD } from "@/constants/table";
+import {
+  DATA_TABLE,
+  PINNED_HEADER,
+  TABLE_HEADER,
+  SUB_ROW_PAD,
+} from "@/constants/table";
 import type { Distributor } from "@/types/distributor";
 import { cn } from "@/utils/cn";
-import { getDistributorFullAddress } from "@/utils/distributors";
+import {
+  getDistributorFullAddress,
+  getDistributorLocation,
+} from "@/utils/distributors";
 import { formatPhoneDisplay, formatPricePerUnit } from "@/utils/format";
 
 type DistributorTableProps = {
@@ -49,45 +57,46 @@ export function DistributorTable({ distributors }: DistributorTableProps) {
   }
 
   return (
-    <div className="bg-surface overflow-hidden rounded-xl">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1100px] border-collapse text-left">
-          <thead>
-            <tr className="bg-surface border-b border-[#00000014]">
-              <th className="w-8 px-4 py-3" aria-hidden />
-              {COLUMNS.map((column) => (
-                <th key={column} className={cn("px-3 py-3", TABLE_HEADER)}>
-                  {column}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {distributors.map((distributor) => {
-              const expanded = expandedIds.has(distributor.id);
+    <div className="bg-surface w-full min-w-[1100px] rounded-xl">
+      <table className={DATA_TABLE}>
+        <thead>
+          <tr className="bg-surface border-b border-[#00000014]">
+            <th className={cn("w-8 px-4 py-3", PINNED_HEADER)} aria-hidden />
+            {COLUMNS.map((column) => (
+              <th
+                key={column}
+                className={cn("px-3 py-3", TABLE_HEADER, PINNED_HEADER)}
+              >
+                {column}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {distributors.map((distributor) => {
+            const expanded = expandedIds.has(distributor.id);
 
-              return (
-                <DistributorRow
-                  key={distributor.id}
-                  distributor={distributor}
-                  expanded={expanded}
-                  onToggle={() => toggleRow(distributor.id)}
-                />
-              );
-            })}
-            {distributors.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={COLUMNS.length + 1}
-                  className="text-muted px-4 py-8 text-center text-sm"
-                >
-                  No distributors found
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+            return (
+              <DistributorRow
+                key={distributor.id}
+                distributor={distributor}
+                expanded={expanded}
+                onToggle={() => toggleRow(distributor.id)}
+              />
+            );
+          })}
+          {distributors.length === 0 ? (
+            <tr>
+              <td
+                colSpan={COLUMNS.length + 1}
+                className="text-muted px-4 py-8 text-center text-sm"
+              >
+                No distributors found
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -160,7 +169,7 @@ function DistributorRow({
             className="text-muted-strong text-sm"
             fullAddress={getDistributorFullAddress(distributor)}
           >
-            {distributor.location}
+            {getDistributorLocation(distributor)}
           </LocationHover>
         </td>
         <td className="text-muted-strong px-3 py-3.5 text-sm">
