@@ -45,7 +45,7 @@ import {
   ordersApi,
   type ApiOrder,
 } from "@/lib/api";
-import { publicCode } from "@/utils/entityIds";
+import { isUuid, publicCode } from "@/utils/entityIds";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -125,11 +125,13 @@ const STEPS_META: { key: TimelineStepKey; header: string }[] = [
   { key: "return", header: "Return" },
 ];
 
-const STEP_API_STATUS: Partial<Record<TimelineStepKey, string>> = {
+const STEP_API_STATUS: Record<TimelineStepKey, string> = {
   requested: "requested",
   packing: "packing",
   onRoute: "on_route",
   delivered: "delivered",
+  coolerPickup: "cooler_pickup",
+  return: "return",
 };
 
 const ORDER_STATUS_DONE_COUNT: Record<string, number> = {
@@ -139,6 +141,8 @@ const ORDER_STATUS_DONE_COUNT: Record<string, number> = {
   loaded: 2,
   on_route: 3,
   delivered: 4,
+  cooler_pickup: 5,
+  return: 6,
   cancelled: 0,
 };
 
@@ -238,8 +242,9 @@ function mapApiOrderToActive(
     customer?.name ||
     publicCode(customer?.distributorCode, order.customerId) ||
     "Customer";
+  const orderCode = orderModelId(order, fallbackId);
   return {
-    id: orderModelId(order, fallbackId),
+    id: orderCode,
     recordId: orderRecordId(order),
     customerName,
     itemCount: itemCount || (order.items?.length ?? 0),
@@ -248,20 +253,18 @@ function mapApiOrderToActive(
     city: "",
     state: "",
     zip: "",
-    orderDate: order.createdAt
-      ? new Date(order.createdAt).toLocaleDateString()
-      : "",
+    orderDate: order.createdAt ? formatOrderStamp(order.createdAt) : "",
     deliveryDate: order.deliveryDate
-      ? new Date(order.deliveryDate).toLocaleDateString()
+      ? formatDeliveryBadge(order.deliveryDate)
       : "",
     deliveryLabel: order.deliveryDate
-      ? new Date(order.deliveryDate).toLocaleDateString()
+      ? formatDeliveryBadge(order.deliveryDate)
       : "",
     paymentStatus: "Pending",
     status: order.status,
     total: 0,
     items: (order.items ?? []).map((line) => ({
-      name: line.productId ?? "Item",
+      name: publicCode(line.productId) ?? orderCode,
       qty: line.quantity ?? 0,
       unit: "Each",
       unitPrice: 0,
@@ -295,16 +298,35 @@ function asRecord(value: unknown) {
   return null;
 }
 
+function parseFlexibleDate(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00`);
+  }
+  return new Date(value);
+}
+
 function formatOrderStamp(value: string) {
-  const date = new Date(value);
+  const date = parseFlexibleDate(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function formatDeliveryBadge(value: string) {
+  const date = parseFlexibleDate(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const datePart = date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
+  return `${datePart}, ${weekday}`;
 }
 
 function weekAndDay(value: string) {
@@ -540,12 +562,14 @@ function HoverCard({
           {step.person ?? order.customerName}
         </div>
         <div className="mt-3 space-y-1.5 border-t border-[#00000014] pt-2">
-          {order.items.map((item) => (
+          {order.items.map((item, itemIndex) => (
             <div
-              key={item.name}
+              key={`${order.id}-${itemIndex}`}
               className="grid grid-cols-[1fr_24px_56px] gap-2 text-[12px] text-[#111118]"
             >
-              <span className="truncate">{item.name}</span>
+              <span className="truncate">
+                {isUuid(item.name) ? order.id : item.name}
+              </span>
               <span className="text-center text-[#8A8A8A]">{item.qty}</span>
               <span className="text-right font-medium">
                 {currency(item.qty * item.unitPrice)}
@@ -738,12 +762,14 @@ function StatusChangeDetails({
           {order.items.length === 0 ? (
             <div className="text-[13px] text-[#8A8A8A]">No line items</div>
           ) : (
-            order.items.map((item) => (
+            order.items.map((item, itemIndex) => (
               <div
-                key={`${item.name}-${item.qty}`}
+                key={`${order.id}-${itemIndex}`}
                 className="grid grid-cols-[1fr_32px_72px] gap-2 text-[13px] text-[#111118]"
               >
-                <span className="truncate">{item.name}</span>
+                <span className="truncate">
+                  {isUuid(item.name) ? order.id : item.name}
+                </span>
                 <span className="text-center text-[#8A8A8A]">{item.qty}</span>
                 <span className="text-right font-medium">
                   {currency(item.qty * item.unitPrice)}
@@ -1031,6 +1057,12 @@ function DayHeaderIcon() {
   );
 }
 
+const DETAIL_LABEL =
+  "text-[11px] font-medium tracking-[0.04em] text-[#9AA0A6] uppercase";
+const DETAIL_VALUE = "mt-1 text-[13px] text-[#111118]";
+const DETAIL_COLUMNS =
+  "grid grid-cols-[minmax(0,1.7fr)_44px_minmax(108px,1fr)_72px] items-center gap-3 px-4";
+
 function OrderDetailPanel({
   order,
   onClose,
@@ -1038,160 +1070,144 @@ function OrderDetailPanel({
   order: CustomerOrderRow;
   onClose: () => void;
 }) {
+  const panelRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof Node && panelRef.current?.contains(target)) return;
+      onCloseRef.current();
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
-      <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
-        <div>
+    <aside
+      ref={panelRef}
+      className="absolute top-[52px] right-0 bottom-0 z-40 flex w-full max-w-[560px] flex-col border-l border-[#ECECEC] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.06)]"
+    >
+      <div className="flex items-start justify-between gap-4 border-b border-[#ECECEC] px-6 pt-4 pb-4">
+        <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <IdPill>{order.id}</IdPill>
             <span className="text-[12px] text-[#8A8A8A]">
-              Ordered: <span className="text-[#111118]">{order.orderDate}</span>
+              Ordered: {order.orderDate || "—"}
             </span>
           </div>
-          <h2 className="mt-2 text-[26px] font-semibold tracking-tight text-[#111118]">
+          <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-tight text-[#111118]">
             {order.customerName}
           </h2>
-          <div
-            className={cn(
-              "mt-2 inline-flex rounded-[6px] px-2 py-1 text-[12px] font-medium",
-              order.paymentStatus === "Paid"
-                ? "bg-[#E8F5EC] text-[#2F8F4E]"
-                : "bg-[#FFF0E8] text-[#E07A4F]",
-            )}
-          >
-            Payment Status: {order.paymentStatus}
-          </div>
         </div>
         <button
           type="button"
           aria-label="Close"
           onClick={onClose}
-          className="hover:bg-background rounded-md p-1 text-[#A9A9A9] hover:text-[#6B6B6B]"
+          className="shrink-0 rounded-md p-1 text-[#A9A9A9] hover:bg-[#F5F5F3] hover:text-[#6B6B6B]"
         >
           <X size={18} />
         </button>
       </div>
 
-      <div className="flex-1 overflow-auto px-5 py-5">
-        <h3 className="mb-3 text-[13px] font-semibold text-[#111118]">
+      <div className="flex-1 overflow-auto px-6 pt-5 pb-6">
+        <h3 className="mb-3 text-[15px] font-semibold text-[#111118]">
           Requested Items
         </h3>
-        <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+        <div className="overflow-hidden rounded-[12px] border border-[#E6E6E8] bg-white">
           <div
             className={cn(
-              "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
-              SUB_ROW_PAD,
+              DETAIL_COLUMNS,
+              "border-b border-[#E6E6E8] bg-[#F7F7F8] py-2.5 text-[11px] font-medium tracking-[0.04em] text-[#9AA0A6] uppercase",
             )}
           >
-            <div>Item / Order ID</div>
+            <div>Order ID</div>
             <div>Qty</div>
             <div>Unit Price</div>
             <div className="text-right">Total</div>
           </div>
-          {order.items.map((item) => (
-            <div
-              key={item.name}
-              className={cn(
-                "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
-                SUB_ROW_PAD,
-              )}
-            >
-              <div className="min-w-0">
-                <div>{item.name}</div>
-                <div className="mt-0.5 font-mono text-[11px] text-[#8A8A8A]">
-                  {order.id}
+          {order.items.map((item, itemIndex) => {
+            const label = isUuid(item.name) ? order.id : item.name;
+            return (
+              <div
+                key={`${order.id}-${itemIndex}`}
+                className={cn(
+                  DETAIL_COLUMNS,
+                  "border-b border-[#E6E6E8] bg-white py-3 text-[13px] text-[#111118]",
+                )}
+              >
+                <div className="min-w-0 break-words">{label}</div>
+                <div>{item.qty}</div>
+                <div className="whitespace-nowrap">
+                  <span>{currency(item.unitPrice)}</span>
+                  {item.unit ? (
+                    <span className="text-[#9AA0A6]"> / {item.unit}</span>
+                  ) : null}
+                </div>
+                <div className="text-right font-bold">
+                  {currency(item.qty * item.unitPrice)}
                 </div>
               </div>
-              <div>{item.qty}</div>
-              <div className="whitespace-nowrap">
-                <span>{currency(item.unitPrice)}</span>
-                <span className="text-[#8A8A8A]"> / {item.unit}</span>
-              </div>
-              <div className="text-right font-bold">
-                {currency(item.qty * item.unitPrice)}
-              </div>
-            </div>
-          ))}
-          <div
-            className={cn(
-              "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
-              SUB_ROW_PAD,
-            )}
-          >
-            <span className="text-[14px] font-semibold">Order Total</span>
-            <span className="text-[18px] font-bold tracking-tight">
+            );
+          })}
+          <div className="flex items-center justify-between bg-white px-4 py-3 text-[#111118]">
+            <span className="text-[13px] font-medium">Order Total</span>
+            <span className="text-[15px] font-bold tracking-tight">
               {currency(order.total)}
             </span>
           </div>
         </div>
 
-        <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
+        <h3 className="mt-6 mb-3 text-[15px] font-semibold text-[#111118]">
           Packing Information
         </h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="flex flex-wrap gap-x-10 gap-y-4">
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-              Packer Assigned
-            </div>
-            <div className="mt-1 text-[13px] text-[#99A1AF]">
-              {order.packerAssigned ?? "—"}
-            </div>
+            <div className={DETAIL_LABEL}>Packer Assigned</div>
+            <div className={DETAIL_VALUE}>{order.packerAssigned || "—"}</div>
           </div>
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-              Cooler ID(s)
-            </div>
-            <div className="mt-1 flex flex-wrap gap-1.5">
+            <div className={DETAIL_LABEL}>Cooler ID</div>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
               {(order.coolerIds ?? []).map((coolerId) => (
                 <IdPill key={coolerId}>{coolerId}</IdPill>
               ))}
               {!order.coolerIds?.length ? (
-                <span className="text-[13px] text-[#99A1AF]">—</span>
+                <span className="text-[14px] text-[#111118]">—</span>
               ) : null}
             </div>
           </div>
         </div>
 
-        <h3 className="mt-6 mb-3 text-[13px] font-semibold text-[#111118]">
+        <h3 className="mt-6 mb-3 text-[15px] font-semibold text-[#111118]">
           Delivery Information
         </h3>
-        <div className="mb-4 inline-flex items-center gap-1.5 rounded-[6px] bg-[#FFF0E8] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
-          <Truck size={12} />
-          {order.deliveryDate}
+        <div className="mb-4 inline-flex rounded-[8px] bg-[#FFF1EB] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
+          {order.deliveryDate || "—"}
         </div>
-        <div className="flex flex-col gap-3 bg-white text-[13px]">
+        <div className="flex flex-col gap-4">
           <div>
-            <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-              Street Address
-            </div>
-            <div className="mt-1 font-bold text-[#111118]">{order.address}</div>
+            <div className={DETAIL_LABEL}>Street Address</div>
+            <div className={DETAIL_VALUE}>{order.address || "—"}</div>
           </div>
           <div className="grid grid-cols-4 gap-4">
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Apt / Unit
-              </div>
-              <div className="mt-1 font-bold text-[#111118]">
-                {order.apt || "—"}
-              </div>
+              <div className={DETAIL_LABEL}>Apt / Unit</div>
+              <div className={DETAIL_VALUE}>{order.apt || "—"}</div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                City
-              </div>
-              <div className="mt-1 font-bold text-[#111118]">{order.city}</div>
+              <div className={DETAIL_LABEL}>City</div>
+              <div className={DETAIL_VALUE}>{order.city || "—"}</div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                State
-              </div>
-              <div className="mt-1 font-bold text-[#111118]">{order.state}</div>
+              <div className={DETAIL_LABEL}>State</div>
+              <div className={DETAIL_VALUE}>{order.state || "—"}</div>
             </div>
             <div>
-              <div className="text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                Zip
-              </div>
-              <div className="mt-1 font-bold text-[#111118]">{order.zip}</div>
+              <div className={DETAIL_LABEL}>Zip</div>
+              <div className={DETAIL_VALUE}>{order.zip || "—"}</div>
             </div>
           </div>
         </div>
@@ -1447,7 +1463,7 @@ export default function CustomerOrdersPage() {
     )?.recordId;
     setStatusSaving(true);
     try {
-      if (apiConfigured && apiStatus) {
+      if (apiConfigured) {
         if (!recordId) {
           throw new Error("This order is missing a database id.");
         }
@@ -1456,7 +1472,11 @@ export default function CustomerOrdersPage() {
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? { ...order, steps: makeSteps(targetIndex + 1) }
+            ? {
+                ...order,
+                status: apiStatus,
+                steps: makeSteps(targetIndex + 1),
+              }
             : order,
         ),
       );
@@ -1469,7 +1489,7 @@ export default function CustomerOrdersPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Customer Orders"
         toolbar={
@@ -1773,8 +1793,8 @@ export default function CustomerOrdersPage() {
                           <OrderTimelineTrack
                             order={order}
                             onStatusClick={(stepKey, anchor) => {
-                              const menuWidth = 250;
-                              const menuHeight = 112;
+                              const menuWidth = 260;
+                              const menuHeight = 96;
                               const gap = 8;
                               const spaceBelow =
                                 window.innerHeight - anchor.bottom;
@@ -1922,7 +1942,7 @@ export default function CustomerOrdersPage() {
           ? createPortal(
               <div
                 data-status-menu
-                className="fixed z-[100] w-max rounded-[10px] border border-[#00000014] bg-white p-3 shadow-xl"
+                className="fixed z-[100] w-[260px] rounded-[12px] border border-[#00000014] bg-white p-3 shadow-[0_8px_28px_rgba(0,0,0,0.12)]"
                 style={{
                   top: statusMenu.top,
                   left: statusMenu.left,
@@ -1931,47 +1951,43 @@ export default function CustomerOrdersPage() {
                     : undefined,
                 }}
               >
-                <div className="mb-2 text-[12px] font-semibold text-[#111118]">
+                <div className="mb-2 text-[14px] font-semibold text-[#111118]">
                   Change Status
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex gap-2">
                   {previousStep ? (
                     <button
                       type="button"
-                      className="rounded-[8px] bg-[#F3F3F1] px-3 py-1.5 text-left"
-                      onClick={() =>
+                      className="h-9 flex-1 rounded-[8px] bg-[#F2F2F2] px-2 text-[13px] font-semibold text-[#2E2E2E]"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
                         openStatusChange(
                           statusMenu.orderId,
                           previousStep.key,
                           "previous",
-                        )
-                      }
+                        );
+                      }}
                     >
-                      <div className="text-[10px] font-medium tracking-wide text-[#8A8A8A] uppercase">
-                        Previous
-                      </div>
-                      <div className="text-[12px] text-[#111118]">
-                        {previousStep.header}
-                      </div>
+                      {previousStep.header}
                     </button>
                   ) : null}
                   {nextStep ? (
                     <button
                       type="button"
-                      className="rounded-[8px] px-3 py-1.5 text-left text-white"
+                      className="h-9 flex-1 rounded-[8px] px-2 text-[13px] font-semibold text-white"
                       style={{ background: ORANGE }}
-                      onClick={() =>
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
                         openStatusChange(
                           statusMenu.orderId,
                           nextStep.key,
                           "next",
-                        )
-                      }
+                        );
+                      }}
                     >
-                      <div className="text-[10px] font-medium tracking-wide text-white/80 uppercase">
-                        Next
-                      </div>
-                      <div className="text-[12px]">{nextStep.header}</div>
+                      {nextStep.header}
                     </button>
                   ) : null}
                 </div>
@@ -1992,13 +2008,14 @@ export default function CustomerOrdersPage() {
           onConfirm={() => void confirmStatusChange()}
         />
 
-        {selectedOrder ? (
-          <OrderDetailPanel
-            order={selectedOrder}
-            onClose={() => setSelectedOrderId(null)}
-          />
-        ) : null}
       </div>
+
+      {selectedOrder ? (
+        <OrderDetailPanel
+          order={selectedOrder}
+          onClose={() => setSelectedOrderId(null)}
+        />
+      ) : null}
     </div>
   );
 }

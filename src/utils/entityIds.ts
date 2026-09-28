@@ -67,9 +67,16 @@ export function preferModelId(
   return codeFrom(record, codeKeys) ?? fallback;
 }
 
-/** Prefer the business code for API path params and FK payloads. */
+/** Prefer the business code for API path params and display ids. */
 export function apiId(entity: IdentifiedEntity): string {
   return publicCode(entity.id) ?? entity.recordId ?? entity.id;
+}
+
+/** Backend record UUID. Item foreign keys must use this, not the public code. */
+export function recordRef(entity: IdentifiedEntity): string | undefined {
+  if (isUuid(entity.recordId)) return entity.recordId!.trim();
+  if (isUuid(entity.id)) return entity.id.trim();
+  return undefined;
 }
 
 /** Match a ref that may be either a business code or a record UUID. */

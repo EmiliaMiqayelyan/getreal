@@ -1,7 +1,7 @@
 import type { ApiInventory } from "@/lib/api/types";
 import type { Item } from "@/types/item";
 import { ITEM_CATEGORIES, ITEM_SUBCATEGORIES } from "@/types/item";
-import { findByEntityRef, isUuid } from "@/utils/entityIds";
+import { codeFrom, findByEntityRef, isUuid } from "@/utils/entityIds";
 
 export type InventoryLot = {
   /** Inventory record id used for PATCH. */
@@ -16,6 +16,8 @@ export type InventoryLot = {
   qty: number;
   unit: string;
   location: string;
+  /** Address revealed when the location cell is hovered. */
+  address: string;
 };
 
 export type InventoryProduct = {
@@ -80,19 +82,38 @@ export function formatPurchased(amount?: number) {
   return `$${text}`;
 }
 
-function inventoryOrderLabel(
-  row: {
-    inventoryCode?: string;
-    distributorOrderId?: string | null;
-    id?: string;
-  },
-  index: number,
-) {
-  const code = row.inventoryCode?.trim();
-  if (code) return code;
+function readString(record: object, key: string) {
+  const raw = record as Record<string, unknown>;
+  const snake = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  const value = raw[key] ?? raw[snake];
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function inventoryOrderLabel(row: ApiInventory) {
+  const code =
+    readString(row, "orderCode") ||
+    codeFrom(row, ["inventoryCode", "orderCode", "code"]);
+  if (code && !isUuid(code)) return code;
   const orderId = row.distributorOrderId?.trim();
   if (orderId && !isUuid(orderId)) return orderId;
-  return row.id?.trim() || `INV-${index + 1}`;
+  return "—";
+}
+
+function formatPurchasedField(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return formatPurchased(value);
+  }
+  if (typeof value !== "string") return "—";
+  const text = value.trim();
+  if (!text) return "—";
+  if (text.startsWith("$")) return text;
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return formatInventoryDate(text);
+  const numeric = Number(text);
+  if (Number.isFinite(numeric)) return formatPurchased(numeric);
+  return text;
 }
 
 export function findCatalogItem(
@@ -132,20 +153,60 @@ function productIdFor(item: Item) {
   return item.recordId || item.id;
 }
 
-function lotFromRow(row: ApiInventory, item: Item | undefined, index: number): InventoryLot {
-  const location = row.location?.trim() || "—";
+function lotFromRow(
+  row: ApiInventory,
+  item: Item | undefined,
+  index: number,
+  catalogItemId = catalogItemUuid(item, row.itemId),
+): InventoryLot {
+  const location = readString(row, "location") || "—";
+  const address = readString(row, "address") || location;
   return {
     recordId: row.id?.trim() || `inv-${index}`,
-    catalogItemId: catalogItemUuid(item, row.itemId),
-    orderId: inventoryOrderLabel(row, index),
-    distributor: item?.distributor?.trim() || "—",
-    source: item?.source?.trim() || "—",
-    deliveryDate: formatInventoryDate(row.createdAt || row.updatedAt),
-    purchased: formatPurchased(item?.buyingPrice),
+    catalogItemId,
+    orderId: inventoryOrderLabel(row),
+    distributor: readString(row, "distributorName") || item?.distributor?.trim() || "—",
+    source: readString(row, "sourceName") || item?.source?.trim() || "—",
+    deliveryDate: formatInventoryDate(readString(row, "deliveryDate")),
+    purchased: formatPurchasedField(row.purchased),
     qty: row.quantity ?? 0,
-    unit: item?.singleItemUnit?.trim() || "—",
+    unit: readString(row, "unit") || item?.singleItemUnit?.trim() || "—",
     location,
+    address,
   };
+}
+
+function sameCatalogIdentity(matches: Item[]) {
+  const first = matches[0];
+  if (!first) return false;
+  const name = first.merchandisingName.trim() || first.name.trim();
+  return matches.every((item) => {
+    const itemName = item.merchandisingName.trim() || item.name.trim();
+    return (
+      itemName === name &&
+      item.category === first.category &&
+      item.subcategory === first.subcategory
+    );
+  });
+}
+
+function catalogMatches(items: Item[], row: ApiInventory) {
+  if (row.itemId) {
+    const linked = findCatalogItem(items, row.itemId);
+    if (linked) return [linked];
+  }
+  const distributor = row.distributorName?.trim().toLowerCase();
+  const source = row.sourceName?.trim().toLowerCase();
+  const unit = row.unit?.trim().toLowerCase();
+  if (!distributor && !source && !unit) return [];
+  return items.filter((item) => {
+    if (distributor && item.distributor.trim().toLowerCase() !== distributor) {
+      return false;
+    }
+    if (source && item.source.trim().toLowerCase() !== source) return false;
+    if (unit && item.singleItemUnit.trim().toLowerCase() !== unit) return false;
+    return true;
+  });
 }
 
 /**
@@ -158,22 +219,39 @@ export function buildInventorySections(
   rows: ApiInventory[],
 ): InventorySection[] {
   const lotsByProduct = new Map<string, InventoryLot[]>();
-  const orphans: Array<{ name: string; lot: InventoryLot }> = [];
+  const productMeta = new Map<
+    string,
+    { name: string; category: string; subcategory: string; distributor: string; unit: string }
+  >();
 
   rows.forEach((row, index) => {
-    const item = findCatalogItem(items, row.itemId);
-    const lot = lotFromRow(row, item, index);
-    if (!item) {
-      orphans.push({
-        name: row.itemId?.trim() || lot.orderId || "Item",
-        lot,
-      });
-      return;
-    }
-    const key = productIdFor(item);
+    const matches = catalogMatches(items, row);
+    const grouped = sameCatalogIdentity(matches);
+    const item = grouped ? matches[0] : undefined;
+    const catalogItemId =
+      matches.length === 1 ? catalogItemUuid(matches[0], row.itemId) : "";
+    const lot = lotFromRow(row, item, index, catalogItemId);
+    const name = item
+      ? item.merchandisingName?.trim() || item.name?.trim() || "Item"
+      : "Item";
+    const category = item ? parentCategory(item.category || "") : "Uncategorized";
+    const subcategory = item?.subcategory?.trim() || (item ? category : "Inventory");
+    const key =
+      matches.length === 1 && item
+        ? productIdFor(item)
+        : `${category}::${subcategory}::${name}`;
     const list = lotsByProduct.get(key) ?? [];
     list.push(lot);
     lotsByProduct.set(key, list);
+    if (!productMeta.has(key)) {
+      productMeta.set(key, {
+        name,
+        category,
+        subcategory,
+        distributor: lot.distributor,
+        unit: lot.unit,
+      });
+    }
   });
 
   const sections = new Map<string, InventorySection>();
@@ -193,30 +271,15 @@ export function buildInventorySections(
     return section;
   }
 
-  for (const item of items) {
-    const category = parentCategory(item.category || "");
-    const title = item.subcategory?.trim() || category;
-    const section = ensureSection(category, title);
+  for (const [id, meta] of productMeta) {
+    const section = ensureSection(meta.category, meta.subcategory);
     section.products.push({
-      id: productIdFor(item),
-      name: item.merchandisingName?.trim() || item.name?.trim() || "Item",
-      distributor: item.distributor?.trim() || "—",
-      unit: item.singleItemUnit?.trim() || "—",
-      lots: lotsByProduct.get(productIdFor(item)) ?? [],
+      id,
+      name: meta.name,
+      distributor: meta.distributor,
+      unit: meta.unit,
+      lots: lotsByProduct.get(id) ?? [],
     });
-  }
-
-  if (orphans.length) {
-    const section = ensureSection("Uncategorized", "Stock");
-    for (const orphan of orphans) {
-      section.products.push({
-        id: orphan.lot.recordId,
-        name: orphan.name,
-        distributor: orphan.lot.distributor,
-        unit: orphan.lot.unit,
-        lots: [orphan.lot],
-      });
-    }
   }
 
   const list = [...sections.values()];

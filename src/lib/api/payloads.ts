@@ -2,7 +2,12 @@ import type { Distributor, DistributorDocument } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
-import { apiId, findByEntityRef, publicCode } from "@/utils/entityIds";
+import {
+  findByEntityRef,
+  isUuid,
+  publicCode,
+  recordRef,
+} from "@/utils/entityIds";
 import { parseAddressParts } from "@/utils/format";
 
 import type { CreateDistributorPayload } from "./distributors";
@@ -190,17 +195,57 @@ export function toCreateSourcePayload(source: Source): CreateSourcePayload {
   };
 }
 
+function relationRecordId<T extends { id: string; recordId?: string; name: string }>(
+  ref: string | undefined,
+  name: string | undefined,
+  entities: T[],
+): string | undefined {
+  const trimmedRef = ref?.trim();
+  if (trimmedRef && isUuid(trimmedRef)) return trimmedRef;
+
+  const match =
+    (trimmedRef ? findByEntityRef(entities, trimmedRef) : undefined) ??
+    (name?.trim()
+      ? entities.find((entry) => entry.name === name.trim())
+      : undefined);
+
+  return match ? recordRef(match) : undefined;
+}
+
 export function toCreateItemPayload(
   item: Item,
   subcategories: CatalogSubcategory[] = [],
   photoUrls: string[] = [],
+  relations: {
+    distributors?: Distributor[];
+    sources?: Source[];
+  } = {},
 ): CreateItemPayload {
   const category = item.category.trim();
   if (!category) {
     throw new Error("No category available for item create");
   }
-  if (!item.distributorId) {
-    throw new Error("Item requires a distributorId for the API");
+
+  const distributorId = relationRecordId(
+    item.distributorId,
+    item.distributor,
+    relations.distributors ?? [],
+  );
+  if (!distributorId) {
+    throw new Error(
+      "This distributor is not linked to a server record. Reload the page and try again.",
+    );
+  }
+
+  const sourceId = relationRecordId(
+    item.sourceId,
+    item.source,
+    relations.sources ?? [],
+  );
+  if ((item.source.trim() || item.sourceId) && !sourceId) {
+    throw new Error(
+      "This source is not linked to a server record. Reload the page and try again.",
+    );
   }
 
   const subcategoryId =
@@ -216,8 +261,8 @@ export function toCreateItemPayload(
     itemCode: businessCodeOrUndefined(item.id),
     category,
     subcategoryId,
-    distributorId: item.distributorId,
-    ...(item.sourceId ? { sourceId: item.sourceId } : {}),
+    distributorId,
+    ...(sourceId ? { sourceId } : {}),
     buyingPrice: buyingPriceCents,
     contents,
     buyingUnit: item.sourcePer || undefined,
@@ -232,8 +277,18 @@ export function toCreateProductPayload(
   catalogItems: Item[] = [],
 ): CreateProductPayload {
   const linked = findByEntityRef(catalogItems, product.itemId);
+  const itemId = linked
+    ? recordRef(linked)
+    : isUuid(product.itemId)
+      ? product.itemId
+      : undefined;
+  if (!itemId) {
+    throw new Error(
+      "This item is not linked to a server record. Reload the page and try again.",
+    );
+  }
   return {
-    itemId: linked ? apiId(linked) : product.itemId,
+    itemId,
     merchandisingName: product.merchandisingName.trim(),
     sellingPrice: dollarsToCents(product.salesPrice),
     description: product.description || undefined,

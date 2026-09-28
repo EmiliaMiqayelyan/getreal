@@ -34,7 +34,7 @@ import { exportFilename } from "@/utils/csvExport";
 import { ITEM_CATEGORIES, type Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
-import { apiId, findByEntityRef, publicCode } from "@/utils/entityIds";
+import { findByEntityRef, recordRef } from "@/utils/entityIds";
 import {
   calcFinalMarginPercent,
   calcPricingBreakdown,
@@ -102,7 +102,7 @@ async function upsertItemSaleProduct(
   );
 
   const body = {
-    itemId: publicCode(item.id) ?? itemRecordId,
+    itemId: itemRecordId,
     merchandisingName:
       item.merchandisingName.trim() || item.name.trim() || "Item",
     sellingPrice: dollarsToCents(item.sellingPrice),
@@ -119,8 +119,15 @@ async function upsertItemSaleProduct(
       (item.recordId != null && product.itemId === item.recordId),
   );
 
+  const productPathId = existing ? recordRef(existing) : undefined;
+  if (existing && !productPathId) {
+    throw new Error(
+      "This product is not linked to a server record. Reload the page and try again.",
+    );
+  }
+
   const saved = existing
-    ? await productsApi.update(apiId(existing), body)
+    ? await productsApi.update(productPathId!, body)
     : await productsApi.create(body);
 
   return mapApiProductToProductForSale(saved, 0, [
@@ -234,6 +241,8 @@ export default function ItemsPage() {
     setItems,
     products,
     setProducts,
+    distributors,
+    sources,
     categories,
     subcategoryRecords,
     subcategoriesByCategory,
@@ -357,7 +366,18 @@ export default function ItemsPage() {
     const previous = rows;
     setItems((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void itemsApi.remove(apiId(editing)).catch((error) => {
+      const pathId = recordRef(editing);
+      if (!pathId) {
+        setItems(previous);
+        notifyApiError(
+          new Error(
+            "This item is not linked to a server record. Reload the page and try again.",
+          ),
+          "Failed to delete item.",
+        );
+        return;
+      }
+      void itemsApi.remove(pathId).catch((error) => {
         setItems(previous);
         notifyApiError(error, "Failed to delete item.");
       });
@@ -643,6 +663,7 @@ export default function ItemsPage() {
                   item,
                   subcategoryRecords,
                   photoUrls,
+                  { distributors, sources },
                 );
                 const categoriesById = new Map(
                   categoryList
@@ -654,14 +675,20 @@ export default function ItemsPage() {
                     .filter((entry) => entry.id)
                     .map((entry) => [entry.id as string, entry.name] as const),
                 );
-                const distributorsById = new Map(
-                  item.distributorId
-                    ? [[item.distributorId, item.distributor]]
-                    : [],
-                );
-                const sourcesById = new Map(
-                  item.sourceId ? [[item.sourceId, item.source]] : [],
-                );
+                const distributorsById = new Map<string, string>();
+                if (item.distributor) {
+                  if (item.distributorId) {
+                    distributorsById.set(item.distributorId, item.distributor);
+                  }
+                  distributorsById.set(payload.distributorId, item.distributor);
+                }
+                const sourcesById = new Map<string, string>();
+                if (item.source) {
+                  if (item.sourceId) sourcesById.set(item.sourceId, item.source);
+                  if (payload.sourceId) {
+                    sourcesById.set(payload.sourceId, item.source);
+                  }
+                }
 
                 const mapOpts = {
                   categoriesById,
@@ -673,10 +700,13 @@ export default function ItemsPage() {
 
                 let savedItem: Item;
                 if (editing) {
-                  const updated = await itemsApi.update(
-                    apiId(editing),
-                    payload,
-                  );
+                  const itemPathId = recordRef(editing);
+                  if (!itemPathId) {
+                    throw new Error(
+                      "This item is not linked to a server record. Reload the page and try again.",
+                    );
+                  }
+                  const updated = await itemsApi.update(itemPathId, payload);
                   const mapped = mapApiItemToItem(updated, 0, mapOpts);
                   savedItem = {
                     ...item,
@@ -717,7 +747,12 @@ export default function ItemsPage() {
                   setItems((current) => upsertCreatedItem(current, savedItem));
                 }
 
-                const itemRecordId = savedItem.recordId ?? apiId(savedItem);
+                const itemRecordId = recordRef(savedItem);
+                if (!itemRecordId) {
+                  throw new Error(
+                    "This item is not linked to a server record. Reload the page and try again.",
+                  );
+                }
                 const product = await upsertItemSaleProduct(
                   savedItem,
                   itemRecordId,

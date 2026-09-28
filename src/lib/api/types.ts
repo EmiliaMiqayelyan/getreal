@@ -136,7 +136,17 @@ export type ApiInventory = {
   itemId?: string;
   quantity?: number;
   location?: string | null;
+  /** Full address shown on the location hover. */
+  address?: string | null;
   distributorOrderId?: string | null;
+  /** Public order code for the Order ID column. Null when the lot has no order. */
+  orderCode?: string | null;
+  distributorName?: string | null;
+  sourceName?: string | null;
+  deliveryDate?: string | null;
+  /** Purchase timestamp or amount, as returned by the inventory list. */
+  purchased?: string | number | null;
+  unit?: string | null;
   expirationDate?: string | null;
   status?: string | null;
   createdAt?: string;

@@ -149,7 +149,7 @@ function nextUnusedLocation(used: string[]) {
 }
 
 const GRID =
-  "grid grid-cols-[minmax(150px,1.15fr)_minmax(130px,1.2fr)_minmax(130px,1.1fr)_minmax(160px,1.2fr)_minmax(88px,0.8fr)_96px_72px_minmax(120px,1fr)] items-center gap-x-4 px-4";
+  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3 px-3";
 
 const STOCK_GRID =
   "grid grid-cols-[300px_minmax(0,1.4fr)_40px_52px_152px_100px_minmax(0,1fr)_minmax(72px,1fr)_40px_124px] items-center gap-x-4 px-4";
@@ -232,16 +232,18 @@ function LocationSelect({
 
 function InventoryLocationCell({
   location,
+  address,
   onEditLocation,
 }: {
   location: string;
+  address?: string;
   onEditLocation: () => void;
 }) {
   return (
     <div className="relative flex min-w-0 items-center gap-1.5">
       <LocationHover
         className="min-w-0 flex-1 text-[12px] text-[#111118]"
-        fullAddress={location}
+        fullAddress={address || location}
         label="Location"
       >
         {location}
@@ -974,7 +976,13 @@ export default function InventoryPage() {
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
 
   const sections = useMemo(
-    () => buildInventorySections(catalogItems, inventoryRows),
+    () =>
+      buildInventorySections(catalogItems, inventoryRows)
+        .map((section) => ({
+          ...section,
+          products: section.products.filter((product) => product.lots.length > 0),
+        }))
+        .filter((section) => section.products.length > 0),
     [catalogItems, inventoryRows],
   );
 
@@ -1504,7 +1512,7 @@ export default function InventoryPage() {
                           "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
                         )}
                       >
-                        <span className="col-span-5 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
+                        <span className="col-span-6 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
                           {section.title}
                         </span>
                         <span className={cn(TABLE_HEADER, "text-center")}>
@@ -1525,6 +1533,7 @@ export default function InventoryPage() {
                           TABLE_HEADER,
                         )}
                       >
+                        <div />
                         <div className="whitespace-nowrap">Order ID</div>
                         <div className="whitespace-nowrap">Distributor</div>
                         <div className="whitespace-nowrap">
@@ -1554,19 +1563,19 @@ export default function InventoryPage() {
                                 (!isLast || open) && "border-b border-[#00000014]",
                               )}
                             >
-                              <span className="col-span-5 flex min-w-0 items-center gap-2 text-[#111118]">
+                              <span className="flex justify-center text-[#8A8A8A]">
                                 <ChevronDown
                                   size={14}
                                   className={cn(
-                                    "shrink-0 transition-transform",
+                                    "transition-transform",
                                     open
                                       ? "rotate-0 text-[#E25B5B]"
                                       : "-rotate-90 text-[#8A8A8A]",
                                   )}
                                 />
-                                <span className="truncate text-[13px] font-semibold">
-                                  {product.name}
-                                </span>
+                              </span>
+                              <span className="col-span-5 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                                {product.name}
                               </span>
                               <span
                                 className={cn(
@@ -1594,11 +1603,14 @@ export default function InventoryPage() {
                                         "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
                                       )}
                                     >
-                                      <span
-                                        className={cn(ID_PILL, "justify-self-start")}
-                                        title={lot.orderId}
-                                      >
-                                        {lot.orderId}
+                                      <span />
+                                      <span className="min-w-0 overflow-hidden">
+                                        <span
+                                          className="inline-flex h-5 max-w-full items-center truncate rounded-[6px] bg-id-pill px-1.5 font-mono text-[11px] font-medium leading-none text-[#6B7180]"
+                                          title={lot.recordId}
+                                        >
+                                          {lot.orderId}
+                                        </span>
                                       </span>
                                       <div className="min-w-0 truncate">
                                         {lot.distributor}
@@ -1625,6 +1637,7 @@ export default function InventoryPage() {
                                       </div>
                                       <InventoryLocationCell
                                         location={lot.location}
+                                        address={lot.address}
                                         onEditLocation={() =>
                                           openEditLocation(
                                             section.id,
@@ -1643,6 +1656,7 @@ export default function InventoryPage() {
                                       "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
                                     )}
                                   >
+                                    <span />
                                     <span className={cn(ID_PILL, "justify-self-start")}>
                                       -
                                     </span>
