@@ -29,6 +29,7 @@ import { cn } from "@/utils/cn";
 import { publicCode } from "@/utils/entityIds";
 import {
   ROLE_PERMISSION_GROUPS,
+  checkedPermissionKeys,
   permissionsForRoleType,
 } from "@/utils/rolePermissions";
 import {
@@ -248,9 +249,10 @@ export default function RolesPage() {
         void usersApi
           .update(draft.id, {
             name: draft.name.trim(),
-            email: draft.email.trim(),
             role: mapRoleUserTypeToApiRole(draft.type),
-            ...(draft.password ? { password: draft.password } : {}),
+            ...(draft.phone.trim()
+              ? { phoneNumber: draft.phone.trim() }
+              : {}),
           })
           .catch((error) => {
             notifyApiError(error, "Failed to update user on server.");
@@ -260,12 +262,24 @@ export default function RolesPage() {
       let createdId: string | undefined;
       if (isApiConfigured()) {
         try {
-          const created = await usersApi.create({
-            email: draft.email.trim(),
-            password: draft.password,
-            name: draft.name.trim(),
-            role: mapRoleUserTypeToApiRole(draft.type),
-          });
+          const name = draft.name.trim();
+          const role = mapRoleUserTypeToApiRole(draft.type);
+          const email = draft.email.trim();
+          const phoneNumber = draft.phone.trim() || undefined;
+          const created = draft.password
+            ? await usersApi.create({
+                email,
+                password: draft.password,
+                name,
+                role,
+                ...(phoneNumber ? { phoneNumber } : {}),
+              })
+            : await usersApi.adminAdd({
+                email,
+                name,
+                role,
+                ...(phoneNumber ? { phoneNumber } : {}),
+              });
           createdId = publicCode(created.userCode) ?? created.id;
         } catch (error) {
           notifyApiError(error, "Failed to create user on server.");
@@ -302,11 +316,9 @@ export default function RolesPage() {
   function deleteUser() {
     if (!draft.id) return;
     if (isApiConfigured()) {
-      void usersApi
-        .update(draft.id, { isBlocked: true })
-        .catch((error) => {
-          notifyApiError(error, "Failed to delete user on server.");
-        });
+      void usersApi.block(draft.id).catch((error) => {
+        notifyApiError(error, "Failed to delete user on server.");
+      });
     }
     // Soft-delete access: remove from active users; audit history elsewhere stays
     removeUser(draft.id);
@@ -726,7 +738,7 @@ export default function RolesPage() {
                   .create({
                     name: role.name,
                     ...(roleCode ? { roleCode } : {}),
-                    permissions: [],
+                    permissions: checkedPermissionKeys(role.permissions),
                   })
                   .then((created) => {
                     const code = publicCode(created.roleCode);
@@ -742,7 +754,10 @@ export default function RolesPage() {
                   });
               } else {
                 void rolesApi
-                  .update(publicCode(role.id) ?? role.id, { name: role.name })
+                  .update(publicCode(role.id) ?? role.id, {
+                    name: role.name,
+                    permissions: checkedPermissionKeys(role.permissions),
+                  })
                   .catch((error) => {
                     notifyApiError(error, `Failed to update role "${role.name}".`);
                   });

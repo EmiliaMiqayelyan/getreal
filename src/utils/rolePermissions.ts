@@ -250,6 +250,15 @@ export function normalizePermissions(
   };
 }
 
+/** Checked permission keys sent as `permissions: string[]`. */
+export function checkedPermissionKeys(permissions: RolePermissions): string[] {
+  return (
+    Object.entries(permissions) as Array<[keyof RolePermissions, boolean]>
+  )
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => key);
+}
+
 export function permissionsForRoleType(type: string): RolePermissions {
   const normalized = type.trim().toLowerCase();
   if (normalized.includes("super")) return { ...ADMIN_ROLE_PERMISSIONS };

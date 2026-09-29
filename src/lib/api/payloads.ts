@@ -2,12 +2,7 @@ import type { Distributor, DistributorDocument } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
-import {
-  findByEntityRef,
-  isUuid,
-  publicCode,
-  recordRef,
-} from "@/utils/entityIds";
+import { findByEntityRef, isUuid, recordRef } from "@/utils/entityIds";
 import { parseAddressParts } from "@/utils/format";
 
 import type { CreateDistributorPayload } from "./distributors";
@@ -21,12 +16,6 @@ import type {
   CatalogSubcategory,
 } from "./types";
 import { persistDocumentFile } from "./upload";
-
-function businessCodeOrUndefined(id: string | undefined) {
-  const code = publicCode(id);
-  if (!code || code.endsWith("-TEMP")) return undefined;
-  return code;
-}
 
 function splitAddress(fullAddress: string): {
   address: string;
@@ -133,7 +122,6 @@ export function toCreateDistributorPayload(
   );
   return {
     name: distributor.name.trim(),
-    distributorCode: businessCodeOrUndefined(distributor.id),
     address: parsed.address || distributor.fullAddress || undefined,
     city: parsed.city,
     state: parsed.state,
@@ -194,7 +182,6 @@ export function toCreateSourcePayload(
   const parsed = sourceAddressPayload(source);
   return {
     name: source.name.trim(),
-    sourceCode: businessCodeOrUndefined(source.id),
     distributorId,
     description: source.description || undefined,
     address: parsed.address || undefined,
@@ -258,19 +245,19 @@ export function toCreateItemPayload(
     );
   }
 
-  const subcategoryId =
+  const subcategoryRef =
     item.subcategoryId ||
     findSubcategoryIdByName(subcategories, item.category, item.subcategory) ||
-    null;
+    "";
+  const subcategoryId = isUuid(subcategoryRef) ? subcategoryRef : undefined;
 
   const contents = Math.max(1, Math.round(item.contents || 1));
   const buyingPriceCents = dollarsToCents(item.buyingPrice);
 
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
-    itemCode: businessCodeOrUndefined(item.id),
     category,
-    subcategoryId,
+    ...(subcategoryId ? { subcategoryId } : {}),
     distributorId,
     ...(sourceId ? { sourceId } : {}),
     buyingPrice: buyingPriceCents,
@@ -278,7 +265,7 @@ export function toCreateItemPayload(
     buyingUnit: item.sourcePer || undefined,
     singleItemUnit: item.singleItemUnit || undefined,
     description: item.description.trim() || undefined,
-    photos: photoUrls,
+    photos: photoUrls.filter((url) => typeof url === "string"),
   };
 }
 
@@ -302,8 +289,8 @@ export function toCreateProductPayload(
     merchandisingName: product.merchandisingName.trim(),
     sellingPrice: dollarsToCents(product.salesPrice),
     description: product.description || undefined,
-    isLive: product.live,
-    position: product.sortOrder,
+    isLive: Boolean(product.live),
+    position: Math.round(product.sortOrder || 0),
   };
 }
 

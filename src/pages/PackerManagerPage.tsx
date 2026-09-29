@@ -19,12 +19,17 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { PINNED_HEADER } from "@/constants/table";
+import { isApiConfigured, ordersApi, usersApi } from "@/lib/api";
+import { orderModelId, orderRecordId } from "@/lib/api/mappers";
+import type { ApiOrder } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
+import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 const MUTED_HEADER =
@@ -47,10 +52,12 @@ type Packer = {
 
 type ManagerOrder = {
   id: string;
+  recordId?: string;
   customer: string;
   code: string;
   itemCount: number;
   deliveryDate: string;
+  packerId?: string;
 };
 
 const DELIVERY_CHIPS: DeliveryChip[] = [];
@@ -159,13 +166,43 @@ function AssignPackerMenu({
   );
 }
 
+function mapManagerOrder(order: ApiOrder, index: number): ManagerOrder {
+  const code = orderModelId(order, `ORD-${index + 1}`);
+  const raw = order as ApiOrder & {
+    customerName?: string;
+    customer?: { name?: string; firstName?: string; lastName?: string };
+  };
+  const customer =
+    raw.customerName?.trim() ||
+    [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
+    raw.customer?.name ||
+    "Customer";
+  const itemCount = (order.items ?? []).reduce(
+    (sum, line) => sum + (line.quantity ?? 0),
+    0,
+  );
+  return {
+    id: code,
+    recordId: orderRecordId(order),
+    customer,
+    code,
+    itemCount: itemCount || (order.items?.length ?? 0),
+    deliveryDate: order.deliveryDate
+      ? new Date(order.deliveryDate).toLocaleDateString()
+      : "",
+    packerId: order.packerId ?? undefined,
+  };
+}
+
 export default function PackerManagerPage() {
   useDocumentTitle("Packer Manager");
 
   const { packingByCode, assignPacker: assignPackerHandoff } =
     usePackingHandoff();
+  const { notifyApiError } = useApiFeedback();
 
-  const [orders] = useState(INITIAL_ORDERS);
+  const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [packers, setPackers] = useState(ELIGIBLE_PACKERS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [activeChip, setActiveChip] = useState("wed-20");
@@ -181,14 +218,46 @@ export default function PackerManagerPage() {
     (chip) => chip.id === activeChip,
   );
 
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+    void Promise.all([
+      ordersApi.list({ type: "standard", limit: 100 }),
+      usersApi.list({ role: "packer", limit: 100 }),
+    ])
+      .then(([orderPage, userPage]) => {
+        if (cancelled) return;
+        setOrders(orderPage.items.map(mapManagerOrder));
+        const nextPackers = userPage.items
+          .map((user) => {
+            const id = user.id?.trim() ?? "";
+            if (!isUuid(id)) return null;
+            return {
+              id,
+              name: user.name?.trim() || "Packer",
+              code: user.userCode?.trim() || id.slice(0, 8),
+              role: "packer" as const,
+            };
+          })
+          .filter((packer): packer is Packer => packer != null);
+        setPackers(nextPackers);
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load packer orders.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notifyApiError]);
+
   const packersWithWorkload = useMemo(() => {
-    return ELIGIBLE_PACKERS.map((packer) => ({
+    return packers.map((packer) => ({
       ...packer,
       orderCount: Object.values(packingByCode).filter(
         (entry) => entry.packerId === packer.id,
       ).length,
     }));
-  }, [packingByCode]);
+  }, [packers, packingByCode]);
 
   const chipCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -259,11 +328,28 @@ export default function PackerManagerPage() {
   }
 
   function handleAssign(orderCode: string, packer: Packer) {
-    // Reassignment updates active packer; timestamps stay (§6, §12)
+    const order = orders.find((entry) => entry.code === orderCode);
+    if (isApiConfigured()) {
+      if (!order?.recordId || !isUuid(packer.id)) {
+        notifyApiError(
+          new Error("This order or packer is missing a server id."),
+          "This order or packer is missing a server id.",
+        );
+        return;
+      }
+      void ordersApi.assignPacker(order.recordId, packer.id).catch((error) => {
+        notifyApiError(error, "Failed to assign packer.");
+      });
+    }
     assignPackerHandoff(orderCode, {
       packerId: packer.id,
       packerName: packer.name,
     });
+    setOrders((current) =>
+      current.map((entry) =>
+        entry.code === orderCode ? { ...entry, packerId: packer.id } : entry,
+      ),
+    );
     setAssignMenu(null);
   }
 

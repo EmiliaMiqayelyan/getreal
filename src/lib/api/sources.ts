@@ -5,7 +5,6 @@ import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type CreateSourcePayload = {
   name: string;
-  sourceCode?: string;
   distributorId: string;
   description?: string;
   address?: string;

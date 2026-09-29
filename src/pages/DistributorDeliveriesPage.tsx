@@ -32,13 +32,17 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { isApiConfigured, receivingApi } from "@/lib/api";
+import type { ApiDelivery } from "@/lib/api/receiving";
 import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
 import { cn } from "@/utils/cn";
+import { isUuid } from "@/utils/entityIds";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
@@ -60,7 +64,7 @@ type LineItem = {
   id: string;
   itemCode: string;
   name: string;
-  category: "Meat" | "Fruits";
+  category: string;
   quantity: number;
   unit: string;
   source: string;
@@ -70,6 +74,7 @@ type LineItem = {
 
 type DeliveryOrder = {
   id: string;
+  recordId?: string;
   distributor: string;
   orderDate: string;
   expectedDelivery: string;
@@ -499,6 +504,63 @@ function ExpirationDatePicker({
 
 /** Temporary seed - one delivery order sample. */
 const INITIAL_ORDERS: DeliveryOrder[] = [];
+
+function readDeliveryName(delivery: ApiDelivery) {
+  if (typeof delivery.distributor === "string" && delivery.distributor.trim()) {
+    return delivery.distributor.trim();
+  }
+  if (delivery.distributor && typeof delivery.distributor === "object") {
+    return delivery.distributor.name?.trim() || "Distributor";
+  }
+  return delivery.distributorName?.trim() || delivery.name?.trim() || "Distributor";
+}
+
+function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
+  const recordId = isUuid(delivery.id) ? delivery.id : undefined;
+  const code =
+    delivery.orderCode?.trim() ||
+    delivery.code?.trim() ||
+    delivery.id?.trim() ||
+    `DLV-${index + 1}`;
+  const when = delivery.deliveryDate || delivery.createdAt || "";
+  const parsed = when ? new Date(when) : new Date();
+  const deliveryDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+  const checked = Boolean(delivery.validatedAt || delivery.receivedAt);
+  const items: LineItem[] = (delivery.items ?? []).map((line, lineIndex) => {
+    const quantity = Number(line.quantity ?? 0) || 0;
+    const unitPrice = Number(line.unitPrice ?? line.price ?? 0) || 0;
+    return {
+      id: line.id || `${code}-${lineIndex + 1}`,
+      itemCode: line.itemId || line.productId || line.id || "",
+      name: line.name || line.itemName || "Item",
+      category: line.category?.trim() || "Items",
+      quantity,
+      unit: line.unit || "Each",
+      source: line.source || line.sourceName || "",
+      unitPrice,
+      priceLabel: unitPrice ? `$${unitPrice.toFixed(2)}` : "—",
+    };
+  });
+  const totalPrice =
+    typeof delivery.totalPrice === "number"
+      ? delivery.totalPrice
+      : items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
+  return {
+    id: code,
+    recordId,
+    distributor: readDeliveryName(delivery),
+    orderDate: delivery.createdAt
+      ? new Date(delivery.createdAt).toLocaleDateString()
+      : "",
+    expectedDelivery: Number.isNaN(deliveryDate.getTime())
+      ? ""
+      : deliveryDate.toLocaleDateString(),
+    deliveryDateId: toDeliveryDateId(deliveryDate),
+    totalPrice,
+    checked,
+    items,
+  };
+}
 
 const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {};
 
@@ -962,6 +1024,7 @@ const ROW_GRID =
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
   const { pushHandoff, markDeliveryReceived } = useReceivingHandoff();
+  const { notifyApiError } = useApiFeedback();
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
   const [activeDateId, setActiveDateId] = useState("2026-07-20");
@@ -980,6 +1043,26 @@ export default function DistributorDeliveriesPage() {
   const [imagePreview, setImagePreview] = useState<RejectImagePreview | null>(
     null,
   );
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+    void receivingApi
+      .listDeliveries()
+      .then((rows) => {
+        if (cancelled) return;
+        const mapped = rows.map(mapDelivery);
+        setOrders(mapped);
+        const firstDate = mapped[0]?.deliveryDateId;
+        if (firstDate) setActiveDateId(firstDate);
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load deliveries.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notifyApiError]);
 
   const checkingOrder = orders.find((order) => order.id === checkingId) ?? null;
   const viewingOrder = orders.find((order) => order.id === viewingId) ?? null;
@@ -1013,11 +1096,22 @@ export default function DistributorDeliveriesPage() {
     return counts;
   }, [activeTab, orders]);
 
+  const receivingDates = useMemo(() => {
+    const unique = new Map<string, Date>();
+    for (const order of orders) {
+      const parsed = parseDeliveryDateId(order.deliveryDateId);
+      if (parsed) unique.set(order.deliveryDateId, parsed);
+    }
+    const fromOrders = [...unique.values()].sort(
+      (left, right) => left.getTime() - right.getTime(),
+    );
+    return fromOrders.length ? fromOrders : RECEIVING_DATES;
+  }, [orders]);
+
   const visibleChips = useMemo(() => {
-    return RECEIVING_DATES.slice(
-      chipWindowStart,
-      chipWindowStart + CHIP_WINDOW_SIZE,
-    ).map((date) => {
+    return receivingDates
+      .slice(chipWindowStart, chipWindowStart + CHIP_WINDOW_SIZE)
+      .map((date) => {
       const id = toDeliveryDateId(date);
       return {
         id,
@@ -1025,11 +1119,11 @@ export default function DistributorDeliveriesPage() {
         count: dateCounts.get(id) ?? 0,
       };
     });
-  }, [chipWindowStart, dateCounts]);
+  }, [chipWindowStart, dateCounts, receivingDates]);
 
   const canShiftBack = chipWindowStart > 0;
   const canShiftForward =
-    chipWindowStart + CHIP_WINDOW_SIZE < RECEIVING_DATES.length;
+    chipWindowStart + CHIP_WINDOW_SIZE < receivingDates.length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1071,7 +1165,7 @@ export default function DistributorDeliveriesPage() {
 
   function selectDeliveryDate(dateId: string) {
     setActiveDateId(dateId);
-    const index = RECEIVING_DATES.findIndex(
+    const index = receivingDates.findIndex(
       (date) => toDeliveryDateId(date) === dateId,
     );
     if (index === -1) return;
@@ -1088,7 +1182,7 @@ export default function DistributorDeliveriesPage() {
     setChipWindowStart((current) =>
       Math.max(
         0,
-        Math.min(current + delta, RECEIVING_DATES.length - CHIP_WINDOW_SIZE),
+        Math.min(current + delta, receivingDates.length - CHIP_WINDOW_SIZE),
       ),
     );
   }
@@ -1102,12 +1196,29 @@ export default function DistributorDeliveriesPage() {
     });
   }
 
-  function handleAccepted(
+  async function handleAccepted(
     orderId: string,
     checks: Record<string, ItemCheckState>,
   ) {
     const order = orders.find((entry) => entry.id === orderId);
     if (!order) return;
+
+    if (isApiConfigured()) {
+      const validateId = order.recordId ?? (isUuid(order.id) ? order.id : "");
+      if (!validateId) {
+        notifyApiError(
+          new Error("This delivery is missing a server id."),
+          "This delivery is missing a server id.",
+        );
+        return;
+      }
+      try {
+        await receivingApi.validate(validateId);
+      } catch (error) {
+        notifyApiError(error, "Failed to validate delivery.");
+        return;
+      }
+    }
 
     const lines: ReceivingHandoffLine[] = order.items.map((item) => {
       const result = checks[item.id];

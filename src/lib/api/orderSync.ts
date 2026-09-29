@@ -10,7 +10,7 @@ import { isApiConfigured } from "./client";
 import { formatApiError } from "./errors";
 import { ordersApi, type CreateOrderItemPayload } from "./orders";
 import { toastFromApi } from "@/lib/toastBridge";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import { apiId, findByEntityRef, isUuid } from "@/utils/entityIds";
 
 function findDistributor(
   nameOrId: string,
@@ -69,9 +69,15 @@ function toOrderItemPayloads(
   for (const line of lines) {
     const product = findProductForLine(line, products, catalogItems);
     if (!product) continue;
+    const productId = product.recordId && isUuid(product.recordId)
+      ? product.recordId
+      : isUuid(product.id)
+        ? product.id
+        : apiId(product);
+    if (!isUuid(productId)) continue;
     payloads.push({
-      productId: apiId(product),
-      quantity: Math.max(1, line.quantity),
+      productId,
+      quantity: Math.max(0.01, Number(line.quantity) || 1),
       frequency: "one_time",
     });
   }
@@ -83,14 +89,29 @@ function postDistributorOrder(input: {
   items: CreateOrderItemPayload[];
   deliveryDate?: string;
 }) {
+  const distributorId = isUuid(input.distributor.recordId)
+    ? input.distributor.recordId!
+    : isUuid(input.distributor.id)
+      ? input.distributor.id
+      : undefined;
+  if (!distributorId) {
+    toastFromApi(
+      "Could not sync order: distributor has no server id.",
+      "error",
+    );
+    return;
+  }
   const body: Parameters<typeof ordersApi.create>[0] = {
     type: "distributor",
-    distributorId: apiId(input.distributor),
+    distributorId,
     communicationChannel: "quickbooks",
     items: input.items,
   };
   if (input.deliveryDate) {
-    body.deliveryDate = input.deliveryDate;
+    const parsed = Date.parse(input.deliveryDate);
+    body.deliveryDate = Number.isNaN(parsed)
+      ? input.deliveryDate
+      : new Date(parsed).toISOString();
   }
 
   void ordersApi.create(body).catch((error) => {

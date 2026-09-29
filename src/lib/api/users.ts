@@ -8,8 +8,9 @@ export type CreateUserPayload = {
   email: string;
   password: string;
   name: string;
-  role: string;
+  role?: string;
   status?: string;
+  isSubscribed?: boolean;
   heardFrom?: string;
   firstName?: string;
   lastName?: string;
@@ -19,16 +20,44 @@ export type CreateUserPayload = {
   city?: string;
   state?: string;
   zipCode?: string;
+  distributorId?: string;
+};
+
+export type AdminAddUserPayload = {
+  email?: string;
+  name: string;
+  role: string;
+  status?: string;
+  isSubscribed?: boolean;
+  isBlocked?: boolean;
+  heardFrom?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  address?: string;
+  aptUnit?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  distributorId?: string;
 };
 
 export type UpdateUserPayload = {
-  isBlocked?: boolean;
-  status?: string;
-  role?: string;
   name?: string;
-  email?: string;
-  password?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  address?: string;
+  aptUnit?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
   heardFrom?: string;
+  role?: string;
+  status?: string;
+  isSubscribed?: boolean;
+  isBlocked?: boolean;
+  distributorId?: string;
 };
 
 export type UsersListParams = {
@@ -76,6 +105,16 @@ export const usersApi = {
     );
   },
 
+  adminAdd(body: AdminAddUserPayload) {
+    return apiRequest<unknown>("/users/admin-add", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiUser>(payload, "user") ?? (payload as ApiUser),
+    );
+  },
+
   update(id: string, body: UpdateUserPayload) {
     return apiRequest<unknown>(`/users/${id}`, {
       method: "PATCH",
@@ -86,10 +125,9 @@ export const usersApi = {
     );
   },
 
-  block(id: string, reason: string) {
+  block(id: string) {
     return apiRequest<unknown>(`/users/${id}/block`, {
       method: "POST",
-      body: JSON.stringify({ reason }),
     });
   },
 

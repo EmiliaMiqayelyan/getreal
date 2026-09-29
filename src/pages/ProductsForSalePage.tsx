@@ -40,10 +40,9 @@ import { toCreateProductPayload } from "@/lib/api/payloads";
 import { type Item } from "@/types/item";
 import type { Source } from "@/types/source";
 import {
-  PRODUCT_TABS,
   type ProductForSale,
-  type ProductTab,
 } from "@/types/productForSale";
+import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
 import { apiId, findByEntityRef } from "@/utils/entityIds";
 import { validateAddProductForSale } from "@/utils/productForSaleForm";
@@ -381,6 +380,7 @@ export default function ProductsForSalePage() {
     setProducts,
     items: catalog,
     sources,
+    categories,
     subcategoriesByCategory,
     isBootstrapping,
   } = useAppCatalog();
@@ -389,7 +389,12 @@ export default function ProductsForSalePage() {
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [tab, setTab] = useState<ProductTab>("All");
+  const categoryNames = useMemo(
+    () => categoryNamesFromCatalog(categories),
+    [categories],
+  );
+  const tabs = useMemo(() => ["All", ...categoryNames], [categoryNames]);
+  const [tab, setTab] = useState("All");
   const [addOpen, setAddOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<ProductForSale | null>(null);
   const [viewing, setViewing] = useState<ProductForSale | null>(null);
@@ -452,8 +457,9 @@ export default function ProductsForSalePage() {
         listWindow.visible,
         catalog,
         subcategoriesByCategory,
+        categoryNames,
       ),
-    [catalog, listWindow.visible, subcategoriesByCategory],
+    [catalog, categoryNames, listWindow.visible, subcategoriesByCategory],
   );
 
   const viewingProduct = useMemo(() => {
@@ -482,10 +488,16 @@ export default function ProductsForSalePage() {
     return set;
   }, [products, editTarget, catalog]);
 
-  function selectTab(nextTab: ProductTab) {
+  function selectTab(nextTab: string) {
     setTab(nextTab);
     setSubcategoryFilter("");
   }
+
+  useEffect(() => {
+    if (tab !== "All" && categoryNames.length > 0 && !categoryNames.includes(tab)) {
+      setTab("All");
+    }
+  }, [categoryNames, tab]);
 
   function toggleLive(id: string, live: boolean) {
     const target = products.find((row) => row.id === id);
@@ -702,9 +714,9 @@ export default function ProductsForSalePage() {
         below={
           <Tabs
             aria-label="Product categories"
-            items={PRODUCT_TABS.map((entry) => ({ id: entry, label: entry }))}
-            value={tab}
-            onChange={(id) => selectTab(id as ProductTab)}
+            items={tabs.map((entry) => ({ id: entry, label: entry }))}
+            value={tabs.includes(tab) ? tab : "All"}
+            onChange={selectTab}
           />
         }
       />

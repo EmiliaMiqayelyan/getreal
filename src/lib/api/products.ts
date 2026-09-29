@@ -72,7 +72,12 @@ export const productsApi = {
   reorder(items: Array<{ id: string; position: number }>) {
     return apiRequest<unknown>("/products/reorder", {
       method: "PATCH",
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({
+        items: items.map((item) => ({
+          id: item.id,
+          position: Math.round(item.position),
+        })),
+      }),
     });
   },
 

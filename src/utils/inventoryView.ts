@@ -218,6 +218,7 @@ function catalogMatches(items: Item[], row: ApiInventory) {
 export function buildInventorySections(
   items: Item[],
   rows: ApiInventory[],
+  categoryOrder: string[] = [],
 ): InventorySection[] {
   const lotsByProduct = new Map<string, InventoryLot[]>();
   const productMeta = new Map<
@@ -294,8 +295,11 @@ export function buildInventorySections(
   }
 
   const list = [...sections.values()];
+  const rank = new Map(categoryOrder.map((name, index) => [name, index]));
   list.sort((a, b) => {
-    const byCategory = categoryRank(a.category) - categoryRank(b.category);
+    const left = rank.get(a.category) ?? categoryRank(a.category);
+    const right = rank.get(b.category) ?? categoryRank(b.category);
+    const byCategory = left - right;
     if (byCategory !== 0) return byCategory;
     if (a.category !== b.category) return a.category.localeCompare(b.category);
     const bySub =

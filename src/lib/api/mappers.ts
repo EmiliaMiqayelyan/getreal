@@ -271,7 +271,7 @@ export function mapApiItemToItem(
   const categoryName =
     (item.categoryId && options.categoriesById?.get(item.categoryId)) ||
     item.category ||
-    "Protein";
+    "";
   const subcategoryName =
     (item.subcategoryId &&
       options.subcategoriesById?.get(item.subcategoryId)) ||
@@ -333,7 +333,7 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
     merchandisingName: name,
     description: product.description ?? "",
     preorderInfo: "",
-    category: product.categoryNames?.[0] ?? "Protein",
+    category: product.categoryNames?.[0] ?? "",
     subcategory: product.categoryNames?.[1] ?? "",
     distributor: "",
     source: "",
@@ -372,7 +372,7 @@ export function mapApiProductToProductForSale(
     sortOrder: product.position ?? index,
     live: Boolean(product.isLive),
     merchandisingName: name,
-    category: linked?.category ?? product.categoryNames?.[0] ?? "Protein",
+    category: linked?.category ?? product.categoryNames?.[0] ?? "",
     subcategory: linked?.subcategory ?? product.categoryNames?.[1] ?? "",
     source: linked?.source ?? "",
     sourceId: linked?.sourceId,

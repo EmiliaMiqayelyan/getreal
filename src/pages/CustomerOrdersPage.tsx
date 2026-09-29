@@ -45,6 +45,7 @@ import {
   ordersApi,
   type ApiOrder,
 } from "@/lib/api";
+import type { OrderStatus } from "@/lib/api/orders";
 import { isUuid, publicCode } from "@/utils/entityIds";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
@@ -125,7 +126,7 @@ const STEPS_META: { key: TimelineStepKey; header: string }[] = [
   { key: "return", header: "Return" },
 ];
 
-const STEP_API_STATUS: Record<TimelineStepKey, string> = {
+const STEP_API_STATUS: Record<TimelineStepKey, OrderStatus> = {
   requested: "requested",
   packing: "packing",
   onRoute: "on_route",
@@ -243,6 +244,11 @@ function mapApiOrderToActive(
     publicCode(customer?.distributorCode, order.customerId) ||
     "Customer";
   const orderCode = orderModelId(order, fallbackId);
+  const readyAt = order.coolerReadyAt || order.packingStartedAt || undefined;
+  const steps = makeSteps(doneCount).map((step) => {
+    if (step.key !== "packing" || !readyAt) return step;
+    return { ...step, done: true, at: formatOrderStamp(readyAt) };
+  });
   return {
     id: orderCode,
     recordId: orderRecordId(order),
@@ -269,7 +275,9 @@ function mapApiOrderToActive(
       unit: "Each",
       unitPrice: 0,
     })),
-    steps: makeSteps(doneCount),
+    packerAssigned: order.packerId ?? undefined,
+    coolerIds: order.coolerId ? [order.coolerId] : undefined,
+    steps,
   };
 }
 
@@ -1352,10 +1360,12 @@ export default function CustomerOrdersPage() {
 
   const ordersWithPacking = useMemo(
     () =>
-      orders.map((order) =>
-        applyPackingHandoff(order, packingByCode[order.id]),
-      ),
-    [orders, packingByCode],
+      apiConfigured
+        ? orders
+        : orders.map((order) =>
+            applyPackingHandoff(order, packingByCode[order.id]),
+          ),
+    [apiConfigured, orders, packingByCode],
   );
 
   const filteredActive = useMemo(

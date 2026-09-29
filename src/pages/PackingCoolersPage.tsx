@@ -24,12 +24,17 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { coolersApi, isApiConfigured, ordersApi } from "@/lib/api";
+import type { ApiOrder } from "@/lib/api/types";
 import type { PackingLine, PackingSourceOption } from "@/types/packing";
 import { cn } from "@/utils/cn";
+import { orderModelId, orderRecordId } from "@/lib/api/mappers";
+import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 const ORANGE = "#F57850";
@@ -49,12 +54,14 @@ type DeliveryChip = {
 
 type PackOrder = {
   id: string;
+  recordId?: string;
   customer: string;
   code: string;
   itemCount: number;
   deliveryDate: string;
   packedAt?: string;
   loadedAt?: string;
+  packerId?: string;
   coolerIds: string[];
   items: PackingLine[];
 };
@@ -204,12 +211,52 @@ function SourcePicker({
   );
 }
 
+function mapStandardOrder(order: ApiOrder, index: number): PackOrder {
+  const code = orderModelId(order, `ORD-${index + 1}`);
+  const raw = order as ApiOrder & {
+    customerName?: string;
+    customer?: { name?: string; firstName?: string; lastName?: string };
+  };
+  const customer =
+    raw.customerName?.trim() ||
+    [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
+    raw.customer?.name ||
+    "Customer";
+  const deliveryDate = order.deliveryDate
+    ? new Date(order.deliveryDate).toLocaleDateString()
+    : "";
+  const items: PackingLine[] = (order.items ?? []).map((line, lineIndex) => ({
+    id: `${code}-${lineIndex + 1}`,
+    name: line.productId || "Item",
+    category: "Items",
+    qty: line.quantity ?? 0,
+    coolerId: order.coolerId || "Cooler",
+    packed: Boolean(order.coolerReadyAt),
+    options: [],
+  }));
+  return {
+    id: code,
+    recordId: orderRecordId(order),
+    customer,
+    code,
+    itemCount: items.reduce((sum, line) => sum + line.qty, 0) || items.length,
+    deliveryDate,
+    packedAt: order.coolerReadyAt ?? undefined,
+    loadedAt: order.loadedAt ?? undefined,
+    packerId: order.packerId ?? undefined,
+    coolerIds: order.coolerId ? [order.coolerId] : [],
+    items,
+  };
+}
+
 function PackingDetail({
   order,
+  coolerOptions,
   onClose,
   onReady,
 }: {
   order: PackOrder;
+  coolerOptions: string[];
   onClose: () => void;
   onReady: (order: PackOrder) => void;
 }) {
@@ -222,12 +269,14 @@ function PackingDetail({
   } | null>(null);
 
   const groups = useMemo(() => {
-    const meat = draft.items.filter((item) => item.category === "Meat");
-    const fruits = draft.items.filter((item) => item.category === "Fruits");
-    return [
-      ["Meat", meat],
-      ["Fruits", fruits],
-    ] as const;
+    const grouped = new Map<string, PackingLine[]>();
+    for (const item of draft.items) {
+      const title = item.category || "Items";
+      const rows = grouped.get(title) ?? [];
+      rows.push(item);
+      grouped.set(title, rows);
+    }
+    return [...grouped.entries()];
   }, [draft.items]);
 
   const allReady = draft.items.every(itemReady);
@@ -439,7 +488,7 @@ function PackingDetail({
                               }
                               options={[
                                 { value: "Cooler", label: "Cooler" },
-                                ...COOLER_OPTIONS.map((cooler) => ({
+                                ...coolerOptions.map((cooler) => ({
                                   value: cooler,
                                   label: cooler,
                                 })),
@@ -523,8 +572,10 @@ export default function PackingCoolersPage() {
 
   const { upsertPacking, markLoaded, markPackingStarted, packingByCode } =
     usePackingHandoff();
+  const { notifyApiError } = useApiFeedback();
 
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [coolerOptions, setCoolerOptions] = useState<string[]>(COOLER_OPTIONS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [activeChip, setActiveChip] = useState("wed-20");
@@ -540,7 +591,9 @@ export default function PackingCoolersPage() {
     const counts: Record<string, number> = {};
     for (const chip of DELIVERY_CHIPS) {
       counts[chip.id] = orders.filter((order) => {
-        const assigned = Boolean(packingByCode[order.code]?.packerId);
+        const assigned = Boolean(
+          packingByCode[order.code]?.packerId || order.packerId,
+        );
         return assigned && order.deliveryDate.includes(chip.dateKey);
       }).length;
     }
@@ -557,7 +610,7 @@ export default function PackingCoolersPage() {
       .filter((order) => {
         // §11: available in Cooler Packing after Packer Manager assignment
         const handoff = packingByCode[order.code];
-        const assigned = Boolean(handoff?.packerId);
+        const assigned = Boolean(handoff?.packerId || order.packerId);
         const matchesChip =
           !chip || order.deliveryDate.includes(chip.dateKey);
         const matchesSearch =
@@ -594,8 +647,36 @@ export default function PackingCoolersPage() {
     `${search}|${sortBy}|${activeChip}`,
   );
 
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+    void Promise.all([
+      ordersApi.list({ type: "standard", limit: 100 }),
+      coolersApi.list(),
+    ])
+      .then(([orderPage, coolers]) => {
+        if (cancelled) return;
+        setOrders(orderPage.items.map(mapStandardOrder));
+        const ids = coolers
+          .map((cooler) => cooler.id?.trim())
+          .filter((id): id is string => Boolean(id));
+        if (ids.length) setCoolerOptions(ids);
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load packing orders.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notifyApiError]);
+
   function openPacking(order: PackOrder) {
     markPackingStarted(order.code, formatPackTimestamp());
+    if (isApiConfigured() && order.recordId && !order.packedAt) {
+      void ordersApi.startPacking(order.recordId).catch((error) => {
+        notifyApiError(error, "Failed to start packing.");
+      });
+    }
     setActiveOrderId(order.id);
   }
 
@@ -620,8 +701,24 @@ export default function PackingCoolersPage() {
     return (
       <PackingDetail
         order={activeOrder}
+        coolerOptions={coolerOptions}
         onClose={() => setActiveOrderId(null)}
         onReady={(updated) => {
+          if (isApiConfigured() && updated.recordId) {
+            const coolerIds = [...new Set(updated.coolerIds)].filter((id) =>
+              isUuid(id),
+            );
+            void (async () => {
+              try {
+                for (const coolerId of coolerIds) {
+                  await ordersApi.assignCooler(updated.recordId!, coolerId);
+                }
+                await ordersApi.coolerReady(updated.recordId!);
+              } catch (error) {
+                notifyApiError(error, "Failed to mark the cooler ready.");
+              }
+            })();
+          }
           setOrders((current) =>
             current.map((order) =>
               order.id === updated.id ? updated : order,
@@ -889,6 +986,11 @@ export default function PackingCoolersPage() {
                         variant="dark"
                         onClick={() => {
                           const loadedAt = formatPackTimestamp();
+                          if (isApiConfigured() && order.recordId) {
+                            void ordersApi.loaded(order.recordId).catch((error) => {
+                              notifyApiError(error, "Failed to mark the order loaded.");
+                            });
+                          }
                           setOrders((current) =>
                             current.map((entry) =>
                               entry.id === order.id

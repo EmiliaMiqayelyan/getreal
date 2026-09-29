@@ -10,11 +10,22 @@ export type CreateOrderItemPayload = {
   frequency?: "one_time" | "weekly";
 };
 
+export type OrderStatus =
+  | "requested"
+  | "packing"
+  | "on_route"
+  | "delivered"
+  | "cooler_pickup"
+  | "return"
+  | "cancelled"
+  | "archived";
+
 export type CreateDistributorOrderPayload = {
   type: "distributor";
   distributorId: string;
-  communicationChannel?: string;
+  communicationChannel?: "quickbooks";
   deliveryDate?: string;
+  deliveryCode?: string;
   items: CreateOrderItemPayload[];
 };
 
@@ -22,6 +33,7 @@ export type CreateStandardOrderPayload = {
   type: "standard";
   customerId: string;
   deliveryDate?: string;
+  deliveryCode?: string;
   items: CreateOrderItemPayload[];
 };
 
@@ -31,10 +43,9 @@ export type CreateOrderPayload =
 
 export type UpdateOrderPayload = {
   distributorId?: string;
-  customerId?: string;
-  communicationChannel?: string;
-  status?: string;
-  deliveryDate?: string;
+  communicationChannel?: "quickbooks";
+  status?: OrderStatus;
+  deliveryCode?: string;
   items?: CreateOrderItemPayload[];
 };
 
@@ -93,10 +104,57 @@ export const ordersApi = {
     );
   },
 
-  updateStatus(id: string, status: string) {
+  updateStatus(id: string, status: OrderStatus) {
     return apiRequest<unknown>(`/orders/${id}/status`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  assignPacker(id: string, packerId: string) {
+    return apiRequest<unknown>(`/orders/${id}/assign-packer`, {
+      method: "POST",
+      body: JSON.stringify({ packerId }),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  assignCooler(id: string, coolerId: string) {
+    return apiRequest<unknown>(`/orders/${id}/assign-cooler`, {
+      method: "POST",
+      body: JSON.stringify({ coolerId }),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  startPacking(id: string) {
+    return apiRequest<unknown>(`/orders/${id}/start-packing`, {
+      method: "POST",
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  coolerReady(id: string) {
+    return apiRequest<unknown>(`/orders/${id}/cooler-ready`, {
+      method: "POST",
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  loaded(id: string) {
+    return apiRequest<unknown>(`/orders/${id}/loaded`, {
+      method: "POST",
     }).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),

@@ -12,7 +12,6 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { findSubcategoryIdByName } from "@/lib/api/mappers";
 import {
   CASE_BY_OPTIONS,
-  ITEM_CATEGORIES,
   PIECE_WEIGHT_OPTIONS,
   SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
@@ -27,6 +26,7 @@ import {
   resolveSourceId,
   sourceNamesForDistributor,
 } from "@/utils/sources";
+import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
 import {
   firstItemFormErrorField,
@@ -88,9 +88,15 @@ export function AddItemModal({
   const {
     distributors,
     sources: catalogSources,
+    categories,
     subcategoriesByCategory,
     subcategoryRecords,
   } = useAppCatalog();
+
+  const categoryOptions = useMemo(
+    () => categoryNamesFromCatalog(categories),
+    [categories],
+  );
 
   const [distributor, setDistributor] = useState("");
   const [source, setSource] = useState("");
@@ -266,6 +272,7 @@ export function AddItemModal({
       sellingPrice,
       distributorOptions,
       sourceOptions,
+      categoryOptions,
       subcategoryOptions,
     });
 
@@ -439,7 +446,7 @@ export function AddItemModal({
                       buttonClassName={cn(errors.category && INVALID_BORDER)}
                       options={[
                         { value: "", label: "Select" },
-                        ...ITEM_CATEGORIES.map((entry) => ({
+                        ...categoryOptions.map((entry) => ({
                           value: entry,
                           label: entry,
                         })),

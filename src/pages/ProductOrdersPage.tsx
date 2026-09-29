@@ -60,6 +60,7 @@ import {
 } from "@/lib/api/orderSync";
 import type { Distributor } from "@/types/distributor";
 import type {
+  DeliveredOrder,
   ManualOrderDraft,
   OrderCategory,
   PlacedOrder,
@@ -162,6 +163,47 @@ function mapDistributorApiOrder(
       : "",
     totalPrice,
     items: lines,
+  };
+}
+
+function weekOfLabel(date: Date) {
+  const start = new Date(date);
+  const weekday = start.getDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  start.setDate(start.getDate() + mondayOffset);
+  return `Week of ${start.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  })}`;
+}
+
+function mapDeliveredApiOrder(
+  order: ApiOrder,
+  index: number,
+  catalogs: { distributors: Distributor[]; products: ProductForSale[] },
+): DeliveredOrder {
+  const placed = mapDistributorApiOrder(order, index, catalogs);
+  const when = order.deliveryDate || order.updatedAt || order.createdAt || "";
+  const date = when ? new Date(when) : new Date();
+  const valid = !Number.isNaN(date.getTime());
+  const distributor = catalogs.distributors.find(
+    (entry) =>
+      entry.id === order.distributorId ||
+      entry.recordId === order.distributorId,
+  );
+  return {
+    ...placed,
+    week: valid ? weekOfLabel(date) : "Delivered",
+    day: valid
+      ? date.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        })
+      : "—",
+    zipCode: distributor?.zip || "",
+    status: "Delivered",
+    sortTimestamp: valid ? date.getTime() : 0,
   };
 }
 
@@ -417,6 +459,7 @@ export default function ProductOrdersPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
+  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
   const [loading, setLoading] = useState(() => isApiConfigured());
   const [loadingMoreOrders, setLoadingMoreOrders] = useState(false);
   const [orderPage, setOrderPage] = useState(1);
@@ -459,10 +502,18 @@ export default function ProductOrdersPage() {
         return {
           id,
           label: formatDeliveryChipLabel(date),
-          count: getOrderDemandCountForDate(id),
+          count: isApiConfigured()
+            ? inProgress.filter((order) => {
+                const parsed = new Date(order.deliveryDate);
+                return (
+                  !Number.isNaN(parsed.getTime()) &&
+                  toDeliveryDateId(parsed) === id
+                );
+              }).length
+            : getOrderDemandCountForDate(id),
         };
       });
-  }, [chipWindowStart, deliveryDates]);
+  }, [chipWindowStart, deliveryDates, inProgress]);
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? deliveryDates[0] ?? new Date();
@@ -477,10 +528,28 @@ export default function ProductOrdersPage() {
     [productFilter, search],
   );
 
-  const orderDemandRows = useMemo(
-    () => getOrderDemandForDate(activeDeliveryDateId),
-    [activeDeliveryDateId],
-  );
+  const orderDemandRows = useMemo(() => {
+    if (!isApiConfigured()) return getOrderDemandForDate(activeDeliveryDateId);
+    const target = parseDeliveryDateId(activeDeliveryDateId);
+    return inProgress.flatMap((order) => {
+      const parsed = new Date(order.deliveryDate);
+      if (
+        target &&
+        !Number.isNaN(parsed.getTime()) &&
+        toDeliveryDateId(parsed) !== activeDeliveryDateId
+      ) {
+        return [];
+      }
+      return order.items.map((item) => ({
+        id: `${order.id}-${item.sku || item.itemName}`,
+        itemName: item.itemName,
+        custOrderTotal: item.quantity,
+        inStock: null,
+        qtyReceiving: item.quantity,
+        dateReceivingBy: order.deliveryDate,
+      }));
+    });
+  }, [activeDeliveryDateId, inProgress]);
 
   const filteredPreview = useMemo(
     () => filterOrderDemandRows(orderDemandRows, orderDemandCriteria),
@@ -586,22 +655,24 @@ export default function ProductOrdersPage() {
     ],
   );
 
+  const deliveredSource = isApiConfigured() ? deliveredOrders : DELIVERED_ORDERS;
+
   const deliveredZipOptions = useMemo(
-    () => uniqueDeliveredFieldValues(DELIVERED_ORDERS, "zipCode"),
-    [],
+    () => uniqueDeliveredFieldValues(deliveredSource, "zipCode"),
+    [deliveredSource],
   );
   const deliveredDateOptions = useMemo(
-    () => uniqueDeliveredFieldValues(DELIVERED_ORDERS, "day"),
-    [],
+    () => uniqueDeliveredFieldValues(deliveredSource, "day"),
+    [deliveredSource],
   );
 
   const deliveredFlat = useMemo(() => {
     const filtered = filterDeliveredOrders(
-      DELIVERED_ORDERS,
+      deliveredSource,
       deliveredFilterCriteria,
     );
     return sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
-  }, [deliveredFilterCriteria]);
+  }, [deliveredFilterCriteria, deliveredSource]);
   const deliveredWindow = useLazyWindow(
     deliveredFlat,
     `${search}|${deliveredZipFilter}|${deliveredDateFilter}|${deliveredStatusFilter}|${deliveredSort}`,
@@ -665,10 +736,10 @@ export default function ProductOrdersPage() {
     const names = new Set([
       ...ORDER_LIST_ITEMS.flatMap((r) => r.options.map((o) => o.distributor)),
       ...inProgress.map((o) => o.distributor),
-      ...DELIVERED_ORDERS.map((o) => o.distributor),
+      ...deliveredSource.map((o) => o.distributor),
     ]);
     return Array.from(names).sort();
-  }, [inProgress]);
+  }, [deliveredSource, inProgress]);
 
   useEffect(() => {
     if (!isApiConfigured()) {
@@ -696,14 +767,16 @@ export default function ProductOrdersPage() {
         if (remote.length < DEFAULT_PAGE_LIMIT) setRemoteExhausted(true);
         if (remote.length === 0) return;
 
-        const mapped: PlacedOrder[] = remote.map((order, index) =>
-          mapDistributorApiOrder(
-            order,
-            index,
-            { distributors, products },
-            orderPage,
-          ),
-        );
+        const mapped: PlacedOrder[] = remote
+          .filter((order) => order.status !== "delivered")
+          .map((order, index) =>
+            mapDistributorApiOrder(
+              order,
+              index,
+              { distributors, products },
+              orderPage,
+            ),
+          );
 
         setInProgress((prev) => appendInProgressOrders(prev, mapped));
       })
@@ -724,6 +797,29 @@ export default function ProductOrdersPage() {
     // Catalog identity is stable after bootstrap; paging should not refetch on those arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isBootstrapping, orderPage]);
+
+  useEffect(() => {
+    if (!isApiConfigured() || isBootstrapping) return;
+    let cancelled = false;
+    void ordersApi
+      .list({ type: "distributor", status: "delivered", page: 1, limit: 100 })
+      .then((result) => {
+        if (cancelled) return;
+        setDeliveredOrders(
+          result.items.map((order, index) =>
+            mapDeliveredApiOrder(order, index, { distributors, products }),
+          ),
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          notifyApiError(error, "Failed to load delivered orders.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [distributors, isBootstrapping, notifyApiError, products]);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -1012,7 +1108,7 @@ export default function ProductOrdersPage() {
                       const groups =
                         request.scope === "all"
                           ? groupDeliveredOrders(
-                              sortDeliveredOrders(DELIVERED_ORDERS, "newest"),
+                              sortDeliveredOrders(deliveredSource, "newest"),
                             )
                           : groupDeliveredOrders(deliveredFlat);
                       downloadDeliveredOrdersCsv(

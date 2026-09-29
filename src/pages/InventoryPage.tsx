@@ -24,7 +24,8 @@ import { buildInventoryPayload } from "@/lib/api/inventory";
 import type { ApiInventory } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
-import { isUuid } from "@/utils/entityIds";
+import { categoryNamesFromCatalog } from "@/utils/categories";
+import { isUuid, recordRef } from "@/utils/entityIds";
 import {
   buildInventorySections,
   groupInventorySections,
@@ -969,7 +970,12 @@ function handoffFromRemaining(order: ReceivedOrder) {
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
   const { pendingHandoffs, removeHandoff, pushHandoff } = useReceivingHandoff();
-  const { items: catalogItems, isBootstrapping } = useAppCatalog();
+  const {
+    items: catalogItems,
+    products,
+    categories,
+    isBootstrapping,
+  } = useAppCatalog();
   const { notifyApiError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
@@ -988,7 +994,11 @@ export default function InventoryPage() {
 
   const sections = useMemo(
     () =>
-      buildInventorySections(catalogItems, inventoryRows)
+      buildInventorySections(
+        catalogItems,
+        inventoryRows,
+        categoryNamesFromCatalog(categories),
+      )
         .map((section) => ({
           ...section,
           products: section.products.filter(
@@ -996,7 +1006,7 @@ export default function InventoryPage() {
           ),
         }))
         .filter((section) => section.products.length > 0),
-    [catalogItems, inventoryRows],
+    [catalogItems, categories, inventoryRows],
   );
 
   useEffect(() => {
@@ -1236,38 +1246,13 @@ export default function InventoryPage() {
       setSavingLocation(true);
       let mutated = false;
       try {
-        const first = valid[0];
-        if (!first) return;
-        const source = inventoryRows.find((row) => row.id === editLot.recordId);
-        await inventoryApi.update(editLot.recordId, {
-          quantity: Math.round(first.qty),
-          location: first.location,
+        await inventoryApi.split(editLot.recordId, {
+          splits: valid.map((row) => ({
+            quantity: Math.max(1, Math.round(row.qty)),
+            location: row.location.trim(),
+          })),
         });
         mutated = true;
-        if (valid.length > 1) {
-          if (!isUuid(editLot.catalogItemId)) {
-            throw new Error(
-              "This item is not linked to a catalog item, so the extra location could not be saved.",
-            );
-          }
-          for (const split of valid.slice(1)) {
-            await inventoryApi.create(
-              buildInventoryPayload({
-                itemId: editLot.catalogItemId,
-                quantity: split.qty,
-                location: split.location,
-                expirationDate: source?.expirationDate,
-                unit: source?.unit || editLot.unit,
-                purchased: source?.purchased,
-                deliveryDate: source?.deliveryDate,
-                distributorOrderId: source?.distributorOrderId,
-                orderCode: source?.orderCode || editLot.orderId,
-                distributorName: source?.distributorName || editLot.distributor,
-                sourceName: source?.sourceName || editLot.source,
-              }),
-            );
-          }
-        }
         setInventoryRows(await inventoryApi.list());
         setEditTarget(null);
       } catch (error) {
@@ -1324,21 +1309,56 @@ export default function InventoryPage() {
               `${item.itemName} is not linked to a catalog item, so it cannot be stored.`,
             );
           }
-          for (const placement of placements) {
-            await inventoryApi.create(
-              buildInventoryPayload({
-                itemId: item.catalogItemId,
-                quantity: placement.qty,
-                location: placement.location,
-                expirationDate: item.expirationIso,
-                unit: item.unit,
-                purchased: item.purchased,
-                distributorOrderId: item.deliveryId || order.id,
-                orderCode: order.id,
-                distributorName: order.supplier,
-                sourceName: item.source,
-              }),
+          const orderRecordId = [item.deliveryId, order.id].find((value) =>
+            isUuid(value),
+          );
+          const linkedProduct = products.find((product) => {
+            if (product.itemId === item.catalogItemId) return true;
+            const catalogItem = catalogItems.find(
+              (entry) =>
+                entry.recordId === item.catalogItemId ||
+                entry.id === item.catalogItemId,
             );
+            if (!catalogItem) return false;
+            return (
+              product.itemId === catalogItem.id ||
+              product.itemId === catalogItem.recordId
+            );
+          });
+          const productId = linkedProduct
+            ? recordRef(linkedProduct)
+            : undefined;
+          if (orderRecordId && productId) {
+            await inventoryApi.store({
+              distributorOrderId: orderRecordId,
+              items: placements.map((placement) => {
+                const parsed = Date.parse(
+                  /^\d{4}-\d{2}-\d{2}$/.test(item.expirationIso)
+                    ? `${item.expirationIso}T00:00:00.000Z`
+                    : item.expirationIso,
+                );
+                return {
+                  productId,
+                  quantity: Math.max(1, Math.round(placement.qty)),
+                  location: placement.location.trim(),
+                  ...(Number.isNaN(parsed)
+                    ? {}
+                    : { expirationDate: new Date(parsed).toISOString() }),
+                };
+              }),
+            });
+          } else {
+            for (const placement of placements) {
+              await inventoryApi.create(
+                buildInventoryPayload({
+                  itemId: item.catalogItemId,
+                  quantity: placement.qty,
+                  location: placement.location,
+                  expirationDate: item.expirationIso,
+                  distributorOrderId: orderRecordId,
+                }),
+              );
+            }
           }
         } else {
           setInventoryRows((current) => [

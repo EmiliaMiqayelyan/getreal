@@ -28,6 +28,8 @@ export { itemsApi } from "./items";
 export { distributorsApi } from "./distributors";
 export { sourcesApi } from "./sources";
 export { inventoryApi } from "./inventory";
+export { receivingApi } from "./receiving";
+export { coolersApi } from "./coolers";
 export { notificationRulesApi } from "./notifications";
 export type {
   NotificationRulePayload,

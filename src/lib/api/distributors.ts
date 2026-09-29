@@ -19,7 +19,6 @@ export type ApiDistributorContactPayload = {
 
 export type CreateDistributorPayload = {
   name: string;
-  distributorCode?: string;
   address?: string;
   city?: string;
   state?: string;

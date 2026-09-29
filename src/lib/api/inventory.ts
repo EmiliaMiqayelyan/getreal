@@ -1,26 +1,43 @@
-import { isUuid, publicCode } from "@/utils/entityIds";
+import { isUuid } from "@/utils/entityIds";
 
-import { ApiError, apiRequest } from "./client";
+import { apiRequest } from "./client";
 import type { ApiInventory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
+
+export type InventoryStatus =
+  | "in_stock"
+  | "reserved"
+  | "picked"
+  | "shipped"
+  | "wasted";
 
 export type CreateInventoryPayload = {
   itemId: string;
   quantity: number;
   location?: string;
+  /** ISO date-time. */
   expirationDate?: string;
-  unit?: string;
-  purchased?: number;
-  deliveryDate?: string;
   distributorOrderId?: string;
-  orderCode?: string;
-  distributorName?: string;
-  sourceName?: string;
+  status?: InventoryStatus;
 };
 
 export type UpdateInventoryPayload = Partial<CreateInventoryPayload>;
 
-const DOCUMENTED_WRITE_KEYS = ["itemId", "quantity", "location"] as const;
+export type StoreInventoryItemPayload = {
+  productId: string;
+  quantity: number;
+  location: string;
+  expirationDate?: string;
+};
+
+export type StoreInventoryPayload = {
+  distributorOrderId: string;
+  items: StoreInventoryItemPayload[];
+};
+
+export type SplitInventoryPayload = {
+  splits: Array<{ quantity: number; location: string }>;
+};
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -241,10 +258,13 @@ function cleanText(value: string | null | undefined) {
   return trimmed;
 }
 
-function isoDate(value: string | null | undefined) {
+function isoDateTime(value: string | null | undefined) {
   const text = cleanText(value);
-  if (!text || !/^\d{4}-\d{2}-\d{2}/.test(text)) return undefined;
-  return text.slice(0, 10);
+  if (!text) return undefined;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00.000Z`;
+  const parsed = Date.parse(text);
+  if (Number.isNaN(parsed)) return undefined;
+  return new Date(parsed).toISOString();
 }
 
 export function moneyAmount(
@@ -266,62 +286,21 @@ export function buildInventoryPayload(input: {
   quantity: number;
   location?: string | null;
   expirationDate?: string | null;
-  unit?: string | null;
-  purchased?: string | number | null;
-  deliveryDate?: string | null;
   distributorOrderId?: string | null;
-  orderCode?: string | null;
-  distributorName?: string | null;
-  sourceName?: string | null;
+  status?: InventoryStatus | null;
 }): CreateInventoryPayload {
   const body: CreateInventoryPayload = {
     itemId: input.itemId,
-    quantity: Math.max(1, Math.round(input.quantity)),
+    quantity: Math.max(0, Math.round(input.quantity)),
   };
   const location = cleanText(input.location);
   if (location) body.location = location;
-  const expirationDate = isoDate(input.expirationDate);
+  const expirationDate = isoDateTime(input.expirationDate);
   if (expirationDate) body.expirationDate = expirationDate;
-  const unit = cleanText(input.unit);
-  if (unit) body.unit = unit;
-  const purchased = moneyAmount(input.purchased);
-  if (purchased != null) body.purchased = purchased;
-  const deliveryDate = isoDate(input.deliveryDate);
-  if (deliveryDate) body.deliveryDate = deliveryDate;
   const orderId = cleanText(input.distributorOrderId);
   if (orderId && isUuid(orderId)) body.distributorOrderId = orderId;
-  const orderCode = publicCode(cleanText(input.orderCode), orderId);
-  if (orderCode) body.orderCode = orderCode;
-  const distributorName = cleanText(input.distributorName);
-  if (distributorName) body.distributorName = distributorName;
-  const sourceName = cleanText(input.sourceName);
-  if (sourceName) body.sourceName = sourceName;
+  if (input.status) body.status = input.status;
   return body;
-}
-
-function documentedBody(
-  body: CreateInventoryPayload | UpdateInventoryPayload,
-): UpdateInventoryPayload {
-  const next: UpdateInventoryPayload = {};
-  for (const key of DOCUMENTED_WRITE_KEYS) {
-    const value = body[key];
-    if (value != null && value !== "") next[key] = value as never;
-  }
-  return next;
-}
-
-function rejectsExtraFields(error: unknown) {
-  if (!(error instanceof ApiError)) return false;
-  if (error.status !== 400 && error.status !== 422) return false;
-  const text =
-    `${error.message} ${JSON.stringify(error.body ?? "")}`.toLowerCase();
-  return (
-    text.includes("should not exist") ||
-    text.includes("not allowed") ||
-    text.includes("unknown field") ||
-    text.includes("unknown property") ||
-    text.includes("additional propert")
-  );
 }
 
 /** Live `GET /inventory` returns `{ inventory: [{ category, items: [...] }] }`, not a flat list. */
@@ -410,20 +389,11 @@ async function writeInventory(
   path: string,
   body: CreateInventoryPayload | UpdateInventoryPayload,
 ) {
-  try {
-    const payload = await apiRequest<unknown>(path, {
-      method,
-      body: JSON.stringify(body),
-    });
-    return unwrapInventory(payload);
-  } catch (error) {
-    if (!rejectsExtraFields(error)) throw error;
-    const payload = await apiRequest<unknown>(path, {
-      method,
-      body: JSON.stringify(documentedBody(body)),
-    });
-    return unwrapInventory(payload);
-  }
+  const payload = await apiRequest<unknown>(path, {
+    method,
+    body: JSON.stringify(body),
+  });
+  return unwrapInventory(payload);
 }
 
 export const inventoryApi = {
@@ -458,5 +428,19 @@ export const inventoryApi = {
 
   remove(id: string) {
     return apiRequest<void>(`/inventory/${id}`, { method: "DELETE" });
+  },
+
+  store(body: StoreInventoryPayload) {
+    return apiRequest<unknown>("/inventory/store", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  },
+
+  split(id: string, body: SplitInventoryPayload) {
+    return apiRequest<unknown>(`/inventory/${id}/split`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
   },
 };

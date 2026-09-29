@@ -174,6 +174,13 @@ export type ApiOrder = {
   communicationChannel?: string;
   deliveryDate?: string;
   items?: ApiOrderItem[];
+  packerId?: string | null;
+  coolerId?: string | null;
+  packingStartedAt?: string | null;
+  coolerReadyAt?: string | null;
+  loadedAt?: string | null;
+  receivedAt?: string | null;
+  validatedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { isApiConfigured } from "@/lib/api/client";
 import type { ReceivingHandoffOrder } from "@/types/receiving";
 
 type ReceivingHandoffContextValue = {
@@ -55,7 +56,7 @@ export function ReceivingHandoffProvider({
   const [pendingHandoffs, setPendingHandoffs] =
     useState<ReceivingHandoffOrder[]>(loadPendingHandoffs);
   const [receivedDeliveryIds, setReceivedDeliveryIds] = useState<Set<string>>(
-    () => new Set(["DP-1038"]),
+    () => (isApiConfigured() ? new Set() : new Set(["DP-1038"])),
   );
 
   useEffect(() => {

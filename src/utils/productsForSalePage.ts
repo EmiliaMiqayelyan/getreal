@@ -1,10 +1,9 @@
 import {
-  ITEM_CATEGORIES,
   ITEM_SUBCATEGORIES,
   type Item,
   type ItemPhoto,
 } from "@/types/item";
-import type { ProductForSale, ProductTab } from "@/types/productForSale";
+import type { ProductForSale } from "@/types/productForSale";
 import { findByEntityRef } from "@/utils/entityIds";
 import { getItemDisplayName } from "@/utils/items";
 import type { SubcategoryMap } from "@/utils/subcategories";
@@ -82,7 +81,7 @@ export function resolveProductDetails(
 }
 export type ProductFilterCriteria = {
   query: string;
-  tab: ProductTab;
+  tab: string;
   subcategory: string;
   distributor: string;
   source: string;
@@ -217,6 +216,7 @@ export function groupProductsForSale(
   products: ProductForSale[],
   items: Item[] = [],
   subcategoryOrder?: SubcategoryMap,
+  categoryOrder: string[] = [],
 ): ProductGroup[] {
   const byCategory = new Map<string, Map<string, ProductForSale[]>>();
 
@@ -231,10 +231,10 @@ export function groupProductsForSale(
     byCategory.set(category, subcategories);
   }
 
-  const categoryOrder = [...ITEM_CATEGORIES, "Other"];
+  const ordered = [...categoryOrder, "Other"];
   const categories = Array.from(byCategory.keys()).sort((left, right) => {
-    const leftIndex = categoryOrder.indexOf(left);
-    const rightIndex = categoryOrder.indexOf(right);
+    const leftIndex = ordered.indexOf(left);
+    const rightIndex = ordered.indexOf(right);
     if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right);
     if (leftIndex === -1) return 1;
     if (rightIndex === -1) return -1;
@@ -316,6 +316,6 @@ export function formatSubcategoryTitle(subcategory: string) {
   return subcategory.trim() || "Other";
 }
 
-export function isProductTab(value: string): value is ProductTab {
-  return value === "All" || (ITEM_CATEGORIES as readonly string[]).includes(value);
+export function isProductTab(value: string, categoryNames: string[] = []): boolean {
+  return value === "All" || categoryNames.includes(value);
 }

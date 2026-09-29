@@ -31,7 +31,8 @@ import {
 import { dollarsToCents } from "@/lib/api/mappers";
 import type { ExportRequest } from "@/types/export";
 import { exportFilename } from "@/utils/csvExport";
-import { ITEM_CATEGORIES, type Item } from "@/types/item";
+import { type Item } from "@/types/item";
+import { categoryNamesFromCatalog } from "@/utils/categories";
 import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
 import { findByEntityRef, recordRef } from "@/utils/entityIds";
@@ -52,8 +53,6 @@ const SECONDARY = "text-[12px] font-medium leading-[18px] text-[#6B718099]";
 const VIEW_DESCRIPTION_LINK =
   "cursor-pointer border-0 bg-transparent p-0 text-left text-[12px] font-medium italic underline leading-[18px] text-[#6B718099] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
-const TABS = ["All", ...ITEM_CATEGORIES] as const;
-type ItemTab = (typeof TABS)[number];
 
 const GRID =
   "grid grid-cols-[112px_64px_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(48px,1fr)] items-center gap-3";
@@ -253,7 +252,12 @@ export default function ItemsPage() {
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [sourceFilter, setSourceFilter] = useState("");
-  const [tab, setTab] = useState<ItemTab>("All");
+  const categoryNames = useMemo(
+    () => categoryNamesFromCatalog(categories),
+    [categories],
+  );
+  const tabs = useMemo(() => ["All", ...categoryNames], [categoryNames]);
+  const [tab, setTab] = useState("All");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const itemSaveLock = useRef(false);
@@ -339,10 +343,16 @@ export default function ItemsPage() {
     `${query}|${tab}|${subcategoryFilter}|${distributorFilter}|${sourceFilter}`,
   );
 
-  function selectTab(nextTab: ItemTab) {
+  function selectTab(nextTab: string) {
     setTab(nextTab);
     setSubcategoryFilter("");
   }
+
+  useEffect(() => {
+    if (tab !== "All" && categoryNames.length > 0 && !categoryNames.includes(tab)) {
+      setTab("All");
+    }
+  }, [categoryNames, tab]);
 
   function openCreate() {
     setEditing(null);
@@ -483,9 +493,9 @@ export default function ItemsPage() {
         below={
           <Tabs
             aria-label="Item categories"
-            items={TABS.map((entry) => ({ id: entry, label: entry }))}
-            value={tab}
-            onChange={(id) => selectTab(id as ItemTab)}
+            items={tabs.map((entry) => ({ id: entry, label: entry }))}
+            value={tabs.includes(tab) ? tab : "All"}
+            onChange={selectTab}
           />
         }
       />

@@ -10,7 +10,7 @@ export type PackingSourceOption = {
 export type PackingLine = {
   id: string;
   name: string;
-  category: "Meat" | "Fruits";
+  category: string;
   qty: number;
   selected?: PackingSourceOption;
   coolerId: string;

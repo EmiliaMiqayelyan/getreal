@@ -1,6 +1,5 @@
 import {
   CASE_BY_OPTIONS,
-  ITEM_CATEGORIES,
   PIECE_WEIGHT_OPTIONS,
   SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
@@ -35,6 +34,7 @@ export type ItemFormInput = {
   sellingPrice: string;
   distributorOptions: string[];
   sourceOptions: string[];
+  categoryOptions: string[];
   subcategoryOptions: string[];
 };
 
@@ -87,7 +87,7 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
 
   if (!input.category) {
     errors.category = "Select a category.";
-  } else if (!(ITEM_CATEGORIES as readonly string[]).includes(input.category)) {
+  } else if (!input.categoryOptions.includes(input.category)) {
     errors.category = "Select a valid category.";
   }
 
@@ -95,7 +95,7 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.subcategory = "Select a subcategory.";
   } else if (
     input.category &&
-    (ITEM_CATEGORIES as readonly string[]).includes(input.category) &&
+    input.categoryOptions.includes(input.category) &&
     !input.subcategoryOptions.includes(input.subcategory)
   ) {
     errors.subcategory = "Select a subcategory for the selected category.";
