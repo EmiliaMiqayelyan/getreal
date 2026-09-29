@@ -1,36 +1,35 @@
-import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { ROUTES } from "@/constants";
 import { getHomeRoute, getRole, isAuthenticated } from "@/lib/auth";
+import { lazyPage } from "@/lib/lazyPage";
 import LoginPage from "@/pages/LoginPage";
 
-const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
-const InventoryPage = lazy(() => import("@/pages/InventoryPage"));
-const ProductsForSalePage = lazy(() => import("@/pages/ProductsForSalePage"));
-const ProductOrdersPage = lazy(() => import("@/pages/ProductOrdersPage"));
-const DistributorDeliveriesPage = lazy(
+const DashboardPage = lazyPage(() => import("@/pages/DashboardPage"));
+const InventoryPage = lazyPage(() => import("@/pages/InventoryPage"));
+const ProductsForSalePage = lazyPage(
+  () => import("@/pages/ProductsForSalePage"),
+);
+const ProductOrdersPage = lazyPage(() => import("@/pages/ProductOrdersPage"));
+const DistributorDeliveriesPage = lazyPage(
   () => import("@/pages/DistributorDeliveriesPage"),
 );
-const PackingCoolersPage = lazy(() => import("@/pages/PackingCoolersPage"));
-const PackerManagerPage = lazy(() => import("@/pages/PackerManagerPage"));
-const DistributorsPage = lazy(() => import("@/pages/DistributorsPage"));
-const SourcePage = lazy(() => import("@/pages/SourcePage"));
-const ItemsPage = lazy(() => import("@/pages/ItemsPage"));
-const CustomerOrdersPage = lazy(() => import("@/pages/CustomerOrdersPage"));
-const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
-const RolesPage = lazy(() => import("@/pages/RolesPage"));
-const PushNotificationsPage = lazy(
+const PackingCoolersPage = lazyPage(() => import("@/pages/PackingCoolersPage"));
+const PackerManagerPage = lazyPage(() => import("@/pages/PackerManagerPage"));
+const DistributorsPage = lazyPage(() => import("@/pages/DistributorsPage"));
+const SourcePage = lazyPage(() => import("@/pages/SourcePage"));
+const ItemsPage = lazyPage(() => import("@/pages/ItemsPage"));
+const CustomerOrdersPage = lazyPage(() => import("@/pages/CustomerOrdersPage"));
+const CustomersPage = lazyPage(() => import("@/pages/CustomersPage"));
+const RolesPage = lazyPage(() => import("@/pages/RolesPage"));
+const PushNotificationsPage = lazyPage(
   () => import("@/pages/PushNotificationsPage"),
 );
 
 function HomeRedirect() {
   return (
-    <Navigate
-      to={isAuthenticated() ? getHomeRoute() : ROUTES.login}
-      replace
-    />
+    <Navigate to={isAuthenticated() ? getHomeRoute() : ROUTES.login} replace />
   );
 }
 
