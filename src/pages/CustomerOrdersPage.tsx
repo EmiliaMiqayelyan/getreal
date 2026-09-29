@@ -1450,7 +1450,6 @@ export default function CustomerOrdersPage() {
   const [completedLoading, setCompletedLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [appliedDateId, setAppliedDateId] = useState("");
-  const [draftDateId, setDraftDateId] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [zipFilter, setZipFilter] = useState("");
@@ -1845,20 +1844,6 @@ export default function CustomerOrdersPage() {
     setListExhausted(false);
   }
 
-  function toggleCalendar() {
-    if (calendarOpen) {
-      setCalendarOpen(false);
-      return;
-    }
-    setDraftDateId(appliedDateId);
-    setCalendarOpen(true);
-  }
-
-  function applyCalendarDate() {
-    commitDeliveryDate(draftDateId);
-    setCalendarOpen(false);
-  }
-
   function shiftDeliveryDate(delta: number) {
     if (deliveryChips.length === 0) return;
     if (appliedChipIndex === -1) {
@@ -2159,20 +2144,18 @@ export default function CustomerOrdersPage() {
                   <DateNavButton
                     aria-label="Calendar"
                     aria-expanded={calendarOpen}
-                    onClick={toggleCalendar}
+                    onClick={() => setCalendarOpen((open) => !open)}
                   >
                     <CalendarIcon />
                   </DateNavButton>
 
                   {calendarOpen ? (
                     <DeliveryDateCalendar
-                      selectedDateId={draftDateId}
-                      onSelectDate={setDraftDateId}
+                      selectedDateId={appliedDateId}
+                      onSelectDate={commitDeliveryDate}
                       onClose={() => setCalendarOpen(false)}
-                      onApply={applyCalendarDate}
-                      applyDisabled={!draftDateId}
                       initialMonth={
-                        parseDeliveryDateId(draftDateId) ?? new Date()
+                        parseDeliveryDateId(appliedDateId) ?? new Date()
                       }
                     />
                   ) : null}
