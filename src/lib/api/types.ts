@@ -134,6 +134,10 @@ export type ApiInventory = {
   id?: string;
   inventoryCode?: string;
   itemId?: string;
+  /** Filled from a nested `item` when the list does not send a flat name. */
+  itemName?: string | null;
+  category?: string | null;
+  subcategory?: string | null;
   quantity?: number;
   location?: string | null;
   /** Full address shown on the location hover. */
@@ -144,7 +148,7 @@ export type ApiInventory = {
   distributorName?: string | null;
   sourceName?: string | null;
   deliveryDate?: string | null;
-  /** Purchase timestamp or amount, as returned by the inventory list. */
+  /** Purchase price, as returned by the inventory list. */
   purchased?: string | number | null;
   unit?: string | null;
   expirationDate?: string | null;
@@ -190,7 +194,8 @@ export type ApiUser = {
   distributorCode?: string;
   /** Public customer id shown in the Customers ID column. */
   customerCode?: string;
-  distributor?: { distributorCode?: string; id?: string; name?: string } | string;
+  distributor?:
+    { distributorCode?: string; id?: string; name?: string } | string;
   email?: string;
   name?: string;
   role?: string;
@@ -207,6 +212,14 @@ export type ApiUser = {
   state?: string | null;
   zipCode?: string | null;
   heardFrom?: string | null;
+  isSubscribed?: boolean;
+  /** Order count from the customers list. */
+  orderCount?: number | null;
+  /** Lifetime spend in cents. */
+  totalAmount?: number | null;
+  lastOrderDate?: string | null;
+  /** Next or latest delivery timestamp. The table shows its weekday. */
+  deliveryDate?: string | null;
 };
 
 export type ApiRoleUser = {

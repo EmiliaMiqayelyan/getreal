@@ -389,7 +389,7 @@ export default function SourcePage() {
                 return;
               }
               try {
-                const payload = toCreateSourcePayload(source);
+                const payload = toCreateSourcePayload(source, distributors);
                 if (editing) {
                   const updated = await sourcesApi.update(
                     apiId(editing),

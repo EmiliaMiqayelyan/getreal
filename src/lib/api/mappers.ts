@@ -156,6 +156,24 @@ export function uniqueManagedRoles(roles: ApiRole[]): ManagedRole[] {
   return result;
 }
 
+function isoDateOnly(value: string | null | undefined): string {
+  const match = value?.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}
+
+/** Weekday name at noon local time, so a date-only value does not shift a day. */
+function weekdayName(value: string | null | undefined): string {
+  const day = isoDateOnly(value);
+  if (!day) return "";
+  const date = new Date(`${day}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { weekday: "long" });
+}
+
+function finiteNumber(value: number | null | undefined): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
 export function mapApiUserToAdminCustomer(
   user: ApiUser,
   index: number,
@@ -188,17 +206,18 @@ export function mapApiUserToAdminCustomer(
     phone: user.phoneNumber ?? user.phone ?? "",
     shortLocation,
     fullAddress,
-    orderQuantity: 0,
-    lastOrderedDate: "",
-    lifetimeTotal: 0,
+    orderQuantity: finiteNumber(user.orderCount),
+    lastOrderedDate: isoDateOnly(user.lastOrderDate),
+    lifetimeTotal: centsToDollars(user.totalAmount ?? undefined),
     blocked: Boolean(user.isBlocked),
+    subscribed: Boolean(user.isSubscribed),
     customerTag:
       user.status === "vip"
         ? "VIP"
         : user.status === "regular"
           ? "Regular"
           : "",
-    deliveryDay: "",
+    deliveryDay: weekdayName(user.deliveryDate),
     zip: user.zipCode ?? undefined,
     orders: [],
   };

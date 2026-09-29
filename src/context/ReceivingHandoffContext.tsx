@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -22,13 +23,51 @@ type ReceivingHandoffContextValue = {
 const ReceivingHandoffContext =
   createContext<ReceivingHandoffContextValue | null>(null);
 
-export function ReceivingHandoffProvider({ children }: { children: ReactNode }) {
-  const [pendingHandoffs, setPendingHandoffs] = useState<ReceivingHandoffOrder[]>(
-    [],
+const HANDOFF_STORAGE_KEY = "getreal.pendingInventoryHandoffs";
+
+function isHandoffOrder(value: unknown): value is ReceivingHandoffOrder {
+  if (!value || typeof value !== "object") return false;
+  const row = value as ReceivingHandoffOrder;
+  return (
+    typeof row.deliveryId === "string" &&
+    typeof row.distributor === "string" &&
+    Array.isArray(row.items)
   );
+}
+
+function loadPendingHandoffs(): ReceivingHandoffOrder[] {
+  try {
+    const raw = sessionStorage.getItem(HANDOFF_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(isHandoffOrder);
+  } catch {
+    return [];
+  }
+}
+
+export function ReceivingHandoffProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const [pendingHandoffs, setPendingHandoffs] =
+    useState<ReceivingHandoffOrder[]>(loadPendingHandoffs);
   const [receivedDeliveryIds, setReceivedDeliveryIds] = useState<Set<string>>(
     () => new Set(["DP-1038"]),
   );
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        HANDOFF_STORAGE_KEY,
+        JSON.stringify(pendingHandoffs),
+      );
+    } catch {
+      // Session storage can be unavailable. The in-memory list still works.
+    }
+  }, [pendingHandoffs]);
 
   const pushHandoff = useCallback((order: ReceivingHandoffOrder) => {
     setPendingHandoffs((current) => {

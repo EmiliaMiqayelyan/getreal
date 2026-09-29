@@ -165,7 +165,8 @@ function lotFromRow(
     recordId: row.id?.trim() || `inv-${index}`,
     catalogItemId,
     orderId: inventoryOrderLabel(row),
-    distributor: readString(row, "distributorName") || item?.distributor?.trim() || "—",
+    distributor:
+      readString(row, "distributorName") || item?.distributor?.trim() || "—",
     source: readString(row, "sourceName") || item?.source?.trim() || "—",
     deliveryDate: formatInventoryDate(readString(row, "deliveryDate")),
     purchased: formatPurchasedField(row.purchased),
@@ -221,7 +222,13 @@ export function buildInventorySections(
   const lotsByProduct = new Map<string, InventoryLot[]>();
   const productMeta = new Map<
     string,
-    { name: string; category: string; subcategory: string; distributor: string; unit: string }
+    {
+      name: string;
+      category: string;
+      subcategory: string;
+      distributor: string;
+      unit: string;
+    }
   >();
 
   rows.forEach((row, index) => {
@@ -231,11 +238,15 @@ export function buildInventorySections(
     const catalogItemId =
       matches.length === 1 ? catalogItemUuid(matches[0], row.itemId) : "";
     const lot = lotFromRow(row, item, index, catalogItemId);
+    const apiName = row.itemName?.trim();
     const name = item
-      ? item.merchandisingName?.trim() || item.name?.trim() || "Item"
-      : "Item";
-    const category = item ? parentCategory(item.category || "") : "Uncategorized";
-    const subcategory = item?.subcategory?.trim() || (item ? category : "Inventory");
+      ? item.merchandisingName?.trim() || item.name?.trim() || apiName || "Item"
+      : apiName || "Item";
+    const category = parentCategory(row.category || item?.category || "");
+    const subcategory =
+      row.subcategory?.trim() ||
+      item?.subcategory?.trim() ||
+      (category === "Uncategorized" ? "Inventory" : category);
     const key =
       matches.length === 1 && item
         ? productIdFor(item)
@@ -288,7 +299,8 @@ export function buildInventorySections(
     if (byCategory !== 0) return byCategory;
     if (a.category !== b.category) return a.category.localeCompare(b.category);
     const bySub =
-      subcategoryRank(a.category, a.title) - subcategoryRank(b.category, b.title);
+      subcategoryRank(a.category, a.title) -
+      subcategoryRank(b.category, b.title);
     if (bySub !== 0) return bySub;
     return a.title.localeCompare(b.title);
   });

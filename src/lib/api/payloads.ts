@@ -177,15 +177,25 @@ function sourceAddressPayload(source: Source) {
   return splitAddress(source.fullAddress || source.location);
 }
 
-export function toCreateSourcePayload(source: Source): CreateSourcePayload {
-  if (!source.distributorId) {
-    throw new Error("Source requires a distributorId for the API");
+export function toCreateSourcePayload(
+  source: Source,
+  distributors: Distributor[] = [],
+): CreateSourcePayload {
+  const distributorId = relationRecordId(
+    source.distributorId,
+    source.distributor,
+    distributors,
+  );
+  if (!distributorId) {
+    throw new Error(
+      "This distributor is not linked to a server record. Reload the page and try again.",
+    );
   }
   const parsed = sourceAddressPayload(source);
   return {
     name: source.name.trim(),
     sourceCode: businessCodeOrUndefined(source.id),
-    distributorId: source.distributorId,
+    distributorId,
     description: source.description || undefined,
     address: parsed.address || undefined,
     city: parsed.city,
