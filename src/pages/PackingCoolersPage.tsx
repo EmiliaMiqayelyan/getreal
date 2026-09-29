@@ -211,17 +211,26 @@ function SourcePicker({
   );
 }
 
-function mapStandardOrder(order: ApiOrder, index: number): PackOrder {
-  const code = orderModelId(order, `ORD-${index + 1}`);
+function packCustomerName(order: ApiOrder) {
   const raw = order as ApiOrder & {
     customerName?: string;
     customer?: { name?: string; firstName?: string; lastName?: string };
   };
-  const customer =
+  const users = Array.isArray(order.users) ? order.users[0] : order.users;
+  const joined = [users?.firstName, users?.lastName].filter(Boolean).join(" ");
+  return (
+    joined ||
+    users?.name?.trim() ||
     raw.customerName?.trim() ||
     [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
     raw.customer?.name ||
-    "Customer";
+    "Customer"
+  );
+}
+
+function mapStandardOrder(order: ApiOrder, index: number): PackOrder {
+  const code = orderModelId(order, `ORD-${index + 1}`);
+  const customer = packCustomerName(order);
   const deliveryDate = order.deliveryDate
     ? new Date(order.deliveryDate).toLocaleDateString()
     : "";
@@ -678,6 +687,32 @@ export default function PackingCoolersPage() {
       });
     }
     setActiveOrderId(order.id);
+    if (isApiConfigured() && order.recordId) {
+      void ordersApi
+        .getById(order.recordId)
+        .then((remote) => {
+          const mapped = mapStandardOrder(remote, 0);
+          setOrders((current) =>
+            current.map((row) =>
+              row.id === order.id
+                ? {
+                    ...row,
+                    ...mapped,
+                    id: row.id,
+                    recordId: row.recordId,
+                    code: row.code,
+                    customer:
+                      mapped.customer !== "Customer" ? mapped.customer : row.customer,
+                    items: mapped.items.length ? mapped.items : row.items,
+                  }
+                : row,
+            ),
+          );
+        })
+        .catch((error) => {
+          notifyApiError(error, "Failed to load order details.");
+        });
+    }
   }
 
   function cycleChip(delta: number) {

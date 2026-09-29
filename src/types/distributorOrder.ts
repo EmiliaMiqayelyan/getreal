@@ -43,6 +43,8 @@ export type ReviewGroup = {
 
 export type PlacedOrder = {
   id: string;
+  /** UUID for GET /orders/:id. */
+  recordId?: string;
   deliveryId: string;
   distributor: string;
   orderDate: string;

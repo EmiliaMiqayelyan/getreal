@@ -990,6 +990,7 @@ export default function InventoryPage() {
   const [showToast, setShowToast] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
+  const editRequest = useRef(0);
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
 
   const sections = useMemo(
@@ -1232,6 +1233,30 @@ export default function InventoryPage() {
         location: nextUnusedLocation(currentLocation ? [currentLocation] : []),
       },
     ]);
+    if (!isApiConfigured() || !isUuid(lot.recordId)) return;
+    const recordId = lot.recordId;
+    const request = editRequest.current + 1;
+    editRequest.current = request;
+    void inventoryApi
+      .getById(recordId)
+      .then((row) => {
+        if (editRequest.current !== request) return;
+        const qty = typeof row.quantity === "number" ? row.quantity : lot.qty;
+        const location =
+          row.location?.trim() && row.location.trim() !== "—"
+            ? row.location.trim()
+            : currentLocation;
+        setEditSplits([
+          { qty, location },
+          {
+            qty: 0,
+            location: nextUnusedLocation(location ? [location] : []),
+          },
+        ]);
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load inventory details.");
+      });
   }
 
   async function confirmEditLocation() {

@@ -37,7 +37,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { isApiConfigured, receivingApi } from "@/lib/api";
+import { isApiConfigured, ordersApi, receivingApi } from "@/lib/api";
 import type { ApiDelivery } from "@/lib/api/receiving";
 import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
@@ -1063,6 +1063,47 @@ export default function DistributorDeliveriesPage() {
       cancelled = true;
     };
   }, [notifyApiError]);
+
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  const loadedDeliveryIds = useRef(new Set<string>());
+
+  useEffect(() => {
+    const openId = viewingId ?? checkingId;
+    if (!isApiConfigured() || !openId || loadedDeliveryIds.current.has(openId)) {
+      return;
+    }
+    const order = ordersRef.current.find((row) => row.id === openId);
+    if (!order?.recordId) return;
+    loadedDeliveryIds.current.add(openId);
+    let cancelled = false;
+    void ordersApi
+      .getById(order.recordId)
+      .then((remote) => {
+        if (cancelled) return;
+        const mapped = mapDelivery(remote as ApiDelivery, 0);
+        setOrders((current) =>
+          current.map((row) =>
+            row.id === openId
+              ? {
+                  ...row,
+                  items: remote.items?.length ? mapped.items : row.items,
+                  distributor:
+                    mapped.distributor && mapped.distributor !== "Distributor"
+                      ? mapped.distributor
+                      : row.distributor,
+                }
+              : row,
+          ),
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkingId, notifyApiError, viewingId]);
 
   const checkingOrder = orders.find((order) => order.id === checkingId) ?? null;
   const viewingOrder = orders.find((order) => order.id === viewingId) ?? null;

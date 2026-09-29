@@ -363,6 +363,44 @@ export default function ItemsPage() {
     const latest = rows.find((row) => row.id === item.id) ?? item;
     setEditing(latest);
     setModalOpen(true);
+    const pathId = recordRef(latest);
+    if (!isApiConfigured() || !pathId) return;
+    const sellingPrice = displaySalePrice(latest);
+    void itemsApi
+      .getById(pathId)
+      .then((remote) => {
+        const mapped = mapApiItemToItem(remote, 0, {
+          categoriesById: new Map(
+            categories
+              .filter((entry) => entry.id && entry.name)
+              .map((entry) => [entry.id as string, entry.name as string]),
+          ),
+          subcategoriesById: new Map(
+            subcategoryRecords
+              .filter((entry) => entry.id)
+              .map((entry) => [entry.id as string, entry.name]),
+          ),
+          distributorsById: new Map(
+            distributors.flatMap((entry) =>
+              entry.recordId ? [[entry.recordId, entry.name] as const] : [],
+            ),
+          ),
+          sourcesById: new Map(
+            sources.flatMap((entry) =>
+              entry.recordId ? [[entry.recordId, entry.name] as const] : [],
+            ),
+          ),
+          sellingPriceDollars: sellingPrice || undefined,
+        });
+        setEditing((current) =>
+          current?.id === latest.id
+            ? { ...mapped, id: current.id, sellingPrice: mapped.sellingPrice || current.sellingPrice }
+            : current,
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load item details.");
+      });
   }
 
   function closeModal() {

@@ -176,6 +176,8 @@ export type ApiOrder = {
   status?: string;
   distributorId?: string;
   customerId?: string;
+  /** Customer record included on the order. The API names this relation `users`. */
+  users?: ApiUser | ApiUser[] | null;
   communicationChannel?: string;
   deliveryDate?: string;
   items?: ApiOrderItem[];

@@ -51,6 +51,7 @@ import {
   collectPaginated,
   isApiConfigured,
   orderModelId,
+  orderRecordId,
   ordersApi,
   type ApiOrder,
 } from "@/lib/api";
@@ -153,6 +154,7 @@ function mapDistributorApiOrder(
   const orderCode = orderModelId(order, `API-DO-${page}-${index + 1}`);
   return {
     id: orderCode,
+    recordId: orderRecordId(order),
     deliveryId: orderCode,
     distributor: distributorName,
     orderDate: order.createdAt
@@ -467,6 +469,11 @@ export default function ProductOrdersPage() {
   const [remoteTotal, setRemoteTotal] = useState(0);
   const [remoteExhausted, setRemoteExhausted] = useState(false);
   const ordersLoadLock = useRef(false);
+  const loadedDetailIds = useRef(new Set<string>());
+  const inProgressRef = useRef(inProgress);
+  const deliveredRef = useRef(deliveredOrders);
+  inProgressRef.current = inProgress;
+  deliveredRef.current = deliveredOrders;
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
     null,
@@ -606,6 +613,51 @@ export default function ProductOrdersPage() {
       ),
     );
   }
+
+  useEffect(() => {
+    const openId = expandedId ?? expandedDeliveredId;
+    if (!isApiConfigured() || !openId || loadedDetailIds.current.has(openId)) {
+      return;
+    }
+    const placed =
+      inProgressRef.current.find((order) => order.id === openId) ??
+      deliveredRef.current.find((order) => order.id === openId);
+    if (!placed?.recordId) return;
+    let cancelled = false;
+    void ordersApi
+      .getById(placed.recordId)
+      .then((remote) => {
+        if (cancelled) return;
+        loadedDetailIds.current.add(openId);
+        const mapped = mapDistributorApiOrder(remote, 0, {
+          distributors,
+          products,
+        });
+        const items = mapped.items.length ? mapped.items : placed.items;
+        setInProgress((current) =>
+          current.map((row) =>
+            row.id === openId ? { ...row, items, recordId: row.recordId } : row,
+          ),
+        );
+        setDeliveredOrders((current) =>
+          current.map((row) =>
+            row.id === openId ? { ...row, items, recordId: row.recordId } : row,
+          ),
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    distributors,
+    expandedDeliveredId,
+    expandedId,
+    notifyApiError,
+    products,
+  ]);
 
   useEffect(() => {
     if (deliveryDates.length === 0) return;

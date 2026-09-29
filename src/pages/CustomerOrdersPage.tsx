@@ -252,28 +252,51 @@ function orderTotalDollars(order: ApiOrder, lines: OrderItem[]) {
   return lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
 }
 
+function orderCustomerRecord(order: ApiOrder) {
+  const raw = order as ApiOrder & { customer?: unknown; user?: unknown };
+  const users = order.users;
+  if (Array.isArray(users)) {
+    const match = users.find((entry) => entry?.id && entry.id === order.customerId);
+    return asRecord(match ?? users[0]);
+  }
+  return asRecord(users) ?? asRecord(raw.customer) ?? asRecord(raw.user);
+}
+
+function readOrderCustomer(order: ApiOrder) {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const customer = orderCustomerRecord(order);
+  const name =
+    readString(raw.customerName) ||
+    [readString(customer?.firstName), readString(customer?.lastName)]
+      .filter(Boolean)
+      .join(" ") ||
+    readString(customer?.name) ||
+    readString(customer?.email) ||
+    "Customer";
+  return {
+    name,
+    address:
+      readString(customer?.address) ||
+      readString(raw.address) ||
+      readString(raw.deliveryAddress),
+    apt: readString(customer?.aptUnit) || readString(customer?.apt),
+    city: readString(customer?.city),
+    state: readString(customer?.state),
+    zip:
+      readString(customer?.zipCode) ||
+      readString(customer?.zip) ||
+      readString(raw.zipCode) ||
+      readString(raw.zip),
+  };
+}
+
 function mapApiOrderToActive(
   order: ApiOrder,
   fallbackId: string,
 ): CustomerOrderRow {
   const doneCount = ORDER_STATUS_DONE_COUNT[order.status ?? "requested"] ?? 1;
   const lines = orderLineItems(order);
-  const raw = order as ApiOrder & {
-    customerName?: string;
-    customer?: {
-      firstName?: string;
-      lastName?: string;
-      name?: string;
-      distributorCode?: string;
-    };
-  };
-  const customer = raw.customer;
-  const customerName =
-    raw.customerName?.trim() ||
-    [customer?.firstName, customer?.lastName].filter(Boolean).join(" ") ||
-    customer?.name ||
-    publicCode(customer?.distributorCode, order.customerId) ||
-    "Customer";
+  const customer = readOrderCustomer(order);
   const orderCode = orderModelId(order, fallbackId);
   const readyAt = order.coolerReadyAt || order.packingStartedAt || undefined;
   const steps = makeSteps(doneCount).map((step) => {
@@ -283,13 +306,13 @@ function mapApiOrderToActive(
   return {
     id: orderCode,
     recordId: orderRecordId(order),
-    customerName,
+    customerName: customer.name,
     itemCount: order.items?.length ?? 0,
-    address: "",
-    apt: "",
-    city: "",
-    state: "",
-    zip: "",
+    address: customer.address,
+    apt: customer.apt,
+    city: customer.city,
+    state: customer.state,
+    zip: customer.zip,
     orderDate: order.createdAt ? formatOrderStamp(order.createdAt) : "",
     deliveryDate: order.deliveryDate
       ? formatDeliveryBadge(order.deliveryDate)
@@ -307,9 +330,43 @@ function mapApiOrderToActive(
   };
 }
 
+/** Status values GET /orders accepts for orders that belong on the Completed tab. */
+const COMPLETED_ORDER_QUERY_STATUSES = [
+  "delivered",
+  "cooler_pickup",
+  "return",
+  "archived",
+] as const;
+
 function isCompletedOrderStatus(status?: string) {
   const value = (status ?? "").trim().toLowerCase();
-  return value === "completed" || value === "complete";
+  return (
+    value === "completed" ||
+    value === "complete" ||
+    (COMPLETED_ORDER_QUERY_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+function isClosedOrderStatus(status?: string) {
+  const value = (status ?? "").trim().toLowerCase();
+  return (
+    value === "return" ||
+    value === "archived" ||
+    value === "cancelled" ||
+    value === "completed" ||
+    value === "complete"
+  );
+}
+
+async function loadCompletedStandardOrders() {
+  const pages = await Promise.all(
+    COMPLETED_ORDER_QUERY_STATUSES.map((status) =>
+      collectPaginated((page, limit) =>
+        ordersApi.list({ page, limit, type: "standard", status }),
+      ),
+    ),
+  );
+  return pages.flat();
 }
 
 function readString(value: unknown) {
@@ -387,31 +444,11 @@ function mapApiOrderToCompleted(
   index: number,
 ): CompletedOrder {
   const raw = order as ApiOrder & Record<string, unknown>;
-  const customer = asRecord(raw.customer);
-  const customerName =
-    readString(raw.customerName) ||
-    [readString(customer?.firstName), readString(customer?.lastName)]
-      .filter(Boolean)
-      .join(" ") ||
-    readString(customer?.name) ||
-    readString(order.customerId) ||
-    "Customer";
-  const address =
-    readString(raw.address) ||
-    readString(raw.deliveryAddress) ||
-    readString(customer?.address) ||
-    [
-      readString(customer?.street),
-      readString(customer?.city),
-      readString(customer?.state),
-    ]
-      .filter(Boolean)
-      .join(", ");
-  const zip =
-    readString(raw.zip) ||
-    readString(raw.zipCode) ||
-    readString(customer?.zip) ||
-    readString(customer?.zipCode);
+  const customer = readOrderCustomer(order);
+  const address = [customer.address, customer.apt, customer.city, customer.state]
+    .filter(Boolean)
+    .join(", ");
+  const zip = customer.zip;
   const lines = orderLineItems(order);
   const orderDateRaw = readString(order.createdAt) || readString(raw.orderDate);
   const deliveredRaw =
@@ -423,7 +460,7 @@ function mapApiOrderToCompleted(
 
   return {
     id: orderModelId(order, `API-CO-${index + 1}`),
-    customer: customerName,
+    customer: customer.name,
     address,
     zip,
     orderDate: orderDateRaw ? formatOrderStamp(orderDateRaw) : "",
@@ -443,8 +480,7 @@ function display(value?: string) {
 
 function completedDataset(orders: CompletedOrder[], fromApi: boolean) {
   if (!fromApi) return orders;
-  const finished = orders.filter((order) => order.finished);
-  return finished.length > 0 ? finished : orders;
+  return orders.filter((order) => order.finished !== false);
 }
 
 function filterActiveOrders(
@@ -454,7 +490,7 @@ function filterActiveOrders(
 ) {
   const q = search.trim().toLowerCase();
   return orders.filter((order) => {
-    if (isCompletedOrderStatus(order.status)) return false;
+    if (isClosedOrderStatus(order.status)) return false;
     const matchesSearch =
       !q ||
       order.customerName.toLowerCase().includes(q) ||
@@ -1245,6 +1281,7 @@ export default function CustomerOrdersPage() {
     () => (apiConfigured ? [] : COMPLETED_ORDERS),
   );
   const [loading, setLoading] = useState(apiConfigured);
+  const [completedLoading, setCompletedLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [activeChip, setActiveChip] = useState("wed-20");
   const [search, setSearch] = useState("");
@@ -1252,6 +1289,7 @@ export default function CustomerOrdersPage() {
   const [zipFilter, setZipFilter] = useState("");
   const [sortBy, setSortBy] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderDetail, setOrderDetail] = useState<CustomerOrderRow | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState(19);
   const [page, setPage] = useState(1);
@@ -1299,20 +1337,6 @@ export default function CustomerOrdersPage() {
           const seen = new Set(current.map((order) => order.id));
           return [...current, ...mapped.filter((order) => !seen.has(order.id))];
         });
-        const completedMapped = result.items.map((order, index) =>
-          mapApiOrderToCompleted(
-            order,
-            (page - 1) * DEFAULT_PAGE_LIMIT + index,
-          ),
-        );
-        setCompletedOrders((current) => {
-          if (!append) return completedMapped;
-          const seen = new Set(current.map((order) => order.id));
-          return [
-            ...current,
-            ...completedMapped.filter((order) => !seen.has(order.id)),
-          ];
-        });
         setTotal(result.total);
         if (
           mapped.length < DEFAULT_PAGE_LIMIT ||
@@ -1336,6 +1360,36 @@ export default function CustomerOrdersPage() {
       cancelled = true;
     };
   }, [apiConfigured, notifyApiError, page]);
+
+  useEffect(() => {
+    if (!apiConfigured) return;
+    let cancelled = false;
+    setCompletedLoading(true);
+    void loadCompletedStandardOrders()
+      .then((remote) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const mapped: CompletedOrder[] = [];
+        remote.forEach((order, index) => {
+          const row = mapApiOrderToCompleted(order, index);
+          if (seen.has(row.id)) return;
+          seen.add(row.id);
+          mapped.push({ ...row, finished: true });
+        });
+        setCompletedOrders(mapped);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          notifyApiError(error, "Failed to load completed orders.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCompletedLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfigured, notifyApiError]);
 
   useEffect(() => {
     if (!statusMenu) return;
@@ -1401,16 +1455,20 @@ export default function CustomerOrdersPage() {
     `${search}|${zipFilter}|${sortBy}`,
   );
 
+  const visibleCompleted = apiConfigured
+    ? filteredCompleted
+    : completedWindow.visible;
+
   const completedGroups = useMemo(() => {
     const weeks = new Map<string, Map<string, CompletedOrder[]>>();
-    completedWindow.visible.forEach((order) => {
+    visibleCompleted.forEach((order) => {
       if (!weeks.has(order.week)) weeks.set(order.week, new Map());
       const days = weeks.get(order.week)!;
       if (!days.has(order.day)) days.set(order.day, []);
       days.get(order.day)!.push(order);
     });
     return Array.from(weeks.entries());
-  }, [completedWindow.visible]);
+  }, [visibleCompleted]);
 
   const zipOptions = useMemo(
     () =>
@@ -1422,6 +1480,52 @@ export default function CustomerOrdersPage() {
 
   const selectedOrder =
     ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
+
+  const selectedRecordId = selectedOrder?.recordId;
+  const packingRowsRef = useRef(ordersWithPacking);
+  packingRowsRef.current = ordersWithPacking;
+
+  useEffect(() => {
+    if (!apiConfigured || !selectedOrderId || !selectedRecordId) {
+      setOrderDetail(null);
+      return;
+    }
+    const listRow = packingRowsRef.current.find(
+      (order) => order.id === selectedOrderId,
+    );
+    if (!listRow) return;
+    let cancelled = false;
+    void ordersApi
+      .getById(selectedRecordId)
+      .then((order) => {
+        if (cancelled) return;
+        const mapped = mapApiOrderToActive(order, listRow.id);
+        setOrderDetail({
+          ...listRow,
+          ...mapped,
+          id: listRow.id,
+          recordId: listRow.recordId,
+          customerName:
+            mapped.customerName !== "Customer"
+              ? mapped.customerName
+              : listRow.customerName,
+          address: mapped.address || listRow.address,
+          apt: mapped.apt || listRow.apt,
+          city: mapped.city || listRow.city,
+          state: mapped.state || listRow.state,
+          zip: mapped.zip || listRow.zip,
+          items: mapped.items.length ? mapped.items : listRow.items,
+          itemCount: mapped.items.length ? mapped.itemCount : listRow.itemCount,
+          total: mapped.total || listRow.total,
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfigured, notifyApiError, selectedOrderId, selectedRecordId]);
   const statusChangeOrder =
     ordersWithPacking.find((order) => order.id === statusChange?.orderId) ??
     null;
@@ -1591,9 +1695,11 @@ export default function CustomerOrdersPage() {
                       );
                       return applyPackingHandoff(row, packingByCode[row.id]);
                     });
-                    completedRows = remote.map((order, index) =>
-                      mapApiOrderToCompleted(order, index),
-                    );
+                    const finished = await loadCompletedStandardOrders();
+                    completedRows = finished.map((order, index) => ({
+                      ...mapApiOrderToCompleted(order, index),
+                      finished: true,
+                    }));
                   }
 
                   if (activeTab === "Completed") {
@@ -1851,7 +1957,7 @@ export default function CustomerOrdersPage() {
                 </ScrollTable>
               )}
             </div>
-          ) : loading && completedOrders.length === 0 ? (
+          ) : completedLoading && completedOrders.length === 0 ? (
             <AppLoader variant="table" label="Loading completed orders" />
           ) : completedGroups.length === 0 ? (
             <p className="text-[14px] text-[#6B7180]">
@@ -1940,7 +2046,11 @@ export default function CustomerOrdersPage() {
 
           <InfiniteScrollSentinel
             hasMore={
-              activeTab === "Orders" ? activeHasMore : completedWindow.hasMore
+              activeTab === "Orders"
+                ? activeHasMore
+                : apiConfigured
+                  ? false
+                  : completedWindow.hasMore
             }
             loading={activeTab === "Orders" && loadingMore}
             loadedCount={
@@ -2030,7 +2140,9 @@ export default function CustomerOrdersPage() {
 
       {selectedOrder ? (
         <OrderDetailPanel
-          order={selectedOrder}
+          order={
+            orderDetail?.id === selectedOrder.id ? orderDetail : selectedOrder
+          }
           onClose={() => setSelectedOrderId(null)}
         />
       ) : null}

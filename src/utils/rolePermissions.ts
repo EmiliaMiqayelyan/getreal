@@ -250,6 +250,15 @@ export function normalizePermissions(
   };
 }
 
+/** Role permission flags from a GET /roles/:id `permissions` array. */
+export function permissionsFromKeys(keys: string[]): RolePermissions {
+  const next = { ...DEFAULT_ROLE_PERMISSIONS };
+  for (const key of keys) {
+    if (key in next) next[key as keyof RolePermissions] = true;
+  }
+  return next;
+}
+
 /** Checked permission keys sent as `permissions: string[]`. */
 export function checkedPermissionKeys(permissions: RolePermissions): string[] {
   return (

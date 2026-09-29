@@ -70,6 +70,8 @@ export type AdminCustomerOrderItem = {
 
 export type AdminCustomerOrder = {
   id: string;
+  /** UUID for GET /orders/:id. */
+  recordId?: string;
   orderDate: string;
   deliveryDate: string;
   deliveryAddress: string;
@@ -84,6 +86,8 @@ export type AdminCustomerOrder = {
 
 export type AdminCustomer = {
   id: string;
+  /** UUID for GET /users/:id. */
+  recordId?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -170,6 +174,8 @@ export type RolePermissions = {
 
 export type RoleUser = {
   id: string;
+  /** UUID for GET /users/:id. */
+  recordId?: string;
   /** Business code shown in the Roles ID column. */
   roleCode?: string;
   roleId?: string;

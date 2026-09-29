@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronRight, Copy, Plus, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
@@ -26,11 +26,13 @@ import {
 } from "@/lib/api";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
-import { publicCode } from "@/utils/entityIds";
+import { isUuid, publicCode } from "@/utils/entityIds";
 import {
+  DEFAULT_ROLE_PERMISSIONS,
   ROLE_PERMISSION_GROUPS,
   checkedPermissionKeys,
   permissionsForRoleType,
+  permissionsFromKeys,
 } from "@/utils/rolePermissions";
 import {
   type UserFormErrors,
@@ -174,6 +176,33 @@ export default function RolesPage() {
     setExpandedId((current) => (current === id ? null : id));
   }
 
+  useEffect(() => {
+    if (!expandedId || !isApiConfigured()) return;
+    const user = users.find((entry) => entry.id === expandedId);
+    const roleId = isUuid(user?.roleId) ? user?.roleId : undefined;
+    if (!roleId) return;
+    let cancelled = false;
+    void rolesApi
+      .getById(roleId)
+      .then((role) => {
+        if (cancelled) return;
+        const keys = (role.permissions ?? []).filter(
+          (key) => key in DEFAULT_ROLE_PERMISSIONS,
+        );
+        if (!keys.length) return;
+        setDraftPermissions((current) => ({
+          ...current,
+          [expandedId]: permissionsFromKeys(keys),
+        }));
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load role details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [expandedId, notifyApiError, users]);
+
   function patchPermission(
     user: RoleUser,
     key: keyof RolePermissions,
@@ -209,7 +238,54 @@ export default function RolesPage() {
     setDraft(toDraft(user));
     setFormErrors({});
     setModalOpen(true);
+    const pathId =
+      user.recordId && isUuid(user.recordId)
+        ? user.recordId
+        : isUuid(user.id)
+          ? user.id
+          : undefined;
+    if (!isApiConfigured() || !pathId) return;
+    void usersApi
+      .getById(pathId)
+      .then((remote) => {
+        setDraft((current) =>
+          current.id === user.id
+            ? {
+                ...current,
+                name:
+                  [remote.firstName, remote.lastName].filter(Boolean).join(" ") ||
+                  remote.name ||
+                  current.name,
+                email: remote.email || current.email,
+                phone: remote.phoneNumber || remote.phone || current.phone,
+              }
+            : current,
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load user details.");
+      });
   }
+
+  const loadManagedRole = useCallback(async (role: ManagedRole) => {
+    const pathId =
+      role.recordId && isUuid(role.recordId) ? role.recordId : undefined;
+    if (!pathId) return null;
+    try {
+      const remote = await rolesApi.getById(pathId);
+      const keys = (remote.permissions ?? []).filter(
+        (key) => key in DEFAULT_ROLE_PERMISSIONS,
+      );
+      return {
+        name: remote.roleName?.trim() || remote.name?.trim() || role.name,
+        recordId: isUuid(remote.id) ? remote.id : role.recordId,
+        permissions: keys.length ? permissionsFromKeys(keys) : role.permissions,
+      };
+    } catch (error) {
+      notifyApiError(error, "Failed to load role details.");
+      return null;
+    }
+  }, [notifyApiError]);
 
   function closeModal() {
     setModalOpen(false);
@@ -724,6 +800,7 @@ export default function RolesPage() {
       <RoleManagementModal
         open={roleMgmtOpen}
         roles={managedRoles}
+        onLoadRole={loadManagedRole}
         onClose={() => setRoleMgmtOpen(false)}
         onSave={(next) => {
           setManagedRoles(next);

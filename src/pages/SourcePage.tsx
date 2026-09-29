@@ -21,7 +21,7 @@ import type { ExportRequest } from "@/types/export";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
-import { apiId } from "@/utils/entityIds";
+import { apiId, recordRef } from "@/utils/entityIds";
 import {
   filterSources,
   getSourceDistributorDisplay,
@@ -187,6 +187,24 @@ export default function SourcePage() {
   function openEdit(source: Source) {
     setEditing(source);
     setModalOpen(true);
+    const pathId = recordRef(source);
+    if (!isApiConfigured() || !pathId) return;
+    const distributorsById = new Map(
+      distributors.flatMap((entry) =>
+        entry.recordId ? [[entry.recordId, entry.name] as const] : [],
+      ),
+    );
+    void sourcesApi
+      .getById(pathId)
+      .then((remote) => {
+        const mapped = mapApiSourceToSource(remote, 0, distributorsById);
+        setEditing((current) =>
+          current?.id === source.id ? { ...mapped, id: current.id } : current,
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load source details.");
+      });
   }
 
   function closeModal() {

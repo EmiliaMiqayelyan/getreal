@@ -29,7 +29,7 @@ import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
-import { apiId } from "@/utils/entityIds";
+import { apiId, recordRef } from "@/utils/entityIds";
 import {
   downloadDistributorsCsv,
   filterDistributors,
@@ -368,6 +368,19 @@ export default function DistributorsPage() {
   function openEdit(distributor: Distributor) {
     setEditing(distributor);
     setModalOpen(true);
+    const pathId = recordRef(distributor);
+    if (!isApiConfigured() || !pathId) return;
+    void distributorsApi
+      .getById(pathId)
+      .then((remote) => {
+        const mapped = mapApiDistributorToDistributor(remote, 0);
+        setEditing((current) =>
+          current?.id === distributor.id ? { ...mapped, id: current.id } : current,
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load distributor details.");
+      });
   }
 
   function closeModal() {

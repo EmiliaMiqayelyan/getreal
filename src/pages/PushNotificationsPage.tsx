@@ -26,7 +26,7 @@ import {
 import type { NotificationRulePayload } from "@/lib/api/notifications";
 import type { PushNotification } from "@/types/notification";
 import { cn } from "@/utils/cn";
-import { apiId } from "@/utils/entityIds";
+import { apiId, recordRef } from "@/utils/entityIds";
 
 const LINK_BLUE = "#3B82F6";
 
@@ -183,6 +183,29 @@ export default function PushNotificationsPage() {
       body: item.body,
     });
     setModalOpen(true);
+    const pathId = recordRef(item);
+    if (!isApiConfigured() || !pathId) return;
+    void notificationRulesApi
+      .getById(pathId)
+      .then((remote) => {
+        const mapped = mapApiNotificationRule(remote, 0);
+        setDraft((current) =>
+          current.recordId === item.recordId
+            ? {
+                ...current,
+                action: mapped.action,
+                httpMethod: mapped.httpMethod,
+                scheduleDelay: String(mapped.scheduleDelay),
+                scheduleUnit: mapped.scheduleUnit,
+                subject: mapped.title,
+                body: mapped.body,
+              }
+            : current,
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load notification details.");
+      });
   }
 
   function closeModal() {

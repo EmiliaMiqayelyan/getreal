@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
@@ -18,6 +18,7 @@ type RoleManagementModalProps = {
   roles: ManagedRole[];
   onClose: () => void;
   onSave: (roles: ManagedRole[]) => void;
+  onLoadRole?: (role: ManagedRole) => Promise<Partial<ManagedRole> | null>;
 };
 
 function emptyPermissions(): RolePermissions {
@@ -29,18 +30,48 @@ export function RoleManagementModal({
   roles,
   onClose,
   onSave,
+  onLoadRole,
 }: RoleManagementModalProps) {
   const [draftRoles, setDraftRoles] = useState<ManagedRole[]>(roles);
   const [selectedId, setSelectedId] = useState<string | null>(
     roles[0]?.id ?? null,
   );
+  const loadedRoleIds = useRef(new Set<string>());
   useScrollLock(open);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      loadedRoleIds.current.clear();
+      return;
+    }
     setDraftRoles(roles);
     setSelectedId(roles[0]?.id ?? null);
   }, [open, roles]);
+
+  const selectedRecordId = draftRoles.find((role) => role.id === selectedId)
+    ?.recordId;
+
+  useEffect(() => {
+    if (!open || !onLoadRole || !selectedId || !selectedRecordId) return;
+    if (loadedRoleIds.current.has(selectedRecordId)) return;
+    const role = draftRoles.find((entry) => entry.id === selectedId);
+    if (!role) return;
+    let cancelled = false;
+    void onLoadRole(role).then((next) => {
+      if (cancelled || !next) return;
+      loadedRoleIds.current.add(selectedRecordId);
+      setDraftRoles((current) =>
+        current.map((entry) =>
+          entry.id === role.id ? { ...entry, ...next, id: entry.id } : entry,
+        ),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Load once per selected role. draftRoles is read when the selection changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onLoadRole, open, selectedId, selectedRecordId]);
 
   const selected = useMemo(
     () => draftRoles.find((role) => role.id === selectedId) ?? null,

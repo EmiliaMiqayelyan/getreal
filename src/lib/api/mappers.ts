@@ -64,6 +64,7 @@ export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
       ["userCode"],
       user.id ?? `U${String(index + 1).padStart(3, "0")}`,
     ),
+    recordId: isUuid(user.id) ? user.id : undefined,
     roleCode,
     roleId: user.roleId,
     name: user.name ?? user.email ?? "User",
@@ -119,8 +120,15 @@ export function mapApiRoleAssignmentToRoleUser(
     email ||
     `role-user-${index + 1}`;
 
+  const userRecordId = isUuid(member.userId)
+    ? member.userId
+    : isUuid(member.id)
+      ? member.id
+      : undefined;
+
   return {
     id,
+    recordId: userRecordId,
     roleCode: codeFrom(role, ["roleCode"]),
     roleId: role.roleId ?? role.id,
     name: member.name?.trim() || email || "User",
@@ -200,6 +208,7 @@ export function mapApiUserToAdminCustomer(
       ["customerCode"],
       user.id ?? `C${String(index + 1).padStart(3, "0")}`,
     ),
+    recordId: isUuid(user.id) ? user.id : undefined,
     firstName,
     lastName,
     email: user.email ?? "",

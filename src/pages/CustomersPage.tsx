@@ -21,8 +21,11 @@ import {
   collectPaginated,
   isApiConfigured,
   mapApiUserToAdminCustomer,
+  ordersApi,
   usersApi,
+  type ApiOrder,
 } from "@/lib/api";
+import { centsToDollars } from "@/lib/api/mappers";
 import type { ExportRequest } from "@/types/export";
 import type {
   AdminCustomer,
@@ -30,8 +33,34 @@ import type {
   AdminCustomerOrderStatus,
 } from "@/types/admin";
 import { cn } from "@/utils/cn";
+import { isUuid } from "@/utils/entityIds";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { resolveFullAddress } from "@/utils/format";
+
+function applyOrderDetail(
+  order: ApiOrder,
+  fallback: AdminCustomerOrder,
+): AdminCustomerOrder {
+  const items = (order.items ?? []).map((line) => {
+    const price = centsToDollars(line.price);
+    const quantity = line.quantity ?? 0;
+    return {
+      itemName: line.name || line.itemName || "Item",
+      quantity,
+      unit: line.unit || "Each",
+      pricePerUnit: price,
+      totalPrice: price * quantity,
+    };
+  });
+  return {
+    ...fallback,
+    items: items.length ? items : fallback.items,
+    orderPrice:
+      order.totalPrice != null
+        ? centsToDollars(order.totalPrice)
+        : fallback.orderPrice,
+  };
+}
 
 function currency(value: number) {
   return `$${value.toLocaleString(undefined, {
@@ -768,6 +797,7 @@ export default function CustomersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
+  const loadedOrderIds = useRef(new Set<string>());
   const customersRef = useRef(customers);
   customersRef.current = customers;
 
@@ -832,6 +862,70 @@ export default function CustomersPage() {
       cancelled = true;
     };
   }, [apiConfigured, debouncedQuery, notifyApiError, page]);
+
+  useEffect(() => {
+    if (!apiConfigured || !expandedId) return;
+    const customer = customersRef.current.find((row) => row.id === expandedId);
+    const recordId = isUuid(customer?.recordId)
+      ? customer?.recordId
+      : isUuid(customer?.id)
+        ? customer?.id
+        : undefined;
+    if (!recordId) return;
+    let cancelled = false;
+    void usersApi
+      .getById(recordId)
+      .then((user) => {
+        if (cancelled) return;
+        const mapped = mapApiUserToAdminCustomer(user, 0);
+        setCustomers((current) =>
+          current.map((row) =>
+            row.id === expandedId
+              ? { ...row, ...mapped, id: row.id, orders: row.orders }
+              : row,
+          ),
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load customer details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfigured, expandedId, notifyApiError]);
+
+  const selectedOrderRecordId = selected?.order.recordId;
+  const selectedOrderKey = selected?.order.id;
+
+  useEffect(() => {
+    if (
+      !apiConfigured ||
+      !selectedOrderRecordId ||
+      !isUuid(selectedOrderRecordId) ||
+      !selectedOrderKey
+    ) {
+      return;
+    }
+    if (loadedOrderIds.current.has(selectedOrderRecordId)) return;
+    let cancelled = false;
+    void ordersApi
+      .getById(selectedOrderRecordId)
+      .then((order) => {
+        if (cancelled) return;
+        loadedOrderIds.current.add(selectedOrderRecordId);
+        setSelected((current) =>
+          current && current.order.id === selectedOrderKey
+            ? { ...current, order: applyOrderDetail(order, current.order) }
+            : current,
+        );
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiConfigured, notifyApiError, selectedOrderKey, selectedOrderRecordId]);
 
   const zipOptions = useMemo(
     () =>
