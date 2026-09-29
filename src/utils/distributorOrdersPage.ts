@@ -13,6 +13,7 @@ import type {
   WorkingOrderRow,
 } from "@/types/distributorOrder";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
+import { deliveryDateIdFromValue } from "@/utils/deliveryCalendar";
 
 export type OrderDemandFilterCriteria = {
   query: string;
@@ -40,6 +41,7 @@ export function createPlacedOrderFromReviewGroup(
   group: ReviewGroup,
   deliveryId: string,
   deliveryDate: string,
+  deliveryDateId = "",
 ): PlacedOrder {
   return {
     id: `placed-${group.distributor}-${Date.now()}`,
@@ -47,6 +49,7 @@ export function createPlacedOrderFromReviewGroup(
     distributor: group.distributor,
     orderDate: formatOrderTimestamp(),
     deliveryDate,
+    deliveryDateId,
     totalPrice: group.totalPrice,
     items: group.items.map((item, index) => ({
       sku: `OPE-${18048 + index}`,
@@ -69,6 +72,9 @@ export function createPlacedOrderFromManualDraft(
     distributor: draft.distributor,
     orderDate: formatOrderTimestamp(),
     deliveryDate: draft.deliveryDate,
+    deliveryDateId:
+      deliveryDateIdFromValue(draft.deliveryDateIso) ||
+      deliveryDateIdFromValue(draft.deliveryDate),
     totalPrice: draft.totalPrice,
     items: draft.items.map((item) => ({ ...item })),
   };

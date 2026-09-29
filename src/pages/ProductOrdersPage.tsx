@@ -97,10 +97,12 @@ import {
 } from "@/utils/distributorOrdersPage";
 import {
   formatDeliveryChipLabel,
+  deliveryDateIdFromValue,
   formatExpectedDelivery,
+  getDeliveryDatesInRange,
   getDeliveryWeekdayIndices,
-  getUpcomingDeliveryDates,
   parseDeliveryDateId,
+  startOfLocalDay,
   toDeliveryDateId,
 } from "@/utils/deliveryCalendar";
 
@@ -152,6 +154,8 @@ function mapDistributorApiOrder(
     0,
   );
   const orderCode = orderModelId(order, `API-DO-${page}-${index + 1}`);
+  const deliveryDateId = deliveryDateIdFromValue(order.deliveryDate);
+  const deliveryDay = parseDeliveryDateId(deliveryDateId);
   return {
     id: orderCode,
     recordId: orderRecordId(order),
@@ -160,12 +164,15 @@ function mapDistributorApiOrder(
     orderDate: order.createdAt
       ? new Date(order.createdAt).toLocaleDateString()
       : "",
-    deliveryDate: order.deliveryDate
-      ? new Date(order.deliveryDate).toLocaleDateString()
-      : "",
+    deliveryDate: deliveryDay ? deliveryDay.toLocaleDateString("en-US") : "",
+    deliveryDateId,
     totalPrice,
     items: lines,
   };
+}
+
+function placedOrderDateId(order: PlacedOrder) {
+  return order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate);
 }
 
 function weekOfLabel(date: Date) {
@@ -215,6 +222,7 @@ function filterPlacedOrders(
     search: string;
     productFilter: string;
     distributorFilter: string;
+    deliveryDateId?: string;
   },
 ) {
   const q = criteria.search.trim().toLowerCase();
@@ -222,6 +230,12 @@ function filterPlacedOrders(
   return orders.filter((order) => {
     if (seen.has(order.id)) return false;
     seen.add(order.id);
+    if (
+      criteria.deliveryDateId &&
+      placedOrderDateId(order) !== criteria.deliveryDateId
+    ) {
+      return false;
+    }
     if (
       criteria.distributorFilter &&
       order.distributor !== criteria.distributorFilter
@@ -458,6 +472,7 @@ export default function ProductOrdersPage() {
     toDeliveryDateId(new Date()),
   );
   const [chipWindowStart, setChipWindowStart] = useState(0);
+  const [chipTotals, setChipTotals] = useState<Record<string, number>>({});
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
@@ -496,31 +511,45 @@ export default function ProductOrdersPage() {
     [distributors, distributorFilter],
   );
 
-  const deliveryDates = useMemo(
-    () => getUpcomingDeliveryDates(deliveryWeekdays),
-    [deliveryWeekdays],
-  );
+  const deliveryDates = useMemo(() => {
+    const weekdays =
+      deliveryWeekdays.size > 0
+        ? deliveryWeekdays
+        : new Set([0, 1, 2, 3, 4, 5, 6]);
+    const start = startOfLocalDay(new Date());
+    start.setDate(start.getDate() - 90);
+    const end = startOfLocalDay(new Date());
+    end.setDate(end.getDate() + 180);
+    return getDeliveryDatesInRange(start, end, weekdays);
+  }, [deliveryWeekdays]);
+
+  const chipDates = useMemo(() => {
+    const window = deliveryDates.slice(
+      chipWindowStart,
+      chipWindowStart + CHIP_WINDOW_SIZE,
+    );
+    const selected = parseDeliveryDateId(activeDeliveryDateId);
+    if (
+      selected &&
+      !window.some((date) => toDeliveryDateId(date) === activeDeliveryDateId)
+    ) {
+      return [selected, ...window];
+    }
+    return window;
+  }, [activeDeliveryDateId, chipWindowStart, deliveryDates]);
 
   const visibleDeliveryChips = useMemo(() => {
-    return deliveryDates
-      .slice(chipWindowStart, chipWindowStart + CHIP_WINDOW_SIZE)
-      .map((date) => {
-        const id = toDeliveryDateId(date);
-        return {
-          id,
-          label: formatDeliveryChipLabel(date),
-          count: isApiConfigured()
-            ? inProgress.filter((order) => {
-                const parsed = new Date(order.deliveryDate);
-                return (
-                  !Number.isNaN(parsed.getTime()) &&
-                  toDeliveryDateId(parsed) === id
-                );
-              }).length
-            : getOrderDemandCountForDate(id),
-        };
-      });
-  }, [chipWindowStart, deliveryDates, inProgress]);
+    return chipDates.map((date) => {
+      const id = toDeliveryDateId(date);
+      return {
+        id,
+        label: formatDeliveryChipLabel(date),
+        count: isApiConfigured()
+          ? (chipTotals[id] ?? 0)
+          : getOrderDemandCountForDate(id),
+      };
+    });
+  }, [chipDates, chipTotals]);
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? deliveryDates[0] ?? new Date();
@@ -537,25 +566,16 @@ export default function ProductOrdersPage() {
 
   const orderDemandRows = useMemo(() => {
     if (!isApiConfigured()) return getOrderDemandForDate(activeDeliveryDateId);
-    const target = parseDeliveryDateId(activeDeliveryDateId);
-    return inProgress.flatMap((order) => {
-      const parsed = new Date(order.deliveryDate);
-      if (
-        target &&
-        !Number.isNaN(parsed.getTime()) &&
-        toDeliveryDateId(parsed) !== activeDeliveryDateId
-      ) {
-        return [];
-      }
-      return order.items.map((item) => ({
+    return inProgress.flatMap((order) =>
+      order.items.map((item) => ({
         id: `${order.id}-${item.sku || item.itemName}`,
         itemName: item.itemName,
         custOrderTotal: item.quantity,
         inStock: null,
         qtyReceiving: item.quantity,
         dateReceivingBy: order.deliveryDate,
-      }));
-    });
+      })),
+    );
   }, [activeDeliveryDateId, inProgress]);
 
   const filteredPreview = useMemo(
@@ -592,17 +612,8 @@ export default function ProductOrdersPage() {
 
   function selectDeliveryDate(dateId: string) {
     setActiveDeliveryDateId(dateId);
-    const index = deliveryDates.findIndex(
-      (date) => toDeliveryDateId(date) === dateId,
-    );
-    if (index === -1) return;
-    if (index < chipWindowStart) {
-      setChipWindowStart(index);
-      return;
-    }
-    if (index >= chipWindowStart + CHIP_WINDOW_SIZE) {
-      setChipWindowStart(Math.max(0, index - CHIP_WINDOW_SIZE + 1));
-    }
+    setOrderPage(1);
+    setRemoteExhausted(false);
   }
 
   function shiftChipWindow(delta: number) {
@@ -659,21 +670,58 @@ export default function ProductOrdersPage() {
     products,
   ]);
 
-  useEffect(() => {
-    if (deliveryDates.length === 0) return;
+  const chipDateKey = chipDates
+    .map((date) => toDeliveryDateId(date))
+    .join("|");
 
-    const activeValid = deliveryDates.some(
+  useEffect(() => {
+    if (!isApiConfigured() || isBootstrapping || !chipDateKey) return;
+    let cancelled = false;
+    const ids = chipDateKey.split("|");
+    void Promise.all(
+      ids.map(async (id) => {
+        const result = await ordersApi.list({
+          page: 1,
+          limit: 1,
+          type: "distributor",
+          deliveryDate: id,
+        });
+        return [id, result.total] as const;
+      }),
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        setChipTotals((current) => {
+          const next = { ...current };
+          for (const [id, total] of entries) next[id] = total;
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          notifyApiError(error, "Failed to load delivery date counts.");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chipDateKey, isBootstrapping, notifyApiError]);
+
+  useEffect(() => {
+    const index = deliveryDates.findIndex(
       (date) => toDeliveryDateId(date) === activeDeliveryDateId,
     );
-    if (activeValid) return;
-
-    const fallback = deliveryDates[0];
-    const fallbackId = toDeliveryDateId(fallback);
-    const fallbackIndex = deliveryDates.indexOf(fallback);
-
-    setActiveDeliveryDateId(fallbackId);
-    setChipWindowStart(Math.max(0, fallbackIndex - 1));
-  }, [deliveryDates, activeDeliveryDateId]);
+    if (index === -1) return;
+    setChipWindowStart((current) => {
+      if (index >= current && index < current + CHIP_WINDOW_SIZE) {
+        return current;
+      }
+      return Math.max(
+        0,
+        Math.min(index, Math.max(0, deliveryDates.length - CHIP_WINDOW_SIZE)),
+      );
+    });
+  }, [activeDeliveryDateId, deliveryDates]);
 
   const filteredInProgress = useMemo(
     () =>
@@ -681,13 +729,20 @@ export default function ProductOrdersPage() {
         search,
         productFilter,
         distributorFilter,
+        deliveryDateId: isApiConfigured() ? undefined : activeDeliveryDateId,
       }),
-    [distributorFilter, inProgress, productFilter, search],
+    [
+      activeDeliveryDateId,
+      distributorFilter,
+      inProgress,
+      productFilter,
+      search,
+    ],
   );
 
   const inProgressWindow = useLazyWindow(
     filteredInProgress,
-    `${search}|${distributorFilter}|${productFilter}`,
+    `${search}|${distributorFilter}|${productFilter}|${activeDeliveryDateId}`,
   );
 
   const deliveredFilterCriteria = useMemo(
@@ -744,7 +799,12 @@ export default function ProductOrdersPage() {
       : deliveredCount;
   const exportFiltersActive =
     tab === "Orders"
-      ? Boolean(search.trim() || productFilter || distributorFilter)
+      ? Boolean(
+          search.trim() ||
+            productFilter ||
+            distributorFilter ||
+            activeDeliveryDateId,
+        )
       : Boolean(
           search.trim() ||
           deliveredZipFilter ||
@@ -808,16 +868,24 @@ export default function ProductOrdersPage() {
     else setLoading(true);
 
     void ordersApi
-      .list({ page: orderPage, limit: DEFAULT_PAGE_LIMIT, type: "distributor" })
+      .list({
+        page: orderPage,
+        limit: DEFAULT_PAGE_LIMIT,
+        type: "distributor",
+        deliveryDate: activeDeliveryDateId,
+      })
       .then((result) => {
         if (cancelled) return;
         const remote = result.items;
         setRemoteTotal(result.total);
+        setChipTotals((current) => ({
+          ...current,
+          [activeDeliveryDateId]: result.total,
+        }));
         setRemoteLoaded((current) =>
           append ? current + remote.length : remote.length,
         );
-        if (remote.length < DEFAULT_PAGE_LIMIT) setRemoteExhausted(true);
-        if (remote.length === 0) return;
+        setRemoteExhausted(remote.length < DEFAULT_PAGE_LIMIT);
 
         const mapped: PlacedOrder[] = remote
           .filter((order) => order.status !== "delivered")
@@ -830,7 +898,9 @@ export default function ProductOrdersPage() {
             ),
           );
 
-        setInProgress((prev) => appendInProgressOrders(prev, mapped));
+        setInProgress((prev) =>
+          append ? appendInProgressOrders(prev, mapped) : mapped,
+        );
       })
       .catch((error) => {
         if (cancelled) return;
@@ -848,7 +918,7 @@ export default function ProductOrdersPage() {
     };
     // Catalog identity is stable after bootstrap; paging should not refetch on those arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBootstrapping, orderPage]);
+  }, [activeDeliveryDateId, isBootstrapping, orderPage]);
 
   useEffect(() => {
     if (!isApiConfigured() || isBootstrapping) return;
@@ -939,6 +1009,7 @@ export default function ProductOrdersPage() {
       group,
       nextDeliveryId(inProgress),
       expectedDeliveryLabel,
+      activeDeliveryDateId,
     );
 
     setInProgress((prev) => appendInProgressOrders(prev, [order]));
@@ -961,6 +1032,7 @@ export default function ProductOrdersPage() {
         group,
         deliveryId,
         expectedDeliveryLabel,
+        activeDeliveryDateId,
       );
       deliveryCounter = [order, ...deliveryCounter];
       return order;
@@ -1049,6 +1121,10 @@ export default function ProductOrdersPage() {
                               page,
                               limit,
                               type: "distributor",
+                              deliveryDate:
+                                request.scope === "all"
+                                  ? undefined
+                                  : activeDeliveryDateId,
                             }),
                           );
                           const mapped = remote.map((order, index) =>
@@ -1059,7 +1135,7 @@ export default function ProductOrdersPage() {
                           );
                           source = appendInProgressOrders(mapped, inProgress);
                         }
-                        const orders =
+                          const orders =
                           request.scope === "all"
                             ? filterPlacedOrders(source, {
                                 search: "",
@@ -1070,6 +1146,9 @@ export default function ProductOrdersPage() {
                                 search,
                                 productFilter,
                                 distributorFilter,
+                                deliveryDateId: isApiConfigured()
+                                  ? undefined
+                                  : activeDeliveryDateId,
                               });
                         const demand =
                           request.scope === "all"
@@ -1210,7 +1289,7 @@ export default function ProductOrdersPage() {
                     );
                   })}
                 </div>
-                <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
+                <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
                   <DateNavButton
                     aria-label="Previous dates"
                     disabled={!canShiftChipsBack}
@@ -1234,8 +1313,6 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
-                      disablePast
-                      deliveryWeekdays={deliveryWeekdays}
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

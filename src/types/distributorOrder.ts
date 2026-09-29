@@ -49,6 +49,8 @@ export type PlacedOrder = {
   distributor: string;
   orderDate: string;
   deliveryDate: string;
+  /** Local calendar day (`YYYY-MM-DD`) used by the date chips and list filter. */
+  deliveryDateId?: string;
   totalPrice: number;
   items: Array<{
     sku: string;

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import {
   DateNavButton,
   CalendarIcon,
@@ -53,6 +54,12 @@ import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
+import {
+  deliveryDateIdFromValue,
+  formatDeliveryChipLabel,
+  parseDeliveryDateId,
+  toDeliveryDateId,
+} from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
 
@@ -88,6 +95,8 @@ type CustomerOrderRow = {
   zip: string;
   orderDate: string;
   deliveryDate: string;
+  /** Local calendar day, `YYYY-MM-DD`, used to filter the list. */
+  deliveryDateId: string;
   deliveryLabel: string;
   paymentStatus: "Paid" | "Pending";
   status?: string;
@@ -96,12 +105,6 @@ type CustomerOrderRow = {
   packerAssigned?: string;
   coolerIds?: string[];
   steps: TimelineStep[];
-};
-
-type DeliveryChip = {
-  id: string;
-  label: string;
-  count: number;
 };
 
 type CompletedOrder = {
@@ -166,7 +169,33 @@ function statusNeighbors(stepKey: TimelineStepKey) {
   };
 }
 
-const DELIVERY_CHIPS: DeliveryChip[] = [];
+function orderProgressIndex(steps: { done: boolean }[], status?: string) {
+  if (status && status in ORDER_STATUS_DONE_COUNT) {
+    return ORDER_STATUS_DONE_COUNT[status] - 1;
+  }
+  let index = -1;
+  steps.forEach((step, stepIndex) => {
+    if (step.done) index = stepIndex;
+  });
+  return index;
+}
+
+/** Only the immediate next step is a legal status change. */
+function statusMoveHint(
+  targetKey: TimelineStepKey,
+  steps: { done: boolean }[],
+  status?: string,
+) {
+  const currentIndex = orderProgressIndex(steps, status);
+  const next = STEPS_META[currentIndex + 1] ?? null;
+  if (!next) return "This order is already at the last status.";
+  if (targetKey === next.key) return null;
+  const targetIndex = STEPS_META.findIndex((step) => step.key === targetKey);
+  if (targetIndex > currentIndex + 1) {
+    return `You can't skip a status. Move to ${next.header} first.`;
+  }
+  return `You can only move to the next status (${next.header}).`;
+}
 
 /** Temporary seed - one line item sample. */
 
@@ -314,6 +343,7 @@ function mapApiOrderToActive(
     state: customer.state,
     zip: customer.zip,
     orderDate: order.createdAt ? formatOrderStamp(order.createdAt) : "",
+    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
     deliveryDate: order.deliveryDate
       ? formatDeliveryBadge(order.deliveryDate)
       : "",
@@ -483,10 +513,19 @@ function completedDataset(orders: CompletedOrder[], fromApi: boolean) {
   return orders.filter((order) => order.finished !== false);
 }
 
+/** Today, otherwise the next delivery day, otherwise the most recent one. */
+function pickDefaultDeliveryChipId(chips: { id: string }[]) {
+  if (chips.length === 0) return "";
+  const today = toDeliveryDateId(new Date());
+  const upcoming = chips.find((chip) => chip.id >= today);
+  return (upcoming ?? chips[chips.length - 1]).id;
+}
+
 function filterActiveOrders(
   orders: CustomerOrderRow[],
   search: string,
   statusFilter: string,
+  deliveryDateId = "",
 ) {
   const q = search.trim().toLowerCase();
   return orders.filter((order) => {
@@ -502,7 +541,9 @@ function filterActiveOrders(
       (statusFilter === "packing" && doneCount === 2) ||
       (statusFilter === "onRoute" && doneCount === 3) ||
       (statusFilter === "delivered" && doneCount >= 4);
-    return matchesSearch && matchesStatus;
+    const matchesDate =
+      !deliveryDateId || order.deliveryDateId === deliveryDateId;
+    return matchesSearch && matchesStatus && matchesDate;
   });
 }
 
@@ -938,13 +979,115 @@ function StatusChangeModal({
   );
 }
 
+function HoverHint({
+  text,
+  children,
+  className,
+}: {
+  text?: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+
+  function show() {
+    if (!text) return;
+    const rect = anchorRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const width = 220;
+    setPos({
+      top: rect.top - 8,
+      left: Math.max(
+        12,
+        Math.min(
+          rect.left + rect.width / 2 - width / 2,
+          window.innerWidth - width - 12,
+        ),
+      ),
+    });
+    setOpen(true);
+  }
+
+  return (
+    <span
+      ref={anchorRef}
+      className={className}
+      onMouseEnter={show}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={show}
+      onBlur={() => setOpen(false)}
+    >
+      {children}
+      {text && open
+        ? createPortal(
+            <div
+              role="tooltip"
+              className="pointer-events-none fixed z-[120] w-[220px] rounded-[8px] border border-[#00000014] bg-white px-2.5 py-1.5 text-center text-[12px] leading-4 text-[#111118] shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              style={{
+                top: pos.top,
+                left: pos.left,
+                transform: "translateY(-100%)",
+              }}
+            >
+              {text}
+            </div>,
+            document.body,
+          )
+        : null}
+    </span>
+  );
+}
+
+function StatusChoiceButton({
+  label,
+  enabled,
+  hint,
+  onPick,
+}: {
+  label: string;
+  enabled: boolean;
+  hint: string | null;
+  onPick: () => void;
+}) {
+  return (
+    <HoverHint
+      text={enabled ? undefined : (hint ?? undefined)}
+      className="block min-w-0"
+    >
+      <button
+        type="button"
+        aria-disabled={!enabled}
+        className={cn(
+          "h-9 w-full truncate rounded-[8px] px-2 text-[13px] font-semibold",
+          enabled
+            ? "text-white"
+            : "cursor-not-allowed bg-[#F2F2F2] text-[#B0B0B0]",
+        )}
+        style={enabled ? { background: ORANGE } : undefined}
+        onMouseDown={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!enabled) return;
+          onPick();
+        }}
+      >
+        {label}
+      </button>
+    </HoverHint>
+  );
+}
+
 function StepNode({
   step,
   order,
+  lockReason,
   onStatusClick,
 }: {
   step: TimelineStep;
   order: CustomerOrderRow;
+  lockReason?: string;
   onStatusClick: (anchor: DOMRect) => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -1004,26 +1147,31 @@ function StepNode({
         {step.done && step.shortLabel ? step.shortLabel : null}
       </div>
 
-      <button
-        type="button"
-        data-status-node
-        onClick={(event) => {
-          event.stopPropagation();
-          onStatusClick(event.currentTarget.getBoundingClientRect());
-        }}
-        className={cn(
-          "z-[1] flex size-[18px] shrink-0 items-center justify-center rounded-full",
-          step.done
-            ? step.final
-              ? "bg-[#242424]"
-              : "bg-[#F57850]"
-            : "border border-[#00000014] bg-[#EFEDEA]",
-        )}
-      >
-        {step.done ? (
-          <Check size={10} className="text-white" strokeWidth={3} />
-        ) : null}
-      </button>
+      <HoverHint text={lockReason} className="z-[1] inline-flex">
+        <button
+          type="button"
+          data-status-node
+          aria-disabled={lockReason ? true : undefined}
+          onClick={(event) => {
+            event.stopPropagation();
+            if (lockReason) return;
+            onStatusClick(event.currentTarget.getBoundingClientRect());
+          }}
+          className={cn(
+            "z-[1] flex size-[18px] shrink-0 items-center justify-center rounded-full",
+            lockReason && "cursor-not-allowed opacity-40",
+            step.done
+              ? step.final
+                ? "bg-[#242424]"
+                : "bg-[#F57850]"
+              : "border border-[#00000014] bg-[#EFEDEA]",
+          )}
+        >
+          {step.done ? (
+            <Check size={10} className="text-white" strokeWidth={3} />
+          ) : null}
+        </button>
+      </HoverHint>
 
       <div className="mt-1.5 min-h-[14px] w-full truncate text-center text-[11px] leading-tight font-medium text-[#6B7180]">
         {step.done && step.at ? step.at : null}
@@ -1058,6 +1206,9 @@ function OrderTimelineTrack({
   order: CustomerOrderRow;
   onStatusClick: (stepKey: TimelineStepKey, anchor: DOMRect) => void;
 }) {
+  const progressIndex = orderProgressIndex(order.steps, order.status);
+  const nextStep = STEPS_META[progressIndex + 1] ?? null;
+
   return (
     <div className="relative">
       <div className="pointer-events-none absolute top-[29px] right-[8%] left-[8%] flex">
@@ -1078,14 +1229,26 @@ function OrderTimelineTrack({
         })}
       </div>
       <div className="relative grid grid-cols-6">
-        {order.steps.map((step) => (
-          <StepNode
-            key={step.key}
-            step={step}
-            order={order}
-            onStatusClick={(anchor) => onStatusClick(step.key, anchor)}
-          />
-        ))}
+        {order.steps.map((step, index) => {
+          const skipped = index > progressIndex + 1;
+          const lockReason = skipped
+            ? nextStep
+              ? `You can't skip a status. Move to ${nextStep.header} first.`
+              : "You can't skip a status."
+            : undefined;
+          return (
+            <StepNode
+              key={step.key}
+              step={step}
+              order={order}
+              lockReason={lockReason}
+              onStatusClick={(anchor) => {
+                if (lockReason) return;
+                onStatusClick(step.key, anchor);
+              }}
+            />
+          );
+        })}
       </div>
     </div>
   );
@@ -1144,9 +1307,12 @@ function OrderDetailPanel({
       <div className="flex items-start justify-between gap-4 border-b border-[#ECECEC] px-6 pt-4 pb-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <IdPill>{order.id}</IdPill>
-            <span className="text-[12px] text-[#8A8A8A]">
-              Ordered: {order.orderDate || "—"}
+            <span className="inline-flex h-5 w-max shrink-0 items-center rounded-[6px] bg-[#F3F4F6] px-1.5 font-mono text-[11px] font-medium leading-none whitespace-nowrap text-[#99A1AF]">
+              {order.id}
+            </span>
+            <span className="text-[12px]">
+              <span className="text-[#6D6F7B]">Ordered:</span>{" "}
+              <span className="text-[#111118]">{order.orderDate || "—"}</span>
             </span>
           </div>
           <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-tight text-[#111118]">
@@ -1283,7 +1449,8 @@ export default function CustomerOrdersPage() {
   const [loading, setLoading] = useState(apiConfigured);
   const [completedLoading, setCompletedLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
-  const [activeChip, setActiveChip] = useState("wed-20");
+  const [appliedDateId, setAppliedDateId] = useState("");
+  const [draftDateId, setDraftDateId] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [zipFilter, setZipFilter] = useState("");
@@ -1291,14 +1458,16 @@ export default function CustomerOrdersPage() {
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderDetail, setOrderDetail] = useState<CustomerOrderRow | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(19);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
+  const defaultDeliveryApplied = useRef(false);
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
+  const calendarAnchorRef = useRef<HTMLDivElement>(null);
+  const dateChipRowRef = useRef<HTMLDivElement>(null);
   const [statusMenu, setStatusMenu] = useState<{
     orderId: string;
     stepKey: TimelineStepKey;
@@ -1322,7 +1491,12 @@ export default function CustomerOrdersPage() {
     else setLoading(true);
 
     void ordersApi
-      .list({ page, limit: DEFAULT_PAGE_LIMIT, type: "standard" })
+      .list({
+        page,
+        limit: DEFAULT_PAGE_LIMIT,
+        type: "standard",
+        deliveryDate: appliedDateId || undefined,
+      })
       .then((result) => {
         if (cancelled) return;
 
@@ -1359,7 +1533,7 @@ export default function CustomerOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [apiConfigured, notifyApiError, page]);
+  }, [apiConfigured, appliedDateId, notifyApiError, page]);
 
   useEffect(() => {
     if (!apiConfigured) return;
@@ -1429,14 +1603,65 @@ export default function CustomerOrdersPage() {
     [apiConfigured, orders, packingByCode],
   );
 
+  const deliveryChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const order of filterActiveOrders(
+      ordersWithPacking,
+      search,
+      statusFilter,
+    )) {
+      if (!order.deliveryDateId) continue;
+      counts.set(
+        order.deliveryDateId,
+        (counts.get(order.deliveryDateId) ?? 0) + 1,
+      );
+    }
+
+    if (apiConfigured && appliedDateId) {
+      const date = parseDeliveryDateId(appliedDateId);
+      const loaded = counts.get(appliedDateId) ?? ordersWithPacking.length;
+      return [
+        {
+          id: appliedDateId,
+          label: date ? formatDeliveryChipLabel(date) : appliedDateId,
+          count: search.trim() || statusFilter ? loaded : total || loaded,
+        },
+      ];
+    }
+
+    return [...counts.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([id, count]) => {
+        const date = parseDeliveryDateId(id);
+        return {
+          id,
+          label: date ? formatDeliveryChipLabel(date) : id,
+          count,
+        };
+      });
+  }, [
+    apiConfigured,
+    appliedDateId,
+    ordersWithPacking,
+    search,
+    statusFilter,
+    total,
+  ]);
+
   const filteredActive = useMemo(
-    () => filterActiveOrders(ordersWithPacking, search, statusFilter),
-    [ordersWithPacking, search, statusFilter],
+    () =>
+      filterActiveOrders(
+        ordersWithPacking,
+        search,
+        statusFilter,
+        apiConfigured ? "" : appliedDateId,
+      ),
+    [apiConfigured, appliedDateId, ordersWithPacking, search, statusFilter],
   );
 
   const activeWindow = useLazyWindow(
     filteredActive,
-    `${search}|${statusFilter}`,
+    `${search}|${statusFilter}|${appliedDateId}`,
   );
   const visibleActive = apiConfigured ? filteredActive : activeWindow.visible;
 
@@ -1529,17 +1754,121 @@ export default function CustomerOrdersPage() {
   const statusChangeOrder =
     ordersWithPacking.find((order) => order.id === statusChange?.orderId) ??
     null;
-  const statusMenuNeighbors = statusMenu
-    ? statusNeighbors(statusMenu.stepKey)
+  const statusMenuOrder =
+    ordersWithPacking.find((order) => order.id === statusMenu?.orderId) ??
+    null;
+  const triggeredStep = statusMenu
+    ? (STEPS_META.find((step) => step.key === statusMenu.stepKey) ?? null)
     : null;
-  const previousStep = statusMenuNeighbors?.previous ?? null;
-  const nextStep = statusMenuNeighbors?.next ?? null;
+  const previousStep = statusMenu
+    ? statusNeighbors(statusMenu.stepKey).previous
+    : null;
+  const previousHint =
+    previousStep && statusMenuOrder
+      ? statusMoveHint(
+          previousStep.key,
+          statusMenuOrder.steps,
+          statusMenuOrder.status,
+        )
+      : "You can only move to the next status.";
+  const triggeredHint =
+    triggeredStep && statusMenuOrder
+      ? statusMoveHint(
+          triggeredStep.key,
+          statusMenuOrder.steps,
+          statusMenuOrder.status,
+        )
+      : "You can only move to the next status.";
 
   const ordersTotal = apiConfigured ? total : filteredActive.length;
 
   const ordersHasMore =
     apiConfigured && !listExhausted && orders.length < total;
   const activeHasMore = apiConfigured ? ordersHasMore : activeWindow.hasMore;
+
+  const appliedChipIndex = deliveryChips.findIndex(
+    (chip) => chip.id === appliedDateId,
+  );
+  const canShiftDatesBack =
+    deliveryChips.length > 0 &&
+    (appliedChipIndex === -1 || appliedChipIndex > 0);
+  const canShiftDatesForward =
+    deliveryChips.length > 0 &&
+    (appliedChipIndex === -1 ||
+      appliedChipIndex < deliveryChips.length - 1);
+
+  useEffect(() => {
+    if (!calendarOpen) return;
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (calendarAnchorRef.current?.contains(target)) return;
+      setCalendarOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setCalendarOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [calendarOpen]);
+
+  useEffect(() => {
+    if (!appliedDateId) return;
+    const chip = dateChipRowRef.current?.querySelector<HTMLElement>(
+      `[data-delivery-date="${appliedDateId}"]`,
+    );
+    chip?.scrollIntoView({ inline: "nearest", block: "nearest" });
+  }, [appliedDateId, deliveryChips]);
+
+  useEffect(() => {
+    if (defaultDeliveryApplied.current || appliedDateId) {
+      if (appliedDateId) defaultDeliveryApplied.current = true;
+      return;
+    }
+    const dateId = pickDefaultDeliveryChipId(deliveryChips);
+    if (!dateId) return;
+    defaultDeliveryApplied.current = true;
+    setAppliedDateId(dateId);
+    setPage(1);
+    setListExhausted(false);
+  }, [appliedDateId, deliveryChips]);
+
+  function commitDeliveryDate(dateId: string) {
+    setAppliedDateId(dateId);
+    setPage(1);
+    setListExhausted(false);
+  }
+
+  function toggleCalendar() {
+    if (calendarOpen) {
+      setCalendarOpen(false);
+      return;
+    }
+    setDraftDateId(appliedDateId);
+    setCalendarOpen(true);
+  }
+
+  function applyCalendarDate() {
+    commitDeliveryDate(draftDateId);
+    setCalendarOpen(false);
+  }
+
+  function shiftDeliveryDate(delta: number) {
+    if (deliveryChips.length === 0) return;
+    if (appliedChipIndex === -1) {
+      const edge = delta > 0 ? deliveryChips[0] : deliveryChips.at(-1);
+      if (edge) commitDeliveryDate(edge.id);
+      return;
+    }
+    const next = deliveryChips[appliedChipIndex + delta];
+    if (next) commitDeliveryDate(next.id);
+  }
 
   function loadMoreActive() {
     if (apiConfigured) {
@@ -1551,24 +1880,24 @@ export default function CustomerOrdersPage() {
     activeWindow.loadMore();
   }
 
+  const dateFilterActive = Boolean(appliedDateId);
   const exportCount =
     activeTab === "Orders"
-      ? search.trim() || statusFilter
+      ? search.trim() || statusFilter || dateFilterActive
         ? filteredActive.length
         : ordersTotal
       : filteredCompleted.length;
   const exportFiltersActive =
     activeTab === "Orders"
-      ? Boolean(search.trim() || statusFilter)
+      ? Boolean(search.trim() || statusFilter || dateFilterActive)
       : Boolean(search.trim() || zipFilter || statusFilter || sortBy);
 
-  function openStatusChange(
-    orderId: string,
-    stepKey: TimelineStepKey,
-    direction: StatusDirection,
-  ) {
+  function openStatusChange(orderId: string, stepKey: TimelineStepKey) {
+    const existing = ordersWithPacking.find((order) => order.id === orderId);
+    if (!existing || statusMoveHint(stepKey, existing.steps, existing.status))
+      return;
     setStatusMenu(null);
-    setStatusChange({ orderId, stepKey, direction });
+    setStatusChange({ orderId, stepKey, direction: "next" });
   }
 
   async function confirmStatusChange() {
@@ -1577,6 +1906,9 @@ export default function CustomerOrdersPage() {
     const { orderId, stepKey } = statusChange;
     const targetIndex = STEPS_META.findIndex((step) => step.key === stepKey);
     if (targetIndex < 0) return;
+    const existing = ordersWithPacking.find((order) => order.id === orderId);
+    if (!existing || statusMoveHint(stepKey, existing.steps, existing.status))
+      return;
 
     const apiStatus = STEP_API_STATUS[stepKey];
     const recordId = ordersWithPacking.find(
@@ -1686,7 +2018,15 @@ export default function CustomerOrdersPage() {
                   let completedRows = completedOrders;
                   if (apiConfigured) {
                     const remote = await collectPaginated((page, limit) =>
-                      ordersApi.list({ page, limit, type: "standard" }),
+                      ordersApi.list({
+                        page,
+                        limit,
+                        type: "standard",
+                        deliveryDate:
+                          request.scope === "all"
+                            ? undefined
+                            : appliedDateId || undefined,
+                      }),
                     );
                     activeRows = remote.map((order, index) => {
                       const row = mapApiOrderToActive(
@@ -1730,7 +2070,12 @@ export default function CustomerOrdersPage() {
                   const rows =
                     request.scope === "all"
                       ? filterActiveOrders(activeRows, "", "")
-                      : filterActiveOrders(activeRows, search, statusFilter);
+                      : filterActiveOrders(
+                          activeRows,
+                          search,
+                          statusFilter,
+                          apiConfigured ? "" : appliedDateId,
+                        );
                   downloadActiveOrdersCsv(
                     rows,
                     exportFilename(
@@ -1758,6 +2103,7 @@ export default function CustomerOrdersPage() {
               setActiveTab(id as "Orders" | "Completed");
               setSelectedOrderId(null);
               setStatusMenu(null);
+              setCalendarOpen(false);
             }}
           />
         }
@@ -1768,90 +2114,67 @@ export default function CustomerOrdersPage() {
           {activeTab === "Orders" ? (
             <div>
               <div className={DATE_CHIP_ROW}>
-                <div className={DATE_CHIP_SCROLL}>
-                  {DELIVERY_CHIPS.map((chip) => {
-                    const active = chip.id === activeChip;
+                <div ref={dateChipRowRef} className={DATE_CHIP_SCROLL}>
+                  {deliveryChips.map((chip) => {
+                    const active = chip.id === appliedDateId;
                     return (
-                      <DeliveryDateChip
+                      <span
                         key={chip.id}
-                        label={chip.label}
-                        count={chip.count}
-                        active={active}
-                        onClick={() => setActiveChip(chip.id)}
-                      />
+                        data-delivery-date={chip.id}
+                        className="shrink-0"
+                      >
+                        <DeliveryDateChip
+                          label={chip.label}
+                          count={chip.count}
+                          active={active}
+                          onClick={() =>
+                            commitDeliveryDate(
+                              active ? "" : chip.id,
+                            )
+                          }
+                        />
+                      </span>
                     );
                   })}
                 </div>
 
-                <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
-                  <DateNavButton aria-label="Previous dates">
+                <div
+                  ref={calendarAnchorRef}
+                  className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}
+                >
+                  <DateNavButton
+                    aria-label="Previous dates"
+                    disabled={!canShiftDatesBack}
+                    onClick={() => shiftDeliveryDate(-1)}
+                  >
                     <ChevronLeft size={14} />
                   </DateNavButton>
-                  <DateNavButton aria-label="Next dates">
+                  <DateNavButton
+                    aria-label="Next dates"
+                    disabled={!canShiftDatesForward}
+                    onClick={() => shiftDeliveryDate(1)}
+                  >
                     <ChevronRight size={14} />
                   </DateNavButton>
                   <DateNavButton
                     aria-label="Calendar"
                     aria-expanded={calendarOpen}
-                    onClick={() => setCalendarOpen((open) => !open)}
+                    onClick={toggleCalendar}
                   >
                     <CalendarIcon />
                   </DateNavButton>
 
                   {calendarOpen ? (
-                    <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
-                      <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
-                        <span>July 2026</span>
-                        <div className="flex gap-1 text-[#8A8A8A]">
-                          <ChevronLeft size={14} />
-                          <ChevronRight size={14} />
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
-                        {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map(
-                          (day) => (
-                            <div key={day} className="py-1">
-                              {day}
-                            </div>
-                          ),
-                        )}
-                        {Array.from({ length: 31 }, (_, index) => {
-                          const day = index + 1;
-                          return (
-                            <button
-                              key={day}
-                              type="button"
-                              onClick={() => setSelectedDay(day)}
-                              className={cn(
-                                "rounded-full py-1.5 text-[#111118]",
-                                selectedDay === day
-                                  ? "bg-[#E8E5E0] font-semibold"
-                                  : "hover:bg-background",
-                              )}
-                            >
-                              {day}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
-                        <button
-                          type="button"
-                          onClick={() => setCalendarOpen(false)}
-                          className="text-[13px] text-[#8A8A8A]"
-                        >
-                          Close
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setCalendarOpen(false)}
-                          className="rounded-[8px] px-4 py-1.5 text-[13px] font-medium text-white"
-                          style={{ background: ORANGE }}
-                        >
-                          Apply
-                        </button>
-                      </div>
-                    </div>
+                    <DeliveryDateCalendar
+                      selectedDateId={draftDateId}
+                      onSelectDate={setDraftDateId}
+                      onClose={() => setCalendarOpen(false)}
+                      onApply={applyCalendarDate}
+                      applyDisabled={!draftDateId}
+                      initialMonth={
+                        parseDeliveryDateId(draftDateId) ?? new Date()
+                      }
+                    />
                   ) : null}
                 </div>
               </div>
@@ -1917,8 +2240,16 @@ export default function CustomerOrdersPage() {
                           <OrderTimelineTrack
                             order={order}
                             onStatusClick={(stepKey, anchor) => {
+                              const progress = orderProgressIndex(
+                                order.steps,
+                                order.status,
+                              );
+                              const stepIndex = STEPS_META.findIndex(
+                                (step) => step.key === stepKey,
+                              );
+                              if (stepIndex > progress + 1) return;
                               const menuWidth = 260;
-                              const menuHeight = 96;
+                              const menuHeight = 124;
                               const gap = 8;
                               const spaceBelow =
                                 window.innerHeight - anchor.bottom;
@@ -2084,39 +2415,40 @@ export default function CustomerOrdersPage() {
                 </div>
                 <div className="flex gap-2">
                   {previousStep ? (
-                    <button
-                      type="button"
-                      className="h-9 flex-1 rounded-[8px] bg-[#F2F2F2] px-2 text-[13px] font-semibold text-[#2E2E2E]"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openStatusChange(
-                          statusMenu.orderId,
-                          previousStep.key,
-                          "previous",
-                        );
-                      }}
-                    >
-                      {previousStep.header}
-                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                        Previous
+                      </div>
+                      <StatusChoiceButton
+                        label={previousStep.header}
+                        enabled={previousHint === null}
+                        hint={previousHint}
+                        onPick={() =>
+                          openStatusChange(
+                            statusMenu.orderId,
+                            previousStep.key,
+                          )
+                        }
+                      />
+                    </div>
                   ) : null}
-                  {nextStep ? (
-                    <button
-                      type="button"
-                      className="h-9 flex-1 rounded-[8px] px-2 text-[13px] font-semibold text-white"
-                      style={{ background: ORANGE }}
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        openStatusChange(
-                          statusMenu.orderId,
-                          nextStep.key,
-                          "next",
-                        );
-                      }}
-                    >
-                      {nextStep.header}
-                    </button>
+                  {triggeredStep ? (
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                        Status
+                      </div>
+                      <StatusChoiceButton
+                        label={triggeredStep.header}
+                        enabled={triggeredHint === null}
+                        hint={triggeredHint}
+                        onPick={() =>
+                          openStatusChange(
+                            statusMenu.orderId,
+                            triggeredStep.key,
+                          )
+                        }
+                      />
+                    </div>
                   ) : null}
                 </div>
               </div>,

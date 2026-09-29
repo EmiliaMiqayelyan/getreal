@@ -324,66 +324,6 @@ function expandInventoryGroups(rows: ApiInventory[]): ApiInventory[] {
   return flat;
 }
 
-async function mapPool<T, R>(
-  items: T[],
-  size: number,
-  mapper: (item: T) => Promise<R>,
-): Promise<R[]> {
-  if (!items.length) return [];
-  const results = new Array<R>(items.length);
-  let cursor = 0;
-  async function worker() {
-    while (cursor < items.length) {
-      const index = cursor;
-      cursor += 1;
-      results[index] = await mapper(items[index]);
-    }
-  }
-  const workers = Math.min(size, items.length);
-  await Promise.all(Array.from({ length: workers }, () => worker()));
-  return results;
-}
-
-async function fetchInventoryRecord(id: string): Promise<ApiInventory | null> {
-  try {
-    const payload = await apiRequest<unknown>(`/inventory/${id}`);
-    return unwrapInventory(payload);
-  } catch {
-    return null;
-  }
-}
-
-/**
- * The list payload omits `itemId`. The detail endpoint has it, which is how
- * a row is tied to the catalog item name.
- */
-async function hydrateInventoryRows(
-  rows: ApiInventory[],
-): Promise<ApiInventory[]> {
-  const missing = rows.filter((row) => row.id && !row.itemId);
-  if (!missing.length) return rows;
-  const details = await mapPool(missing, 6, (row) =>
-    fetchInventoryRecord(row.id as string),
-  );
-  const byId = new Map(
-    details
-      .filter((row): row is ApiInventory => Boolean(row?.id))
-      .map((row) => [row.id as string, row]),
-  );
-  return rows.map((row) => {
-    const detail = row.id ? byId.get(row.id) : undefined;
-    if (!detail) return row;
-    return flattenInventory({
-      ...row,
-      itemId: row.itemId || detail.itemId,
-      distributorOrderId: row.distributorOrderId || detail.distributorOrderId,
-      expirationDate: row.expirationDate ?? detail.expirationDate,
-      location: row.location || detail.location,
-      quantity: row.quantity ?? detail.quantity,
-    });
-  });
-}
-
 async function writeInventory(
   method: "POST" | "PATCH",
   path: string,
@@ -399,16 +339,14 @@ async function writeInventory(
 export const inventoryApi = {
   list() {
     return apiRequest<unknown>("/inventory").then((payload) =>
-      hydrateInventoryRows(
-        expandInventoryGroups(
-          normalizeNamedList<ApiInventory>(payload, [
-            "inventory",
-            "items",
-            "data",
-            "results",
-          ]),
-        ).map((row) => flattenInventory(row)),
-      ),
+      expandInventoryGroups(
+        normalizeNamedList<ApiInventory>(payload, [
+          "inventory",
+          "items",
+          "data",
+          "results",
+        ]),
+      ).map((row) => flattenInventory(row)),
     );
   },
 

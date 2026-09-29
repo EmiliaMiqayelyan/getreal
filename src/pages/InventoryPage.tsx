@@ -20,7 +20,7 @@ import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import { inventoryApi, isApiConfigured } from "@/lib/api";
-import { buildInventoryPayload } from "@/lib/api/inventory";
+import { buildInventoryPayload, flattenInventory } from "@/lib/api/inventory";
 import type { ApiInventory } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
@@ -986,11 +986,14 @@ export default function InventoryPage() {
   const [inventoryRows, setInventoryRows] = useState<ApiInventory[]>([]);
   const [loading, setLoading] = useState(() => isApiConfigured());
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [detailEpoch, setDetailEpoch] = useState(0);
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
   const [savingLocation, setSavingLocation] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
   const editRequest = useRef(0);
+  const loadedLotIds = useRef(new Set<string>());
+  const inflightLotIds = useRef(new Set<string>());
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
 
   const sections = useMemo(
@@ -1009,6 +1012,8 @@ export default function InventoryPage() {
         .filter((section) => section.products.length > 0),
     [catalogItems, categories, inventoryRows],
   );
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
 
   useEffect(() => {
     if (!isApiConfigured()) {
@@ -1198,6 +1203,13 @@ export default function InventoryPage() {
     [listWindow.visible],
   );
 
+  function replaceInventory(rows: ApiInventory[]) {
+    loadedLotIds.current.clear();
+    inflightLotIds.current.clear();
+    setInventoryRows(rows);
+    setDetailEpoch((current) => current + 1);
+  }
+
   function toggleExpanded(id: string) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -1206,6 +1218,61 @@ export default function InventoryPage() {
       return next;
     });
   }
+
+  useEffect(() => {
+    if (!isApiConfigured() || expanded.size === 0) return;
+    const ids: string[] = [];
+    for (const section of sectionsRef.current) {
+      for (const product of section.products) {
+        if (!expanded.has(product.id)) continue;
+        for (const lot of product.lots) {
+          if (
+            isUuid(lot.recordId) &&
+            !loadedLotIds.current.has(lot.recordId) &&
+            !inflightLotIds.current.has(lot.recordId)
+          ) {
+            ids.push(lot.recordId);
+          }
+        }
+      }
+    }
+    if (!ids.length) return;
+    for (const id of ids) inflightLotIds.current.add(id);
+    void Promise.all(
+      ids.map((id) => inventoryApi.getById(id).catch(() => null)),
+    ).then((details) => {
+      for (const id of ids) inflightLotIds.current.delete(id);
+      const byId = new Map(
+        details
+          .filter((row): row is ApiInventory => Boolean(row?.id))
+          .map((row) => [row.id as string, row]),
+      );
+      for (const id of byId.keys()) loadedLotIds.current.add(id);
+      if (!byId.size) return;
+      setInventoryRows((current) =>
+        current.map((row) => {
+          const detail = row.id ? byId.get(row.id) : undefined;
+          if (!detail) return row;
+          return flattenInventory({
+            ...row,
+            itemId: row.itemId || detail.itemId,
+            distributorOrderId:
+              row.distributorOrderId || detail.distributorOrderId,
+            expirationDate: row.expirationDate ?? detail.expirationDate,
+            location: row.location || detail.location,
+            quantity: row.quantity ?? detail.quantity,
+            itemName: row.itemName || detail.itemName,
+            orderCode: row.orderCode || detail.orderCode,
+            distributorName: row.distributorName || detail.distributorName,
+            sourceName: row.sourceName || detail.sourceName,
+            deliveryDate: row.deliveryDate || detail.deliveryDate,
+            purchased: row.purchased ?? detail.purchased,
+            unit: row.unit || detail.unit,
+          });
+        }),
+      );
+    });
+  }, [detailEpoch, expanded]);
 
   function openEditLocation(
     sectionId: string,
@@ -1278,13 +1345,13 @@ export default function InventoryPage() {
           })),
         });
         mutated = true;
-        setInventoryRows(await inventoryApi.list());
+        replaceInventory(await inventoryApi.list());
         setEditTarget(null);
       } catch (error) {
         notifyApiError(error, "Failed to update location.");
         if (mutated) {
           try {
-            setInventoryRows(await inventoryApi.list());
+            replaceInventory(await inventoryApi.list());
           } catch {
             // The first error is already shown.
           }
@@ -1413,7 +1480,7 @@ export default function InventoryPage() {
 
     if (isApiConfigured() && storedIds.length > 0) {
       try {
-        setInventoryRows(await inventoryApi.list());
+        replaceInventory(await inventoryApi.list());
       } catch (error) {
         notifyApiError(
           error,

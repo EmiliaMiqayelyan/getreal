@@ -19,6 +19,9 @@ type DeliveryDateCalendarProps = {
   selectedDateId: string;
   onSelectDate: (dateId: string) => void;
   onClose: () => void;
+  /** When set, a day click only updates the selection. Apply commits it. */
+  onApply?: () => void;
+  applyDisabled?: boolean;
   initialMonth?: Date;
   className?: string;
 };
@@ -29,6 +32,8 @@ export function DeliveryDateCalendar({
   selectedDateId,
   onSelectDate,
   onClose,
+  onApply,
+  applyDisabled = false,
   initialMonth,
   className,
 }: DeliveryDateCalendarProps) {
@@ -128,7 +133,7 @@ export function DeliveryDateCalendar({
               type="button"
               onClick={() => {
                 onSelectDate(dateId);
-                onClose();
+                if (!onApply) onClose();
               }}
               className={cn(
                 "cursor-pointer rounded-full py-1.5 text-[12px] font-medium transition-colors",
@@ -143,7 +148,7 @@ export function DeliveryDateCalendar({
         })}
       </div>
 
-      <div className="mt-3 flex items-center justify-end border-t border-[#00000014] pt-3">
+      <div className="mt-3 flex items-center justify-end gap-3 border-t border-[#00000014] pt-3">
         <button
           type="button"
           onClick={onClose}
@@ -151,6 +156,16 @@ export function DeliveryDateCalendar({
         >
           Close
         </button>
+        {onApply ? (
+          <button
+            type="button"
+            disabled={applyDisabled}
+            onClick={onApply}
+            className="rounded-[8px] bg-[#F57850] px-4 py-1.5 text-[13px] font-medium text-white disabled:opacity-40"
+          >
+            Apply
+          </button>
+        ) : null}
       </div>
     </div>
   );

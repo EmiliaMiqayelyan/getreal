@@ -19,6 +19,16 @@ export function toDeliveryDateId(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
+/** Calendar-day id for an API timestamp or `YYYY-MM-DD` value. Date-only strings stay on that day. */
+export function deliveryDateIdFromValue(value?: string | null) {
+  if (!value?.trim()) return "";
+  const trimmed = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return toDeliveryDateId(parsed);
+}
+
 export function parseDeliveryDateId(id: string) {
   const [year, month, day] = id.split("-").map(Number);
   if (!year || !month || !day) return null;

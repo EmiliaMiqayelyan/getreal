@@ -55,6 +55,8 @@ export type OrdersListParams = {
   limit?: number;
   status?: string;
   type?: string;
+  /** Calendar day `YYYY-MM-DD`. Backend `getOrdersQuerySchema.deliveryDate`. */
+  deliveryDate?: string;
 };
 
 export const ordersApi = {
@@ -77,6 +79,7 @@ export const ordersApi = {
     search.set("limit", String(limit));
     if (params.status) search.set("status", params.status);
     if (params.type) search.set("type", params.type);
+    if (params.deliveryDate) search.set("deliveryDate", params.deliveryDate);
     const qs = search.toString();
     return apiRequest<unknown>(`/orders?${qs}`).then((payload) =>
       normalizePaginatedList<ApiOrder>(
