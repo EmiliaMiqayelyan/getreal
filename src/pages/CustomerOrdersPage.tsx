@@ -32,7 +32,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
-import { PINNED_HEADER, SUB_ROW_PAD, TABLE_HEADER } from "@/constants/table";
+import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
