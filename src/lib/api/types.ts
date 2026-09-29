@@ -159,7 +159,12 @@ export type ApiInventory = {
 
 export type ApiOrderItem = {
   productId?: string;
+  name?: string;
+  itemName?: string;
   quantity?: number;
+  /** Unit price in integer cents. */
+  price?: number;
+  unit?: string;
   frequency?: string;
 };
 
@@ -174,6 +179,9 @@ export type ApiOrder = {
   communicationChannel?: string;
   deliveryDate?: string;
   items?: ApiOrderItem[];
+  /** Order total in integer cents. */
+  totalPrice?: number;
+  paymentStatus?: string;
   packerId?: string | null;
   coolerId?: string | null;
   packingStartedAt?: string | null;

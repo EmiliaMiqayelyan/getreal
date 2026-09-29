@@ -38,15 +38,17 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
+  centsToDollars,
   collectPaginated,
   isApiConfigured,
   orderModelId,
   orderRecordId,
   ordersApi,
   type ApiOrder,
+  type ApiOrderItem,
 } from "@/lib/api";
 import type { OrderStatus } from "@/lib/api/orders";
-import { isUuid, publicCode } from "@/utils/entityIds";
+import { publicCode } from "@/utils/entityIds";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -218,15 +220,44 @@ function currency(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
+function orderLineItems(order: ApiOrder): OrderItem[] {
+  return (order.items ?? []).map((line) => {
+    const record = line as ApiOrderItem & Record<string, unknown>;
+    const priceCents = readNumber(record.price);
+    return {
+      name:
+        readString(record.name) ||
+        readString(record.itemName) ||
+        publicCode(line.productId) ||
+        "Item",
+      qty: readNumber(record.quantity) ?? 0,
+      unit: readString(record.unit) || "Each",
+      unitPrice:
+        priceCents != null
+          ? centsToDollars(priceCents)
+          : (readNumber(record.unitPrice) ?? 0),
+    };
+  });
+}
+
+function orderTotalDollars(order: ApiOrder, lines: OrderItem[]) {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const totalPriceCents = readNumber(raw.totalPrice);
+  if (totalPriceCents != null) return centsToDollars(totalPriceCents);
+  const dollarTotal =
+    readNumber(raw.total) ??
+    readNumber(raw.totalAmount) ??
+    readNumber(raw.amount);
+  if (dollarTotal != null) return dollarTotal;
+  return lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
+}
+
 function mapApiOrderToActive(
   order: ApiOrder,
   fallbackId: string,
 ): CustomerOrderRow {
   const doneCount = ORDER_STATUS_DONE_COUNT[order.status ?? "requested"] ?? 1;
-  const itemCount = (order.items ?? []).reduce(
-    (sum, line) => sum + (line.quantity ?? 0),
-    0,
-  );
+  const lines = orderLineItems(order);
   const raw = order as ApiOrder & {
     customerName?: string;
     customer?: {
@@ -253,7 +284,7 @@ function mapApiOrderToActive(
     id: orderCode,
     recordId: orderRecordId(order),
     customerName,
-    itemCount: itemCount || (order.items?.length ?? 0),
+    itemCount: order.items?.length ?? 0,
     address: "",
     apt: "",
     city: "",
@@ -268,13 +299,8 @@ function mapApiOrderToActive(
       : "",
     paymentStatus: "Pending",
     status: order.status,
-    total: 0,
-    items: (order.items ?? []).map((line) => ({
-      name: publicCode(line.productId) ?? orderCode,
-      qty: line.quantity ?? 0,
-      unit: "Each",
-      unitPrice: 0,
-    })),
+    total: orderTotalDollars(order, lines),
+    items: lines,
     packerAssigned: order.packerId ?? undefined,
     coolerIds: order.coolerId ? [order.coolerId] : undefined,
     steps,
@@ -386,26 +412,7 @@ function mapApiOrderToCompleted(
     readString(raw.zipCode) ||
     readString(customer?.zip) ||
     readString(customer?.zipCode);
-  const lines = order.items ?? [];
-  const itemCount = lines.reduce((sum, line) => {
-    const quantity = readNumber((line as { quantity?: unknown }).quantity);
-    return sum + (quantity ?? 0);
-  }, 0);
-  const lineTotal = lines.reduce((sum, line) => {
-    const record = line as {
-      quantity?: unknown;
-      unitPrice?: unknown;
-      price?: unknown;
-    };
-    const quantity = readNumber(record.quantity) ?? 0;
-    const price = readNumber(record.unitPrice) ?? readNumber(record.price) ?? 0;
-    return sum + quantity * price;
-  }, 0);
-  const total =
-    readNumber(raw.total) ??
-    readNumber(raw.totalAmount) ??
-    readNumber(raw.amount) ??
-    lineTotal;
+  const lines = orderLineItems(order);
   const orderDateRaw = readString(order.createdAt) || readString(raw.orderDate);
   const deliveredRaw =
     readString(order.deliveryDate) ||
@@ -421,8 +428,8 @@ function mapApiOrderToCompleted(
     zip,
     orderDate: orderDateRaw ? formatOrderStamp(orderDateRaw) : "",
     delivered: deliveredRaw ? formatOrderStamp(deliveredRaw) : "",
-    items: itemCount || lines.length,
-    total,
+    items: order.items?.length ?? 0,
+    total: orderTotalDollars(order, lines),
     day: grouped.day,
     week: grouped.week,
     finished: isCompletedOrderStatus(order.status),
@@ -576,7 +583,7 @@ function HoverCard({
               className="grid grid-cols-[1fr_24px_56px] gap-2 text-[12px] text-[#111118]"
             >
               <span className="truncate">
-                {isUuid(item.name) ? order.id : item.name}
+                {item.name}
               </span>
               <span className="text-center text-[#8A8A8A]">{item.qty}</span>
               <span className="text-right font-medium">
@@ -776,7 +783,7 @@ function StatusChangeDetails({
                 className="grid grid-cols-[1fr_32px_72px] gap-2 text-[13px] text-[#111118]"
               >
                 <span className="truncate">
-                  {isUuid(item.name) ? order.id : item.name}
+                  {item.name}
                 </span>
                 <span className="text-center text-[#8A8A8A]">{item.qty}</span>
                 <span className="text-right font-medium">
@@ -1131,13 +1138,13 @@ function OrderDetailPanel({
               "border-b border-[#E6E6E8] bg-[#F7F7F8] py-2.5 text-[11px] font-medium tracking-[0.04em] text-[#9AA0A6] uppercase",
             )}
           >
-            <div>Order ID</div>
+            <div>Item</div>
             <div>Qty</div>
             <div>Unit Price</div>
             <div className="text-right">Total</div>
           </div>
           {order.items.map((item, itemIndex) => {
-            const label = isUuid(item.name) ? order.id : item.name;
+            const label = item.name;
             return (
               <div
                 key={`${order.id}-${itemIndex}`}
@@ -1794,7 +1801,8 @@ export default function CustomerOrdersPage() {
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <IdPill>{order.id}</IdPill>
                             <span className="text-[12px] text-[#8A8A8A]">
-                              {order.itemCount} items
+                              {order.itemCount}{" "}
+                              {order.itemCount === 1 ? "item" : "items"}
                             </span>
                           </div>
                         </button>
