@@ -1623,7 +1623,7 @@ export default function DistributorDeliveriesPage() {
             })}
 
             {!filtered.length ? (
-              <div className="col-span-full px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+              <div className="col-span-full px-4 py-12 text-center text-[14px] text-[#8A8A8A]">
                 No deliveries match your filters.
               </div>
             ) : null}

@@ -29,6 +29,7 @@ import { isUuid, recordRef } from "@/utils/entityIds";
 import {
   buildInventorySections,
   groupInventorySections,
+  remapExpandedProductIds,
   type InventoryProduct,
 } from "@/utils/inventoryView";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
@@ -151,7 +152,7 @@ function nextUnusedLocation(used: string[]) {
 }
 
 const GRID =
-  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3 px-3";
+  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3 px-4";
 
 const STOCK_GRID =
   "grid grid-cols-[300px_minmax(0,1.4fr)_40px_52px_152px_100px_minmax(0,1fr)_minmax(72px,1fr)_40px_124px] items-center gap-x-4 px-4";
@@ -1014,6 +1015,12 @@ export default function InventoryPage() {
   );
   const sectionsRef = useRef(sections);
   sectionsRef.current = sections;
+  const inventoryRowsRef = useRef(inventoryRows);
+  inventoryRowsRef.current = inventoryRows;
+  const catalogItemsRef = useRef(catalogItems);
+  catalogItemsRef.current = catalogItems;
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
 
   useEffect(() => {
     if (!isApiConfigured()) {
@@ -1249,7 +1256,8 @@ export default function InventoryPage() {
       );
       for (const id of byId.keys()) loadedLotIds.current.add(id);
       if (!byId.size) return;
-      setInventoryRows((current) =>
+
+      const mergeRows = (current: ApiInventory[]) =>
         current.map((row) => {
           const detail = row.id ? byId.get(row.id) : undefined;
           if (!detail) return row;
@@ -1269,8 +1277,24 @@ export default function InventoryPage() {
             purchased: row.purchased ?? detail.purchased,
             unit: row.unit || detail.unit,
           });
-        }),
+        });
+
+      const categoryNames = categoryNamesFromCatalog(categoriesRef.current);
+      const previousSections = buildInventorySections(
+        catalogItemsRef.current,
+        inventoryRowsRef.current,
+        categoryNames,
       );
+      const nextRows = mergeRows(inventoryRowsRef.current);
+      const nextSections = buildInventorySections(
+        catalogItemsRef.current,
+        nextRows,
+        categoryNames,
+      );
+      setExpanded((open) =>
+        remapExpandedProductIds(open, previousSections, nextSections),
+      );
+      setInventoryRows(mergeRows);
     });
   }, [detailEpoch, expanded]);
 
@@ -1670,17 +1694,21 @@ export default function InventoryPage() {
                                 "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
                               )}
                             >
-                              <span className="col-span-6 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
+                              <span className="col-span-4 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
                                 {section.title}
                               </span>
-                              <span className={cn(TABLE_HEADER, "text-center")}>
-                                In Stock
-                              </span>
-                              <span />
                               <span
                                 className={cn(
                                   TABLE_HEADER,
-                                  "whitespace-nowrap",
+                                  "col-start-6 w-max justify-self-start -ml-1.5 -translate-x-1/2 text-center whitespace-nowrap",
+                                )}
+                              >
+                                In Stock
+                              </span>
+                              <span
+                                className={cn(
+                                  TABLE_HEADER,
+                                  "col-start-9 whitespace-nowrap",
                                 )}
                               >
                                 Date Receiving By
@@ -1740,7 +1768,7 @@ export default function InventoryPage() {
                                           "border-b border-[#00000014]",
                                       )}
                                     >
-                                      <span className="flex justify-center text-[#8A8A8A]">
+                                      <span className="flex items-center justify-start text-[#8A8A8A]">
                                         <ChevronDown
                                           size={14}
                                           className={cn(
@@ -1751,21 +1779,19 @@ export default function InventoryPage() {
                                           )}
                                         />
                                       </span>
-                                      <span className="col-span-5 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                                      <span className="col-start-2 col-span-3 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                                         {product.name}
                                       </span>
                                       <span
                                         className={cn(
-                                          "text-center text-[13px] font-semibold whitespace-nowrap",
+                                          "col-start-6 w-max justify-self-start -ml-1.5 -translate-x-1/2 text-center text-[13px] font-semibold whitespace-nowrap",
                                           total <= 0
                                             ? "text-[#E25B5B]"
                                             : "text-[#111118]",
                                         )}
                                       >
-                                        {total}
+                                        {total <= 0 ? "Empty" : total}
                                       </span>
-                                      <span />
-                                      <span />
                                     </button>
 
                                     {open ? (

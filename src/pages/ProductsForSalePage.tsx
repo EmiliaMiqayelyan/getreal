@@ -61,7 +61,7 @@ import { subcategoriesForCategory } from "@/utils/subcategories";
 
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
-const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
+const BODY = "text-[13px] font-medium leading-none text-[#111118]";
 
 /** One track list for the header and every body row. Not a subgrid item — sticky grid items overlap the first row. */
 const PRODUCT_COLUMNS =
@@ -69,7 +69,10 @@ const PRODUCT_COLUMNS =
 
 function DragHandle() {
   return (
-    <span className="flex shrink-0 flex-col gap-[3px] text-[#C0C0BC]" aria-hidden>
+    <span
+      className="inline-flex h-5 shrink-0 flex-col items-center justify-center gap-[3px] leading-none text-[#C0C0BC]"
+      aria-hidden
+    >
       <span className="block h-[2px] w-[10px] rounded-full bg-current" />
       <span className="block h-[2px] w-[10px] rounded-full bg-current" />
     </span>
@@ -287,7 +290,7 @@ function SubcategoryTable({
           "min-h-10 py-2 shadow-[inset_0_-1px_0_#00000014]",
         )}
       >
-        <span />
+        <span aria-hidden />
         <span>ID</span>
         <span>Live</span>
         <span>Merchandising Name</span>
@@ -315,36 +318,36 @@ function SubcategoryTable({
                 "bg-[#F3F3F1] opacity-55 shadow-[inset_0_0_0_1px_#0000000A]",
             )}
           >
-            <div>
+            <div className="flex items-center">
               <button
                 type="button"
                 draggable
                 onDragStart={(event) => handleDragStart(event, row.id)}
                 onDragEnd={clearDragState}
-                className="cursor-grab active:cursor-grabbing"
+                className="inline-flex h-5 cursor-grab items-center justify-center p-0 leading-none active:cursor-grabbing"
                 aria-label={`Reorder ${display.merchandisingName}`}
               >
                 <DragHandle />
               </button>
             </div>
-            <div>
+            <div className="flex items-center">
               <IdPill>{row.id}</IdPill>
             </div>
-            <div>
+            <div className="flex items-center">
               <Switch
                 checked={row.live}
                 label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
                 onCheckedChange={(live) => onToggleLive(row.id, live)}
               />
             </div>
-            <div className={cn(BODY, "min-w-0 truncate font-semibold")}>
+            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate font-semibold")}>
               {display.merchandisingName}
             </div>
-            <div className={cn(BODY, "min-w-0 truncate")}>{display.source}</div>
-            <div className={cn(BODY, "whitespace-nowrap font-semibold")}>
+            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>{display.source}</div>
+            <div className={cn(BODY, "flex h-5 items-center whitespace-nowrap font-semibold")}>
               {formatSalePrice(display.salesPrice)}
             </div>
-            <div className={cn(BODY, "min-w-0 truncate")}>
+            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>
               {display.unitOfSales}
             </div>
             <div className="flex items-center justify-end gap-3">

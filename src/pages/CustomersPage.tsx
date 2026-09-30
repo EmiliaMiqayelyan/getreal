@@ -243,8 +243,7 @@ function OrderDetailDrawer({
             <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
               <div
                 className={cn(
-                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
-                  SUB_ROW_PAD,
+                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                 )}
               >
                 <div>Item / Order ID</div>
@@ -256,8 +255,7 @@ function OrderDetailDrawer({
                 <div
                   key={`${order.id}-${item.itemName}`}
                   className={cn(
-                    "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
-                    SUB_ROW_PAD,
+                    "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[12px] text-[#111118] last:border-b-0",
                   )}
                 >
                   <div className="min-w-0">
@@ -280,8 +278,7 @@ function OrderDetailDrawer({
               ))}
               <div
                 className={cn(
-                  "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] text-[#111118]",
-                  SUB_ROW_PAD,
+                  "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[#111118]",
                 )}
               >
                 <span className="text-[14px] font-semibold">Order Total</span>

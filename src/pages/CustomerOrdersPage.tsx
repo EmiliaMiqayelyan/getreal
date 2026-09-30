@@ -2186,7 +2186,7 @@ export default function CustomerOrdersPage() {
                   </div>
 
                   {visibleActive.length === 0 ? (
-                    <div className="px-5 py-10 text-center text-[13px] text-[#8A8A8A]">
+                    <div className="px-4 py-10 text-center text-[13px] text-[#8A8A8A]">
                       No orders found
                     </div>
                   ) : (

@@ -316,6 +316,50 @@ export function buildInventorySections(
   return list;
 }
 
+/**
+ * Detail loads can change a product's id (name key → catalog id).
+ * Keep rows the user opened pointed at the product that still holds those lots.
+ */
+export function remapExpandedProductIds(
+  open: Set<string>,
+  previous: InventorySection[],
+  next: InventorySection[],
+): Set<string> {
+  if (open.size === 0) return open;
+
+  const nextProductByLot = new Map<string, string>();
+  for (const section of next) {
+    for (const product of section.products) {
+      for (const lot of product.lots) {
+        if (lot.recordId) nextProductByLot.set(lot.recordId, product.id);
+      }
+    }
+  }
+
+  const remapped = new Set<string>();
+  const seen = new Set<string>();
+  let changed = false;
+
+  for (const section of previous) {
+    for (const product of section.products) {
+      if (!open.has(product.id)) continue;
+      seen.add(product.id);
+      const nextId =
+        product.lots
+          .map((lot) => nextProductByLot.get(lot.recordId))
+          .find((id): id is string => Boolean(id)) ?? product.id;
+      if (nextId !== product.id) changed = true;
+      remapped.add(nextId);
+    }
+  }
+
+  for (const id of open) {
+    if (!seen.has(id)) remapped.add(id);
+  }
+
+  return changed ? remapped : open;
+}
+
 export function groupInventorySections(sections: InventorySection[]) {
   const groups: Array<{ title: string; sections: InventorySection[] }> = [];
   for (const section of sections) {

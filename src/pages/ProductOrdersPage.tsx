@@ -1371,7 +1371,7 @@ export default function ProductOrdersPage() {
                         <span>Date Receiving By</span>
                       </div>
                       {filteredPreview.length === 0 ? (
-                        <div className="px-5 py-12 text-center text-[14px] text-[#8A8A8A]">
+                        <div className="px-4 py-12 text-center text-[14px] text-[#8A8A8A]">
                           {getOrderDemandEmptyMessage(orderDemandCriteria)}
                         </div>
                       ) : (
