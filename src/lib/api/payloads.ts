@@ -142,9 +142,8 @@ export function toCreateDistributorPayload(
 
 function persistableLogoUrl(
   url: string | null | undefined,
-): string | null | undefined {
-  if (url == null || url === "") return url === "" ? undefined : url;
-  if (url.startsWith("blob:") || url.startsWith("data:")) return undefined;
+): string | undefined {
+  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return undefined;
   return url;
 }
 

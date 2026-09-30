@@ -2095,7 +2095,7 @@ export default function CustomerOrdersPage() {
       />
 
       <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
-        <div className="min-h-0 flex-1 overflow-auto p-4 md:p-7">
+        <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-7 md:py-5">
           {activeTab === "Orders" ? (
             <div>
               <div className={DATE_CHIP_ROW}>

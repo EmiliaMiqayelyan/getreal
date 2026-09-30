@@ -11,7 +11,7 @@ export type CreateSourcePayload = {
   city?: string;
   state?: string;
   zipCode?: string;
-  logoUrl?: string | null;
+  logoUrl?: string;
 };
 
 export type UpdateSourcePayload = Partial<

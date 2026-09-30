@@ -721,7 +721,8 @@ export default function ProductsForSalePage() {
         }
       />
 
-      <div className="relative min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="relative min-h-0 flex-1 bg-[#FAFAFA]">
+        <div className="h-full overflow-auto px-4 py-5 md:px-7 md:py-5">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading products" />
         ) : filtered.length === 0 || grouped.length === 0 ? (
@@ -769,6 +770,8 @@ export default function ProductsForSalePage() {
             />
           </div>
         )}
+
+        </div>
 
         <AddProductForSaleModal
           open={addOpen}

@@ -1,20 +1,5 @@
 import { Link, useLocation } from "react-router";
 import { X } from "lucide-react";
-
-import {
-  BellIcon,
-  BoxIcon,
-  CartIcon,
-  DashboardIcon,
-  InventoryIcon,
-  ItemsIcon,
-  PackageIcon,
-  PhoneIcon,
-  RolesIcon,
-  SourceIcon,
-  TruckIcon,
-  UsersIcon,
-} from "@/components/icons";
 import { BrandLogo } from "@/components/layout/BrandLogo";
 import { CountBadge } from "@/components/ui/Badge";
 import { APP_NAME, ROUTES } from "@/constants";
@@ -33,21 +18,21 @@ function resolveNavBadge(item: NavItem): number | undefined {
   return item.badge;
 }
 
-const ICONS = {
-  dashboard: DashboardIcon,
-  inventory: InventoryIcon,
-  box: BoxIcon,
-  cart: CartIcon,
-  truck: TruckIcon,
-  users: UsersIcon,
-  customers: UsersIcon,
-  roles: RolesIcon,
-  source: SourceIcon,
-  items: ItemsIcon,
-  phone: PhoneIcon,
-  package: PackageIcon,
-  bell: BellIcon,
-} as const;
+const SIDEBAR_ICONS: Record<string, string> = {
+  [ROUTES.distributors]: "/icons/sidebar-icons/distributors.png",
+  [ROUTES.source]: "/icons/sidebar-icons/source.png",
+  [ROUTES.items]: "/icons/sidebar-icons/items.png",
+  [ROUTES.productsForSale]: "/icons/sidebar-icons/prouctsforsale.png",
+  [ROUTES.productOrders]: "/icons/sidebar-icons/distributorsorders.png",
+  [ROUTES.inventory]: "/icons/sidebar-icons/inventory.png",
+  [ROUTES.customers]: "/icons/sidebar-icons/customers.png",
+  [ROUTES.customerOrders]: "/icons/sidebar-icons/customerorders.png",
+  [ROUTES.distributorDeliveries]: "/icons/sidebar-icons/distributorreceiving.png",
+  [ROUTES.packingCoolers]: "/icons/sidebar-icons/coolerpacking.png",
+  [ROUTES.packerManager]: "/icons/sidebar-icons/packermanager.png",
+  [ROUTES.roles]: "/icons/sidebar-icons/roles.png",
+  [ROUTES.notifications]: "/icons/sidebar-icons/notifications.png",
+};
 
 function SidebarItem({
   item,
@@ -58,7 +43,7 @@ function SidebarItem({
   active: boolean;
   onNavigate?: () => void;
 }) {
-  const Icon = ICONS[item.icon];
+  const iconSrc = SIDEBAR_ICONS[item.href];
   const badge = resolveNavBadge(item);
 
   return (
@@ -66,13 +51,22 @@ function SidebarItem({
       to={item.href}
       onClick={onNavigate}
       className={cn(
-        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
+        "group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] transition-colors",
         active
           ? "bg-[#28402B] font-medium text-white"
           : "text-white/35 hover:bg-white/5 hover:text-white",
       )}
     >
-      <Icon className="size-[17px] shrink-0" />
+      {iconSrc ? (
+        <img
+          src={iconSrc}
+          alt=""
+          className={cn(
+            "size-5 shrink-0 [filter:url(#sidebar-icon-solid)]",
+            active ? "opacity-100" : "opacity-40 group-hover:opacity-100",
+          )}
+        />
+      ) : null}
       <span className="flex-1 truncate">{item.label}</span>
       {badge != null ? <CountBadge>{badge}</CountBadge> : null}
     </Link>
@@ -124,6 +118,15 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <X size={18} />
         </button>
       </div>
+
+      <svg aria-hidden className="absolute size-0">
+        <filter id="sidebar-icon-solid" colorInterpolationFilters="sRGB">
+          <feColorMatrix
+            type="matrix"
+            values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 2.5 0"
+          />
+        </filter>
+      </svg>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-6">
         {sections.map((section) => (

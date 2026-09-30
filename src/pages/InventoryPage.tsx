@@ -691,7 +691,7 @@ function StockItemsView({
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header title="Stock Items" />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] p-4 md:p-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         <div className="space-y-8">
           {groupedSections.map((group) => {
             const showHeading =
@@ -1592,7 +1592,7 @@ export default function InventoryPage() {
         }
       />
 
-      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] px-4 pt-8 pb-5 md:px-7">
+      <div className="min-h-0 flex-1 overflow-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         {orders.length ? (
           <div className="mb-5 space-y-2.5">
             {orders.map((order) => (

@@ -39,7 +39,7 @@ const NOTES_LINK =
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 
 const GRID =
-  "grid grid-cols-[112px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_88px_48px] items-center gap-x-3";
+  "grid grid-cols-[112px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_136px_48px] items-center gap-x-3";
 
 function SourcePhoto({
   logoUrl,
@@ -254,7 +254,7 @@ export default function SourcePage() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] p-4 md:p-7">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         {isBootstrapping ? (
           <AppLoader variant="table" label="Loading sources" />
         ) : (
@@ -309,7 +309,7 @@ export default function SourcePage() {
               />
             </div>
 
-            <ScrollTable fill minWidth={860} className="hidden md:block">
+            <ScrollTable fill minWidth={910} className="hidden md:block">
               <div
                 className={cn(
                   GRID,

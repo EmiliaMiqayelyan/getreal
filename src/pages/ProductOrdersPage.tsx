@@ -1271,7 +1271,7 @@ export default function ProductOrdersPage() {
           }
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] p-4 md:p-7">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
           {tab === "Orders" ? (
             <>
               <div className={DATE_CHIP_ROW}>

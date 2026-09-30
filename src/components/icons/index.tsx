@@ -33,10 +33,9 @@ export function DashboardIcon(props: IconProps) {
 export function InventoryIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <path d="M3 21V8l9-5 9 5v13" />
-      <path d="M3 8h18" />
-      <path d="M9 21V12h6v9" />
-      <path d="M9 12h6" />
+      <path d="m3 11 9-7 9 7" />
+      <path d="M5 10.2V21h14V10.2" />
+      <path d="M10 21v-6h4v6" />
     </svg>
   );
 }
@@ -75,10 +74,8 @@ export function TruckIcon(props: IconProps) {
 export function UsersIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 19c0-3 2.5-5 6-5s6 2 6 5" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M21 19c0-2.2-1.5-3.8-3.5-4.5" />
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M5 20c0-3.5 3-6 7-6s7 2.5 7 6" />
     </svg>
   );
 }
@@ -165,12 +162,8 @@ export function FileIcon(props: IconProps) {
 export function SourceIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <circle cx="12" cy="12" r="8" />
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v2.5" />
-      <path d="M12 19.5V22" />
-      <path d="M2 12h2.5" />
-      <path d="M19.5 12H22" />
+      <path d="M12 21.5s6.5-5.1 6.5-10.3a6.5 6.5 0 1 0-13 0c0 5.2 6.5 10.3 6.5 10.3Z" />
+      <circle cx="12" cy="11.2" r="2.15" />
     </svg>
   );
 }
@@ -178,8 +171,9 @@ export function SourceIcon(props: IconProps) {
 export function ItemsIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
-      <path d="M12 3c2.5 3.5 4 6.2 4 9a4 4 0 1 1-8 0c0-2.8 1.5-5.5 4-9Z" />
-      <path d="M12 14v7" />
+      <path d="M12 21V11" />
+      <path d="M12 15.2C8.6 14.6 6.6 12.6 6.4 9c3.4.4 5.2 2.2 5.6 6.2Z" />
+      <path d="M12 12.4c2.8-1.3 5.2-3.4 5.4-6.8-3.2.5-5 2.4-5.4 6.8Z" />
     </svg>
   );
 }
@@ -200,7 +194,6 @@ export function PackageIcon(props: IconProps) {
       <path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z" />
       <path d="M12 12v8" />
       <path d="m4 8.5 8 3.5 8-3.5" />
-      <path d="M8.5 6.2 15.5 10" />
     </svg>
   );
 }
