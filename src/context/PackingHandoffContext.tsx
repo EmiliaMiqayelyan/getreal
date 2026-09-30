@@ -92,7 +92,7 @@ export function PackingHandoffProvider({ children }: { children: ReactNode }) {
             ...previous,
             orderCode,
             coolerIds: previous?.coolerIds ?? [],
-            packerName: previous?.packerName ?? "Packer Name 1",
+            packerName: previous?.packerName ?? "",
             packingStartedAt,
           },
         };
@@ -113,7 +113,7 @@ export function PackingHandoffProvider({ children }: { children: ReactNode }) {
           ...previous,
           orderCode,
           coolerIds: previous?.coolerIds ?? [],
-          packerName: previous?.packerName ?? "Packer Name 1",
+          packerName: previous?.packerName ?? "",
           loadedAt,
         },
       };

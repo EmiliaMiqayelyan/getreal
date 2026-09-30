@@ -45,7 +45,7 @@ function applyOrderDetail(
     const price = centsToDollars(line.price);
     const quantity = line.quantity ?? 0;
     return {
-      itemName: line.name || line.itemName || "Item",
+      itemName: line.name || line.itemName || "N/A",
       quantity,
       unit: line.unit || "Each",
       pricePerUnit: price,
@@ -70,14 +70,16 @@ function currency(value: number) {
 }
 
 function formatShortDate(iso: string) {
-  if (!iso?.trim()) return "-";
+  if (!iso?.trim()) return "N/A";
   const date = new Date(`${iso}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return "-";
+  if (Number.isNaN(date.getTime())) return "N/A";
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 function formatDeliveryDate(iso: string) {
+  if (!iso?.trim()) return "N/A";
   const date = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return "N/A";
   return date.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -87,7 +89,7 @@ function formatDeliveryDate(iso: string) {
 }
 
 function dayAbbrev(day?: string) {
-  if (!day) return "—";
+  if (!day) return "N/A";
   return day.slice(0, 3);
 }
 

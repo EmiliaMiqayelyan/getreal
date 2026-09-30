@@ -7,6 +7,7 @@ import {
   Package,
 } from "lucide-react";
 
+import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { Header } from "@/components/layout/AdminHeader";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
@@ -31,16 +32,15 @@ import type { ApiOrder } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
+import {
+  deliveryDateIdFromValue,
+  formatDeliveryChipLabel,
+  formatTodayLabel,
+  parseDeliveryDateId,
+} from "@/utils/deliveryCalendar";
 
 const MUTED_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
-
-type DeliveryChip = {
-  id: string;
-  label: string;
-  dateKey: string;
-  day: number;
-};
 
 /** Eligible packing-role users only (§6). */
 type Packer = {
@@ -57,10 +57,9 @@ type ManagerOrder = {
   code: string;
   itemCount: number;
   deliveryDate: string;
+  deliveryDateId: string;
   packerId?: string;
 };
-
-const DELIVERY_CHIPS: DeliveryChip[] = [];
 
 /** Eligible packing-role users only (§6). Temporary seed - one packer. */
 const ELIGIBLE_PACKERS: Packer[] = [];
@@ -166,30 +165,40 @@ function AssignPackerMenu({
   );
 }
 
-function mapManagerOrder(order: ApiOrder, index: number): ManagerOrder {
-  const code = orderModelId(order, `ORD-${index + 1}`);
+function orderCustomerName(order: ApiOrder) {
   const raw = order as ApiOrder & {
     customerName?: string;
     customer?: { name?: string; firstName?: string; lastName?: string };
   };
-  const customer =
+  const users = Array.isArray(order.users) ? order.users[0] : order.users;
+  const joined = [users?.firstName, users?.lastName].filter(Boolean).join(" ");
+  return (
+    joined ||
+    users?.name?.trim() ||
     raw.customerName?.trim() ||
     [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
     raw.customer?.name ||
-    "Customer";
+    "N/A"
+  );
+}
+
+function mapManagerOrder(order: ApiOrder, index: number): ManagerOrder {
+  const code = orderModelId(order, `ORD-${index + 1}`);
   const itemCount = (order.items ?? []).reduce(
     (sum, line) => sum + (line.quantity ?? 0),
     0,
   );
+  const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate) : null;
+  const hasDelivery =
+    deliveryDate != null && !Number.isNaN(deliveryDate.getTime());
   return {
     id: code,
     recordId: orderRecordId(order),
-    customer,
+    customer: orderCustomerName(order),
     code,
     itemCount: itemCount || (order.items?.length ?? 0),
-    deliveryDate: order.deliveryDate
-      ? new Date(order.deliveryDate).toLocaleDateString()
-      : "",
+    deliveryDate: hasDelivery ? deliveryDate.toLocaleDateString() : "",
+    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
     packerId: order.packerId ?? undefined,
   };
 }
@@ -205,18 +214,34 @@ export default function PackerManagerPage() {
   const [packers, setPackers] = useState(ELIGIBLE_PACKERS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
-  const [activeChip, setActiveChip] = useState("wed-20");
+  const [activeDateId, setActiveDateId] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(20);
   const [assignMenu, setAssignMenu] = useState<{
     orderId: string;
     code: string;
     anchor: HTMLElement;
   } | null>(null);
 
-  const activeChipIndex = DELIVERY_CHIPS.findIndex(
-    (chip) => chip.id === activeChip,
-  );
+  const deliveryChips = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const order of orders) {
+      if (!order.deliveryDateId) continue;
+      counts.set(
+        order.deliveryDateId,
+        (counts.get(order.deliveryDateId) ?? 0) + 1,
+      );
+    }
+    return [...counts.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([id, count]) => {
+        const date = parseDeliveryDateId(id);
+        return {
+          id,
+          label: date ? formatDeliveryChipLabel(date) : id,
+          count,
+        };
+      });
+  }, [orders]);
 
   useEffect(() => {
     if (!isApiConfigured()) return;
@@ -234,7 +259,7 @@ export default function PackerManagerPage() {
             if (!isUuid(id)) return null;
             return {
               id,
-              name: user.name?.trim() || "Packer",
+              name: user.name?.trim() || "N/A",
               code: user.userCode?.trim() || id.slice(0, 8),
               role: "packer" as const,
             };
@@ -259,32 +284,23 @@ export default function PackerManagerPage() {
     }));
   }, [packers, packingByCode]);
 
-  const chipCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const chip of DELIVERY_CHIPS) {
-      counts[chip.id] = orders.filter((order) =>
-        order.deliveryDate.includes(chip.dateKey),
-      ).length;
-    }
-    return counts;
-  }, [orders]);
-
   const rows = useMemo(() => {
-    const chip = DELIVERY_CHIPS.find((entry) => entry.id === activeChip);
     const q = search.trim().toLowerCase();
 
     let next = orders
       .filter((order) => {
         const handoff = packingByCode[order.code];
         const packerName = handoff?.packerName ?? "";
-        const matchesChip =
-          !chip || order.deliveryDate.includes(chip.dateKey);
+        const matchesDate =
+          !activeDateId ||
+          !order.deliveryDateId ||
+          order.deliveryDateId === activeDateId;
         const matchesSearch =
           !q ||
           order.customer.toLowerCase().includes(q) ||
           order.code.toLowerCase().includes(q) ||
           packerName.toLowerCase().includes(q);
-        return matchesChip && matchesSearch;
+        return matchesDate && matchesSearch;
       })
       .map((order) => {
         const handoff = packingByCode[order.code];
@@ -307,24 +323,19 @@ export default function PackerManagerPage() {
     }
 
     return next;
-  }, [orders, packingByCode, search, sortBy, activeChip]);
+  }, [orders, packingByCode, search, sortBy, activeDateId]);
 
-  const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeChip}`);
+  const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeDateId}`);
 
   function cycleChip(delta: number) {
-    if (DELIVERY_CHIPS.length === 0) return;
-    const index = activeChipIndex >= 0 ? activeChipIndex : 0;
+    if (deliveryChips.length === 0) return;
+    const index = Math.max(
+      0,
+      deliveryChips.findIndex((chip) => chip.id === activeDateId),
+    );
     const next =
-      (index + delta + DELIVERY_CHIPS.length) % DELIVERY_CHIPS.length;
-    const chip = DELIVERY_CHIPS[next]!;
-    setActiveChip(chip.id);
-    setSelectedDay(chip.day);
-  }
-
-  function applyCalendarDay(day: number) {
-    setSelectedDay(day);
-    const match = DELIVERY_CHIPS.find((chip) => chip.day === day);
-    if (match) setActiveChip(match.id);
+      (index + delta + deliveryChips.length) % deliveryChips.length;
+    setActiveDateId(deliveryChips[next]!.id);
   }
 
   function handleAssign(orderCode: string, packer: Packer) {
@@ -376,7 +387,7 @@ export default function PackerManagerPage() {
               ]}
             />
             <div className="ml-auto text-[12px] text-[#8A8A8A]">
-              Today, Tue, Jun 22, 2026
+              {formatTodayLabel()}
             </div>
           </div>
         }
@@ -385,21 +396,15 @@ export default function PackerManagerPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
-            {DELIVERY_CHIPS.map((chip) => {
-              const active = activeChip === chip.id;
-              return (
+            {deliveryChips.map((chip) => (
                 <DeliveryDateChip
                   key={chip.id}
                   label={chip.label}
-                  count={chipCounts[chip.id] ?? 0}
-                  active={active}
-                  onClick={() => {
-                    setActiveChip(chip.id);
-                    setSelectedDay(chip.day);
-                  }}
+                  count={chip.count}
+                  active={activeDateId === chip.id}
+                  onClick={() => setActiveDateId(chip.id)}
                 />
-              );
-            })}
+            ))}
           </div>
 
           <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
@@ -424,50 +429,15 @@ export default function PackerManagerPage() {
             </DateNavButton>
 
             {calendarOpen ? (
-              <div className="absolute top-11 right-0 z-30 w-[280px] rounded-[12px] border border-[#00000014] bg-white p-4 shadow-xl">
-                <div className="mb-3 flex items-center justify-between text-[13px] font-semibold text-[#111118]">
-                  <span>July 2026</span>
-                  <div className="flex gap-1 text-[#8A8A8A]">
-                    <ChevronLeft size={14} />
-                    <ChevronRight size={14} />
-                  </div>
-                </div>
-                <div className="grid grid-cols-7 gap-1 text-center text-[11px] text-[#8A8A8A]">
-                  {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
-                    <span key={day}>{day}</span>
-                  ))}
-                </div>
-                <div className="mt-1 grid grid-cols-7 gap-1">
-                  {Array.from({ length: 31 }, (_, index) => {
-                    const day = index + 1;
-                    const match = DELIVERY_CHIPS.some(
-                      (chip) => chip.day === day,
-                    );
-                    const selected = selectedDay === day;
-                    return (
-                      <button
-                        key={day}
-                        type="button"
-                        disabled={!match}
-                        onClick={() => {
-                          applyCalendarDay(day);
-                          setCalendarOpen(false);
-                        }}
-                        className={cn(
-                          "flex size-8 items-center justify-center rounded-full text-[12px]",
-                          selected
-                            ? "bg-[#2B5B31] text-white"
-                            : match
-                              ? "text-[#111118] hover:bg-[#F3F3F1]"
-                              : "text-[#D0D0D0]",
-                        )}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              <DeliveryDateCalendar
+                selectedDateId={activeDateId}
+                initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
+                onSelectDate={(dateId) => {
+                  setActiveDateId(dateId);
+                  setCalendarOpen(false);
+                }}
+                onClose={() => setCalendarOpen(false)}
+              />
             ) : null}
           </div>
         </div>
@@ -548,13 +518,13 @@ export default function PackerManagerPage() {
                 </div>
 
                 <div className="text-[13px] text-[#111118]">
-                  {order.packingStartedAt ?? ""}
+                  {order.packingStartedAt || "N/A"}
                 </div>
                 <div className="text-[13px] text-[#111118]">
-                  {order.coolerReadyAt ?? ""}
+                  {order.coolerReadyAt || "N/A"}
                 </div>
                 <div className="text-[13px] text-[#111118]">
-                  {order.loadedAt ?? ""}
+                  {order.loadedAt || "N/A"}
                 </div>
               </div>
             );

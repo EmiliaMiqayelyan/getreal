@@ -11,7 +11,7 @@ import { pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { PushNotification } from "@/types/notification";
 import type { Source } from "@/types/source";
-import { codeFrom, isUuid, preferModelId, publicCode } from "@/utils/entityIds";
+import { codeFrom, isUuid, preferModelId } from "@/utils/entityIds";
 import {
   formatCityState,
   formatDeliveryLabel,
@@ -92,7 +92,11 @@ export function mapApiRoleToManagedRole(
   index: number,
 ): ManagedRole {
   const roleCode = codeFrom(role, ["roleCode"]);
-  const recordId = role.roleId ?? (publicCode(role.id) ? undefined : role.id);
+  const recordId = isUuid(role.id)
+    ? role.id
+    : isUuid(role.roleId)
+      ? role.roleId
+      : undefined;
   const name = formatApiRoleName(role.roleName ?? role.name);
 
   return {
@@ -188,8 +192,8 @@ export function mapApiUserToAdminCustomer(
 ): AdminCustomer {
   const firstName =
     user.firstName?.trim() ||
-    (user.name ?? user.email ?? "Customer").trim().split(/\s+/)[0] ||
-    "Customer";
+    (user.name ?? user.email ?? "").trim().split(/\s+/)[0] ||
+    "N/A";
   const lastName =
     user.lastName?.trim() ||
     (user.name ?? "").trim().split(/\s+/).slice(1).join(" ");
@@ -305,8 +309,9 @@ export function mapApiItemToItem(
   return {
     id: preferModelId(item, ["itemCode"], recordId ?? `API-ITEM-${index + 1}`),
     recordId,
-    name: item.name ?? "Item",
-    merchandisingName: item.merchandisingName ?? item.name ?? "Item",
+    name: item.name?.trim() || "N/A",
+    merchandisingName:
+      item.merchandisingName?.trim() || item.name?.trim() || "N/A",
     description: item.description ?? "",
     preorderInfo: "",
     category: categoryName,
@@ -377,7 +382,11 @@ export function mapApiProductToProductForSale(
       recordId ?? `API-PFS-${index + 1}`,
     ),
     recordId,
-    itemId: publicCode(linked?.id) ?? linked?.id ?? product.itemId ?? "",
+    itemId:
+      (product.itemId && isUuid(product.itemId) ? product.itemId : undefined) ??
+      linked?.recordId ??
+      product.itemId ??
+      "",
     sortOrder: product.position ?? index,
     live: Boolean(product.isLive),
     merchandisingName: name,
@@ -600,23 +609,29 @@ export function findCategoryIdByName(
   const match = categories.find(
     (category) => category.name?.toLowerCase() === normalized,
   );
-  if (!match) return undefined;
-  return publicCode(match.categoryCode) ?? match.id;
+  if (!match?.id || !isUuid(match.id)) return undefined;
+  return match.id;
 }
 
 export function findSubcategoryIdByName(
-  subcategories: Array<Pick<CatalogSubcategory, "id" | "name" | "category">>,
+  subcategories: Array<
+    Pick<CatalogSubcategory, "id" | "name" | "category" | "recordId">
+  >,
   category: string,
   name: string,
 ): string | undefined {
   const categoryKey = category.trim().toLowerCase();
   const nameKey = name.trim().toLowerCase();
   if (!categoryKey || !nameKey) return undefined;
-  return subcategories.find(
+  const match = subcategories.find(
     (entry) =>
       entry.category.trim().toLowerCase() === categoryKey &&
       entry.name.trim().toLowerCase() === nameKey,
-  )?.id;
+  );
+  if (!match) return undefined;
+  if (match.recordId && isUuid(match.recordId)) return match.recordId;
+  if (match.id && isUuid(match.id)) return match.id;
+  return undefined;
 }
 
 export function mapApiSubcategoryToCatalog(
@@ -642,9 +657,10 @@ export function mapApiSubcategoryToCatalog(
 
   return {
     id: preferModelId(subcategory, ["subcategoryCode"], subcategory.id ?? name),
+    recordId: isUuid(subcategory.id) ? subcategory.id : undefined,
     name,
     category: categoryName,
-    categoryId: publicCode(categoryId) ?? categoryId,
+    categoryId: categoryId && isUuid(categoryId) ? categoryId : undefined,
   };
 }
 

@@ -1,4 +1,4 @@
-import { publicCode } from "@/utils/entityIds";
+import { isUuid } from "@/utils/entityIds";
 
 import { ApiError, apiRequest } from "./client";
 import { itemsApi } from "./items";
@@ -71,7 +71,8 @@ async function clearDistributorLinks(distributorRef: string) {
     ...items
       .filter((item) => item.id && item.distributorId && refs.has(item.distributorId))
       .map((item) => {
-        const id = publicCode(item.itemCode) ?? item.id!;
+        const id = item.id?.trim();
+        if (!id || !isUuid(id)) return Promise.resolve();
         return unlinkRecord(
           () => itemsApi.update(id, { distributorId: null }),
           () => itemsApi.remove(id),
@@ -83,7 +84,8 @@ async function clearDistributorLinks(distributorRef: string) {
           source.id && source.distributorId && refs.has(source.distributorId),
       )
       .map((source) => {
-        const id = publicCode(source.sourceCode) ?? source.id!;
+        const id = source.id?.trim();
+        if (!id || !isUuid(id)) return Promise.resolve();
         return unlinkRecord(
           () => sourcesApi.update(id, { distributorId: null }),
           () => sourcesApi.remove(id),

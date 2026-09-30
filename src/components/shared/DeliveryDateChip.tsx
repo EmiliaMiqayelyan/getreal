@@ -8,7 +8,8 @@ export const DATE_CHIP_SCROLL =
 
 type DeliveryDateChipProps = {
   label: string;
-  count: number;
+  /** Omit when this date has not been loaded. */
+  count?: number;
   active?: boolean;
   onClick?: () => void;
 };
@@ -38,16 +39,18 @@ export function DeliveryDateChip({
       >
         {label}
       </span>
-      <span
-        className={cn(
-          "inline-flex h-[18px] items-center justify-center rounded-[7px] text-[11px] font-semibold",
-          active
-            ? "w-[22px] bg-[#EDF4F033] text-white"
-            : "w-[27px] bg-[#EDF4F0] text-black",
-        )}
-      >
-        {count}
-      </span>
+      {count != null ? (
+        <span
+          className={cn(
+            "inline-flex h-[18px] items-center justify-center rounded-[7px] text-[11px] font-semibold",
+            active
+              ? "w-[22px] bg-[#EDF4F033] text-white"
+              : "w-[27px] bg-[#EDF4F0] text-black",
+          )}
+        >
+          {count}
+        </span>
+      ) : null}
     </button>
   );
 }

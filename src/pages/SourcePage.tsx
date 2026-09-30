@@ -10,7 +10,7 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
-import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -21,7 +21,7 @@ import type { ExportRequest } from "@/types/export";
 import type { Source } from "@/types/source";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
-import { apiId, recordRef } from "@/utils/entityIds";
+import { recordRef } from "@/utils/entityIds";
 import {
   filterSources,
   getSourceDistributorDisplay,
@@ -145,8 +145,8 @@ export default function SourcePage() {
     sources: rows,
     distributors,
     setSources,
-    isBootstrapping,
   } = useAppCatalog();
+  const { ready: catalogReady } = useCatalogSlice(["sources", "distributors"]);
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -218,7 +218,16 @@ export default function SourcePage() {
     const snapshot = editing;
     setSources((current) => current.filter((row) => row.id !== id));
     if (isApiConfigured()) {
-      void sourcesApi.remove(apiId(editing)).catch((error) => {
+      const pathId = recordRef(editing);
+      if (!pathId) {
+        setSources((current) => [snapshot, ...current]);
+        notifyApiError(
+          new Error("This source is not linked to a server record."),
+          "Failed to delete source.",
+        );
+        return;
+      }
+      void sourcesApi.remove(pathId).catch((error) => {
         setSources((current) => [snapshot, ...current]);
         notifyApiError(error, "Failed to delete source.");
       });
@@ -255,7 +264,7 @@ export default function SourcePage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
-        {isBootstrapping ? (
+        {!catalogReady ? (
           <AppLoader variant="table" label="Loading sources" />
         ) : (
           <>
@@ -409,10 +418,13 @@ export default function SourcePage() {
               try {
                 const payload = toCreateSourcePayload(source, distributors);
                 if (editing) {
-                  const updated = await sourcesApi.update(
-                    apiId(editing),
-                    payload,
-                  );
+                  const pathId = recordRef(editing);
+                  if (!pathId) {
+                    throw new Error(
+                      "This source is not linked to a server record. Reload the page and try again.",
+                    );
+                  }
+                  const updated = await sourcesApi.update(pathId, payload);
                   const mapped = mapApiSourceToSource(
                     updated,
                     0,

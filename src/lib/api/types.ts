@@ -48,6 +48,8 @@ export type ApiSubcategory = {
 /** UI/catalog representation of a subcategory (name keyed by category). */
 export type CatalogSubcategory = {
   id?: string;
+  /** UUID for subcategory routes. `id` may be the model code shown in the UI. */
+  recordId?: string;
   name: string;
   category: string;
   categoryId?: string;

@@ -67,9 +67,9 @@ export function preferModelId(
   return codeFrom(record, codeKeys) ?? fallback;
 }
 
-/** Prefer the business code for API path params and display ids. */
+/** Record UUID for API paths and foreign keys. Model codes stay on screen. */
 export function apiId(entity: IdentifiedEntity): string {
-  return publicCode(entity.id) ?? entity.recordId ?? entity.id;
+  return recordRef(entity) ?? entity.id;
 }
 
 /** Backend record UUID. Item foreign keys must use this, not the public code. */

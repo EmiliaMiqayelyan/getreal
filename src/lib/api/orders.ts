@@ -79,6 +79,8 @@ export const ordersApi = {
     search.set("limit", String(limit));
     if (params.status) search.set("status", params.status);
     if (params.type) search.set("type", params.type);
+    // Exact match on the stored timestamp. A calendar day (YYYY-MM-DD) does not
+    // match values like 2026-09-30T02:00:00.000Z, so day chips filter locally.
     if (params.deliveryDate) search.set("deliveryDate", params.deliveryDate);
     const qs = search.toString();
     return apiRequest<unknown>(`/orders?${qs}`).then((payload) =>

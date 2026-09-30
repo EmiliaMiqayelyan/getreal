@@ -13,7 +13,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
-import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -245,8 +245,15 @@ export default function ItemsPage() {
     categories,
     subcategoryRecords,
     subcategoriesByCategory,
-    isBootstrapping,
   } = useAppCatalog();
+  const { ready: catalogReady } = useCatalogSlice([
+    "items",
+    "categories",
+    "subcategories",
+    "distributors",
+    "sources",
+    "products",
+  ]);
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
@@ -539,7 +546,7 @@ export default function ItemsPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
-        {isBootstrapping ? (
+        {!catalogReady ? (
           <AppLoader variant="table" label="Loading items" />
         ) : (
           <>

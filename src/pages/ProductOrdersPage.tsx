@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -32,66 +32,48 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import {
-  DELIVERED_ORDERS,
   DELIVERED_SORT_OPTIONS,
   DELIVERED_ORDER_STATUSES,
-  DISTRIBUTOR_EMAILS,
-  ORDER_CATEGORIES,
-  ORDER_DEMAND_BY_DATE,
-  ORDER_LIST_ITEMS,
 } from "@/constants/distributorOrders";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
-import { useAppCatalog } from "@/context/AppCatalogContext";
-import { useApiFeedback } from "@/hooks/useApiFeedback";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 import {
-  collectPaginated,
-  isApiConfigured,
-  orderModelId,
-  orderRecordId,
-  ordersApi,
-  type ApiOrder,
-} from "@/lib/api";
-import {
-  syncManualDistributorOrder,
-  syncReviewGroupOrder,
-} from "@/lib/api/orderSync";
+  buildLocalDemandOrders,
+  buildReviewGroups,
+  categorySections,
+  countDemandForDate,
+  previewRowsForOrder,
+  reviewGroupKey,
+  type DemandOrder,
+} from "@/lib/distributorOrderWorkflow";
 import type { Distributor } from "@/types/distributor";
 import type {
   DeliveredOrder,
   ManualOrderDraft,
-  OrderCategory,
   PlacedOrder,
-  ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
-import type { ProductForSale } from "@/types/productForSale";
 import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
-import { findByEntityRef, publicCode } from "@/utils/entityIds";
 import {
   appendInProgressOrders,
   applyCalculatedQuantitiesForCategory,
   createPlacedOrderFromManualDraft,
   createPlacedOrderFromReviewGroup,
   type DeliveredFilterCriteria,
-  downloadOrderInvoice,
   filterDeliveredOrders,
   filterOrderDemandRows,
   getDeliveredEmptyMessage,
-  getOrderDemandCountForDate,
   getOrderDemandEmptyMessage,
-  getOrderDemandForDate,
   groupDeliveredOrders,
   downloadDeliveredOrdersCsv,
   downloadDistributorOrdersCsv,
-  makeWorkingRowsForDate,
   nextDeliveryId,
-  productFilterOptions,
+  openOrderInvoice,
   sortDeliveredOrders,
   uniqueDeliveredFieldValues,
 } from "@/utils/distributorOrdersPage";
@@ -110,11 +92,30 @@ const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
 const REVIEW_LINE_GRID =
   "grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem_7rem] items-center gap-x-8";
 const CHIP_WINDOW_SIZE = 3;
+const ALL_WEEKDAYS = new Set([0, 1, 2, 3, 4, 5, 6]);
+
+function deliveryDatesForWeekdays(weekdays: Set<number>) {
+  const days = weekdays.size > 0 ? weekdays : ALL_WEEKDAYS;
+  const start = startOfLocalDay(new Date());
+  start.setDate(start.getDate() - 90);
+  const end = startOfLocalDay(new Date());
+  end.setDate(end.getDate() + 180);
+  return getDeliveryDatesInRange(start, end, days);
+}
+
+function chipWindowStartForDate(dateId: string, dates: Date[]) {
+  const index = dates.findIndex((date) => toDeliveryDateId(date) === dateId);
+  if (index < 0) return 0;
+  return Math.max(
+    0,
+    Math.min(index, Math.max(0, dates.length - CHIP_WINDOW_SIZE)),
+  );
+}
 /** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
 const ORDER_PREP_COLS =
   "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
 const PLACED_ORDER_COLUMNS =
-  "grid grid-cols-[28px_112px_minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1fr)_minmax(0,1fr)_100px] items-center gap-x-4 px-4";
+  "grid grid-cols-[28px_112px_minmax(140px,1.35fr)_minmax(120px,0.95fr)_minmax(210px,1.25fr)_minmax(88px,0.7fr)_minmax(16px,0.4fr)_100px] items-center gap-x-4 px-4";
 const PREVIEW_COLUMNS =
   "grid grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.3fr)] items-center gap-x-4 px-4";
 
@@ -126,94 +127,8 @@ function money(value: number) {
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
 }
 
-function mapDistributorApiOrder(
-  order: ApiOrder,
-  index: number,
-  catalogs: { distributors: Distributor[]; products: ProductForSale[] },
-  page = 1,
-): PlacedOrder {
-  const distributorName =
-    findByEntityRef(catalogs.distributors, order.distributorId)?.name ??
-    order.distributorId ??
-    "Distributor";
-  const lines = (order.items ?? []).map((line) => {
-    const product = findByEntityRef(catalogs.products, line.productId);
-    return {
-      sku: product
-        ? (publicCode(product.id) ?? product.id)
-        : (publicCode(line.productId) ?? ""),
-      itemName: product?.merchandisingName ?? line.productId ?? "Item",
-      source: product?.source ?? "",
-      quantity: line.quantity ?? 0,
-      price: product?.salesPrice ?? 0,
-      unit: product?.unitOfSales ?? "Each",
-    };
-  });
-  const totalPrice = lines.reduce(
-    (sum, line) => sum + line.price * line.quantity,
-    0,
-  );
-  const orderCode = orderModelId(order, `API-DO-${page}-${index + 1}`);
-  const deliveryDateId = deliveryDateIdFromValue(order.deliveryDate);
-  const deliveryDay = parseDeliveryDateId(deliveryDateId);
-  return {
-    id: orderCode,
-    recordId: orderRecordId(order),
-    deliveryId: orderCode,
-    distributor: distributorName,
-    orderDate: order.createdAt
-      ? new Date(order.createdAt).toLocaleDateString()
-      : "",
-    deliveryDate: deliveryDay ? deliveryDay.toLocaleDateString("en-US") : "",
-    deliveryDateId,
-    totalPrice,
-    items: lines,
-  };
-}
-
 function placedOrderDateId(order: PlacedOrder) {
   return order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate);
-}
-
-function weekOfLabel(date: Date) {
-  const start = new Date(date);
-  const weekday = start.getDay();
-  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
-  start.setDate(start.getDate() + mondayOffset);
-  return `Week of ${start.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  })}`;
-}
-
-function mapDeliveredApiOrder(
-  order: ApiOrder,
-  index: number,
-  catalogs: { distributors: Distributor[]; products: ProductForSale[] },
-): DeliveredOrder {
-  const placed = mapDistributorApiOrder(order, index, catalogs);
-  const when = order.deliveryDate || order.updatedAt || order.createdAt || "";
-  const date = when ? new Date(when) : new Date();
-  const valid = !Number.isNaN(date.getTime());
-  const distributor = catalogs.distributors.find(
-    (entry) =>
-      entry.id === order.distributorId ||
-      entry.recordId === order.distributorId,
-  );
-  return {
-    ...placed,
-    week: valid ? weekOfLabel(date) : "Delivered",
-    day: valid
-      ? date.toLocaleDateString("en-US", {
-          weekday: "short",
-          month: "short",
-          day: "numeric",
-        })
-      : "—",
-    zipCode: distributor?.zip || "",
-    status: "Delivered",
-    sortTimestamp: valid ? date.getTime() : 0,
-  };
 }
 
 function filterPlacedOrders(
@@ -257,48 +172,17 @@ function filterPlacedOrders(
   });
 }
 
-function makeRows(dateId: string): WorkingOrderRow[] {
-  return makeWorkingRowsForDate(dateId);
-}
-
-function buildReview(rows: WorkingOrderRow[]): ReviewGroup[] {
-  const map = new Map<string, ReviewGroup>();
-
-  for (const row of rows) {
-    if (row.quantity <= 0) continue;
-    const option = row.options[0];
-    if (!option) continue;
-
-    const lineTotal = option.price * row.quantity;
-    const line = {
-      itemName: row.itemName,
-      source: option.source,
-      quantity: row.quantity,
-      price: option.price,
-      unit: option.unit,
-      lineTotal,
-    };
-
-    const existing = map.get(option.distributor);
-    if (!existing) {
-      map.set(option.distributor, {
-        distributor: option.distributor,
-        email: DISTRIBUTOR_EMAILS[option.distributor] ?? "orders@example.com",
-        items: [line],
-        itemCount: 1,
-        totalPrice: lineTotal,
-      });
-      continue;
-    }
-
-    existing.items.push(line);
-    existing.totalPrice += lineTotal;
-  }
-
-  return Array.from(map.values()).map((group) => ({
-    ...group,
-    itemCount: group.items.length,
-  }));
+function distributorContactEmail(
+  name: string,
+  distributors: Distributor[],
+) {
+  const match = distributors.find(
+    (entry) => entry.name === name || entry.id === name,
+  );
+  const email =
+    match?.contacts.find((contact) => contact.primary && contact.email.trim())
+      ?.email || match?.contacts.find((contact) => contact.email.trim())?.email;
+  return email?.trim() || "N/A";
 }
 
 function QtyStepper({
@@ -343,7 +227,7 @@ function ExpandableOrders({
   onToggle: (id: string) => void;
 }) {
   return (
-    <ScrollTable minWidth={1100}>
+    <ScrollTable minWidth={1120}>
       <div
         className={cn(
           PLACED_ORDER_COLUMNS,
@@ -408,7 +292,7 @@ function ExpandableOrders({
                   type="button"
                   className={LINK}
                   aria-label={`Download invoice for ${order.distributor}`}
-                  onClick={() => downloadOrderInvoice(order)}
+                  onClick={() => openOrderInvoice(order)}
                 >
                   Download
                 </button>
@@ -454,10 +338,15 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors, products, items, isBootstrapping } = useAppCatalog();
-  const { notifyApiError } = useApiFeedback();
+  const { distributors, products, items, sources } = useAppCatalog();
 
   const [view, setView] = useState<View>("list");
+  const { ready: orderCatalogReady } = useCatalogSlice([
+    "distributors",
+    "items",
+    "sources",
+    "products",
+  ]);
   const [tab, setTab] = useState<Tab>("Orders");
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
@@ -471,32 +360,26 @@ export default function ProductOrdersPage() {
   const [activeDeliveryDateId, setActiveDeliveryDateId] = useState(() =>
     toDeliveryDateId(new Date()),
   );
-  const [chipWindowStart, setChipWindowStart] = useState(0);
-  const [chipTotals, setChipTotals] = useState<Record<string, number>>({});
+  const [chipWindowStart, setChipWindowStart] = useState(() =>
+    chipWindowStartForDate(
+      toDeliveryDateId(new Date()),
+      deliveryDatesForWeekdays(ALL_WEEKDAYS),
+    ),
+  );
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
-  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
-  const [loading, setLoading] = useState(() => isApiConfigured());
-  const [loadingMoreOrders, setLoadingMoreOrders] = useState(false);
-  const [orderPage, setOrderPage] = useState(1);
-  const [remoteLoaded, setRemoteLoaded] = useState(0);
-  const [remoteTotal, setRemoteTotal] = useState(0);
-  const [remoteExhausted, setRemoteExhausted] = useState(false);
-  const ordersLoadLock = useRef(false);
-  const loadedDetailIds = useRef(new Set<string>());
-  const inProgressRef = useRef(inProgress);
-  const deliveredRef = useRef(deliveredOrders);
-  inProgressRef.current = inProgress;
-  deliveredRef.current = deliveredOrders;
+  // INTEGRATION: load with GET /orders?type=distributor&status=delivered.
+  const [deliveredOrders] = useState<DeliveredOrder[]>([]);
+  const [demandOrders, setDemandOrders] = useState<DemandOrder[]>([]);
+  const [demandReady, setDemandReady] = useState(false);
+  const [activeDemandId, setActiveDemandId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
     null,
   );
 
-  const [rows, setRows] = useState<WorkingOrderRow[]>(() =>
-    makeRows(toDeliveryDateId(new Date())),
-  );
+  const [rows, setRows] = useState<WorkingOrderRow[]>([]);
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
     () => new Set(),
   );
@@ -511,17 +394,10 @@ export default function ProductOrdersPage() {
     [distributors, distributorFilter],
   );
 
-  const deliveryDates = useMemo(() => {
-    const weekdays =
-      deliveryWeekdays.size > 0
-        ? deliveryWeekdays
-        : new Set([0, 1, 2, 3, 4, 5, 6]);
-    const start = startOfLocalDay(new Date());
-    start.setDate(start.getDate() - 90);
-    const end = startOfLocalDay(new Date());
-    end.setDate(end.getDate() + 180);
-    return getDeliveryDatesInRange(start, end, weekdays);
-  }, [deliveryWeekdays]);
+  const deliveryDates = useMemo(
+    () => deliveryDatesForWeekdays(deliveryWeekdays),
+    [deliveryWeekdays],
+  );
 
   const chipDates = useMemo(() => {
     const window = deliveryDates.slice(
@@ -544,12 +420,10 @@ export default function ProductOrdersPage() {
       return {
         id,
         label: formatDeliveryChipLabel(date),
-        count: isApiConfigured()
-          ? (chipTotals[id] ?? 0)
-          : getOrderDemandCountForDate(id),
+        count: countDemandForDate(demandOrders, id),
       };
     });
-  }, [chipDates, chipTotals]);
+  }, [chipDates, demandOrders]);
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? deliveryDates[0] ?? new Date();
@@ -564,45 +438,48 @@ export default function ProductOrdersPage() {
     [productFilter, search],
   );
 
-  const orderDemandRows = useMemo(() => {
-    if (!isApiConfigured()) return getOrderDemandForDate(activeDeliveryDateId);
-    return inProgress.flatMap((order) =>
-      order.items.map((item) => ({
-        id: `${order.id}-${item.sku || item.itemName}`,
-        itemName: item.itemName,
-        custOrderTotal: item.quantity,
-        inStock: null,
-        qtyReceiving: item.quantity,
-        dateReceivingBy: order.deliveryDate,
-      })),
-    );
-  }, [activeDeliveryDateId, inProgress]);
+  const ordersForDate = useMemo(
+    () =>
+      demandOrders.filter(
+        (order) => order.deliveryDateId === activeDeliveryDateId,
+      ),
+    [activeDeliveryDateId, demandOrders],
+  );
+
+  const visibleDemandOrders = useMemo(() => {
+    return ordersForDate
+      .map((order) => ({
+        order,
+        lines: filterOrderDemandRows(
+          previewRowsForOrder(order),
+          orderDemandCriteria,
+        ),
+      }))
+      .filter((entry) => {
+        if (!search.trim() && !productFilter) return true;
+        return entry.lines.length > 0;
+      });
+  }, [orderDemandCriteria, ordersForDate, productFilter, search]);
 
   const filteredPreview = useMemo(
-    () => filterOrderDemandRows(orderDemandRows, orderDemandCriteria),
-    [orderDemandCriteria, orderDemandRows],
-  );
-  const previewWindow = useLazyWindow(
-    filteredPreview,
-    `${search}|${productFilter}|${activeDeliveryDateId}`,
+    () => visibleDemandOrders.flatMap((entry) => entry.lines),
+    [visibleDemandOrders],
   );
 
   const productOptions = useMemo(() => {
-    const names = new Set<string>(
-      productFilterOptions(ORDER_LIST_ITEMS).map((option) => option.value),
-    );
+    const names = new Set<string>();
+    for (const order of demandOrders) {
+      for (const line of order.lines) {
+        if (line.itemName.trim()) names.add(line.itemName);
+      }
+    }
     for (const order of inProgress) {
       for (const item of order.items) {
         if (item.itemName.trim()) names.add(item.itemName);
       }
     }
-    for (const rows of Object.values(ORDER_DEMAND_BY_DATE)) {
-      for (const row of rows) {
-        if (row.itemName.trim()) names.add(row.itemName);
-      }
-    }
     return [...names].sort().map((name) => ({ value: name, label: name }));
-  }, [inProgress]);
+  }, [demandOrders, inProgress]);
 
   const showDistributorFilter = inProgress.length > 0;
 
@@ -612,8 +489,6 @@ export default function ProductOrdersPage() {
 
   function selectDeliveryDate(dateId: string) {
     setActiveDeliveryDateId(dateId);
-    setOrderPage(1);
-    setRemoteExhausted(false);
   }
 
   function shiftChipWindow(delta: number) {
@@ -626,86 +501,19 @@ export default function ProductOrdersPage() {
   }
 
   useEffect(() => {
-    const openId = expandedId ?? expandedDeliveredId;
-    if (!isApiConfigured() || !openId || loadedDetailIds.current.has(openId)) {
-      return;
-    }
-    const placed =
-      inProgressRef.current.find((order) => order.id === openId) ??
-      deliveredRef.current.find((order) => order.id === openId);
-    if (!placed?.recordId) return;
-    let cancelled = false;
-    void ordersApi
-      .getById(placed.recordId)
-      .then((remote) => {
-        if (cancelled) return;
-        loadedDetailIds.current.add(openId);
-        const mapped = mapDistributorApiOrder(remote, 0, {
-          distributors,
-          products,
-        });
-        const items = mapped.items.length ? mapped.items : placed.items;
-        setInProgress((current) =>
-          current.map((row) =>
-            row.id === openId ? { ...row, items, recordId: row.recordId } : row,
-          ),
-        );
-        setDeliveredOrders((current) =>
-          current.map((row) =>
-            row.id === openId ? { ...row, items, recordId: row.recordId } : row,
-          ),
-        );
-      })
-      .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load order details.");
-      });
-    return () => {
-      cancelled = true;
-    };
+    if (!orderCatalogReady || demandReady) return;
+    setDemandOrders(
+      buildLocalDemandOrders({ items, products, sources, distributors }),
+    );
+    setDemandReady(true);
   }, [
+    demandReady,
     distributors,
-    expandedDeliveredId,
-    expandedId,
-    notifyApiError,
+    items,
+    orderCatalogReady,
     products,
+    sources,
   ]);
-
-  const chipDateKey = chipDates
-    .map((date) => toDeliveryDateId(date))
-    .join("|");
-
-  useEffect(() => {
-    if (!isApiConfigured() || isBootstrapping || !chipDateKey) return;
-    let cancelled = false;
-    const ids = chipDateKey.split("|");
-    void Promise.all(
-      ids.map(async (id) => {
-        const result = await ordersApi.list({
-          page: 1,
-          limit: 1,
-          type: "distributor",
-          deliveryDate: id,
-        });
-        return [id, result.total] as const;
-      }),
-    )
-      .then((entries) => {
-        if (cancelled) return;
-        setChipTotals((current) => {
-          const next = { ...current };
-          for (const [id, total] of entries) next[id] = total;
-          return next;
-        });
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          notifyApiError(error, "Failed to load delivery date counts.");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chipDateKey, isBootstrapping, notifyApiError]);
 
   useEffect(() => {
     const index = deliveryDates.findIndex(
@@ -716,10 +524,7 @@ export default function ProductOrdersPage() {
       if (index >= current && index < current + CHIP_WINDOW_SIZE) {
         return current;
       }
-      return Math.max(
-        0,
-        Math.min(index, Math.max(0, deliveryDates.length - CHIP_WINDOW_SIZE)),
-      );
+      return chipWindowStartForDate(activeDeliveryDateId, deliveryDates);
     });
   }, [activeDeliveryDateId, deliveryDates]);
 
@@ -729,7 +534,7 @@ export default function ProductOrdersPage() {
         search,
         productFilter,
         distributorFilter,
-        deliveryDateId: isApiConfigured() ? undefined : activeDeliveryDateId,
+        deliveryDateId: activeDeliveryDateId,
       }),
     [
       activeDeliveryDateId,
@@ -762,7 +567,7 @@ export default function ProductOrdersPage() {
     ],
   );
 
-  const deliveredSource = isApiConfigured() ? deliveredOrders : DELIVERED_ORDERS;
+  const deliveredSource = deliveredOrders;
 
   const deliveredZipOptions = useMemo(
     () => uniqueDeliveredFieldValues(deliveredSource, "zipCode"),
@@ -813,23 +618,19 @@ export default function ProductOrdersPage() {
           deliveredSort !== "newest",
         );
 
-  const groupedRows = useMemo(() => {
-    const groups: Record<OrderCategory, WorkingOrderRow[]> = {
-      Meat: [],
-      Fruits: [],
-      Grains: [],
-    };
-    for (const row of rows) {
-      groups[row.category].push(row);
-    }
-    return groups;
-  }, [rows]);
+  const prepSections = useMemo(() => categorySections(rows), [rows]);
 
-  const reviewGroups = useMemo(() => buildReview(rows), [rows]);
+  const reviewGroups = useMemo(
+    () =>
+      buildReviewGroups(rows, (name) =>
+        distributorContactEmail(name, distributors),
+      ),
+    [distributors, rows],
+  );
   const pendingReviewGroups = useMemo(
     () =>
       reviewGroups.filter(
-        (group) => !orderedDistributors.has(group.distributor),
+        (group) => !orderedDistributors.has(reviewGroupKey(group)),
       ),
     [orderedDistributors, reviewGroups],
   );
@@ -842,106 +643,20 @@ export default function ProductOrdersPage() {
     0,
   );
   const canReview = rows.some((row) => row.quantity > 0);
-  const canOrderAll = pendingReviewGroups.length > 0;
+  const canOrderAll = reviewGroups.length > 0;
 
   const distributorOptions = useMemo(() => {
     const names = new Set([
-      ...ORDER_LIST_ITEMS.flatMap((r) => r.options.map((o) => o.distributor)),
-      ...inProgress.map((o) => o.distributor),
-      ...deliveredSource.map((o) => o.distributor),
+      ...demandOrders.flatMap((order) =>
+        order.lines.flatMap((line) => line.options.map((option) => option.distributor)),
+      ),
+      ...inProgress.map((order) => order.distributor),
+      ...deliveredSource.map((order) => order.distributor),
     ]);
     return Array.from(names).sort();
-  }, [deliveredSource, inProgress]);
+  }, [deliveredSource, demandOrders, inProgress]);
 
-  useEffect(() => {
-    if (!isApiConfigured()) {
-      setLoading(false);
-      return;
-    }
-    // Wait for catalog bootstrap so mapping uses API distributors/products.
-    if (isBootstrapping) return;
-
-    let cancelled = false;
-    const append = orderPage > 1;
-    ordersLoadLock.current = true;
-    if (append) setLoadingMoreOrders(true);
-    else setLoading(true);
-
-    void ordersApi
-      .list({
-        page: orderPage,
-        limit: DEFAULT_PAGE_LIMIT,
-        type: "distributor",
-        deliveryDate: activeDeliveryDateId,
-      })
-      .then((result) => {
-        if (cancelled) return;
-        const remote = result.items;
-        setRemoteTotal(result.total);
-        setChipTotals((current) => ({
-          ...current,
-          [activeDeliveryDateId]: result.total,
-        }));
-        setRemoteLoaded((current) =>
-          append ? current + remote.length : remote.length,
-        );
-        setRemoteExhausted(remote.length < DEFAULT_PAGE_LIMIT);
-
-        const mapped: PlacedOrder[] = remote
-          .filter((order) => order.status !== "delivered")
-          .map((order, index) =>
-            mapDistributorApiOrder(
-              order,
-              index,
-              { distributors, products },
-              orderPage,
-            ),
-          );
-
-        setInProgress((prev) =>
-          append ? appendInProgressOrders(prev, mapped) : mapped,
-        );
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        notifyApiError(error, "Failed to load distributor orders.");
-      })
-      .finally(() => {
-        if (cancelled) return;
-        ordersLoadLock.current = false;
-        setLoading(false);
-        setLoadingMoreOrders(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-    // Catalog identity is stable after bootstrap; paging should not refetch on those arrays.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeDeliveryDateId, isBootstrapping, orderPage]);
-
-  useEffect(() => {
-    if (!isApiConfigured() || isBootstrapping) return;
-    let cancelled = false;
-    void ordersApi
-      .list({ type: "distributor", status: "delivered", page: 1, limit: 100 })
-      .then((result) => {
-        if (cancelled) return;
-        setDeliveredOrders(
-          result.items.map((order, index) =>
-            mapDeliveredApiOrder(order, index, { distributors, products }),
-          ),
-        );
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          notifyApiError(error, "Failed to load delivered orders.");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [distributors, isBootstrapping, notifyApiError, products]);
+  const activeDemand = demandOrders.find((order) => order.id === activeDemandId);
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -949,11 +664,34 @@ export default function ProductOrdersPage() {
     window.setTimeout(() => setToast(false), 2800);
   }
 
-  function openOrderFlow() {
-    setRows(makeRows(activeDeliveryDateId));
-    setOrderedDistributors(new Set());
+  function rememberLines(next: WorkingOrderRow[]) {
+    setRows(next);
+    if (!activeDemandId) return;
+    setDemandOrders((current) =>
+      current.map((order) =>
+        order.id === activeDemandId ? { ...order, lines: next } : order,
+      ),
+    );
+  }
+
+  function openListedOrder() {
+    const partial = visibleDemandOrders.find(
+      (entry) => entry.order.phase === "partial",
+    );
+    const target = partial ?? visibleDemandOrders[0];
+    if (!target) return;
+    openOrderFlow(target.order.id);
+  }
+
+  function openOrderFlow(demandId: string) {
+    const order = demandOrders.find((entry) => entry.id === demandId);
+    if (!order) return;
+    setActiveDemandId(demandId);
+    setRows(order.lines.map((line) => ({ ...line })));
+    setOrderedDistributors(new Set(order.sentDistributors));
     setConfirmClose(false);
-    setView("orderList");
+    // A partial send reopens Review Order. A fresh order starts on QTY NEEDED.
+    setView(order.sentDistributors.length > 0 ? "review" : "orderList");
   }
 
   function openManualFlow() {
@@ -968,8 +706,9 @@ export default function ProductOrdersPage() {
   }
 
   function cancelOrderRequest() {
-    setOrderedDistributors(new Set());
-    setRows(makeRows(activeDeliveryDateId));
+    // INTEGRATION: Cancel Order exits this screen only. Do not cancel the
+    // customer order, and do not DELETE distributor orders already posted.
+    // Product still needs to confirm that second rule.
     resetToList();
   }
 
@@ -979,54 +718,72 @@ export default function ProductOrdersPage() {
       nextDeliveryId(inProgress),
     );
     setInProgress((prev) => appendInProgressOrders(prev, [order]));
-    syncManualDistributorOrder(draft, distributors, products, items);
+    if (order.deliveryDateId) setActiveDeliveryDateId(order.deliveryDateId);
+    // INTEGRATION: syncManualDistributorOrder(draft, distributors, products, items)
+    // in src/lib/api/orderSync.ts. Call it here after the local row is shown,
+    // and replace this row with the server order (recordId) on success.
     setExpandedId(order.id);
     showToast("Order created successfully");
     resetToList();
   }
 
-  function calculateQty(category: OrderCategory) {
-    setRows((prev) => applyCalculatedQuantitiesForCategory(prev, category));
+  function calculateQty(category: string) {
+    rememberLines(applyCalculatedQuantitiesForCategory(rows, category));
   }
 
   function setQty(id: string, quantity: number) {
-    setRows((prev) =>
-      prev.map((row) =>
+    rememberLines(
+      rows.map((row) =>
         row.id === id ? { ...row, quantity: Math.max(0, quantity) } : row,
       ),
     );
   }
 
-  function submitDistributorOrder(distributor: string) {
-    if (orderedDistributors.has(distributor)) return;
+  function submitDistributorOrder(key: string) {
+    if (orderedDistributors.has(key)) return;
 
-    const group = reviewGroups.find(
-      (entry) => entry.distributor === distributor,
+    const group = reviewGroups.find((entry) => reviewGroupKey(entry) === key);
+    if (!group || !activeDemandId) return;
+
+    setOrderedDistributors((prev) => new Set(prev).add(key));
+    setDemandOrders((current) =>
+      current.map((order) => {
+        if (order.id !== activeDemandId) return order;
+        return {
+          ...order,
+          phase: "partial",
+          sentDistributors: order.sentDistributors.includes(key)
+            ? order.sentDistributors
+            : [...order.sentDistributors, key],
+          sentGroups: [
+            ...order.sentGroups.filter(
+              (entry) => reviewGroupKey(entry) !== key,
+            ),
+            group,
+          ],
+        };
+      }),
     );
-    if (!group) return;
-
-    const order = createPlacedOrderFromReviewGroup(
-      group,
-      nextDeliveryId(inProgress),
-      expectedDeliveryLabel,
-      activeDeliveryDateId,
-    );
-
-    setInProgress((prev) => appendInProgressOrders(prev, [order]));
-    syncReviewGroupOrder(group, distributors, products, items);
-    setOrderedDistributors((prev) => new Set(prev).add(distributor));
-    setExpandedId(order.id);
-    showToast("Order submitted");
+    // INTEGRATION: POST /orders for this source's distributor
+    // (syncReviewGroupOrder in src/lib/api/orderSync.ts). The screen submits
+    // one source at a time. If two sources share a distributorId, decide
+    // whether the API wants one combined order or two. Leave the parent
+    // customer order in the Order List until Order All.
+    showToast(`Order sent to ${group.source}`);
   }
 
-  function submitRemainingOrders() {
+  function orderAll() {
+    const parent = demandOrders.find((order) => order.id === activeDemandId);
+    if (!parent || reviewGroups.length === 0) return;
+
     const remaining = reviewGroups.filter(
-      (group) => !orderedDistributors.has(group.distributor),
+      (group) => !orderedDistributors.has(reviewGroupKey(group)),
     );
-    if (remaining.length === 0) return;
+    const groups = [...parent.sentGroups, ...remaining];
+    if (groups.length === 0) return;
 
     let deliveryCounter = inProgress;
-    const created = remaining.map((group) => {
+    const created = groups.map((group) => {
       const deliveryId = nextDeliveryId(deliveryCounter);
       const order = createPlacedOrderFromReviewGroup(
         group,
@@ -1039,26 +796,40 @@ export default function ProductOrdersPage() {
     });
 
     setInProgress((prev) => appendInProgressOrders(prev, created));
-    for (const group of remaining) {
-      syncReviewGroupOrder(group, distributors, products, items);
-    }
-    setOrderedDistributors(
-      new Set(reviewGroups.map((group) => group.distributor)),
+    setDemandOrders((current) =>
+      current.filter((order) => order.id !== parent.id),
     );
+    // INTEGRATION: POST /orders only for `remaining` (distributors not in
+    // parent.sentDistributors). Then mark the customer batch ordered so it
+    // leaves the Order List. The sent ones were already posted on Order Now.
     setExpandedId(created[0]?.id ?? null);
     showToast("Orders created successfully");
     resetToList();
   }
 
-  function orderAll() {
-    submitRemainingOrders();
-  }
-
-  function findPlacedOrderForDistributor(distributor: string) {
-    return inProgress.find((order) => order.distributor === distributor);
+  function invoiceForDistributor(key: string) {
+    const group =
+      activeDemand?.sentGroups.find((entry) => reviewGroupKey(entry) === key) ??
+      reviewGroups.find((entry) => reviewGroupKey(entry) === key);
+    if (!group) return;
+    openOrderInvoice(
+      createPlacedOrderFromReviewGroup(
+        group,
+        activeDemand?.id ?? nextDeliveryId(inProgress),
+        expectedDeliveryLabel,
+        activeDeliveryDateId,
+      ),
+    );
   }
 
   if (view === "manual") {
+    if (!orderCatalogReady) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col bg-[#FAFAFA] p-4 md:p-7">
+          <AppLoader variant="table" label="Loading order form" />
+        </div>
+      );
+    }
     return (
       <CreateManualOrderFlow
         onClose={resetToList}
@@ -1114,45 +885,24 @@ export default function ProductOrdersPage() {
                       recordCount={exportCount}
                       filtersActive={exportFiltersActive}
                       onExport={async (request: ExportRequest) => {
-                        let source = inProgress;
-                        if (isApiConfigured()) {
-                          const remote = await collectPaginated((page, limit) =>
-                            ordersApi.list({
-                              page,
-                              limit,
-                              type: "distributor",
-                              deliveryDate:
-                                request.scope === "all"
-                                  ? undefined
-                                  : activeDeliveryDateId,
-                            }),
-                          );
-                          const mapped = remote.map((order, index) =>
-                            mapDistributorApiOrder(order, index, {
-                              distributors,
-                              products,
-                            }),
-                          );
-                          source = appendInProgressOrders(mapped, inProgress);
-                        }
-                          const orders =
+                        const orders =
                           request.scope === "all"
-                            ? filterPlacedOrders(source, {
+                            ? filterPlacedOrders(inProgress, {
                                 search: "",
                                 productFilter: "",
                                 distributorFilter: "",
                               })
-                            : filterPlacedOrders(source, {
+                            : filterPlacedOrders(inProgress, {
                                 search,
                                 productFilter,
                                 distributorFilter,
-                                deliveryDateId: isApiConfigured()
-                                  ? undefined
-                                  : activeDeliveryDateId,
+                                deliveryDateId: activeDeliveryDateId,
                               });
                         const demand =
                           request.scope === "all"
-                            ? Object.values(ORDER_DEMAND_BY_DATE).flat()
+                            ? demandOrders.flatMap((order) =>
+                                previewRowsForOrder(order),
+                              )
                             : filteredPreview;
                         const filename =
                           request.scope === "all"
@@ -1322,7 +1072,7 @@ export default function ProductOrdersPage() {
                 </div>
               </div>
 
-              {loading ? (
+              {!demandReady ? (
                 <AppLoader variant="table" label="Loading orders" />
               ) : (
                 <>
@@ -1348,8 +1098,8 @@ export default function ProductOrdersPage() {
                       </h2>
                       <Button
                         variant="dark"
-                        onClick={openOrderFlow}
-                        disabled={filteredPreview.length === 0}
+                        onClick={openListedOrder}
+                        disabled={visibleDemandOrders.length === 0}
                         size="sm"
                       >
                         Order now
@@ -1375,7 +1125,7 @@ export default function ProductOrdersPage() {
                           {getOrderDemandEmptyMessage(orderDemandCriteria)}
                         </div>
                       ) : (
-                        previewWindow.visible.map((row) => (
+                        filteredPreview.map((row) => (
                           <div
                             key={row.id}
                             className={cn(
@@ -1435,38 +1185,18 @@ export default function ProductOrdersPage() {
           <InfiniteScrollSentinel
             hasMore={
               tab === "Orders"
-                ? previewWindow.hasMore ||
-                  inProgressWindow.hasMore ||
-                  (!remoteExhausted && remoteLoaded < remoteTotal)
+                ? inProgressWindow.hasMore
                 : deliveredWindow.hasMore
             }
-            loading={tab === "Orders" && loadingMoreOrders}
+            loading={false}
             loadedCount={
               tab === "Orders"
-                ? previewWindow.loadedCount +
-                  inProgressWindow.loadedCount +
-                  remoteLoaded
+                ? inProgressWindow.loadedCount
                 : deliveredWindow.loadedCount
             }
             onLoadMore={() => {
-              if (tab !== "Orders") {
-                deliveredWindow.loadMore();
-                return;
-              }
-              if (previewWindow.hasMore) previewWindow.loadMore();
-              if (inProgressWindow.hasMore) {
-                inProgressWindow.loadMore();
-                return;
-              }
-              if (
-                ordersLoadLock.current ||
-                remoteExhausted ||
-                remoteLoaded >= remoteTotal
-              ) {
-                return;
-              }
-              ordersLoadLock.current = true;
-              setOrderPage((current) => current + 1);
+              if (tab !== "Orders") deliveredWindow.loadMore();
+              else inProgressWindow.loadMore();
             }}
           />
         </div>
@@ -1535,13 +1265,12 @@ export default function ProductOrdersPage() {
 
       {view === "orderList" ? (
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-8">
-          {ORDER_CATEGORIES.map((section) => {
-            const sectionRows = groupedRows[section];
+          {prepSections.map(({ category, rows: sectionRows }) => {
             if (sectionRows.length === 0) return null;
             return (
-              <section key={section} className="mb-7">
+              <section key={category} className="mb-7">
                 <h2 className="mb-3 text-[22px] font-semibold tracking-tight text-[#111118]">
-                  {section}
+                  {category}
                 </h2>
                 <div
                   className={cn(
@@ -1557,7 +1286,7 @@ export default function ProductOrdersPage() {
                   <span aria-hidden />
                   <button
                     type="button"
-                    onClick={() => calculateQty(section)}
+                    onClick={() => calculateQty(category)}
                     className="w-[120px] text-center text-[13px] font-medium text-[#4E7CFF]"
                   >
                     Calculate QTY
@@ -1632,19 +1361,23 @@ export default function ProductOrdersPage() {
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px] xl:gap-8">
             <div className="min-w-0 space-y-3">
               {reviewGroups.map((group) => {
-                const ordered = orderedDistributors.has(group.distributor);
+                const key = reviewGroupKey(group);
+                const ordered = orderedDistributors.has(key);
                 return (
                   <div
-                    key={group.distributor}
+                    key={key}
                     className="rounded-[12px] border border-[#00000014] bg-white px-4 py-3.5"
                   >
                     <h3 className="mb-0.5 text-[18px] font-semibold tracking-tight text-[#111118]">
-                      {group.distributor}
+                      {group.source}
                     </h3>
+                    <p className="mb-1 text-[12px] text-[#8A8A8A]">
+                      {group.distributor}
+                    </p>
                     <div>
                       {group.items.map((item) => (
                         <div
-                          key={`${group.distributor}-${item.itemName}`}
+                          key={`${key}-${item.itemName}`}
                           className={cn(
                             REVIEW_LINE_GRID,
                             "border-b border-[#00000014] py-3 text-[13px]",
@@ -1677,10 +1410,16 @@ export default function ProductOrdersPage() {
                             </span>
                             <div className="flex min-w-0 flex-col items-start gap-1.5">
                               <div className="text-[12px] text-[#111118]">
-                                Order sent to email{" "}
+                                Order sent to{" "}
                                 <span className="font-semibold">
-                                  {group.email}
+                                  {group.source}
                                 </span>
+                                {group.email !== "N/A" ? (
+                                  <span className="text-[#8A8A8A]">
+                                    {" "}
+                                    ({group.email})
+                                  </span>
+                                ) : null}
                                 <span className="text-[#8A8A8A]">
                                   {" "}
                                   · Expected delivery{" "}
@@ -1692,12 +1431,7 @@ export default function ProductOrdersPage() {
                               <button
                                 type="button"
                                 className={LINK}
-                                onClick={() => {
-                                  const placed = findPlacedOrderForDistributor(
-                                    group.distributor,
-                                  );
-                                  if (placed) downloadOrderInvoice(placed);
-                                }}
+                                onClick={() => invoiceForDistributor(key)}
                               >
                                 Download order
                               </button>
@@ -1708,9 +1442,7 @@ export default function ProductOrdersPage() {
                             <Button
                               variant="primary"
                               size="sm"
-                              onClick={() =>
-                                submitDistributorOrder(group.distributor)
-                              }
+                              onClick={() => submitDistributorOrder(key)}
                               className="font-semibold"
                             >
                               Order now
@@ -1739,15 +1471,17 @@ export default function ProductOrdersPage() {
               </h3>
               <div>
                 {reviewGroups.map((group) => {
-                  const submitted = orderedDistributors.has(group.distributor);
+                  const submitted = orderedDistributors.has(
+                    reviewGroupKey(group),
+                  );
                   return (
                     <div
-                      key={`sum-${group.distributor}`}
+                      key={`sum-${reviewGroupKey(group)}`}
                       className="flex items-center justify-between gap-3 border-b border-[#00000014] py-3 text-[13px]"
                     >
                       <div className="min-w-0">
                         <div className="truncate font-medium text-[#111118]">
-                          {group.distributor}
+                          {group.source}
                         </div>
                         <div
                           className={cn(

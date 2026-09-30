@@ -1,5 +1,3 @@
-export type OrderCategory = "Meat" | "Fruits" | "Grains";
-
 export type SupplierOption = {
   distributor: string;
   source: string;
@@ -11,13 +9,20 @@ export type SupplierOption = {
 export type OrderListItem = {
   id: string;
   itemName: string;
-  category: OrderCategory;
+  category: string;
   custOrderTotal: number;
   inStock: number | null;
   qtyReceiving: number;
   dateReceivingBy: string;
   suggestedQty: number;
   options: SupplierOption[];
+  /** Item / product code carried onto the invoice. */
+  sku?: string;
+  /**
+   * Product-for-sale id to send as `productId` on POST /orders.
+   * INTEGRATION: prefer the server UUID (`recordId`) over the display code.
+   */
+  productId?: string;
 };
 
 export type WorkingOrderRow = OrderListItem & {
@@ -31,10 +36,14 @@ export type ReviewLine = {
   price: number;
   unit: string;
   lineTotal: number;
+  sku?: string;
+  productId?: string;
 };
 
 export type ReviewGroup = {
   distributor: string;
+  /** Source this section is ordered from. Order Now submits this source only. */
+  source: string;
   email: string;
   items: ReviewLine[];
   itemCount: number;

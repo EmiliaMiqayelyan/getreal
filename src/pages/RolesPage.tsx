@@ -11,7 +11,6 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, SUB_ROW_PAD, TABLE_HEADER } from "@/constants/table";
-import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -19,9 +18,13 @@ import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
+  collectPaginated,
   isApiConfigured,
+  mapApiRolesToRoleUsers,
+  mapApiUserToRoleUser,
   mapRoleUserTypeToApiRole,
   rolesApi,
+  uniqueManagedRoles,
   usersApi,
 } from "@/lib/api";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
@@ -47,7 +50,7 @@ function rolePreviewId(user: RoleUser, roles: ManagedRole[]) {
     }
     return role.name.trim().toLowerCase() === type;
   });
-  return publicCode(user.roleCode, match?.roleCode, match?.id) ?? user.id;
+  return publicCode(user.roleCode, match?.roleCode) ?? "N/A";
 }
 
 const FALLBACK_ROLE_OPTIONS = [
@@ -59,12 +62,19 @@ const FALLBACK_ROLE_OPTIONS = [
 
 type DraftState = {
   id?: string;
+  recordId?: string;
   name: string;
   email: string;
   password: string;
   phone: string;
   type: string;
 };
+
+function serverUserId(user: { id?: string; recordId?: string }) {
+  if (user.recordId && isUuid(user.recordId)) return user.recordId;
+  if (user.id && isUuid(user.id)) return user.id;
+  return undefined;
+}
 
 function emptyDraft(): DraftState {
   return {
@@ -79,6 +89,7 @@ function emptyDraft(): DraftState {
 function toDraft(user: RoleUser): DraftState {
   return {
     id: user.id,
+    recordId: user.recordId,
     name: user.name,
     email: user.email,
     password: "",
@@ -125,7 +136,7 @@ export default function RolesPage() {
 
   const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles, sessionPermissions } =
     useRolesUsers();
-  const { isBootstrapping } = useAppCatalog();
+  const [loadingUsers, setLoadingUsers] = useState(() => isApiConfigured());
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
@@ -175,6 +186,40 @@ export default function RolesPage() {
   function toggleExpand(id: string) {
     setExpandedId((current) => (current === id ? null : id));
   }
+
+  useEffect(() => {
+    if (!isApiConfigured()) return;
+    let cancelled = false;
+    void Promise.all([
+      usersApi.list({ page: 1, limit: 100 }),
+      collectPaginated((page, limit) => rolesApi.list({ page, limit })),
+    ])
+      .then(([usersResult, roles]) => {
+        if (cancelled) return;
+        if (roles.length > 0) {
+          setUsers(mapApiRolesToRoleUsers(roles));
+          setManagedRoles(uniqueManagedRoles(roles));
+          return;
+        }
+        const apiUsers = usersResult.items.map(mapApiUserToRoleUser);
+        if (apiUsers.length > 0) {
+          setUsers((current) => {
+            const byId = new Map(current.map((entry) => [entry.id, entry]));
+            for (const entry of apiUsers) byId.set(entry.id, entry);
+            return Array.from(byId.values());
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load roles.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingUsers(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notifyApiError, setManagedRoles, setUsers]);
 
   useEffect(() => {
     if (!expandedId || !isApiConfigured()) return;
@@ -322,20 +367,29 @@ export default function RolesPage() {
       );
 
       if (isApiConfigured()) {
-        void usersApi
-          .update(draft.id, {
-            name: draft.name.trim(),
-            role: mapRoleUserTypeToApiRole(draft.type),
-            ...(draft.phone.trim()
-              ? { phoneNumber: draft.phone.trim() }
-              : {}),
-          })
-          .catch((error) => {
-            notifyApiError(error, "Failed to update user on server.");
-          });
+        const pathId = serverUserId(draft);
+        if (!pathId) {
+          notifyApiError(
+            new Error("This user is not linked to a server record."),
+            "Failed to update user on server.",
+          );
+        } else {
+          void usersApi
+            .update(pathId, {
+              name: draft.name.trim(),
+              role: mapRoleUserTypeToApiRole(draft.type),
+              ...(draft.phone.trim()
+                ? { phoneNumber: draft.phone.trim() }
+                : {}),
+            })
+            .catch((error) => {
+              notifyApiError(error, "Failed to update user on server.");
+            });
+        }
       }
     } else {
       let createdId: string | undefined;
+      let createdRecordId: string | undefined;
       if (isApiConfigured()) {
         try {
           const name = draft.name.trim();
@@ -357,6 +411,7 @@ export default function RolesPage() {
                 ...(phoneNumber ? { phoneNumber } : {}),
               });
           createdId = publicCode(created.userCode) ?? created.id;
+          createdRecordId = isUuid(created.id) ? created.id : undefined;
         } catch (error) {
           notifyApiError(error, "Failed to create user on server.");
         }
@@ -371,6 +426,7 @@ export default function RolesPage() {
           ...current,
           {
             id: createdId ?? `U${String(max + 1).padStart(3, "0")}`,
+            recordId: createdRecordId,
             name: draft.name.trim(),
             email: draft.email.trim(),
             phone: draft.phone.trim(),
@@ -392,9 +448,17 @@ export default function RolesPage() {
   function deleteUser() {
     if (!draft.id) return;
     if (isApiConfigured()) {
-      void usersApi.block(draft.id).catch((error) => {
-        notifyApiError(error, "Failed to delete user on server.");
-      });
+      const pathId = serverUserId(draft);
+      if (!pathId) {
+        notifyApiError(
+          new Error("This user is not linked to a server record."),
+          "Failed to delete user on server.",
+        );
+      } else {
+        void usersApi.block(pathId).catch((error) => {
+          notifyApiError(error, "Failed to delete user on server.");
+        });
+      }
     }
     // Soft-delete access: remove from active users; audit history elsewhere stays
     removeUser(draft.id);
@@ -455,7 +519,7 @@ export default function RolesPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
-        {isBootstrapping ? (
+        {loadingUsers ? (
           <AppLoader variant="table" label="Loading users" />
         ) : (
         <>
@@ -819,10 +883,18 @@ export default function RolesPage() {
                   })
                   .then((created) => {
                     const code = publicCode(created.roleCode);
-                    if (!code || code === role.id) return;
                     setManagedRoles((current) =>
                       current.map((entry) =>
-                        entry.id === role.id ? { ...entry, id: code } : entry,
+                        entry.id === role.id
+                          ? {
+                              ...entry,
+                              id: code ?? entry.id,
+                              roleCode: code ?? entry.roleCode,
+                              recordId: isUuid(created.id)
+                                ? created.id
+                                : entry.recordId,
+                            }
+                          : entry,
                       ),
                     );
                   })
@@ -830,8 +902,21 @@ export default function RolesPage() {
                     notifyApiError(error, `Failed to create role "${role.name}".`);
                   });
               } else {
+                const pathId =
+                  role.recordId && isUuid(role.recordId)
+                    ? role.recordId
+                    : isUuid(role.id)
+                      ? role.id
+                      : undefined;
+                if (!pathId) {
+                  notifyApiError(
+                    new Error(`Role "${role.name}" is missing a server id.`),
+                    `Failed to update role "${role.name}".`,
+                  );
+                  continue;
+                }
                 void rolesApi
-                  .update(publicCode(role.id) ?? role.id, {
+                  .update(pathId, {
                     name: role.name,
                     permissions: checkedPermissionKeys(role.permissions),
                   })

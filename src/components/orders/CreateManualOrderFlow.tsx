@@ -7,18 +7,18 @@ import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { DatePicker } from "@/components/ui/DatePicker";
 import { Select } from "@/components/ui/Select";
-import {
-  MANUAL_TIME_SLOTS,
-} from "@/constants/distributorOrders";
 import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
-import { parseDeliveryDateId, startOfLocalDay } from "@/utils/deliveryCalendar";
+import { getDeliveryWeekdayIndices } from "@/utils/deliveryCalendar";
+import { formatClock } from "@/utils/format";
 import {
   createManualLines,
+  deliveryTimesForDate,
   formatManualDeliveryLabel,
   getManualCatalogForDistributor,
+  manualDeliveryError,
   toOrderDeliveryDateIso,
 } from "@/utils/manualOrder";
 
@@ -111,17 +111,32 @@ export function CreateManualOrderFlow({
     [deliveryDate, timeSlot],
   );
 
-  const deliveryDateAllowed = useMemo(() => {
-    const date = parseDeliveryDateId(deliveryDate);
-    if (!date) return false;
-    return date.getTime() >= startOfLocalDay(new Date()).getTime();
-  }, [deliveryDate]);
+  const selectedDistributor = useMemo(
+    () => distributors.find((entry) => entry.name === distributor),
+    [distributor, distributors],
+  );
+
+  const deliveryWeekdays = useMemo(
+    () =>
+      selectedDistributor
+        ? getDeliveryWeekdayIndices([selectedDistributor])
+        : undefined,
+    [selectedDistributor],
+  );
+
+  const timeOptions = useMemo(
+    () => deliveryTimesForDate(selectedDistributor, deliveryDate),
+    [deliveryDate, selectedDistributor],
+  );
+
+  const deliveryError = manualDeliveryError({
+    distributor: selectedDistributor,
+    dateYmd: deliveryDate,
+    timeSlot,
+  });
 
   const canReview =
-    Boolean(distributor) &&
-    selectedLines.length > 0 &&
-    deliveryDateAllowed &&
-    Boolean(timeSlot);
+    Boolean(distributor) && selectedLines.length > 0 && !deliveryError;
 
   function selectDistributor(name: string) {
     setDistributor(name);
@@ -146,7 +161,26 @@ export function CreateManualOrderFlow({
     );
   }
 
+  function selectDeliveryDate(next: string) {
+    setDeliveryDate(next);
+    setTimeSlot((current) =>
+      deliveryTimesForDate(selectedDistributor, next).includes(current)
+        ? current
+        : "",
+    );
+  }
+
   function createOrder() {
+    if (manualDeliveryError({
+      distributor: selectedDistributor,
+      dateYmd: deliveryDate,
+      timeSlot,
+    })) {
+      return;
+    }
+    // INTEGRATION: POST /orders { type: "distributor", distributorId: selectedDistributor.recordId,
+    // deliveryDate: deliveryDateIso, items: [{ productId, quantity }] }.
+    // On success, show the created order under In Progress. Do not create it locally twice.
     onCreated({
       distributor,
       deliveryDate: expectedDeliveryLabel,
@@ -296,7 +330,8 @@ export function CreateManualOrderFlow({
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
                   <DatePicker
                     value={deliveryDate}
-                    onChange={setDeliveryDate}
+                    onChange={selectDeliveryDate}
+                    deliveryWeekdays={deliveryWeekdays}
                     className="w-full max-w-[220px] sm:w-[220px]"
                     placeholder="Select Date"
                     aria-label="Select Date"
@@ -306,35 +341,54 @@ export function CreateManualOrderFlow({
                     <span className="text-danger"> *</span>
                   </span>
                   <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-                    {MANUAL_TIME_SLOTS.map((slot) => {
-                      const checked = timeSlot === slot;
-                      return (
-                        <label
-                          key={slot}
-                          className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#111118]"
-                        >
-                          <button
-                            type="button"
-                            role="checkbox"
-                            aria-checked={checked}
-                            onClick={() => setTimeSlot(checked ? "" : slot)}
-                            className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-                              checked
-                                ? "border-[#111118] bg-[#111118] text-white"
-                                : "border-[#C5C5C5] bg-white",
-                            )}
+                    {timeOptions.length === 0 ? (
+                      <span className="text-[13px] text-[#8A8A8A]">
+                        {deliveryDate
+                          ? "No delivery time on this day"
+                          : "Select a delivery day first"}
+                      </span>
+                    ) : (
+                      timeOptions.map((slot) => {
+                        const checked = timeSlot === slot;
+                        const label = slot.includes(":")
+                          ? formatClock(slot)
+                          : slot;
+                        return (
+                          <label
+                            key={slot}
+                            className="inline-flex cursor-pointer items-center gap-2 text-[13px] text-[#111118]"
                           >
-                            {checked ? (
-                              <Check size={11} strokeWidth={3} />
-                            ) : null}
-                          </button>
-                          <span>{slot}</span>
-                        </label>
-                      );
-                    })}
+                            <button
+                              type="button"
+                              role="checkbox"
+                              aria-checked={checked}
+                              onClick={() => setTimeSlot(checked ? "" : slot)}
+                              className={cn(
+                                "flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+                                checked
+                                  ? "border-[#111118] bg-[#111118] text-white"
+                                  : "border-[#C5C5C5] bg-white",
+                              )}
+                            >
+                              {checked ? (
+                                <Check size={11} strokeWidth={3} />
+                              ) : null}
+                            </button>
+                            <span>{label}</span>
+                          </label>
+                        );
+                      })
+                    )}
                   </div>
                 </div>
+                {deliveryError &&
+                deliveryError !== "Select a distributor." &&
+                deliveryError !== "Select a delivery date." &&
+                deliveryError !== "Select a delivery time." ? (
+                  <p className="mt-4 text-[13px] text-[#C04545]">
+                    {deliveryError}
+                  </p>
+                ) : null}
                 {deliveryDate || timeSlot ? (
                   <p className="mt-4 text-[13px] text-[#8A8A8A]">
                     Selected delivery{" "}

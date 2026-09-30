@@ -12,7 +12,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
-import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -975,8 +975,8 @@ export default function InventoryPage() {
     items: catalogItems,
     products,
     categories,
-    isBootstrapping,
   } = useAppCatalog();
+  const { ready: catalogReady } = useCatalogSlice(["items", "categories"]);
   const { notifyApiError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
@@ -1027,8 +1027,6 @@ export default function InventoryPage() {
       setLoading(false);
       return;
     }
-    if (isBootstrapping) return;
-
     let cancelled = false;
 
     void inventoryApi
@@ -1047,9 +1045,7 @@ export default function InventoryPage() {
     return () => {
       cancelled = true;
     };
-    // Fetch once after catalog bootstrap; remapping on every catalogItems identity change caused duplicate GETs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isBootstrapping]);
+  }, [notifyApiError]);
 
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {
@@ -1654,7 +1650,7 @@ export default function InventoryPage() {
           </div>
         ) : null}
 
-        {loading ? (
+        {loading || !catalogReady ? (
           <AppLoader variant="table" label="Loading inventory" />
         ) : (
           <>

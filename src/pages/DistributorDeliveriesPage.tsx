@@ -108,14 +108,6 @@ const REJECT_REASONS: RejectReason[] = [
   "Missing Exp Date",
 ];
 
-const RECEIVING_DATES = [
-  new Date(2026, 6, 14),
-  new Date(2026, 6, 20),
-  new Date(2026, 6, 27),
-  new Date(2026, 7, 3),
-  new Date(2026, 7, 10),
-];
-
 const WEEKDAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] as const;
 
 function toIsoDate(date: Date) {
@@ -532,7 +524,7 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
     return {
       id: line.id || `${code}-${lineIndex + 1}`,
       itemCode: line.itemId || line.productId || line.id || "",
-      name: line.name || line.itemName || "Item",
+      name: line.name || line.itemName || "N/A",
       category: line.category?.trim() || "Items",
       quantity,
       unit: line.unit || "Each",
@@ -1027,7 +1019,7 @@ export default function DistributorDeliveriesPage() {
   const { notifyApiError } = useApiFeedback();
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
-  const [activeDateId, setActiveDateId] = useState("2026-07-20");
+  const [activeDateId, setActiveDateId] = useState("");
   const [chipWindowStart, setChipWindowStart] = useState(0);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -1146,7 +1138,7 @@ export default function DistributorDeliveriesPage() {
     const fromOrders = [...unique.values()].sort(
       (left, right) => left.getTime() - right.getTime(),
     );
-    return fromOrders.length ? fromOrders : RECEIVING_DATES;
+    return fromOrders;
   }, [orders]);
 
   const visibleChips = useMemo(() => {
@@ -1445,9 +1437,7 @@ export default function DistributorDeliveriesPage() {
             {calendarOpen ? (
               <DeliveryDateCalendar
                 selectedDateId={activeDateId}
-                initialMonth={
-                  parseDeliveryDateId(activeDateId) ?? RECEIVING_DATES[0]
-                }
+                initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
                 onSelectDate={(dateId) => {
                   selectDeliveryDate(dateId);
                 }}

@@ -44,7 +44,7 @@ export function createPlacedOrderFromReviewGroup(
   deliveryDateId = "",
 ): PlacedOrder {
   return {
-    id: `placed-${group.distributor}-${Date.now()}`,
+    id: `placed-${group.distributor}-${group.source}-${Date.now()}`,
     deliveryId,
     distributor: group.distributor,
     orderDate: formatOrderTimestamp(),
@@ -52,7 +52,7 @@ export function createPlacedOrderFromReviewGroup(
     deliveryDateId,
     totalPrice: group.totalPrice,
     items: group.items.map((item, index) => ({
-      sku: `OPE-${18048 + index}`,
+      sku: item.sku || `OPE-${18048 + index}`,
       itemName: item.itemName,
       source: item.source,
       quantity: item.quantity,
@@ -94,9 +94,8 @@ function moneyLabel(value: number) {
   return `$${value.toFixed(2)}`;
 }
 
-/** Builds a downloadable invoice text file from the latest saved order state. */
-export function downloadOrderInvoice(order: PlacedOrder) {
-  const lines = [
+function invoiceText(order: PlacedOrder) {
+  return [
     `Invoice — Delivery ${order.deliveryId}`,
     `Distributor: ${order.distributor}`,
     `Order Date: ${order.orderDate}`,
@@ -110,19 +109,37 @@ export function downloadOrderInvoice(order: PlacedOrder) {
     ),
     "",
     `Total: ${moneyLabel(order.totalPrice)}`,
-  ];
+  ].join("\n");
+}
 
-  const blob = new Blob([lines.join("\n")], {
+/**
+ * Opens the order invoice in a new tab.
+ *
+ * INTEGRATION: The button label is "Download order" and the spec text calls
+ * the file an invoice. Confirm with product whether this opens, downloads, or
+ * both, and whether the server returns a PDF invoice or a purchase order.
+ * Replace this local text file with that document URL. Do not invent a PDF here.
+ */
+export function openOrderInvoice(order: PlacedOrder) {
+  const blob = new Blob([invoiceText(order)], {
     type: "text/plain;charset=utf-8",
   });
   const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `invoice-${order.deliveryId}.txt`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  const opened = window.open(url, "_blank", "noopener,noreferrer");
+  if (!opened) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `invoice-${order.deliveryId}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** @deprecated Use openOrderInvoice. Kept so older call sites keep working. */
+export function downloadOrderInvoice(order: PlacedOrder) {
+  openOrderInvoice(order);
 }
 
 export function getOrderDemandForDate(dateId: string): PreviewRow[] {
@@ -164,20 +181,25 @@ export function filterOrderDemandRows(
   });
 }
 
-export function calculateNeededQuantity(row: OrderListItem): number {
-  const option = row.options[0];
-  if (!option || option.qtyPerUnit <= 0) return 0;
-
+/**
+ * QTY NEEDED = customer demand minus on-hand stock.
+ * Stock that covers demand yields 0. The admin may still type a higher number.
+ *
+ * INTEGRATION: `inStock` must be inventory on-hand for that product, not a
+ * placeholder. Do not round by pack size here — the spec is a plain difference
+ * (9 ordered, 3 in stock → 6).
+ */
+export function calculateNeededQuantity(
+  row: Pick<OrderListItem, "custOrderTotal" | "inStock">,
+): number {
   const availableStock = row.inStock ?? 0;
   const netDemand = row.custOrderTotal - availableStock;
-  if (netDemand <= 0) return 0;
-
-  return Math.ceil(netDemand / option.qtyPerUnit);
+  return Math.max(0, netDemand);
 }
 
 export function applyCalculatedQuantitiesForCategory(
   rows: WorkingOrderRow[],
-  category: OrderListItem["category"],
+  category: string,
 ): WorkingOrderRow[] {
   return rows.map((row) =>
     row.category === category
@@ -194,7 +216,7 @@ export function makeWorkingRowsForDate(dateId: string): WorkingOrderRow[] {
   return ORDER_LIST_ITEMS.filter((row) => previewIds.has(row.id)).map(
     (row) => ({
       ...row,
-      quantity: calculateNeededQuantity(row),
+      quantity: 0,
     }),
   );
 }

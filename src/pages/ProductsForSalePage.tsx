@@ -26,7 +26,7 @@ import {
   productFromItem,
   relinkProductToItem,
 } from "@/constants/productsForSale";
-import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -44,7 +44,7 @@ import {
 } from "@/types/productForSale";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import { findByEntityRef, recordRef } from "@/utils/entityIds";
 import { validateAddProductForSale } from "@/utils/productForSaleForm";
 import {
   filterProductsForSale,
@@ -385,8 +385,15 @@ export default function ProductsForSalePage() {
     sources,
     categories,
     subcategoriesByCategory,
-    isBootstrapping,
   } = useAppCatalog();
+  const { ready: catalogReady } = useCatalogSlice([
+    "products",
+    "items",
+    "categories",
+    "subcategories",
+    "sources",
+    "distributors",
+  ]);
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [search, setSearch] = useState("");
   const [subcategoryFilter, setSubcategoryFilter] = useState("");
@@ -510,8 +517,17 @@ export default function ProductsForSalePage() {
     setViewing((current) =>
       current?.id === id ? { ...current, live } : current,
     );
-    if (isApiConfigured() && target) {
-      void productsApi.update(apiId(target), { isLive: live }).catch((error) => {
+    const pathId = target ? recordRef(target) : undefined;
+    if (isApiConfigured() && target && !pathId) {
+      setProducts((current) =>
+        current.map((row) => (row.id === id ? { ...row, live: !live } : row)),
+      );
+      notifyApiError(
+        new Error("This product is not linked to a server record."),
+        "Failed to update live status.",
+      );
+    } else if (isApiConfigured() && target && pathId) {
+      void productsApi.update(pathId, { isLive: live }).catch((error) => {
         setProducts((current) =>
           current.map((row) => (row.id === id ? { ...row, live: !live } : row)),
         );
@@ -542,10 +558,11 @@ export default function ProductsForSalePage() {
         catalog,
       );
       if (isApiConfigured()) {
-        const positions = next.map((product, index) => ({
-          id: apiId(product),
-          position: product.sortOrder ?? index,
-        }));
+        const positions = next.flatMap((product, index) => {
+          const id = recordRef(product);
+          return id ? [{ id, position: product.sortOrder ?? index }] : [];
+        });
+        if (!positions.length) return next;
         void productsApi.reorder(positions).catch((error) => {
           setProducts(previous);
           notifyApiError(error, "Failed to reorder products.");
@@ -569,8 +586,14 @@ export default function ProductsForSalePage() {
         const updated = relinkProductToItem(editTarget, item);
         if (isApiConfigured()) {
           try {
+            const pathId = recordRef(editTarget);
+            if (!pathId) {
+              throw new Error(
+                "This product is not linked to a server record. Reload the page and try again.",
+              );
+            }
             const saved = await productsApi.update(
-              apiId(editTarget),
+              pathId,
               toCreateProductPayload(updated, catalog),
             );
             const mapped = mapApiProductToProductForSale(saved, 0, catalog);
@@ -633,8 +656,17 @@ export default function ProductsForSalePage() {
     setViewing((current) => (current?.id === id ? null : current));
     setEditTarget(null);
     if (isApiConfigured()) {
+      const pathId = recordRef(snapshot);
+      if (!pathId) {
+        setProducts((current) => [snapshot, ...current]);
+        notifyApiError(
+          new Error("This product is not linked to a server record."),
+          "Failed to remove product.",
+        );
+        return;
+      }
       void productsApi
-        .remove(apiId(snapshot))
+        .remove(pathId)
         .then(() => showSuccess("Product removed."))
         .catch((error) => {
           setProducts((current) => [snapshot, ...current]);
@@ -726,7 +758,7 @@ export default function ProductsForSalePage() {
 
       <div className="relative min-h-0 flex-1 bg-[#FAFAFA]">
         <div className="h-full overflow-auto px-4 py-5 md:px-7 md:py-5">
-        {isBootstrapping ? (
+        {!catalogReady ? (
           <AppLoader variant="table" label="Loading products" />
         ) : filtered.length === 0 || grouped.length === 0 ? (
           <EmptyStateBox variant="dashed" className="rounded-[10px] bg-white px-6 py-16 text-[14px]">

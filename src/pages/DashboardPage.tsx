@@ -27,7 +27,6 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { Select } from "@/components/ui/Select";
 import { ROUTES } from "@/constants";
-import { ADMIN_CUSTOMERS } from "@/data/admin";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import {
   dashboardApi,
@@ -38,18 +37,85 @@ import { cn } from "@/utils/cn";
 
 type ChartMode = "daily" | "weekly" | "monthly";
 
-/** Temporary seed chart points until Dashboard API owns these series. */
-const ORDERS_CHART: Record<ChartMode, { name: string; value: number }[]> = {
-  daily: [],
-  weekly: [],
-  monthly: [],
+const MISSING = "N/A";
+
+function readStat(
+  stats: Record<string, unknown> | null,
+  keys: string[],
+): unknown {
+  if (!stats) return undefined;
+  const pools: Record<string, unknown>[] = [stats];
+  for (const value of Object.values(stats)) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      pools.push(value as Record<string, unknown>);
+    }
+  }
+  for (const pool of pools) {
+    for (const key of keys) {
+      const value = pool[key];
+      if (value != null && value !== "") return value;
+    }
+  }
+  return undefined;
+}
+
+function formatCount(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return MISSING;
+}
+
+function formatMoney(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toLocaleString("en-US", {
+      style: "currency",
+      currency: "USD",
+    });
+  }
+  if (typeof value === "string" && value.trim()) {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("$")) return trimmed;
+    const numeric = Number(trimmed.replace(/,/g, ""));
+    if (Number.isFinite(numeric)) {
+      return numeric.toLocaleString("en-US", {
+        style: "currency",
+        currency: "USD",
+      });
+    }
+    return trimmed;
+  }
+  return MISSING;
+}
+
+type TopCustomer = {
+  id: string;
+  name: string;
+  orders: string;
 };
 
-const REVENUE_CHART: Record<ChartMode, { name: string; value: number }[]> = {
-  daily: [],
-  weekly: [],
-  monthly: [],
-};
+function readTopCustomers(
+  stats: Record<string, unknown> | null,
+): TopCustomer[] {
+  const raw = readStat(stats, ["topCustomers", "top_customers"]);
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry, index) => {
+    const row =
+      entry && typeof entry === "object"
+        ? (entry as Record<string, unknown>)
+        : {};
+    const name = String(
+      row.name ??
+        row.customerName ??
+        [row.firstName, row.lastName].filter(Boolean).join(" "),
+    ).trim();
+    const orders = row.orderQuantity ?? row.orders ?? row.orderCount;
+    return {
+      id: String(row.id ?? index),
+      name: name || MISSING,
+      orders: orders == null || orders === "" ? MISSING : String(orders),
+    };
+  });
+}
 
 function ChartToggle({
   value,
@@ -106,6 +172,11 @@ function AreaChartCard({
       </div>
 
       <div className="h-[220px]">
+        {data.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-[13px] text-[#8A8A8A]">
+            {MISSING}
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <defs>
@@ -160,6 +231,7 @@ function AreaChartCard({
             />
           </AreaChart>
         </ResponsiveContainer>
+        )}
       </div>
     </section>
   );
@@ -176,10 +248,10 @@ export default function DashboardPage() {
     null,
   );
   const [ordersChartApi, setOrdersChartApi] = useState<
-    typeof ORDERS_CHART.daily | null
+    { name: string; value: number }[] | null
   >(null);
   const [revenueChartApi, setRevenueChartApi] = useState<
-    typeof REVENUE_CHART.daily | null
+    { name: string; value: number }[] | null
   >(null);
   const [loading, setLoading] = useState(() => isApiConfigured());
 
@@ -196,7 +268,7 @@ export default function DashboardPage() {
         if (cancelled) return;
         setApiStats(stats && typeof stats === "object" ? stats : null);
       } catch {
-        // Keep seeded dashboard data.
+        if (!cancelled) setApiStats(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -216,16 +288,16 @@ export default function DashboardPage() {
       try {
         const ordersChart = await dashboardApi.getChart(ordersMode);
         if (cancelled) return;
-        if (Array.isArray(ordersChart) && ordersChart.length > 0) {
-          setOrdersChartApi(
-            ordersChart.map((point, index) => ({
-              name: String(point.name ?? point.label ?? `P${index + 1}`),
-              value: Number(point.value ?? point.total ?? 0),
-            })),
-          );
-        }
+        setOrdersChartApi(
+          Array.isArray(ordersChart)
+            ? ordersChart.map((point) => ({
+                name: String(point.name ?? point.label ?? MISSING),
+                value: Number(point.value ?? point.total ?? 0),
+              }))
+            : [],
+        );
       } catch {
-        // Keep seeded chart data.
+        if (!cancelled) setOrdersChartApi(null);
       }
     }
 
@@ -243,16 +315,16 @@ export default function DashboardPage() {
       try {
         const revenueChart = await dashboardApi.getChart(revenueMode);
         if (cancelled) return;
-        if (Array.isArray(revenueChart) && revenueChart.length > 0) {
-          setRevenueChartApi(
-            revenueChart.map((point, index) => ({
-              name: String(point.name ?? point.label ?? `P${index + 1}`),
-              value: Number(point.value ?? point.total ?? 0),
-            })),
-          );
-        }
+        setRevenueChartApi(
+          Array.isArray(revenueChart)
+            ? revenueChart.map((point) => ({
+                name: String(point.name ?? point.label ?? MISSING),
+                value: Number(point.value ?? point.total ?? 0),
+              }))
+            : [],
+        );
       } catch {
-        // Keep seeded chart data.
+        if (!cancelled) setRevenueChartApi(null);
       }
     }
 
@@ -262,18 +334,16 @@ export default function DashboardPage() {
     };
   }, [revenueMode]);
 
-  const ordersChartData =
-    ordersChartApi ?? ORDERS_CHART[ordersMode];
-  const revenueChartData =
-    revenueChartApi ?? REVENUE_CHART[revenueMode];
+  const ordersChartData = ordersChartApi ?? [];
+  const revenueChartData = revenueChartApi ?? [];
 
   const statCards = useMemo(
     () => [
       {
         title: "Total Revenue",
-        value:
-          (apiStats?.totalRevenue as string | number | undefined)?.toString() ??
-          "$5,285.30",
+        value: formatMoney(
+          readStat(apiStats, ["totalRevenue", "revenue"]),
+        ),
         subtitle: "All time revenue",
         icon: DollarSign,
         iconBg: "bg-[#E8F2EA]",
@@ -281,9 +351,9 @@ export default function DashboardPage() {
       },
       {
         title: "Total Expenses",
-        value:
-          (apiStats?.totalExpenses as string | number | undefined)?.toString() ??
-          "$3,160.50",
+        value: formatMoney(
+          readStat(apiStats, ["totalExpenses", "expenses"]),
+        ),
         subtitle: "From product orders",
         icon: TrendingUp,
         iconBg: "bg-[#FDECEC]",
@@ -292,9 +362,9 @@ export default function DashboardPage() {
       },
       {
         title: "Total Orders",
-        value:
-          (apiStats?.totalOrders as string | number | undefined)?.toString() ??
-          "41",
+        value: formatCount(
+          readStat(apiStats, ["totalOrders", "orderCount"]),
+        ),
         subtitle: "Total customer orders",
         icon: ShoppingCart,
         iconBg: "bg-[#FFF0E8]",
@@ -303,9 +373,9 @@ export default function DashboardPage() {
       },
       {
         title: "Total Customers",
-        value:
-          (apiStats?.totalCustomers as string | number | undefined)?.toString() ??
-          "6",
+        value: formatCount(
+          readStat(apiStats, ["totalCustomers", "customerCount"]),
+        ),
         subtitle: "Active customers",
         icon: Users,
         iconBg: "bg-[#EAF1FB]",
@@ -316,13 +386,7 @@ export default function DashboardPage() {
     [apiStats, navigate],
   );
 
-  const topCustomers = useMemo(
-    () =>
-      [...ADMIN_CUSTOMERS]
-        .sort((a, b) => b.orderQuantity - a.orderQuantity)
-        .slice(0, 5),
-    [],
-  );
+  const topCustomers = useMemo(() => readTopCustomers(apiStats), [apiStats]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -431,21 +495,35 @@ export default function DashboardPage() {
                 {[
                   {
                     label: "Requests",
-                    value: 4,
+                    value: formatCount(
+                      readStat(apiStats, [
+                        "requests",
+                        "requested",
+                        "requestCount",
+                      ]),
+                    ),
                     icon: Clock,
                     iconBg: "bg-[#FFF0E8]",
                     iconColor: "text-[#E07A4F]",
                   },
                   {
                     label: "Packing & Ready",
-                    value: 28,
+                    value: formatCount(
+                      readStat(apiStats, [
+                        "packing",
+                        "packingReady",
+                        "packingCount",
+                      ]),
+                    ),
                     icon: Package,
                     iconBg: "bg-[#EAF1FB]",
                     iconColor: "text-[#4B7CC9]",
                   },
                   {
                     label: "On the Way",
-                    value: 0,
+                    value: formatCount(
+                      readStat(apiStats, ["onTheWay", "onRoute", "on_route"]),
+                    ),
                     icon: Truck,
                     iconBg: "bg-[#F0EBFA]",
                     iconColor: "text-[#7B5EA7]",
@@ -498,7 +576,12 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <span className="shrink-0 text-[14px] font-semibold text-[#111118]">
-                  3
+                  {formatCount(
+                    readStat(apiStats, [
+                      "pendingDistributorOrders",
+                      "pendingOrders",
+                    ]),
+                  )}
                 </span>
               </button>
             </section>
@@ -519,7 +602,12 @@ export default function DashboardPage() {
               </div>
 
               <div className="divide-y divide-[#00000014]">
-                {topCustomers.map((customer) => (
+                {topCustomers.length === 0 ? (
+                  <p className="py-6 text-center text-[13px] text-[#9A9A9A]">
+                    {MISSING}
+                  </p>
+                ) : (
+                  topCustomers.map((customer) => (
                   <button
                     key={customer.id}
                     type="button"
@@ -528,15 +616,16 @@ export default function DashboardPage() {
                   >
                     <div>
                       <div className="text-[13px] font-medium text-[#111118]">
-                        {customer.firstName} {customer.lastName}
+                        {customer.name}
                       </div>
                       <div className="mt-0.5 text-[12px] text-[#9A9A9A]">
-                        {customer.orderQuantity} orders
+                        {customer.orders} orders
                       </div>
                     </div>
                     <ArrowUpRight size={15} className="text-[#B0B0B0]" />
                   </button>
-                ))}
+                  ))
+                )}
               </div>
             </section>
           </div>

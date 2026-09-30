@@ -52,17 +52,25 @@ export function formatCalendarMonth(date: Date) {
   });
 }
 
+/** Label for a delivery day chosen in the admin calendar. No invented time window. */
 export function formatExpectedDelivery(deliveryDate: Date) {
-  const expected = new Date(deliveryDate);
-  expected.setDate(expected.getDate() - 2);
-
-  const dayLabel = expected.toLocaleDateString("en-US", {
+  if (Number.isNaN(deliveryDate.getTime())) return "N/A";
+  return deliveryDate.toLocaleDateString("en-US", {
     weekday: "short",
     month: "short",
     day: "numeric",
+    year: "numeric",
   });
+}
 
-  return `${dayLabel}, 06:00–08:00 AM`;
+export function formatTodayLabel(date = new Date()) {
+  const formatted = date.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `Today, ${formatted}`;
 }
 
 function distributorsForFilter(

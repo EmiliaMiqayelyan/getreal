@@ -2,7 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -12,6 +14,12 @@ import { ITEMS } from "@/constants/items";
 import { PRODUCTS_FOR_SALE } from "@/constants/productsForSale";
 import { SOURCES } from "@/constants/sources";
 import { formatApiError, isApiConfigured, subcategoriesApi } from "@/lib/api";
+import {
+  loadCatalogSlices,
+  type CatalogLookup,
+  type CatalogSlice,
+} from "@/lib/catalog/loadCatalogSlices";
+import { useToast } from "@/context/ToastContext";
 import { findCategoryIdByName } from "@/lib/api/mappers";
 import type { ApiCategory, CatalogSubcategory } from "@/lib/api/types";
 import type { Distributor } from "@/types/distributor";
@@ -28,7 +36,7 @@ import {
   withResolvedDistributor,
 } from "@/utils/distributorSync";
 import { nextDistributorId } from "@/utils/distributors";
-import { apiId, findByEntityRef } from "@/utils/entityIds";
+import { apiId, findByEntityRef, isUuid } from "@/utils/entityIds";
 import {
   attachSourceIds,
   getSourceLocation,
@@ -57,9 +65,10 @@ type AppCatalogContextValue = {
   categories: ApiCategory[];
   subcategoryRecords: CatalogSubcategory[];
   subcategoriesByCategory: SubcategoryMap;
-  /** True while the initial API catalog bootstrap is in flight. */
-  isBootstrapping: boolean;
-  setBootstrapping: (value: boolean) => void;
+  /** Slices already loaded from the API during this session. */
+  loadedSlices: CatalogSlice[];
+  /** Load only these catalog resources. Already-loaded slices are not requested again. */
+  ensureCatalog: (slices: readonly CatalogSlice[]) => Promise<void>;
   setDistributors: (
     updater: Distributor[] | ((current: Distributor[]) => Distributor[]),
   ) => void;
@@ -93,6 +102,12 @@ type AppCatalogContextValue = {
 };
 
 const AppCatalogContext = createContext<AppCatalogContextValue | null>(null);
+
+function mergeById<T extends { id: string }>(seed: T[], api: T[]): T[] {
+  const byId = new Map(seed.map((entry) => [entry.id, entry]));
+  for (const entry of api) byId.set(entry.id, entry);
+  return Array.from(byId.values());
+}
 
 function bootstrapCatalog() {
   const distributors = [...DISTRIBUTORS];
@@ -157,7 +172,10 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   const [subcategoryRecords, setSubcategoryRecordsState] = useState<
     CatalogSubcategory[]
   >(() => catalogRecordsFromMap(loadSubcategories()));
-  const [isBootstrapping, setBootstrapping] = useState(() => isApiConfigured());
+  const [loadedSlices, setLoadedSlices] = useState<CatalogSlice[]>([]);
+  const loadedRef = useRef<Set<CatalogSlice>>(new Set());
+  const inflightRef = useRef<Map<CatalogSlice, Promise<void>>>(new Map());
+  const { showError } = useToast();
 
   const subcategoriesByCategory = useMemo(
     () => mapFromCatalogRecords(subcategoryRecords),
@@ -367,10 +385,14 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
           setSubcategoryRecords((current) => [
             ...current,
             {
-              id: created.id,
+              id: created.subcategoryCode?.trim() || created.id,
+              recordId: isUuid(created.id) ? created.id : undefined,
               name: created.name?.trim() || trimmed,
               category,
-              categoryId: created.categoryId ?? categoryId,
+              categoryId:
+                created.categoryId && isUuid(created.categoryId)
+                  ? created.categoryId
+                  : categoryId,
             },
           ]);
           return null;
@@ -403,11 +425,17 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       );
 
       if (isApiConfigured()) {
-        if (!existing?.id) {
+        const pathId =
+          existing?.recordId && isUuid(existing.recordId)
+            ? existing.recordId
+            : existing?.id && isUuid(existing.id)
+              ? existing.id
+              : undefined;
+        if (!pathId) {
           return "Subcategory is not available on the server yet.";
         }
         try {
-          const updated = await subcategoriesApi.update(existing.id, {
+          const updated = await subcategoriesApi.update(pathId, {
             name: trimmed,
           });
           const resolvedName = updated.name?.trim() || trimmed;
@@ -431,7 +459,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
               category,
               previous,
               resolvedName,
-              updated.id ?? existing.id,
+              updated.id ?? pathId,
             ),
           }));
           return null;
@@ -472,11 +500,17 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       );
 
       if (isApiConfigured()) {
-        if (!existing?.id) {
+        const pathId =
+          existing?.recordId && isUuid(existing.recordId)
+            ? existing.recordId
+            : existing?.id && isUuid(existing.id)
+              ? existing.id
+              : undefined;
+        if (!pathId) {
           return "Subcategory is not available on the server yet.";
         }
         try {
-          await subcategoriesApi.remove(existing.id);
+          await subcategoriesApi.remove(pathId);
           setSubcategoryRecords((current) =>
             current.filter(
               (entry) =>
@@ -513,6 +547,100 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
     [subcategoryRecords, setSubcategoryRecords],
   );
 
+  const lookupRef = useRef<CatalogLookup>({
+    distributors: catalog.distributors,
+    sources: catalog.sources,
+    items: catalog.items,
+    categories,
+    subcategoryRecords,
+    products: catalog.products,
+  });
+  lookupRef.current = {
+    distributors: catalog.distributors,
+    sources: catalog.sources,
+    items: catalog.items,
+    categories,
+    subcategoryRecords,
+    products: catalog.products,
+  };
+
+  const ensureCatalog = useCallback(
+    async (slices: readonly CatalogSlice[]) => {
+      if (!isApiConfigured()) return;
+
+      const remaining = () =>
+        slices.filter((slice) => !loadedRef.current.has(slice));
+
+      let pending = remaining();
+      while (pending.length > 0) {
+        const waiting = pending.filter((slice) => inflightRef.current.has(slice));
+        const toStart = pending.filter((slice) => !inflightRef.current.has(slice));
+
+        if (toStart.length === 0) {
+          await Promise.all(
+            waiting.map((slice) => inflightRef.current.get(slice)!),
+          );
+          return;
+        }
+
+        if (waiting.length > 0) {
+          await Promise.all(
+            waiting.map((slice) => inflightRef.current.get(slice)!),
+          );
+          pending = remaining();
+          continue;
+        }
+
+        let finish = () => {};
+        const done = new Promise<void>((resolve) => {
+          finish = resolve;
+        });
+        for (const slice of toStart) inflightRef.current.set(slice, done);
+
+        try {
+          const result = await loadCatalogSlices(toStart, lookupRef.current);
+          if (result.distributors && result.distributors.length > 0) {
+            setDistributors((current) => mergeById(current, result.distributors!));
+          }
+          if (result.sources && result.sources.length > 0) {
+            setSources((current) => mergeById(current, result.sources!));
+          }
+          if (result.categories && result.categories.length > 0) {
+            setCategories(result.categories);
+          }
+          if (result.subcategories) {
+            setSubcategoryRecords(result.subcategories);
+          }
+          if (result.items && result.items.length > 0) {
+            setItems((current) => mergeById(current, result.items!));
+          }
+          if (result.products && result.products.length > 0) {
+            setProducts((current) => mergeById(current, result.products!));
+          }
+          if (result.failures.length > 0) {
+            const preview = result.failures.slice(0, 2).join(" | ");
+            showError(
+              result.failures.length > 2
+                ? `Some data failed to load (${result.failures.length}). ${preview}`
+                : `Some data failed to load. ${preview}`,
+            );
+          }
+        } finally {
+          for (const slice of toStart) loadedRef.current.add(slice);
+          setLoadedSlices([...loadedRef.current]);
+          for (const slice of toStart) {
+            if (inflightRef.current.get(slice) === done) {
+              inflightRef.current.delete(slice);
+            }
+          }
+          finish();
+        }
+        return;
+      }
+    },
+    [setCategories, setDistributors, setItems, setProducts, setSources, setSubcategoryRecords, showError],
+  );
+
   const value = useMemo(
     () => ({
       distributors: catalog.distributors,
@@ -522,8 +650,8 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       categories,
       subcategoryRecords,
       subcategoriesByCategory,
-      isBootstrapping,
-      setBootstrapping,
+      loadedSlices,
+      ensureCatalog,
       setDistributors,
       setItems,
       setSources,
@@ -541,8 +669,9 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       addSubcategory,
       catalog,
       categories,
+      ensureCatalog,
       getDistributorById,
-      isBootstrapping,
+      loadedSlices,
       removeDistributor,
       removeSubcategory,
       renameSubcategory,
@@ -571,6 +700,24 @@ export function useAppCatalog() {
     throw new Error("useAppCatalog must be used within AppCatalogProvider");
   }
   return context;
+}
+
+/** Fetch the catalog slices this screen renders. Other resources stay unloaded. */
+export function useCatalogSlice(slices: readonly CatalogSlice[]) {
+  const { ensureCatalog, loadedSlices } = useAppCatalog();
+  const key = slices.join("|");
+
+  useEffect(() => {
+    if (!isApiConfigured() || slices.length === 0) return;
+    void ensureCatalog(key.split("|") as CatalogSlice[]);
+  }, [ensureCatalog, key, slices.length]);
+
+  const ready =
+    !isApiConfigured() ||
+    slices.length === 0 ||
+    slices.every((slice) => loadedSlices.includes(slice));
+
+  return { ready };
 }
 
 export { nextDistributorId };

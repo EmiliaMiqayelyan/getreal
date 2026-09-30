@@ -26,7 +26,7 @@ import {
 import type { NotificationRulePayload } from "@/lib/api/notifications";
 import type { PushNotification } from "@/types/notification";
 import { cn } from "@/utils/cn";
-import { apiId, recordRef } from "@/utils/entityIds";
+import { recordRef } from "@/utils/entityIds";
 
 const LINK_BLUE = "#3B82F6";
 
@@ -233,9 +233,16 @@ export default function PushNotificationsPage() {
     if (!draft.id || pending) return;
     setPending("remove");
     try {
-      await notificationRulesApi.remove(
-        apiId({ id: draft.id, recordId: draft.recordId }),
-      );
+      const pathId = recordRef({
+        id: draft.id,
+        recordId: draft.recordId,
+      });
+      if (!pathId) {
+        throw new Error(
+          "This notification is not linked to a server record.",
+        );
+      }
+      await notificationRulesApi.remove(pathId);
       showSuccess("Notification removed.");
       setModalOpen(false);
       setDraft(emptyDraft());
@@ -256,10 +263,16 @@ export default function PushNotificationsPage() {
     setPending("save");
     try {
       if (draft.id) {
-        await notificationRulesApi.update(
-          apiId({ id: draft.id, recordId: draft.recordId }),
-          payload,
-        );
+        const pathId = recordRef({
+          id: draft.id ?? "",
+          recordId: draft.recordId,
+        });
+        if (!pathId) {
+          throw new Error(
+            "This notification is not linked to a server record.",
+          );
+        }
+        await notificationRulesApi.update(pathId, payload);
         showSuccess("Notification updated.");
       } else {
         await notificationRulesApi.create(payload);

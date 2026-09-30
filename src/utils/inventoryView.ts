@@ -241,8 +241,8 @@ export function buildInventorySections(
     const lot = lotFromRow(row, item, index, catalogItemId);
     const apiName = row.itemName?.trim();
     const name = item
-      ? item.merchandisingName?.trim() || item.name?.trim() || apiName || "Item"
-      : apiName || "Item";
+      ? item.merchandisingName?.trim() || item.name?.trim() || apiName || "N/A"
+      : apiName || "N/A";
     const category = parentCategory(row.category || item?.category || "");
     const subcategory =
       row.subcategory?.trim() ||

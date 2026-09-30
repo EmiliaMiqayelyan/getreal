@@ -9,7 +9,11 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { IdPill } from "@/components/ui/Badge";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
-import { useAppCatalog, nextDistributorId } from "@/context/AppCatalogContext";
+import {
+  nextDistributorId,
+  useAppCatalog,
+  useCatalogSlice,
+} from "@/context/AppCatalogContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -29,7 +33,7 @@ import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
-import { apiId, recordRef } from "@/utils/entityIds";
+import { recordRef } from "@/utils/entityIds";
 import {
   downloadDistributorsCsv,
   filterDistributors,
@@ -87,8 +91,7 @@ function escapeHtml(value: string) {
 
 /**
  * Open a distributor document in a new tab.
- * Real uploads use their blob/object URL; mock metadata-only docs get a blob HTML
- * preview (data: URLs are blocked by Chromium for target=_blank navigations).
+ * Real uploads use their blob/object URL. Documents without a file show N/A.
  */
 function openDistributorDocument(doc: Distributor["documents"][number]) {
   if (doc.url) {
@@ -116,7 +119,7 @@ function openDistributorDocument(doc: Distributor["documents"][number]) {
   <main>
     <h1>${title}</h1>
     ${sizeLine}
-    <p>Preview placeholder — no file bytes are stored for this demo document.</p>
+    <p>N/A — no file is attached to this document.</p>
   </main>
 </body>
 </html>`;
@@ -331,8 +334,8 @@ export default function DistributorsPage() {
     removeDistributor,
     setItems,
     setSources,
-    isBootstrapping,
   } = useAppCatalog();
+  const { ready: catalogReady } = useCatalogSlice(["distributors"]);
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [query, setQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
@@ -391,9 +394,17 @@ export default function DistributorsPage() {
   function handleRemoveDistributor() {
     if (!editing) return;
     const snapshot = editing;
-    const recordId = apiId(snapshot);
+    const recordId = recordRef(snapshot);
     removeDistributor(snapshot.id);
     if (!isApiConfigured()) return;
+    if (!recordId) {
+      saveDistributor(snapshot, "create");
+      notifyApiError(
+        new Error("This distributor is not linked to a server record."),
+        "Failed to delete distributor.",
+      );
+      return;
+    }
 
     void distributorsApi
       .remove(recordId)
@@ -452,7 +463,7 @@ export default function DistributorsPage() {
       />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
-        {isBootstrapping ? (
+        {!catalogReady ? (
           <AppLoader variant="table" label="Loading distributors" />
         ) : (
           <>
@@ -615,8 +626,14 @@ export default function DistributorsPage() {
                 };
                 const payload = toCreateDistributorPayload(withDocs);
                 if (editing) {
+                  const pathId = recordRef(editing);
+                  if (!pathId) {
+                    throw new Error(
+                      "This distributor is not linked to a server record. Reload the page and try again.",
+                    );
+                  }
                   const updated = await distributorsApi.update(
-                    apiId(editing),
+                    pathId,
                     payload,
                   );
                   const mapped = mapApiDistributorToDistributor(updated, 0);

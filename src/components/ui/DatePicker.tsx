@@ -12,6 +12,8 @@ type DatePickerProps = {
   className?: string;
   placeholder?: string;
   "aria-label"?: string;
+  /** When set, only these weekdays (0 = Sunday) can be selected. */
+  deliveryWeekdays?: Set<number>;
 };
 
 function formatTriggerLabel(value: string) {
@@ -30,6 +32,7 @@ export function DatePicker({
   className,
   placeholder = "Select Date",
   "aria-label": ariaLabel = "Select Date",
+  deliveryWeekdays,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -86,6 +89,7 @@ export function DatePicker({
       {open ? (
         <DeliveryDateCalendar
           disablePast
+          deliveryWeekdays={deliveryWeekdays}
           selectedDateId={value}
           onSelectDate={onChange}
           onClose={() => setOpen(false)}
