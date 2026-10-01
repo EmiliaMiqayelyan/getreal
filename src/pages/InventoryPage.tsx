@@ -46,6 +46,7 @@ import { handoffToStockSections } from "@/utils/receivingHandoff";
 import { resolveInventoryStoreItemIds } from "@/utils/inventoryStoreItem";
 import {
   loadPendingStorageOrders,
+  withoutInventoriedOrders,
   withoutStoredHandoffs,
   type PendingStorageOrder,
 } from "@/utils/pendingStorageOrders";
@@ -1125,6 +1126,8 @@ export default function InventoryPage() {
     liveInventory ? [] : createMockReceivedOrders(),
   );
   const [storageOrders, setStorageOrders] = useState<PendingStorageOrder[]>([]);
+  /** Orders stored in this visit. A late pending-storage response must not restore their banners. */
+  const completedStorageIds = useRef(new Set<string>());
 
   const unreceivedItems = useMemo(
     () =>
@@ -1199,7 +1202,9 @@ export default function InventoryPage() {
         if (cancelled) return;
         setLiveRows(rows);
         setApiItems(items);
-        setStorageOrders(waiting);
+        setStorageOrders(
+          withoutInventoriedOrders(waiting, completedStorageIds.current),
+        );
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load inventory.");
@@ -1250,10 +1255,34 @@ export default function InventoryPage() {
     });
   }, [catalogItems, pendingHandoffs]);
 
+  const inventoriedOrderIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const row of liveRows ?? []) {
+      const id = row.distributorOrderId?.trim();
+      if (id) ids.push(id);
+    }
+    return ids;
+  }, [liveRows]);
+
   const orders = useMemo(() => {
-    const waiting = liveInventory ? storageOrders : pendingOrders;
-    return [...withoutStoredHandoffs(handoffOrders, waiting), ...waiting];
-  }, [handoffOrders, liveInventory, pendingOrders, storageOrders]);
+    const waiting = withoutInventoriedOrders(
+      liveInventory ? storageOrders : pendingOrders,
+      inventoriedOrderIds,
+    );
+    return [
+      ...withoutInventoriedOrders(
+        withoutStoredHandoffs(handoffOrders, waiting),
+        inventoriedOrderIds,
+      ),
+      ...waiting,
+    ];
+  }, [
+    handoffOrders,
+    inventoriedOrderIds,
+    liveInventory,
+    pendingOrders,
+    storageOrders,
+  ]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
 
@@ -1584,11 +1613,16 @@ export default function InventoryPage() {
         );
       }
 
+      completedStorageIds.current.add(order.id);
       try {
-        setStorageOrders(await loadPendingStorageOrders());
+        const waiting = withoutInventoriedOrders(
+          await loadPendingStorageOrders(),
+          completedStorageIds.current,
+        );
+        setStorageOrders(waiting);
       } catch {
         setStorageOrders((current) =>
-          current.filter((pending) => pending.id !== order.id),
+          withoutInventoriedOrders(current, completedStorageIds.current),
         );
       }
     } else {
@@ -1601,7 +1635,15 @@ export default function InventoryPage() {
       });
     }
 
-    removeHandoff(order.id);
+    for (const handoff of pendingHandoffs) {
+      const sameOrder =
+        handoff.deliveryId === order.id ||
+        handoff.orderCode === order.id ||
+        (order.orderCode != null &&
+          (handoff.deliveryId === order.orderCode ||
+            handoff.orderCode === order.orderCode));
+      if (sameOrder) removeHandoff(handoff.deliveryId);
+    }
     setPendingOrders((current) =>
       current.filter((pending) => pending.id !== order.id),
     );

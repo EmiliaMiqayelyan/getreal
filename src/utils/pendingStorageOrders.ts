@@ -198,6 +198,23 @@ export async function loadPendingStorageOrders(): Promise<
 }
 
 /**
+ * A stored order should leave the Order Received banners.
+ * Match the distributor order UUID only, because several open orders can share one public code.
+ */
+export function withoutInventoriedOrders<T extends { id: string }>(
+  orders: T[],
+  inventoryOrderIds: Iterable<string | null | undefined>,
+): T[] {
+  const stored = new Set<string>();
+  for (const id of inventoryOrderIds) {
+    const text = id?.trim();
+    if (text) stored.add(text);
+  }
+  if (stored.size === 0) return orders;
+  return orders.filter((order) => !stored.has(order.id));
+}
+
+/**
  * Session handoffs use the order code as their id, while pending-storage rows
  * use the order UUID. Drop a handoff once that order is already in the API list.
  */
