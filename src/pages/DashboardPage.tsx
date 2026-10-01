@@ -155,12 +155,14 @@ function AreaChartCard({
   mode,
   onModeChange,
   yFormatter,
+  loading = false,
 }: {
   title: string;
   data: { name: string; value: number }[];
   mode: ChartMode;
   onModeChange: (mode: ChartMode) => void;
   yFormatter?: (value: number) => string;
+  loading?: boolean;
 }) {
   const gradientId = `grad-${title.replace(/\s+/g, "-").toLowerCase()}`;
 
@@ -172,7 +174,9 @@ function AreaChartCard({
       </div>
 
       <div className="h-[220px]">
-        {data.length === 0 ? (
+        {loading ? (
+          <AppLoader variant="section" label="Loading chart" className="h-full min-h-0 py-0" />
+        ) : data.length === 0 ? (
           <div className="flex h-full items-center justify-center text-[13px] text-[#8A8A8A]">
             {MISSING}
           </div>
@@ -254,6 +258,12 @@ export default function DashboardPage() {
     { name: string; value: number }[] | null
   >(null);
   const [loading, setLoading] = useState(() => isApiConfigured());
+  const [ordersChartLoading, setOrdersChartLoading] = useState(() =>
+    isApiConfigured(),
+  );
+  const [revenueChartLoading, setRevenueChartLoading] = useState(() =>
+    isApiConfigured(),
+  );
 
   useEffect(() => {
     if (!isApiConfigured()) {
@@ -281,8 +291,12 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!isApiConfigured()) {
+      setOrdersChartLoading(false);
+      return;
+    }
     let cancelled = false;
+    setOrdersChartLoading(true);
 
     async function loadOrdersChart() {
       try {
@@ -298,6 +312,8 @@ export default function DashboardPage() {
         );
       } catch {
         if (!cancelled) setOrdersChartApi(null);
+      } finally {
+        if (!cancelled) setOrdersChartLoading(false);
       }
     }
 
@@ -308,8 +324,12 @@ export default function DashboardPage() {
   }, [ordersMode]);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!isApiConfigured()) {
+      setRevenueChartLoading(false);
+      return;
+    }
     let cancelled = false;
+    setRevenueChartLoading(true);
 
     async function loadRevenueChart() {
       try {
@@ -325,6 +345,8 @@ export default function DashboardPage() {
         );
       } catch {
         if (!cancelled) setRevenueChartApi(null);
+      } finally {
+        if (!cancelled) setRevenueChartLoading(false);
       }
     }
 
@@ -475,6 +497,7 @@ export default function DashboardPage() {
               data={ordersChartData}
               mode={ordersMode}
               onModeChange={setOrdersMode}
+              loading={ordersChartLoading}
             />
             <AreaChartCard
               title="Revenue Overview"
@@ -482,6 +505,7 @@ export default function DashboardPage() {
               mode={revenueMode}
               onModeChange={setRevenueMode}
               yFormatter={(value) => `$${value}`}
+              loading={revenueChartLoading}
             />
           </div>
 
@@ -550,7 +574,11 @@ export default function DashboardPage() {
                         {row.label}
                       </span>
                       <span className="shrink-0 text-[14px] font-semibold text-[#111118]">
-                        {row.value}
+                        {loading ? (
+                          <AppLoader variant="inline" size="sm" label="Loading" />
+                        ) : (
+                          row.value
+                        )}
                       </span>
                     </button>
                   );
@@ -576,11 +604,15 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 <span className="shrink-0 text-[14px] font-semibold text-[#111118]">
-                  {formatCount(
-                    readStat(apiStats, [
-                      "pendingDistributorOrders",
-                      "pendingOrders",
-                    ]),
+                  {loading ? (
+                    <AppLoader variant="inline" size="sm" label="Loading" />
+                  ) : (
+                    formatCount(
+                      readStat(apiStats, [
+                        "pendingDistributorOrders",
+                        "pendingOrders",
+                      ]),
+                    )
                   )}
                 </span>
               </button>
@@ -602,7 +634,9 @@ export default function DashboardPage() {
               </div>
 
               <div className="divide-y divide-[#00000014]">
-                {topCustomers.length === 0 ? (
+                {loading ? (
+                  <AppLoader variant="section" label="Loading customers" className="min-h-0 py-8" />
+                ) : topCustomers.length === 0 ? (
                   <p className="py-6 text-center text-[13px] text-[#9A9A9A]">
                     {MISSING}
                   </p>

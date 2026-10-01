@@ -16,6 +16,7 @@ import {
   DATE_CHIP_SCROLL,
 } from "@/components/shared/DeliveryDateChip";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
@@ -211,6 +212,7 @@ export default function PackerManagerPage() {
   const { notifyApiError } = useApiFeedback();
 
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [loading, setLoading] = useState(() => isApiConfigured());
   const [packers, setPackers] = useState(ELIGIBLE_PACKERS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
@@ -269,6 +271,9 @@ export default function PackerManagerPage() {
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load packer orders.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -442,6 +447,10 @@ export default function PackerManagerPage() {
           </div>
         </div>
 
+        {loading ? (
+          <AppLoader variant="table" label="Loading orders" className="mt-4" />
+        ) : (
+        <>
         <ScrollTable fill minWidth={960} className="mt-4">
           <div
             className={cn(
@@ -541,6 +550,8 @@ export default function PackerManagerPage() {
             No orders match your filters.
           </div>
         ) : null}
+        </>
+        )}
       </div>
     </div>
   );

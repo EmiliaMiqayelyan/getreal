@@ -18,6 +18,7 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -582,6 +583,7 @@ export default function PackingCoolersPage() {
   const { notifyApiError } = useApiFeedback();
 
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [loading, setLoading] = useState(() => isApiConfigured());
   const [coolerOptions, setCoolerOptions] = useState<string[]>(COOLER_OPTIONS);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
@@ -678,6 +680,9 @@ export default function PackingCoolersPage() {
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load packing orders.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -853,6 +858,10 @@ export default function PackingCoolersPage() {
           </div>
         </div>
 
+        {loading ? (
+          <AppLoader variant="table" label="Loading orders" className="mt-4" />
+        ) : (
+        <>
         <ScrollTable fill minWidth={960} className="mt-4">
           <div
             className={cn(
@@ -1012,6 +1021,8 @@ export default function PackingCoolersPage() {
             No orders match your filters.
           </div>
         ) : null}
+        </>
+        )}
       </div>
     </div>
   );

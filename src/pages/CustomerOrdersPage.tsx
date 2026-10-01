@@ -415,9 +415,9 @@ function timestampForStep(order: ApiOrder, key: TimelineStepKey) {
       case "packing":
         return order.coolerReadyAt || order.packingStartedAt;
       case "onRoute":
-        return order.loadedAt;
+        return readString(raw.onRouteAt) || readString(order.loadedAt);
       case "delivered":
-        return readString(raw.deliveredAt);
+        return readString(order.deliveredAt) || readString(raw.deliveredAt);
       case "coolerPickup":
         return (
           readString(raw.coolerPickedUpAt) || readString(raw.coolerPickupAt)

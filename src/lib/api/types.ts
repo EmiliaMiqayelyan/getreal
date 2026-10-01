@@ -197,6 +197,13 @@ export type ApiOrder = {
   packingStartedAt?: string | null;
   coolerReadyAt?: string | null;
   loadedAt?: string | null;
+  /** On Route timestamp. `loadedAt` is the older field and may stay null. */
+  onRouteAt?: string | null;
+  deliveredAt?: string | null;
+  coolerPickedUpAt?: string | null;
+  returnedAt?: string | null;
+  cancelledAt?: string | null;
+  archivedAt?: string | null;
   receivedAt?: string | null;
   validatedAt?: string | null;
   createdAt?: string;

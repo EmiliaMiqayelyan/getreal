@@ -25,6 +25,7 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
+import { AppLoader } from "@/components/ui/AppLoader";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
@@ -37,8 +38,14 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { isApiConfigured, ordersApi, receivingApi } from "@/lib/api";
-import type { ApiDelivery } from "@/lib/api/receiving";
+import { collectPaginated, isApiConfigured, ordersApi, receivingApi } from "@/lib/api";
+import { centsToDollars } from "@/lib/api/mappers";
+import type {
+  ApiDelivery,
+  ApiDeliveryLine,
+  ValidateDeliveryItem,
+} from "@/lib/api/receiving";
+import { isUploadableImage, uploadImage } from "@/lib/api/upload";
 import type { ExportRequest } from "@/types/export";
 import type { ReceivingHandoffLine } from "@/types/receiving";
 import { cn } from "@/utils/cn";
@@ -46,10 +53,13 @@ import { isUuid } from "@/utils/entityIds";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
+  deliveryDateIdFromValue,
   formatDeliveryChipLabel,
+  formatExpectedDelivery,
   parseDeliveryDateId,
   toDeliveryDateId,
 } from "@/utils/deliveryCalendar";
+import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
   acceptedLinesOnly,
   formatReceivedAt,
@@ -62,6 +72,8 @@ const CHIP_WINDOW_SIZE = 3;
 
 type LineItem = {
   id: string;
+  /** Sellable product UUID sent to POST /receiving/:orderId/validate. */
+  productId: string;
   itemCode: string;
   name: string;
   category: string;
@@ -94,6 +106,7 @@ type ItemCheckState = {
   reason?: RejectReason;
   photoName?: string;
   photoUrl?: string;
+  photoFile?: File;
 };
 
 type RejectImagePreview = {
@@ -223,6 +236,7 @@ function RejectReasonPopover({
   });
   const [photoTaken, setPhotoTaken] = useState(hasPhoto);
   const [photoError, setPhotoError] = useState(false);
+  const [photoMessage, setPhotoMessage] = useState("Problem photo is required.");
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -262,16 +276,23 @@ function RejectReasonPopover({
         <input
           ref={photoInputRef}
           type="file"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           capture="environment"
           className="sr-only"
           onChange={(event) => {
             const file = event.target.files?.[0];
+            event.target.value = "";
             if (!file) return;
+            if (!isUploadableImage(file)) {
+              setPhotoTaken(false);
+              setPhotoError(true);
+              setPhotoMessage("Use a JPEG, PNG, or WebP photo.");
+              return;
+            }
             setPhotoTaken(true);
             setPhotoError(false);
+            setPhotoMessage("Problem photo is required.");
             onPhoto?.(file);
-            event.target.value = "";
           }}
         />
         <button
@@ -288,9 +309,7 @@ function RejectReasonPopover({
           {photoTaken ? "Photo attached · Retake" : "Take photo of problem *"}
         </button>
         {photoError ? (
-          <p className="mt-1.5 text-[11px] text-[#E25B5B]">
-            Problem photo is required.
-          </p>
+          <p className="mt-1.5 text-[11px] text-[#E25B5B]">{photoMessage}</p>
         ) : null}
       </div>
       <div className="border-t border-[#00000014] pt-2.5">
@@ -507,51 +526,131 @@ function readDeliveryName(delivery: ApiDelivery) {
   return delivery.distributorName?.trim() || delivery.name?.trim() || "Distributor";
 }
 
+function readLineText(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function lineProductId(line: ApiDeliveryLine) {
+  return line.productId?.trim() || line.product?.id?.trim() || "";
+}
+
+function lineDisplayName(line: ApiDeliveryLine) {
+  return (
+    readLineText(line.name) ||
+    readLineText(line.itemName) ||
+    readLineText(line.product?.name) ||
+    "Item"
+  );
+}
+
+function lineUnitPrice(line: ApiDeliveryLine) {
+  const cents = line.price ?? line.unitPrice ?? line.cost;
+  if (typeof cents === "number" && Number.isFinite(cents)) {
+    return centsToDollars(cents);
+  }
+  return 0;
+}
+
 function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
   const recordId = isUuid(delivery.id) ? delivery.id : undefined;
   const code =
+    delivery.deliveryCode?.trim() ||
     delivery.orderCode?.trim() ||
     delivery.code?.trim() ||
     delivery.id?.trim() ||
     `DLV-${index + 1}`;
-  const when = delivery.deliveryDate || delivery.createdAt || "";
-  const parsed = when ? new Date(when) : new Date();
-  const deliveryDate = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
-  const checked = Boolean(delivery.validatedAt || delivery.receivedAt);
+  const deliveryDateId = deliveryDateIdFromValue(delivery.deliveryDate);
+  const deliveryDate = deliveryDateId
+    ? parseDeliveryDateId(deliveryDateId)
+    : null;
+  const created = delivery.createdAt ? new Date(delivery.createdAt) : null;
+  const status = (delivery.status ?? "").trim().toLowerCase();
+  const checked =
+    Boolean(delivery.validatedAt || delivery.receivedAt) ||
+    status === "delivered" ||
+    status === "received";
   const items: LineItem[] = (delivery.items ?? []).map((line, lineIndex) => {
     const quantity = Number(line.quantity ?? 0) || 0;
-    const unitPrice = Number(line.unitPrice ?? line.price ?? 0) || 0;
+    const unitPrice = lineUnitPrice(line);
+    const productId = lineProductId(line);
     return {
-      id: line.id || `${code}-${lineIndex + 1}`,
-      itemCode: line.itemId || line.productId || line.id || "",
-      name: line.name || line.itemName || "N/A",
-      category: line.category?.trim() || "Items",
+      id: line.id || `${productId || code}-${lineIndex + 1}`,
+      productId,
+      itemCode:
+        line.itemCode?.trim() ||
+        line.itemId?.trim() ||
+        "",
+      name: lineDisplayName(line),
+      category: line.categoryName?.trim() || line.category?.trim() || "Items",
       quantity,
-      unit: line.unit || "Each",
-      source: line.source || line.sourceName || "",
+      unit: line.unit?.trim() || "",
+      source: readLineText(line.sourceName) || readLineText(line.source),
       unitPrice,
       priceLabel: unitPrice ? `$${unitPrice.toFixed(2)}` : "—",
     };
   });
   const totalPrice =
     typeof delivery.totalPrice === "number"
-      ? delivery.totalPrice
+      ? centsToDollars(delivery.totalPrice)
       : items.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
   return {
     id: code,
     recordId,
     distributor: readDeliveryName(delivery),
-    orderDate: delivery.createdAt
-      ? new Date(delivery.createdAt).toLocaleDateString()
-      : "",
-    expectedDelivery: Number.isNaN(deliveryDate.getTime())
-      ? ""
-      : deliveryDate.toLocaleDateString(),
-    deliveryDateId: toDeliveryDateId(deliveryDate),
+    orderDate:
+      created && !Number.isNaN(created.getTime())
+        ? formatOrderTimestamp(created)
+        : "",
+    expectedDelivery: deliveryDate ? formatExpectedDelivery(deliveryDate) : "",
+    deliveryDateId,
     totalPrice,
     checked,
     items,
   };
+}
+
+/**
+ * Incoming rows come from GET /receiving/deliveries.
+ * Validated rows leave that list, so Delivered is GET /orders?status=delivered.
+ */
+async function loadReceivingScreen(): Promise<DeliveryOrder[]> {
+  const [incoming, delivered] = await Promise.all([
+    receivingApi.listDeliveries(),
+    collectPaginated((page, limit) =>
+      ordersApi.list({
+        page,
+        limit,
+        type: "distributor",
+        status: "delivered",
+      }),
+    ),
+  ]);
+
+  const merged = new Map<string, DeliveryOrder>();
+  const put = (order: DeliveryOrder) => {
+    const key = order.recordId || order.id;
+    const prior = merged.get(key);
+    if (!prior) {
+      merged.set(key, order);
+      return;
+    }
+    merged.set(key, {
+      ...prior,
+      ...order,
+      items: order.items.length ? order.items : prior.items,
+      checked: prior.checked || order.checked,
+      distributor:
+        order.distributor && order.distributor !== "Distributor"
+          ? order.distributor
+          : prior.distributor,
+    });
+  };
+
+  incoming.forEach((row, index) => put(mapDelivery(row, index)));
+  delivered.forEach((row, index) =>
+    put({ ...mapDelivery(row as ApiDelivery, index), checked: true }),
+  );
+  return [...merged.values()];
 }
 
 const INITIAL_ITEM_RESULTS: Record<string, Record<string, ItemCheckState>> = {};
@@ -653,7 +752,10 @@ function CheckOrderView({
   initialChecks?: Record<string, ItemCheckState>;
   readOnly?: boolean;
   onClose: () => void;
-  onAccepted: (orderId: string, checks: Record<string, ItemCheckState>) => void;
+  onAccepted: (
+    orderId: string,
+    checks: Record<string, ItemCheckState>,
+  ) => void | Promise<void>;
 }) {
   const [checks, setChecks] = useState(
     () => initialChecks ?? emptyChecks(order.items),
@@ -665,6 +767,31 @@ function CheckOrderView({
     readOnly ? "review" : "check",
   );
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setChecks((current) => {
+      let changed = false;
+      const next = { ...current };
+      for (const item of order.items) {
+        const existing = next[item.id];
+        if (!existing) {
+          next[item.id] = {
+            status: "pending",
+            expiration: "",
+            itemId: item.itemCode,
+          };
+          changed = true;
+          continue;
+        }
+        if (!existing.itemId && item.itemCode) {
+          next[item.id] = { ...existing, itemId: item.itemCode };
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [order.items]);
 
   const categories = useMemo(() => {
     const map = new Map<string, LineItem[]>();
@@ -700,7 +827,7 @@ function CheckOrderView({
     onClose();
   }
 
-  function handleAcceptOrder() {
+  async function handleAcceptOrder() {
     const errors = validateChecks(order.items, checks);
     if (errors.length) {
       setValidationError(
@@ -709,7 +836,12 @@ function CheckOrderView({
       setPhase("check");
       return;
     }
-    onAccepted(order.id, checks);
+    setSaving(true);
+    try {
+      await onAccepted(order.id, checks);
+    } finally {
+      setSaving(false);
+    }
   }
 
   // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right
@@ -778,7 +910,11 @@ function CheckOrderView({
                 </div>
 
                 {items.map((item) => {
-                  const state = checks[item.id];
+                  const state = checks[item.id] ?? {
+                    status: "pending" as const,
+                    expiration: "",
+                    itemId: item.itemCode,
+                  };
                   return (
                     <div
                       key={item.id}
@@ -960,6 +1096,7 @@ function CheckOrderView({
             updateCheck(rejectFor, {
               photoName: file.name,
               photoUrl: URL.createObjectURL(file),
+              photoFile: file,
             });
           }}
           hasPhoto={Boolean(
@@ -989,11 +1126,12 @@ function CheckOrderView({
         ) : (
           <button
             type="button"
-            onClick={handleAcceptOrder}
-            className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white"
+            disabled={saving}
+            onClick={() => void handleAcceptOrder()}
+            className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white disabled:opacity-40"
             style={{ background: ORANGE }}
           >
-            Accept Order
+            {saving ? "Saving…" : "Accept Order"}
           </button>
         )}
       </div>
@@ -1027,6 +1165,7 @@ export default function DistributorDeliveriesPage() {
   const [distributorFilter, setDistributorFilter] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [orders, setOrders] = useState(INITIAL_ORDERS);
+  const [loading, setLoading] = useState(() => isApiConfigured());
   const [checkingId, setCheckingId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [itemResults, setItemResults] = useState<
@@ -1039,17 +1178,33 @@ export default function DistributorDeliveriesPage() {
   useEffect(() => {
     if (!isApiConfigured()) return;
     let cancelled = false;
-    void receivingApi
-      .listDeliveries()
-      .then((rows) => {
+    void loadReceivingScreen()
+      .then((mapped) => {
         if (cancelled) return;
-        const mapped = rows.map(mapDelivery);
         setOrders(mapped);
-        const firstDate = mapped[0]?.deliveryDateId;
-        if (firstDate) setActiveDateId(firstDate);
+        const dateIds = [
+          ...new Set(
+            mapped
+              .filter((order) => !order.checked)
+              .map((order) => order.deliveryDateId)
+              .filter(Boolean),
+          ),
+        ].sort();
+        const preferred = dateIds[dateIds.length - 1] ?? "";
+        if (!preferred) return;
+        setActiveDateId((current) => current || preferred);
+        const index = dateIds.indexOf(preferred);
+        setChipWindowStart((current) =>
+          current === 0
+            ? Math.max(0, index - CHIP_WINDOW_SIZE + 1)
+            : current,
+        );
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load deliveries.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
       });
     return () => {
       cancelled = true;
@@ -1061,41 +1216,63 @@ export default function DistributorDeliveriesPage() {
   const loadedDeliveryIds = useRef(new Set<string>());
 
   useEffect(() => {
-    const openId = viewingId ?? checkingId;
-    if (!isApiConfigured() || !openId || loadedDeliveryIds.current.has(openId)) {
-      return;
-    }
-    const order = ordersRef.current.find((row) => row.id === openId);
-    if (!order?.recordId) return;
-    loadedDeliveryIds.current.add(openId);
+    if (!isApiConfigured()) return;
+    const openIds = new Set<string>();
+    if (checkingId) openIds.add(checkingId);
+    if (viewingId) openIds.add(viewingId);
+    for (const id of expanded) openIds.add(id);
+
+    const pending = ordersRef.current.filter(
+      (order) =>
+        openIds.has(order.id) &&
+        order.recordId &&
+        !loadedDeliveryIds.current.has(order.recordId) &&
+        order.items.some((item) => !item.unit && !item.source && !item.itemCode),
+    );
+    if (!pending.length) return;
+
     let cancelled = false;
-    void ordersApi
-      .getById(order.recordId)
-      .then((remote) => {
-        if (cancelled) return;
-        const mapped = mapDelivery(remote as ApiDelivery, 0);
-        setOrders((current) =>
-          current.map((row) =>
-            row.id === openId
-              ? {
-                  ...row,
-                  items: remote.items?.length ? mapped.items : row.items,
-                  distributor:
-                    mapped.distributor && mapped.distributor !== "Distributor"
-                      ? mapped.distributor
-                      : row.distributor,
-                }
-              : row,
-          ),
-        );
-      })
-      .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load order details.");
-      });
+    void Promise.all(
+      pending.map(async (order) => {
+        const recordId = order.recordId;
+        if (!recordId) return null;
+        try {
+          const remote = await ordersApi.getById(recordId);
+          return {
+            id: order.id,
+            recordId,
+            mapped: mapDelivery(remote as ApiDelivery, 0),
+          };
+        } catch (error) {
+          if (!cancelled) notifyApiError(error, "Failed to load order details.");
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      for (const result of results) {
+        if (result?.recordId) loadedDeliveryIds.current.add(result.recordId);
+      }
+      setOrders((current) =>
+        current.map((row) => {
+          const hit = results.find((entry) => entry?.id === row.id);
+          if (!hit?.mapped.items.length) return row;
+          return {
+            ...row,
+            items: hit.mapped.items,
+            distributor:
+              hit.mapped.distributor && hit.mapped.distributor !== "Distributor"
+                ? hit.mapped.distributor
+                : row.distributor,
+            totalPrice: hit.mapped.totalPrice || row.totalPrice,
+          };
+        }),
+      );
+    });
     return () => {
       cancelled = true;
     };
-  }, [checkingId, notifyApiError, viewingId]);
+  }, [checkingId, expanded, notifyApiError, viewingId]);
 
   const checkingOrder = orders.find((order) => order.id === checkingId) ?? null;
   const viewingOrder = orders.find((order) => order.id === viewingId) ?? null;
@@ -1132,6 +1309,7 @@ export default function DistributorDeliveriesPage() {
   const receivingDates = useMemo(() => {
     const unique = new Map<string, Date>();
     for (const order of orders) {
+      if (order.checked) continue;
       const parsed = parseDeliveryDateId(order.deliveryDateId);
       if (parsed) unique.set(order.deliveryDateId, parsed);
     }
@@ -1163,7 +1341,8 @@ export default function DistributorDeliveriesPage() {
     return orders.filter((order) => {
       const matchesTab =
         activeTab === "Orders" ? !order.checked : order.checked;
-      const matchesDate = order.deliveryDateId === activeDateId;
+      const matchesDate =
+        activeTab === "Received" || order.deliveryDateId === activeDateId;
       const matchesSearch =
         !q ||
         order.id.toLowerCase().includes(q) ||
@@ -1246,7 +1425,59 @@ export default function DistributorDeliveriesPage() {
         return;
       }
       try {
-        await receivingApi.validate(validateId);
+        const payload: ValidateDeliveryItem[] = [];
+        for (const item of order.items) {
+          const result = checks[item.id];
+          const status: ValidateDeliveryItem["status"] =
+            result?.status === "rejected" ? "rejected" : "accepted";
+          if (!isUuid(item.productId)) {
+            notifyApiError(
+              new Error("Missing product id"),
+              `${item.name} is missing a product id, so it cannot be validated.`,
+            );
+            return;
+          }
+          let evidenceUrl: string | undefined;
+          if (status === "rejected" && result?.photoFile) {
+            evidenceUrl = await uploadImage(result.photoFile);
+          }
+          payload.push({
+            productId: item.productId,
+            status,
+            ...(status === "rejected" && result?.reason
+              ? { reason: result.reason }
+              : {}),
+            ...(evidenceUrl ? { evidenceUrl } : {}),
+          });
+        }
+        await receivingApi.validate(validateId, payload);
+        try {
+          const refreshed = await loadReceivingScreen();
+          setOrders((current) => {
+            const previous = new Map(
+              current.map((entry) => [entry.recordId ?? entry.id, entry]),
+            );
+            return refreshed.map((entry) => {
+              const prior = previous.get(entry.recordId ?? entry.id);
+              const keepDetails = prior?.items.some(
+                (item) => item.unit || item.source || item.itemCode,
+              );
+              const matched =
+                entry.recordId === validateId || entry.id === order.id;
+              return {
+                ...entry,
+                items: keepDetails && prior ? prior.items : entry.items,
+                checked: entry.checked || matched,
+              };
+            });
+          });
+        } catch {
+          setOrders((current) =>
+            current.map((entry) =>
+              entry.id === orderId ? { ...entry, checked: true } : entry,
+            ),
+          );
+        }
       } catch (error) {
         notifyApiError(error, "Failed to validate delivery.");
         return;
@@ -1257,7 +1488,8 @@ export default function DistributorDeliveriesPage() {
       const result = checks[item.id];
       return {
         lineId: item.id,
-        itemId: result?.itemId || item.itemCode,
+        itemId: result?.itemId || item.itemCode || item.productId,
+        catalogItemId: item.productId,
         itemName: item.name,
         category: item.category,
         source: item.source,
@@ -1285,11 +1517,13 @@ export default function DistributorDeliveriesPage() {
       markDeliveryReceived(order.id);
     }
 
-    setOrders((current) =>
-      current.map((entry) =>
-        entry.id === orderId ? { ...entry, checked: true } : entry,
-      ),
-    );
+    if (!isApiConfigured()) {
+      setOrders((current) =>
+        current.map((entry) =>
+          entry.id === orderId ? { ...entry, checked: true } : entry,
+        ),
+      );
+    }
     setItemResults((current) => ({ ...current, [orderId]: checks }));
     setCheckingId(null);
     setActiveTab("Received");
@@ -1390,12 +1624,16 @@ export default function DistributorDeliveriesPage() {
               { id: "Received", label: "Delivered", width: 93 },
             ]}
             value={activeTab}
-            onChange={(id) => setActiveTab(id as "Orders" | "Received")}
+            onChange={(id) => {
+              setActiveTab(id as "Orders" | "Received");
+              setCalendarOpen(false);
+            }}
           />
         }
       />
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
+        {activeTab === "Orders" ? (
         <div className={DATE_CHIP_ROW}>
           <div className={DATE_CHIP_SCROLL}>
             {visibleChips.map((chip) => {
@@ -1446,11 +1684,16 @@ export default function DistributorDeliveriesPage() {
             ) : null}
           </div>
         </div>
+        ) : null}
 
         <h2 className="mb-4 text-[20px] font-semibold tracking-tight text-[#111118]">
           Receiving Log
         </h2>
 
+        {loading ? (
+          <AppLoader variant="table" label="Loading deliveries" />
+        ) : (
+        <>
         <ScrollTable minWidth={920} className="rounded-[12px]">
           <div>
             <div
@@ -1614,7 +1857,9 @@ export default function DistributorDeliveriesPage() {
 
             {!filtered.length ? (
               <div className="col-span-full px-4 py-12 text-center text-[14px] text-[#8A8A8A]">
-                No deliveries match your filters.
+                {activeTab === "Received"
+                  ? "No delivered orders yet."
+                  : "No deliveries match your filters."}
               </div>
             ) : null}
           </div>
@@ -1624,6 +1869,8 @@ export default function DistributorDeliveriesPage() {
           loadedCount={listWindow.loadedCount}
           onLoadMore={listWindow.loadMore}
         />
+        </>
+        )}
 
         {imagePreview ? (
           <RejectImageDrawer
