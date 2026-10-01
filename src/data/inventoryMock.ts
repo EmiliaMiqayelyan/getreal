@@ -19,8 +19,8 @@ import {
  *
  * API: storage locations come from the backend location list, not this array.
  * API: Complete Storage → POST /inventory/store
- *   { distributorOrderId, items: [{ productId, quantity, location, expirationDate }] }
- *   productId is the catalog/product UUID (catalogItemId below), one entry per allocation.
+ *   { distributorOrderId, items: [{ itemId, quantity, location, expirationDate }] }
+ *   itemId is the catalog item UUID (catalogItemId below), one entry per allocation.
  * API: Edit Location → POST /inventory/:recordId/split
  *   { splits: [{ quantity, location }] }
  *   then replace this list with GET /inventory.
@@ -43,7 +43,7 @@ type MockLot = InventorySection["products"][number]["lots"][number];
 type MockStockItem = {
   id: string;
   orderId: string;
-  /** API: catalog item UUID sent as productId / itemId on store. */
+  /** API: catalog item UUID sent as itemId on POST /inventory/store. */
   catalogItemId: string;
   itemName: string;
   source: string;

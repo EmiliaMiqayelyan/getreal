@@ -5,11 +5,7 @@ import type { ApiInventory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type InventoryStatus =
-  | "in_stock"
-  | "reserved"
-  | "picked"
-  | "shipped"
-  | "wasted";
+  "in_stock" | "reserved" | "picked" | "shipped" | "wasted";
 
 export type CreateInventoryPayload = {
   itemId: string;
@@ -24,9 +20,11 @@ export type CreateInventoryPayload = {
 export type UpdateInventoryPayload = Partial<CreateInventoryPayload>;
 
 export type StoreInventoryItemPayload = {
-  productId: string;
+  /** Catalog item UUID. The store contract uses `itemId`, not `productId`. */
+  itemId: string;
   quantity: number;
   location: string;
+  /** Date only, `YYYY-MM-DD`, as documented for POST /inventory/store. */
   expirationDate?: string;
 };
 
