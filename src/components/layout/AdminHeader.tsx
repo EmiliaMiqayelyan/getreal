@@ -44,21 +44,23 @@ export function Header({
 
   return (
     <div className={cn("shrink-0", className)}>
-      <header
-        className={cn(
-          ROW,
-          "relative min-h-[52px] justify-between gap-4 border-b border-border md:h-[52px]",
-        )}
-      >
-        <h1 className={cn("relative z-10 min-w-0", PAGE_TITLE)}>{title}</h1>
+      <header className="relative border-b border-border bg-white">
+        <div
+          className={cn(
+            ROW,
+            "min-h-[52px] justify-between gap-4 md:h-[52px]",
+          )}
+        >
+          <h1 className={cn("relative z-10 min-w-0", PAGE_TITLE)}>{title}</h1>
+          <div className="relative z-10 flex shrink-0 items-center border-l border-border pl-5">
+            <UserMenu className="items-center" />
+          </div>
+        </div>
         {center ? (
-          <div className="pointer-events-none absolute inset-0 flex items-end justify-center">
+          <div className="flex h-9 items-end justify-center md:pointer-events-none md:absolute md:inset-x-0 md:top-0 md:h-[52px]">
             <div className="pointer-events-auto flex h-7">{center}</div>
           </div>
         ) : null}
-        <div className="relative z-10 flex shrink-0 items-center border-l border-border pl-5">
-          <UserMenu className="items-center" />
-        </div>
       </header>
 
       {toolbar ? (
