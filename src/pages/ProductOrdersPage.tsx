@@ -44,7 +44,6 @@ import {
   buildLocalDemandOrders,
   buildReviewGroups,
   categorySections,
-  countDemandForDate,
   previewRowsForOrder,
   reviewGroupKey,
   type DemandOrder,
@@ -81,36 +80,18 @@ import {
   formatDeliveryChipLabel,
   deliveryDateIdFromValue,
   formatExpectedDelivery,
-  getDeliveryDatesInRange,
-  getDeliveryWeekdayIndices,
+  isWednesdayDateId,
   parseDeliveryDateId,
-  startOfLocalDay,
+  pickDefaultDeliveryChipId,
   toDeliveryDateId,
+  upcomingWednesday,
+  WEDNESDAY_WEEKDAYS,
+  wednesdayChipsFromDateIds,
 } from "@/utils/deliveryCalendar";
 
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
 const REVIEW_LINE_GRID =
   "grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem_7rem] items-center gap-x-8";
-const CHIP_WINDOW_SIZE = 3;
-const ALL_WEEKDAYS = new Set([0, 1, 2, 3, 4, 5, 6]);
-
-function deliveryDatesForWeekdays(weekdays: Set<number>) {
-  const days = weekdays.size > 0 ? weekdays : ALL_WEEKDAYS;
-  const start = startOfLocalDay(new Date());
-  start.setDate(start.getDate() - 90);
-  const end = startOfLocalDay(new Date());
-  end.setDate(end.getDate() + 180);
-  return getDeliveryDatesInRange(start, end, days);
-}
-
-function chipWindowStartForDate(dateId: string, dates: Date[]) {
-  const index = dates.findIndex((date) => toDeliveryDateId(date) === dateId);
-  if (index < 0) return 0;
-  return Math.max(
-    0,
-    Math.min(index, Math.max(0, dates.length - CHIP_WINDOW_SIZE)),
-  );
-}
 /** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
 const ORDER_PREP_COLS =
   "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
@@ -358,13 +339,7 @@ export default function ProductOrdersPage() {
     "newest" | "oldest" | "distributor" | "total"
   >("newest");
   const [activeDeliveryDateId, setActiveDeliveryDateId] = useState(() =>
-    toDeliveryDateId(new Date()),
-  );
-  const [chipWindowStart, setChipWindowStart] = useState(() =>
-    chipWindowStartForDate(
-      toDeliveryDateId(new Date()),
-      deliveryDatesForWeekdays(ALL_WEEKDAYS),
-    ),
+    toDeliveryDateId(upcomingWednesday()),
   );
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -389,44 +364,16 @@ export default function ProductOrdersPage() {
     "Orders created successfully",
   );
 
-  const deliveryWeekdays = useMemo(
-    () => getDeliveryWeekdayIndices(distributors, distributorFilter),
-    [distributors, distributorFilter],
-  );
-
-  const deliveryDates = useMemo(
-    () => deliveryDatesForWeekdays(deliveryWeekdays),
-    [deliveryWeekdays],
-  );
-
-  const chipDates = useMemo(() => {
-    const window = deliveryDates.slice(
-      chipWindowStart,
-      chipWindowStart + CHIP_WINDOW_SIZE,
-    );
-    const selected = parseDeliveryDateId(activeDeliveryDateId);
-    if (
-      selected &&
-      !window.some((date) => toDeliveryDateId(date) === activeDeliveryDateId)
-    ) {
-      return [selected, ...window];
-    }
-    return window;
-  }, [activeDeliveryDateId, chipWindowStart, deliveryDates]);
-
   const visibleDeliveryChips = useMemo(() => {
-    return chipDates.map((date) => {
-      const id = toDeliveryDateId(date);
-      return {
-        id,
-        label: formatDeliveryChipLabel(date),
-        count: countDemandForDate(demandOrders, id),
-      };
-    });
-  }, [chipDates, demandOrders]);
+    const dateIds = [
+      ...demandOrders.map((order) => order.deliveryDateId),
+      ...inProgress.map((order) => placedOrderDateId(order)),
+    ];
+    return wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
+  }, [activeDeliveryDateId, demandOrders, inProgress]);
 
   const activeDeliveryDate =
-    parseDeliveryDateId(activeDeliveryDateId) ?? deliveryDates[0] ?? new Date();
+    parseDeliveryDateId(activeDeliveryDateId) ?? upcomingWednesday();
   const activeDeliveryLabel = formatDeliveryChipLabel(activeDeliveryDate);
   const expectedDeliveryLabel = formatExpectedDelivery(activeDeliveryDate);
 
@@ -483,21 +430,34 @@ export default function ProductOrdersPage() {
 
   const showDistributorFilter = inProgress.length > 0;
 
-  const canShiftChipsBack = chipWindowStart > 0;
+  const activeChipIndex = visibleDeliveryChips.findIndex(
+    (chip) => chip.id === activeDeliveryDateId,
+  );
+  const canShiftChipsBack =
+    visibleDeliveryChips.length > 0 &&
+    (activeChipIndex === -1 || activeChipIndex > 0);
   const canShiftChipsForward =
-    chipWindowStart + CHIP_WINDOW_SIZE < deliveryDates.length;
+    visibleDeliveryChips.length > 0 &&
+    (activeChipIndex === -1 ||
+      activeChipIndex < visibleDeliveryChips.length - 1);
 
   function selectDeliveryDate(dateId: string) {
+    if (!isWednesdayDateId(dateId)) return;
     setActiveDeliveryDateId(dateId);
   }
 
-  function shiftChipWindow(delta: number) {
-    setChipWindowStart((current) =>
-      Math.max(
-        0,
-        Math.min(current + delta, deliveryDates.length - CHIP_WINDOW_SIZE),
-      ),
-    );
+  function shiftDeliveryDate(delta: number) {
+    if (visibleDeliveryChips.length === 0) return;
+    if (activeChipIndex === -1) {
+      const edge =
+        delta > 0
+          ? visibleDeliveryChips[0]
+          : visibleDeliveryChips[visibleDeliveryChips.length - 1];
+      if (edge) selectDeliveryDate(edge.id);
+      return;
+    }
+    const next = visibleDeliveryChips[activeChipIndex + delta];
+    if (next) selectDeliveryDate(next.id);
   }
 
   useEffect(() => {
@@ -516,17 +476,11 @@ export default function ProductOrdersPage() {
   ]);
 
   useEffect(() => {
-    const index = deliveryDates.findIndex(
-      (date) => toDeliveryDateId(date) === activeDeliveryDateId,
-    );
-    if (index === -1) return;
-    setChipWindowStart((current) => {
-      if (index >= current && index < current + CHIP_WINDOW_SIZE) {
-        return current;
-      }
-      return chipWindowStartForDate(activeDeliveryDateId, deliveryDates);
-    });
-  }, [activeDeliveryDateId, deliveryDates]);
+    if (!demandReady) return;
+    if (activeDeliveryDateId && isWednesdayDateId(activeDeliveryDateId)) return;
+    const dateId = pickDefaultDeliveryChipId(visibleDeliveryChips);
+    if (dateId) setActiveDeliveryDateId(dateId);
+  }, [activeDeliveryDateId, demandReady, visibleDeliveryChips]);
 
   const filteredInProgress = useMemo(
     () =>
@@ -718,7 +672,9 @@ export default function ProductOrdersPage() {
       nextDeliveryId(inProgress),
     );
     setInProgress((prev) => appendInProgressOrders(prev, [order]));
-    if (order.deliveryDateId) setActiveDeliveryDateId(order.deliveryDateId);
+    if (order.deliveryDateId && isWednesdayDateId(order.deliveryDateId)) {
+      setActiveDeliveryDateId(order.deliveryDateId);
+    }
     // INTEGRATION: syncManualDistributorOrder(draft, distributors, products, items)
     // in src/lib/api/orderSync.ts. Call it here after the local row is shown,
     // and replace this row with the server order (recordId) on success.
@@ -1043,14 +999,14 @@ export default function ProductOrdersPage() {
                   <DateNavButton
                     aria-label="Previous dates"
                     disabled={!canShiftChipsBack}
-                    onClick={() => shiftChipWindow(-1)}
+                    onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
                   </DateNavButton>
                   <DateNavButton
                     aria-label="Next dates"
                     disabled={!canShiftChipsForward}
-                    onClick={() => shiftChipWindow(1)}
+                    onClick={() => shiftDeliveryDate(1)}
                   >
                     <ChevronRight size={14} />
                   </DateNavButton>
@@ -1063,6 +1019,7 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

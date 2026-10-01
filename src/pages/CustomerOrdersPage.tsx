@@ -55,9 +55,12 @@ import { cn } from "@/utils/cn";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import {
   deliveryDateIdFromValue,
-  formatDeliveryChipLabel,
+  isWednesdayDateId,
   parseDeliveryDateId,
+  pickDefaultDeliveryChipId,
   toDeliveryDateId,
+  WEDNESDAY_WEEKDAYS,
+  wednesdayChipsFromDateIds,
 } from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
@@ -551,14 +554,6 @@ function display(value?: string) {
 function completedDataset(orders: CompletedOrder[], fromApi: boolean) {
   if (!fromApi) return orders;
   return orders.filter((order) => order.finished !== false);
-}
-
-/** Today, otherwise the next delivery day, otherwise the most recent one. */
-function pickDefaultDeliveryChipId(chips: { id: string }[]) {
-  if (chips.length === 0) return "";
-  const today = toDeliveryDateId(new Date());
-  const upcoming = chips.find((chip) => chip.id >= today);
-  return (upcoming ?? chips[chips.length - 1]).id;
 }
 
 function filterActiveOrders(
@@ -1628,33 +1623,15 @@ export default function CustomerOrdersPage() {
   );
 
   const deliveryChips = useMemo(() => {
-    const counts = new Map<string, number>();
+    const dateIds: string[] = [];
     for (const order of filterActiveOrders(
       ordersWithPacking,
       search,
       statusFilter,
     )) {
-      if (!order.deliveryDateId) continue;
-      counts.set(
-        order.deliveryDateId,
-        (counts.get(order.deliveryDateId) ?? 0) + 1,
-      );
+      if (order.deliveryDateId) dateIds.push(order.deliveryDateId);
     }
-
-    if (appliedDateId && !counts.has(appliedDateId)) {
-      counts.set(appliedDateId, 0);
-    }
-
-    return [...counts.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([id, count]) => {
-        const date = parseDeliveryDateId(id);
-        return {
-          id,
-          label: date ? formatDeliveryChipLabel(date) : id,
-          count,
-        };
-      });
+    return wednesdayChipsFromDateIds(dateIds, appliedDateId);
   }, [appliedDateId, ordersWithPacking, search, statusFilter]);
 
   const filteredActive = useMemo(
@@ -1836,6 +1813,12 @@ export default function CustomerOrdersPage() {
   }, [appliedDateId, deliveryChips]);
 
   useEffect(() => {
+    if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
+      const dateId = pickDefaultDeliveryChipId(deliveryChips);
+      setAppliedDateId(dateId);
+      if (dateId) defaultDeliveryApplied.current = true;
+      return;
+    }
     if (defaultDeliveryApplied.current || appliedDateId) {
       if (appliedDateId) defaultDeliveryApplied.current = true;
       return;
@@ -2150,6 +2133,7 @@ export default function CustomerOrdersPage() {
 
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       selectedDateId={appliedDateId}
                       onSelectDate={commitDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

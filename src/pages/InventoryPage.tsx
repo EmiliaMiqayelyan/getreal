@@ -4,7 +4,6 @@ import { Check, ChevronDown, ChevronRight, Minus, Plus, X } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
-import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
@@ -12,42 +11,35 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
-import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useAppCatalog } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useScrollLock } from "@/hooks/useScrollLock";
-import { inventoryApi, isApiConfigured } from "@/lib/api";
-import { buildInventoryPayload, flattenInventory } from "@/lib/api/inventory";
-import type { ApiInventory } from "@/lib/api/types";
+import {
+  STORAGE_LOCATIONS,
+  createMockInventorySections,
+  createMockReceivedOrders,
+  type MockReceivedOrder,
+} from "@/data/inventoryMock";
 import { cn } from "@/utils/cn";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
-import { categoryNamesFromCatalog } from "@/utils/categories";
-import { isUuid, recordRef } from "@/utils/entityIds";
 import {
-  buildInventorySections,
   groupInventorySections,
-  remapExpandedProductIds,
+  sourceColumnLabel,
+  type InventoryLot,
   type InventoryProduct,
+  type InventorySection,
 } from "@/utils/inventoryView";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 
 const ORANGE = "#F57850";
 const GREEN = "#2B5B31";
 
-const LOCATION_OPTIONS = [
-  "Fridge 1",
-  "Fridge 2",
-  "Fridge 3",
-  "Freezer 1",
-  "Freezer 2",
-  "Freezer 3",
-  "Dry Shelf 1",
-  "Dry Shelf 2",
-  "Dry Shelf 3",
-] as const;
+/** API: swap for the storage-location list. See STORAGE_LOCATIONS in inventoryMock. */
+const LOCATION_OPTIONS = STORAGE_LOCATIONS;
 
 type LocationSplit = {
   qty: number;
@@ -114,27 +106,41 @@ function incompleteStorageCount(sections: StockSection[]) {
   );
 }
 
+function escapeLabel(value: string) {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/** Browser print only. API does not need a label endpoint — the label is item ID, name, and location. */
 function printStockLabel(item: StockItem) {
-  const qty = parseUnpackQty(item.qtyAfterUnpack) || item.qty;
+  const location = stockItemLocation(item);
+  if (!location) return;
   const popup = window.open(
     "",
     "_blank",
     "noopener,noreferrer,width=420,height=520",
   );
   if (!popup) return;
+  const itemId = escapeLabel(item.orderId);
+  const itemName = escapeLabel(item.itemName);
+  const storage = escapeLabel(location);
   popup.document
-    .write(`<!doctype html><html><head><title>Label ${item.orderId}</title>
+    .write(`<!doctype html><html><head><title>Label ${itemId}</title>
 <style>
   body{font-family:ui-monospace,Menlo,monospace;padding:24px;color:#111}
   h1{font-size:18px;margin:0 0 12px}
   p{margin:6px 0;font-size:13px}
+  .label{color:#666;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
 </style></head><body>
-<h1>${item.itemName}</h1>
-<p><strong>Order:</strong> ${item.orderId}</p>
-<p><strong>Qty:</strong> ${qty}</p>
-<p><strong>Unit:</strong> ${item.unit}</p>
-<p><strong>Location:</strong> ${item.location || "—"}</p>
-<p><strong>Exp:</strong> ${item.expDate}</p>
+<p class="label">Item ID</p>
+<p>${itemId}</p>
+<p class="label">Item name</p>
+<h1>${itemName}</h1>
+<p class="label">Storage location</p>
+<p>${storage}</p>
 <script>window.onload=function(){window.print()}</script>
 </body></html>`);
   popup.document.close();
@@ -152,10 +158,10 @@ function nextUnusedLocation(used: string[]) {
 }
 
 const GRID =
-  "grid grid-cols-[28px_minmax(96px,0.9fr)_minmax(150px,1.3fr)_minmax(140px,1.2fr)_minmax(150px,1.3fr)_minmax(100px,0.9fr)_minmax(100px,0.8fr)_minmax(72px,0.55fr)_minmax(120px,1fr)] items-center gap-x-3 px-4";
+  "grid grid-cols-[28px_minmax(72px,0.9fr)_minmax(110px,1.15fr)_minmax(100px,1fr)_minmax(128px,1.15fr)_minmax(84px,0.75fr)_minmax(72px,0.6fr)_minmax(52px,0.45fr)_minmax(96px,0.9fr)] items-center gap-x-3 px-4";
 
 const STOCK_GRID =
-  "grid grid-cols-[300px_minmax(0,1.4fr)_40px_52px_152px_100px_minmax(0,1fr)_minmax(72px,1fr)_40px_124px] items-center gap-x-4 px-4";
+  "grid grid-cols-[minmax(84px,0.7fr)_minmax(110px,1.25fr)_36px_44px_minmax(84px,0.7fr)_minmax(88px,0.75fr)_minmax(112px,1fr)_24px_36px_minmax(104px,0.7fr)] items-center gap-x-3 px-4";
 
 function stockTotal(product: InventoryProduct) {
   return product.lots.reduce((sum, lot) => sum + lot.qty, 0);
@@ -411,6 +417,7 @@ function SplitModal({
   onClose,
   onConfirm,
   confirming = false,
+  minRows = 2,
 }: {
   open: boolean;
   title: string;
@@ -422,6 +429,8 @@ function SplitModal({
   onClose: () => void;
   onConfirm: () => void;
   confirming?: boolean;
+  /** Distribute needs two locations; Edit Location can stay on one. */
+  minRows?: number;
 }) {
   useScrollLock(open);
 
@@ -433,11 +442,14 @@ function SplitModal({
       : Number.parseInt(String(itemCount), 10) || 0;
   const assigned = splitsTotal(splits);
   const validRows = splits.filter((row) => row.qty > 0 && row.location.trim());
+  const locations = validRows.map((row) => row.location.trim());
+  const hasDuplicateLocation = new Set(locations).size !== locations.length;
+  const needsSplit = minRows > 1 && target >= minRows;
   const canConfirm =
     target > 0 &&
-    validRows.length > 0 &&
+    validRows.length >= (needsSplit ? minRows : 1) &&
     assigned === target &&
-    validRows.every((row) => row.location.trim());
+    !hasDuplicateLocation;
 
   function updateRow(index: number, patch: Partial<LocationSplit>) {
     onChangeSplits(
@@ -498,8 +510,50 @@ function SplitModal({
                 value={row.location}
                 onChange={(location) => updateRow(index, { location })}
               />
+              {splits.length > minRows ? (
+                <button
+                  type="button"
+                  aria-label="Remove location"
+                  onClick={() =>
+                    onChangeSplits(
+                      splits.filter((_, rowIndex) => rowIndex !== index),
+                    )
+                  }
+                  className="ml-auto flex size-8 shrink-0 items-center justify-center rounded-[8px] text-[#8A8A8A] hover:bg-[#F5F5F3]"
+                >
+                  <X size={14} />
+                </button>
+              ) : null}
             </div>
           ))}
+          <button
+            type="button"
+            onClick={() =>
+              onChangeSplits([
+                ...splits,
+                {
+                  qty: 0,
+                  location: nextUnusedLocation(
+                    splits.map((row) => row.location),
+                  ),
+                },
+              ])
+            }
+            className="mb-2 inline-flex items-center gap-1.5 py-2 text-[13px] font-semibold text-[#2165D4]"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+            Add location
+          </button>
+          {minRows > 1 && target > 0 && target < minRows ? (
+            <p className="pb-2 text-[12px] text-[#E25B5B]">
+              At least {minRows} portions are required to split this item.
+            </p>
+          ) : null}
+          {hasDuplicateLocation ? (
+            <p className="pb-2 text-[12px] text-[#E25B5B]">
+              Each portion needs its own storage location.
+            </p>
+          ) : null}
           {target > 0 && assigned !== target ? (
             <p className="pb-2 text-[12px] text-[#E25B5B]">
               Assigned {assigned} of {target}. Totals must match before
@@ -641,6 +695,7 @@ function StockItemsView({
             nextItems.push({
               ...item,
               id: index === 0 ? item.id : `${item.id}-loc-${index}`,
+              qty: split.qty,
               qtyAfterUnpack: String(split.qty),
               location: split.location,
               splits: [{ qty: split.qty, location: split.location }],
@@ -708,7 +763,7 @@ function StockItemsView({
                 <div className="space-y-5">
                   {group.sections.map((section) => (
                     <div key={section.id}>
-                      <ScrollTable minWidth={1440} className="rounded-[12px]">
+                      <ScrollTable minWidth="100%" className="rounded-[12px]">
                         <div>
                           {/* Meta: category | IN STOCK over unpack+exp | DATE RECEIVING BY over print */}
                           <div
@@ -855,7 +910,8 @@ function StockItemsView({
                                 <button
                                   type="button"
                                   onClick={() => printStockLabel(item)}
-                                  className="inline-flex h-10 min-w-0 items-center gap-1 justify-self-end text-[13px] font-semibold whitespace-nowrap"
+                                  disabled={!stockItemLocation(item)}
+                                  className="inline-flex h-10 min-w-0 items-center gap-1 justify-self-end text-[13px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40"
                                 >
                                   {printQty > 0 ? (
                                     <span className="text-[#777777]">
@@ -885,6 +941,10 @@ function StockItemsView({
           <p className="text-right text-[12px] text-[#E25B5B]">
             {storageError}
           </p>
+        ) : !canCompleteStorage ? (
+          <p className="text-right text-[12px] text-[#8A8A8A]">
+            Enter a quantity and location for every item to complete storage.
+          </p>
         ) : null}
         <div className="flex items-center justify-end gap-4">
           <button
@@ -897,11 +957,11 @@ function StockItemsView({
           <button
             type="button"
             onClick={() => void handleComplete()}
-            disabled={saving}
-            aria-disabled={!canCompleteStorage || saving}
+            disabled={!canCompleteStorage || saving}
             className={cn(
               "inline-flex h-10 items-center rounded-[10px] px-6 text-[14px] font-semibold text-white transition-opacity",
-              (!canCompleteStorage || saving) && "opacity-50",
+              (!canCompleteStorage || saving) &&
+                "cursor-not-allowed opacity-50",
             )}
             style={{ background: ORANGE }}
           >
@@ -941,111 +1001,103 @@ function placementsFor(item: StockItem): LocationSplit[] {
   return location ? [{ qty: unpack, location }] : [];
 }
 
-function handoffFromRemaining(order: ReceivedOrder) {
-  return {
-    deliveryId: order.id,
-    distributor: order.supplier,
-    receivedAt: order.receivedAt,
-    items: order.sections.flatMap((section) =>
-      section.items.map((item) => ({
-        lineId: item.id,
-        itemId: item.orderId,
-        catalogItemId: item.catalogItemId,
-        itemName: item.itemName,
-        category: section.title,
-        source: item.source ?? "",
-        quantity: item.qty,
-        unit: item.unit,
-        unitPrice: 0,
-        priceLabel: item.purchased ?? "",
-        expiration: item.expirationIso,
-        status: "accepted" as const,
-        qtyAfterUnpack: item.qtyAfterUnpack,
-        location: item.location,
-        splits: item.splits,
-      })),
-    ),
-  };
+/**
+ * Apply a finished Stock Items order onto the inventory list.
+ * API: this is the optimistic shape of POST /inventory/store. Each placement
+ * becomes one inventory record. productId on the request is item.catalogItemId.
+ */
+function withStoredOrder(current: InventorySection[], order: ReceivedOrder) {
+  const productIds: string[] = [];
+  const next = current.map((section) => ({
+    ...section,
+    products: section.products.map((product) => ({
+      ...product,
+      lots: [...product.lots],
+    })),
+  }));
+
+  for (const stockSection of order.sections) {
+    let section = next.find(
+      (entry) =>
+        entry.category === stockSection.group &&
+        entry.title === stockSection.title,
+    );
+    if (!section) {
+      section = {
+        id: `${stockSection.group}::${stockSection.title}`,
+        category: stockSection.group,
+        title: stockSection.title,
+        sourceLabel: sourceColumnLabel(stockSection.title),
+        products: [],
+      };
+      next.push(section);
+    }
+
+    for (const item of stockSection.items) {
+      const placements = placementsFor(item);
+      if (!placements.length) continue;
+      let storedProduct = section.products.find(
+        (entry) => entry.name === item.itemName,
+      );
+      if (!storedProduct) {
+        storedProduct = {
+          id: item.catalogItemId || `${section.id}::${item.itemName}`,
+          name: item.itemName,
+          distributor: order.supplier,
+          unit: item.unit,
+          lots: [],
+        };
+        section.products.push(storedProduct);
+        section.products.sort((a, b) => a.name.localeCompare(b.name));
+      }
+      productIds.push(storedProduct.id);
+      const stamp = Date.now();
+      placements.forEach((placement, index) => {
+        storedProduct.lots.push({
+          recordId: `local-${item.id}-${stamp}-${index}`,
+          catalogItemId: item.catalogItemId,
+          orderId: item.orderId,
+          distributor: order.supplier,
+          source: item.source?.trim() || "—",
+          deliveryDate: order.receivedAt,
+          purchased: item.purchased?.trim() || "—",
+          qty: placement.qty,
+          unit: item.unit,
+          location: placement.location,
+          address: placement.location,
+        });
+      });
+    }
+  }
+
+  return { sections: next, productIds };
 }
 
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
-  const { pendingHandoffs, removeHandoff, pushHandoff } = useReceivingHandoff();
-  const {
-    items: catalogItems,
-    products,
-    categories,
-  } = useAppCatalog();
-  const { ready: catalogReady } = useCatalogSlice(["items", "categories"]);
-  const { notifyApiError } = useApiFeedback();
+  // API: pendingHandoffs is the local stand-in for received distributor orders.
+  const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
+  const { items: catalogItems } = useAppCatalog();
+  const { showError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
   const [itemFilter, setItemFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [unitFilter, setUnitFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
-  const [inventoryRows, setInventoryRows] = useState<ApiInventory[]>([]);
-  const [loading, setLoading] = useState(() => isApiConfigured());
+  // API: initialize from GET /inventory via buildInventorySections. Keep zero-qty items.
+  const [sections, setSections] = useState<InventorySection[]>(
+    createMockInventorySections,
+  );
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
-  const [detailEpoch, setDetailEpoch] = useState(0);
   const [storingId, setStoringId] = useState<string | null>(null);
   const [showToast, setShowToast] = useState(false);
-  const [savingLocation, setSavingLocation] = useState(false);
   const [editTarget, setEditTarget] = useState<EditLocationTarget | null>(null);
-  const editRequest = useRef(0);
-  const loadedLotIds = useRef(new Set<string>());
-  const inflightLotIds = useRef(new Set<string>());
   const [editSplits, setEditSplits] = useState<LocationSplit[]>([]);
-
-  const sections = useMemo(
-    () =>
-      buildInventorySections(
-        catalogItems,
-        inventoryRows,
-        categoryNamesFromCatalog(categories),
-      )
-        .map((section) => ({
-          ...section,
-          products: section.products.filter(
-            (product) => product.lots.length > 0,
-          ),
-        }))
-        .filter((section) => section.products.length > 0),
-    [catalogItems, categories, inventoryRows],
+  // API: replace with received distributor orders that are not stored yet.
+  const [pendingOrders, setPendingOrders] = useState<MockReceivedOrder[]>(
+    createMockReceivedOrders,
   );
-  const sectionsRef = useRef(sections);
-  sectionsRef.current = sections;
-  const inventoryRowsRef = useRef(inventoryRows);
-  inventoryRowsRef.current = inventoryRows;
-  const catalogItemsRef = useRef(catalogItems);
-  catalogItemsRef.current = catalogItems;
-  const categoriesRef = useRef(categories);
-  categoriesRef.current = categories;
-
-  useEffect(() => {
-    if (!isApiConfigured()) {
-      setLoading(false);
-      return;
-    }
-    let cancelled = false;
-
-    void inventoryApi
-      .list()
-      .then((rows) => {
-        if (!cancelled) setInventoryRows(rows);
-      })
-      .catch((error) => {
-        if (cancelled) return;
-        notifyApiError(error, "Failed to load inventory.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [notifyApiError]);
 
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {
@@ -1065,7 +1117,13 @@ export default function InventoryPage() {
     });
   }, [catalogItems, pendingHandoffs]);
 
-  const orders = handoffOrders;
+  const orders = useMemo(() => {
+    const handoffIds = new Set(handoffOrders.map((order) => order.id));
+    return [
+      ...handoffOrders,
+      ...pendingOrders.filter((order) => !handoffIds.has(order.id)),
+    ];
+  }, [handoffOrders, pendingOrders]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
 
@@ -1206,13 +1264,6 @@ export default function InventoryPage() {
     [listWindow.visible],
   );
 
-  function replaceInventory(rows: ApiInventory[]) {
-    loadedLotIds.current.clear();
-    inflightLotIds.current.clear();
-    setInventoryRows(rows);
-    setDetailEpoch((current) => current + 1);
-  }
-
   function toggleExpanded(id: string) {
     setExpanded((current) => {
       const next = new Set(current);
@@ -1221,78 +1272,6 @@ export default function InventoryPage() {
       return next;
     });
   }
-
-  useEffect(() => {
-    if (!isApiConfigured() || expanded.size === 0) return;
-    const ids: string[] = [];
-    for (const section of sectionsRef.current) {
-      for (const product of section.products) {
-        if (!expanded.has(product.id)) continue;
-        for (const lot of product.lots) {
-          if (
-            isUuid(lot.recordId) &&
-            !loadedLotIds.current.has(lot.recordId) &&
-            !inflightLotIds.current.has(lot.recordId)
-          ) {
-            ids.push(lot.recordId);
-          }
-        }
-      }
-    }
-    if (!ids.length) return;
-    for (const id of ids) inflightLotIds.current.add(id);
-    void Promise.all(
-      ids.map((id) => inventoryApi.getById(id).catch(() => null)),
-    ).then((details) => {
-      for (const id of ids) inflightLotIds.current.delete(id);
-      const byId = new Map(
-        details
-          .filter((row): row is ApiInventory => Boolean(row?.id))
-          .map((row) => [row.id as string, row]),
-      );
-      for (const id of byId.keys()) loadedLotIds.current.add(id);
-      if (!byId.size) return;
-
-      const mergeRows = (current: ApiInventory[]) =>
-        current.map((row) => {
-          const detail = row.id ? byId.get(row.id) : undefined;
-          if (!detail) return row;
-          return flattenInventory({
-            ...row,
-            itemId: row.itemId || detail.itemId,
-            distributorOrderId:
-              row.distributorOrderId || detail.distributorOrderId,
-            expirationDate: row.expirationDate ?? detail.expirationDate,
-            location: row.location || detail.location,
-            quantity: row.quantity ?? detail.quantity,
-            itemName: row.itemName || detail.itemName,
-            orderCode: row.orderCode || detail.orderCode,
-            distributorName: row.distributorName || detail.distributorName,
-            sourceName: row.sourceName || detail.sourceName,
-            deliveryDate: row.deliveryDate || detail.deliveryDate,
-            purchased: row.purchased ?? detail.purchased,
-            unit: row.unit || detail.unit,
-          });
-        });
-
-      const categoryNames = categoryNamesFromCatalog(categoriesRef.current);
-      const previousSections = buildInventorySections(
-        catalogItemsRef.current,
-        inventoryRowsRef.current,
-        categoryNames,
-      );
-      const nextRows = mergeRows(inventoryRowsRef.current);
-      const nextSections = buildInventorySections(
-        catalogItemsRef.current,
-        nextRows,
-        categoryNames,
-      );
-      setExpanded((open) =>
-        remapExpandedProductIds(open, previousSections, nextSections),
-      );
-      setInventoryRows(mergeRows);
-    });
-  }, [detailEpoch, expanded]);
 
   function openEditLocation(
     sectionId: string,
@@ -1304,15 +1283,13 @@ export default function InventoryPage() {
     const lot = product?.lots[lotIndex];
     if (!lot) return;
     if (lot.qty < 1) {
-      notifyApiError(
-        new Error("This lot has no quantity to move."),
-        "This lot has no quantity to move.",
-      );
+      showError("This lot has no quantity to move.");
       return;
     }
 
     const currentLocation = lot.location === "—" ? "" : lot.location;
     setEditTarget({ sectionId, productId, lotIndex });
+    // API: GET /inventory/:recordId can refresh qty and location before the modal opens.
     setEditSplits([
       { qty: lot.qty, location: currentLocation },
       {
@@ -1320,88 +1297,44 @@ export default function InventoryPage() {
         location: nextUnusedLocation(currentLocation ? [currentLocation] : []),
       },
     ]);
-    if (!isApiConfigured() || !isUuid(lot.recordId)) return;
-    const recordId = lot.recordId;
-    const request = editRequest.current + 1;
-    editRequest.current = request;
-    void inventoryApi
-      .getById(recordId)
-      .then((row) => {
-        if (editRequest.current !== request) return;
-        const qty = typeof row.quantity === "number" ? row.quantity : lot.qty;
-        const location =
-          row.location?.trim() && row.location.trim() !== "—"
-            ? row.location.trim()
-            : currentLocation;
-        setEditSplits([
-          { qty, location },
-          {
-            qty: 0,
-            location: nextUnusedLocation(location ? [location] : []),
-          },
-        ]);
-      })
-      .catch((error) => {
-        notifyApiError(error, "Failed to load inventory details.");
-      });
   }
 
-  async function confirmEditLocation() {
-    if (!editTarget || !editLot || !editProduct) return;
+  function confirmEditLocation() {
+    if (!editTarget || !editLot) return;
 
     const valid = editSplits.filter(
       (row) => row.qty > 0 && row.location.trim() && row.location !== "—",
     );
     if (!valid.length || splitsTotal(valid) !== editLot.qty) return;
 
-    if (isApiConfigured() && isUuid(editLot.recordId)) {
-      setSavingLocation(true);
-      let mutated = false;
-      try {
-        await inventoryApi.split(editLot.recordId, {
-          splits: valid.map((row) => ({
-            quantity: Math.max(1, Math.round(row.qty)),
-            location: row.location.trim(),
-          })),
-        });
-        mutated = true;
-        replaceInventory(await inventoryApi.list());
-        setEditTarget(null);
-      } catch (error) {
-        notifyApiError(error, "Failed to update location.");
-        if (mutated) {
-          try {
-            replaceInventory(await inventoryApi.list());
-          } catch {
-            // The first error is already shown.
-          }
-        }
-      } finally {
-        setSavingLocation(false);
-      }
-      return;
-    }
-
-    setInventoryRows((current) => {
-      const next: ApiInventory[] = [];
-      let replaced = false;
-      for (const row of current) {
-        if ((row.id ?? "") !== editLot.recordId) {
-          next.push(row);
-          continue;
-        }
-        replaced = true;
-        valid.forEach((split, index) => {
-          next.push({
-            ...row,
-            id: index === 0 ? row.id : `local-${row.id}-${index}`,
-            quantity: split.qty,
-            location: split.location,
-          });
-        });
-      }
-      return replaced ? next : current;
-    });
+    // API: POST /inventory/:recordId/split { splits: [{ quantity, location }] }
+    // recordId is editLot.recordId. Replace this list with GET /inventory afterward.
+    setSections((current) =>
+      current.map((section) => {
+        if (section.id !== editTarget.sectionId) return section;
+        return {
+          ...section,
+          products: section.products.map((product) => {
+            if (product.id !== editTarget.productId) return product;
+            const sourceLot = product.lots[editTarget.lotIndex];
+            if (!sourceLot) return product;
+            const replacements: InventoryLot[] = valid.map((split, index) => ({
+              ...sourceLot,
+              recordId:
+                index === 0
+                  ? sourceLot.recordId
+                  : `${sourceLot.recordId}-split-${index}`,
+              qty: split.qty,
+              location: split.location,
+              address: split.location,
+            }));
+            const lots = [...product.lots];
+            lots.splice(editTarget.lotIndex, 1, ...replacements);
+            return { ...product, lots };
+          }),
+        };
+      }),
+    );
     setEditTarget(null);
   }
 
@@ -1409,135 +1342,30 @@ export default function InventoryPage() {
     const ready = order.sections.flatMap((section) =>
       section.items.filter(stockItemReady),
     );
-    const storedIds: string[] = [];
+    if (!ready.length) return { ok: false, storedIds: [] as string[] };
 
-    try {
-      for (const item of ready) {
-        const placements = placementsFor(item);
-        if (!placements.length) continue;
-        if (isApiConfigured()) {
-          if (!isUuid(item.catalogItemId)) {
-            throw new Error(
-              `${item.itemName} is not linked to a catalog item, so it cannot be stored.`,
-            );
-          }
-          const orderRecordId = [item.deliveryId, order.id].find((value) =>
-            isUuid(value),
-          );
-          const linkedProduct = products.find((product) => {
-            if (product.itemId === item.catalogItemId) return true;
-            const catalogItem = catalogItems.find(
-              (entry) =>
-                entry.recordId === item.catalogItemId ||
-                entry.id === item.catalogItemId,
-            );
-            if (!catalogItem) return false;
-            return (
-              product.itemId === catalogItem.id ||
-              product.itemId === catalogItem.recordId
-            );
-          });
-          const productId = linkedProduct
-            ? recordRef(linkedProduct)
-            : undefined;
-          if (orderRecordId && productId) {
-            await inventoryApi.store({
-              distributorOrderId: orderRecordId,
-              items: placements.map((placement) => {
-                const parsed = Date.parse(
-                  /^\d{4}-\d{2}-\d{2}$/.test(item.expirationIso)
-                    ? `${item.expirationIso}T00:00:00.000Z`
-                    : item.expirationIso,
-                );
-                return {
-                  productId,
-                  quantity: Math.max(1, Math.round(placement.qty)),
-                  location: placement.location.trim(),
-                  ...(Number.isNaN(parsed)
-                    ? {}
-                    : { expirationDate: new Date(parsed).toISOString() }),
-                };
-              }),
-            });
-          } else {
-            for (const placement of placements) {
-              await inventoryApi.create(
-                buildInventoryPayload({
-                  itemId: item.catalogItemId,
-                  quantity: placement.qty,
-                  location: placement.location,
-                  expirationDate: item.expirationIso,
-                  distributorOrderId: orderRecordId,
-                }),
-              );
-            }
-          }
-        } else {
-          setInventoryRows((current) => [
-            ...current,
-            ...placements.map((placement, index) => ({
-              id: `local-${item.id}-${index}-${Date.now()}`,
-              itemId: item.catalogItemId || item.orderId,
-              itemName: item.itemName,
-              inventoryCode: item.orderId,
-              orderCode: order.id,
-              distributorName: order.supplier,
-              sourceName: item.source,
-              quantity: placement.qty,
-              unit: item.unit,
-              purchased: item.purchased,
-              expirationDate: item.expirationIso,
-              location: placement.location,
-              createdAt: new Date().toISOString(),
-            })),
-          ]);
-        }
-        storedIds.push(item.id);
-      }
-    } catch (error) {
-      notifyApiError(error, "Failed to store items.");
-    }
+    // API: POST /inventory/store {
+    //   distributorOrderId: order.id,
+    //   items: one { productId: catalogItemId, quantity, location, expirationDate } per allocation
+    // }
+    // If some rows fail, return ok: false and storedIds for the rows that saved.
+    // StockItemsView keeps the rest on the page.
+    const stored = withStoredOrder(sections, order);
+    setSections(stored.sections);
+    removeHandoff(order.id);
+    setPendingOrders((current) =>
+      current.filter((pending) => pending.id !== order.id),
+    );
+    setExpanded((current) => {
+      const next = new Set(current);
+      for (const id of stored.productIds) next.add(id);
+      return next;
+    });
+    setStoringId(null);
+    setShowToast(true);
+    window.setTimeout(() => setShowToast(false), 2500);
 
-    if (isApiConfigured() && storedIds.length > 0) {
-      try {
-        replaceInventory(await inventoryApi.list());
-      } catch (error) {
-        notifyApiError(
-          error,
-          "Stored items, but inventory could not be refreshed.",
-        );
-      }
-    }
-
-    const ok = ready.length > 0 && storedIds.length === ready.length;
-    if (ok) {
-      removeHandoff(order.id);
-      setExpanded((current) => {
-        const next = new Set(current);
-        for (const item of ready) {
-          if (item.catalogItemId) next.add(item.catalogItemId);
-        }
-        return next;
-      });
-      setStoringId(null);
-      setShowToast(true);
-      window.setTimeout(() => setShowToast(false), 2500);
-    } else if (storedIds.length > 0) {
-      const stored = new Set(storedIds);
-      pushHandoff(
-        handoffFromRemaining({
-          ...order,
-          sections: order.sections
-            .map((section) => ({
-              ...section,
-              items: section.items.filter((item) => !stored.has(item.id)),
-            }))
-            .filter((section) => section.items.length > 0),
-        }),
-      );
-    }
-
-    return { ok, storedIds };
+    return { ok: true, storedIds: ready.map((item) => item.id) };
   }
 
   if (activeOrder) {
@@ -1616,269 +1444,252 @@ export default function InventoryPage() {
         {orders.length ? (
           <div className="mb-5 space-y-2.5">
             {orders.map((order) => (
-              <div key={order.id} className="overflow-x-auto">
-                <button
-                  type="button"
-                  onClick={() => setStoringId(order.id)}
-                  className="flex w-full min-w-[720px] items-center rounded-[12px] px-5 py-3.5 text-left text-white"
-                  style={{ background: GREEN }}
-                >
-                  <span className="shrink-0 text-[13px] font-medium whitespace-nowrap">
-                    Order Received
-                  </span>
-                  <span
-                    aria-hidden
-                    className="mx-5 h-[18px] w-px shrink-0 self-center bg-white/70"
-                  />
-                  <span className="min-w-0 flex-[1.4] truncate pl-0 text-[14px] font-semibold">
-                    {order.supplier}
-                  </span>
-                  <span className="ml-4 w-[100px] shrink-0 text-[13px] whitespace-nowrap">
-                    {order.itemsCount}
-                  </span>
-                  <span className="ml-4 min-w-[160px] flex-1 text-[13px] whitespace-nowrap">
-                    {order.receivedAt}
-                  </span>
-                  <ChevronRight
-                    size={28}
-                    strokeWidth={2.25}
-                    className="ml-4 shrink-0 text-white"
-                  />
-                </button>
-              </div>
+              <button
+                key={order.id}
+                type="button"
+                onClick={() => setStoringId(order.id)}
+                className="flex w-full items-center rounded-[12px] px-5 py-3.5 text-left text-white"
+                style={{ background: GREEN }}
+              >
+                <span className="shrink-0 text-[13px] font-medium whitespace-nowrap">
+                  Order Received
+                </span>
+                <span
+                  aria-hidden
+                  className="mx-5 h-[18px] w-px shrink-0 self-center bg-white/70"
+                />
+                <span className="min-w-0 flex-[1.4] truncate pl-0 text-[14px] font-semibold">
+                  {order.supplier}
+                </span>
+                <span className="ml-4 w-[100px] shrink-0 text-[13px] whitespace-nowrap">
+                  {order.itemsCount}
+                </span>
+                <span className="ml-4 min-w-[160px] flex-1 text-[13px] whitespace-nowrap">
+                  {order.receivedAt}
+                </span>
+                <ChevronRight
+                  size={28}
+                  strokeWidth={2.25}
+                  className="ml-4 shrink-0 text-white"
+                />
+              </button>
             ))}
           </div>
         ) : null}
 
-        {loading || !catalogReady ? (
-          <AppLoader variant="table" label="Loading inventory" />
-        ) : (
-          <>
-            <div className="space-y-8">
-              {filteredGroups.map((group) => {
-                const sections = group.sections
-                  .map((section) => ({
-                    ...section,
-                    products: section.products.filter((product) =>
-                      visibleProductIds.has(product.id),
-                    ),
-                  }))
-                  .filter((section) => section.products.length > 0);
-                if (sections.length === 0) return null;
+        <div className="space-y-8">
+          {filteredGroups.map((group) => {
+            const sections = group.sections
+              .map((section) => ({
+                ...section,
+                products: section.products.filter((product) =>
+                  visibleProductIds.has(product.id),
+                ),
+              }))
+              .filter((section) => section.products.length > 0);
+            if (sections.length === 0) return null;
 
-                const showHeading =
-                  sections.length > 1 || sections[0]?.title !== group.title;
+            const showHeading =
+              sections.length > 1 || sections[0]?.title !== group.title;
 
-                return (
-                  <section key={group.title}>
-                    {showHeading ? (
-                      <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
-                        {group.title}
-                      </h2>
-                    ) : null}
+            return (
+              <section key={group.title}>
+                {showHeading ? (
+                  <h2 className="mb-4 text-[20px] font-semibold text-[#111118]">
+                    {group.title}
+                  </h2>
+                ) : null}
 
-                    <div className="space-y-5">
-                      {sections.map((section) => (
-                        <div key={section.id}>
-                          <ScrollTable
-                            minWidth={1300}
-                            className="rounded-[12px]"
+                <div className="space-y-5">
+                  {sections.map((section) => (
+                    <div key={section.id}>
+                      <ScrollTable minWidth="100%" className="rounded-[12px]">
+                        <div
+                          className={cn(
+                            GRID,
+                            "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
+                          )}
+                        >
+                          <span className="col-span-4 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
+                            {section.title}
+                          </span>
+                        </div>
+
+                        <div>
+                          <div
+                            className={cn(
+                              GRID,
+                              PINNED_HEADER,
+                              "h-10 border-b border-[#00000014]",
+                              TABLE_HEADER,
+                            )}
                           >
-                            <div
-                              className={cn(
-                                GRID,
-                                "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
-                              )}
-                            >
-                              <span className="col-span-4 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
-                                {section.title}
-                              </span>
+                            <div className="min-w-0 whitespace-nowrap">
+                              Order ID
                             </div>
+                            <div aria-hidden />
+                            <div className="whitespace-nowrap">Distributor</div>
+                            <div className="whitespace-nowrap">
+                              {section.sourceLabel}
+                            </div>
+                            <div className="whitespace-nowrap">
+                              Delivery Date
+                            </div>
+                            <div className="whitespace-nowrap">Purchased</div>
+                            <div className="whitespace-nowrap">Qty Portion</div>
+                            <div className="whitespace-nowrap">Unit</div>
+                            <div className="whitespace-nowrap">Location</div>
+                          </div>
 
-                            <div>
-                              <div
-                                className={cn(
-                                  GRID,
-                                  PINNED_HEADER,
-                                  "h-10 border-b border-[#00000014]",
-                                  TABLE_HEADER,
-                                )}
-                              >
-                                <div className="min-w-0 whitespace-nowrap">Order ID</div>
-                                <div aria-hidden />
-                                <div className="whitespace-nowrap">
-                                  Distributor
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  {section.sourceLabel}
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Delivery Date
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Purchased
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Qty Portion
-                                </div>
-                                <div className="whitespace-nowrap">Unit</div>
-                                <div className="whitespace-nowrap">
-                                  Location
-                                </div>
-                              </div>
+                          {section.products.map((product, index) => {
+                            const open = expanded.has(product.id);
+                            const total = stockTotal(product);
+                            const isLast =
+                              index === section.products.length - 1;
 
-                              {section.products.map((product, index) => {
-                                const open = expanded.has(product.id);
-                                const total = stockTotal(product);
-                                const isLast =
-                                  index === section.products.length - 1;
-
-                                return (
-                                  <div key={product.id} className="contents">
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleExpanded(product.id)}
+                            return (
+                              <div key={product.id} className="contents">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleExpanded(product.id)}
+                                  className={cn(
+                                    GRID,
+                                    "py-3.5",
+                                    "w-full bg-white text-left hover:bg-[#FAFAF8]",
+                                    (!isLast || open) &&
+                                      "border-b border-[#00000014]",
+                                  )}
+                                >
+                                  <span className="flex items-center justify-start text-[#8A8A8A]">
+                                    <ChevronDown
+                                      size={14}
                                       className={cn(
-                                        GRID,
-                                        "py-3.5",
-                                        "w-full bg-white text-left hover:bg-[#FAFAF8]",
-                                        (!isLast || open) &&
-                                          "border-b border-[#00000014]",
+                                        "transition-transform",
+                                        open
+                                          ? "rotate-0 text-[#E25B5B]"
+                                          : "-rotate-90 text-[#8A8A8A]",
                                       )}
-                                    >
-                                      <span className="flex items-center justify-start text-[#8A8A8A]">
-                                        <ChevronDown
-                                          size={14}
-                                          className={cn(
-                                            "transition-transform",
-                                            open
-                                              ? "rotate-0 text-[#E25B5B]"
-                                              : "-rotate-90 text-[#8A8A8A]",
-                                          )}
-                                        />
-                                      </span>
-                                      <span className="col-start-2 col-span-3 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
-                                        {product.name}
-                                      </span>
-                                      <span
-                                        className={cn(
-                                          "col-start-7 text-left text-[13px] font-semibold whitespace-nowrap",
-                                          total <= 0
-                                            ? "text-[#E25B5B]"
-                                            : "text-[#111118]",
-                                        )}
-                                      >
-                                        {total <= 0 ? "Empty" : total}
-                                      </span>
-                                    </button>
+                                    />
+                                  </span>
+                                  <span className="col-span-3 col-start-2 min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                                    {product.name}
+                                  </span>
+                                  <span
+                                    className={cn(
+                                      "col-start-7 text-left text-[13px] font-semibold whitespace-nowrap",
+                                      total <= 0
+                                        ? "text-[#E25B5B]"
+                                        : "text-[#111118]",
+                                    )}
+                                  >
+                                    {total <= 0 ? "Empty" : total}
+                                  </span>
+                                </button>
 
-                                    {open ? (
-                                      <div className="contents">
-                                        {product.lots.length > 0 ? (
-                                          product.lots.map((lot, lotIndex) => (
-                                            <div
-                                              key={`${product.id}-${lot.recordId}-${lotIndex}`}
-                                              className={cn(
-                                                GRID,
-                                                "py-3.5",
-                                                "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
-                                              )}
+                                {open ? (
+                                  <div className="contents">
+                                    {product.lots.length > 0 ? (
+                                      product.lots.map((lot, lotIndex) => (
+                                        <div
+                                          key={`${product.id}-${lot.recordId}-${lotIndex}`}
+                                          className={cn(
+                                            GRID,
+                                            "py-3.5",
+                                            "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
+                                          )}
+                                        >
+                                          <span className="z-10 w-max min-w-0 justify-self-start">
+                                            <span
+                                              className="bg-id-pill inline-flex h-5 items-center rounded-[6px] px-1.5 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-[#6B7180]"
+                                              title={lot.recordId}
                                             >
-                                              <span className="z-10 w-max min-w-0 justify-self-start">
-                                                <span
-                                                  className="bg-id-pill inline-flex h-5 items-center rounded-[6px] px-1.5 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-[#6B7180]"
-                                                  title={lot.recordId}
-                                                >
-                                                  {lot.orderId}
-                                                </span>
-                                              </span>
-                                              <span aria-hidden />
-                                              <div className="min-w-0 truncate">
-                                                {lot.distributor}
-                                              </div>
-                                              <div className="min-w-0 truncate">
-                                                {lot.source}
-                                              </div>
-                                              <div className="whitespace-nowrap">
-                                                {lot.deliveryDate}
-                                              </div>
-                                              <div className="whitespace-nowrap">
-                                                {lot.purchased}
-                                              </div>
-                                              <div
-                                                className={cn(
-                                                  "text-left font-semibold",
-                                                  lot.qty <= 0 &&
-                                                    "text-[#E25B5B]",
-                                                )}
-                                              >
-                                                {lot.qty}
-                                              </div>
-                                              <div className="whitespace-nowrap">
-                                                {lot.unit}
-                                              </div>
-                                              <InventoryLocationCell
-                                                location={lot.location}
-                                                address={lot.address}
-                                                onEditLocation={() =>
-                                                  openEditLocation(
-                                                    section.id,
-                                                    product.id,
-                                                    lotIndex,
-                                                  )
-                                                }
-                                              />
-                                            </div>
-                                          ))
-                                        ) : (
+                                              {lot.orderId}
+                                            </span>
+                                          </span>
+                                          <span aria-hidden />
+                                          <div className="min-w-0 truncate">
+                                            {lot.distributor}
+                                          </div>
+                                          <div className="min-w-0 truncate">
+                                            {lot.source}
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            {lot.deliveryDate}
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            {lot.purchased}
+                                          </div>
                                           <div
                                             className={cn(
-                                              GRID,
-                                              "py-3.5",
-                                              "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
+                                              "text-left font-semibold",
+                                              lot.qty <= 0 && "text-[#E25B5B]",
                                             )}
                                           >
-                                            <span
-                                              className={cn(
-                                                ID_PILL,
-                                                "z-10 w-max justify-self-start",
-                                              )}
-                                            >
-                                              -
-                                            </span>
-                                            <span aria-hidden />
-                                            <div className="col-span-7">
-                                              Inventory Empty
-                                            </div>
+                                            {lot.qty}
                                           </div>
+                                          <div className="whitespace-nowrap">
+                                            {lot.unit}
+                                          </div>
+                                          <InventoryLocationCell
+                                            location={lot.location}
+                                            address={lot.address}
+                                            onEditLocation={() =>
+                                              openEditLocation(
+                                                section.id,
+                                                product.id,
+                                                lotIndex,
+                                              )
+                                            }
+                                          />
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <div
+                                        className={cn(
+                                          GRID,
+                                          "py-3.5",
+                                          "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
                                         )}
+                                      >
+                                        <span
+                                          className={cn(
+                                            ID_PILL,
+                                            "z-10 w-max justify-self-start",
+                                          )}
+                                        >
+                                          -
+                                        </span>
+                                        <span aria-hidden />
+                                        <div className="col-span-7">
+                                          Inventory Empty
+                                        </div>
                                       </div>
-                                    ) : null}
+                                    )}
                                   </div>
-                                );
-                              })}
-                            </div>
-                          </ScrollTable>
+                                ) : null}
+                              </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      </ScrollTable>
                     </div>
-                  </section>
-                );
-              })}
-              <InfiniteScrollSentinel
-                hasMore={listWindow.hasMore}
-                loadedCount={listWindow.loadedCount}
-                onLoadMore={listWindow.loadMore}
-              />
-            </div>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+          <InfiniteScrollSentinel
+            hasMore={listWindow.hasMore}
+            loadedCount={listWindow.loadedCount}
+            onLoadMore={listWindow.loadMore}
+          />
+        </div>
 
-            {!filteredSections.length ? (
-              <div className="rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
-                No inventory matches your filters.
-              </div>
-            ) : null}
-          </>
-        )}
+        {!filteredSections.length ? (
+          <div className="rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+            No inventory matches your filters.
+          </div>
+        ) : null}
       </div>
 
       <SplitModal
@@ -1889,11 +1700,9 @@ export default function InventoryPage() {
         confirmLabel="Edit"
         splits={editSplits}
         onChangeSplits={setEditSplits}
-        onClose={() => {
-          if (!savingLocation) setEditTarget(null);
-        }}
-        onConfirm={() => void confirmEditLocation()}
-        confirming={savingLocation}
+        minRows={1}
+        onClose={() => setEditTarget(null)}
+        onConfirm={confirmEditLocation}
       />
 
       {showToast ? (

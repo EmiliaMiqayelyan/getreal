@@ -120,6 +120,73 @@ export function startOfLocalDay(date: Date) {
   return next;
 }
 
+/** Customer and distributor order chips are weekly Wednesdays (JS weekday 3). */
+export const WEDNESDAY_WEEKDAYS = new Set([3]);
+
+export function isWednesdayDateId(dateId: string) {
+  const date = parseDeliveryDateId(dateId);
+  return date != null && date.getDay() === 3;
+}
+
+/** Today when it is Wednesday, otherwise the next Wednesday. */
+export function upcomingWednesday(from = new Date()) {
+  const date = startOfLocalDay(from);
+  const delta = (3 - date.getDay() + 7) % 7;
+  date.setDate(date.getDate() + delta);
+  return date;
+}
+
+export type WednesdayOrderChip = {
+  id: string;
+  label: string;
+  count: number;
+};
+
+/**
+ * One chip per Wednesday that appears in `dateIds`.
+ * `selectedDateId` is included with a zero count when it is a Wednesday
+ * that has no matching orders yet.
+ */
+export function wednesdayChipsFromDateIds(
+  dateIds: Iterable<string>,
+  selectedDateId = "",
+): WednesdayOrderChip[] {
+  const counts = new Map<string, number>();
+  for (const id of dateIds) {
+    if (!id || !isWednesdayDateId(id)) continue;
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  if (
+    selectedDateId &&
+    isWednesdayDateId(selectedDateId) &&
+    !counts.has(selectedDateId)
+  ) {
+    counts.set(selectedDateId, 0);
+  }
+
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([id, count]) => {
+      const date = parseDeliveryDateId(id);
+      return {
+        id,
+        label: date ? formatDeliveryChipLabel(date) : id,
+        count,
+      };
+    });
+}
+
+/** Today, otherwise the next chip, otherwise the most recent one. */
+export function pickDefaultDeliveryChipId(
+  chips: { id: string }[],
+  from = new Date(),
+) {
+  if (chips.length === 0) return "";
+  const today = toDeliveryDateId(from);
+  const upcoming = chips.find((chip) => chip.id >= today);
+  return (upcoming ?? chips[chips.length - 1]).id;
+}
+
 /** Delivery days from today through the next several months. */
 export function getUpcomingDeliveryDates(
   deliveryWeekdays: Set<number>,

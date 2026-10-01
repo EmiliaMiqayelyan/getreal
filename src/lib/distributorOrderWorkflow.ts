@@ -11,6 +11,7 @@ import type {
 import {
   formatExpectedDelivery,
   toDeliveryDateId,
+  upcomingWednesday,
 } from "@/utils/deliveryCalendar";
 
 /**
@@ -57,7 +58,7 @@ export type DemandOrder = {
 };
 
 /** Offline order so the workflow can be used before customer orders exist. */
-function sampleDemandOrder(deliveryDate = new Date()): DemandOrder {
+function sampleDemandOrder(deliveryDate = upcomingWednesday()): DemandOrder {
   const deliveryDateId = toDeliveryDateId(deliveryDate);
   const deliveryLabel = formatExpectedDelivery(deliveryDate);
   const lines: WorkingOrderRow[] = [
