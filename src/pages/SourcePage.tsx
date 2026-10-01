@@ -44,14 +44,49 @@ const GRID =
 function SourcePhoto({
   logoUrl,
   name,
+  compact = false,
 }: {
   logoUrl: string | null;
   name: string;
+  compact?: boolean;
 }) {
   return (
-    <div className="flex h-[46px] w-[67px] shrink-0 items-center justify-center overflow-hidden rounded-[8px] bg-[#F3F3F1]">
+    <div
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden bg-[#F3F3F1]",
+        compact
+          ? "size-14 rounded-[10px]"
+          : "h-[46px] w-[67px] rounded-[8px]",
+      )}
+    >
       {logoUrl ? (
         <img src={logoUrl} alt={name} className="size-full object-contain" />
+      ) : compact ? (
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 18 18"
+          fill="none"
+          aria-hidden
+          className="text-[#C8C8C4]"
+        >
+          <rect
+            x="1.5"
+            y="3"
+            width="15"
+            height="12"
+            rx="2"
+            stroke="currentColor"
+            strokeWidth="1.4"
+          />
+          <circle cx="6.2" cy="7.2" r="1.2" fill="currentColor" />
+          <path
+            d="M3.5 13.2 7 9.6l2.2 2.2 1.6-1.5 3.7 3"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinejoin="round"
+          />
+        </svg>
       ) : null}
     </div>
   );
@@ -283,8 +318,12 @@ export default function SourcePage() {
                   className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
+                    <div className="flex min-w-0 items-center gap-3">
+                      <SourcePhoto
+                        compact
+                        logoUrl={row.logoUrl}
+                        name={row.name}
+                      />
                       <div className="min-w-0">
                         <IdPill>{row.id}</IdPill>
                         <div className={cn(BODY, "mt-2 truncate")}>

@@ -65,12 +65,12 @@ const BODY = "text-[13px] font-medium leading-none text-[#111118]";
 
 /** One track list for the header and every body row. Not a subgrid item — sticky grid items overlap the first row. */
 const PRODUCT_COLUMNS =
-  "grid grid-cols-[40px_112px_64px_minmax(0,1fr)_minmax(0,180px)_96px_minmax(0,140px)_132px] items-center gap-x-4 px-4";
+  "grid grid-cols-[40px_112px_64px_minmax(176px,1fr)_minmax(120px,180px)_96px_minmax(120px,140px)_132px] items-center gap-x-4 px-4";
 
 function DragHandle() {
   return (
     <span
-      className="inline-flex h-5 shrink-0 flex-col items-center justify-center gap-[3px] leading-none text-[#C0C0BC]"
+      className="inline-flex h-5 shrink-0 flex-col items-center justify-center gap-[3px] leading-none text-[#E2E2E2]"
       aria-hidden
     >
       <span className="block h-[2px] w-[10px] rounded-full bg-current" />
@@ -275,7 +275,89 @@ function SubcategoryTable({
   }
 
   return (
-    <ScrollTable minWidth={980}>
+    <>
+    <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white md:hidden">
+      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
+        <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
+          {title}
+        </h3>
+      </div>
+      <div
+        className={cn(
+          TABLE_HEADER,
+          "grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3 px-4 py-2",
+        )}
+      >
+        <span className="whitespace-nowrap">ID</span>
+        <span className="min-w-0 truncate whitespace-nowrap">Merchandising Name</span>
+        <span className="whitespace-nowrap text-right">Live</span>
+      </div>
+      {displayRows.map((row, index) => {
+        const display = resolveProductTableDisplay(row, catalog);
+        const isDragging = draggingId === row.id;
+        const isLast = index === displayRows.length - 1;
+        return (
+          <div
+            key={row.id}
+            onDragOver={(event) => handleDragOver(event, row.id)}
+            onDrop={handleDrop}
+            className={cn(
+              "bg-white px-4 py-3",
+              !isLast && "border-b border-[#00000014]",
+              draggingId && !isDragging && "bg-[#F7F7F5]",
+              isDragging && "bg-[#F3F3F1] opacity-55",
+            )}
+          >
+            <div className="grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3">
+              <button
+                type="button"
+                draggable
+                onDragStart={(event) => handleDragStart(event, row.id)}
+                onDragEnd={clearDragState}
+                className="inline-flex h-5 w-8 cursor-grab items-center justify-start p-0 leading-none active:cursor-grabbing"
+                aria-label={`Reorder ${display.merchandisingName}`}
+              >
+                <DragHandle />
+              </button>
+              <div className={cn(BODY, "min-w-0 truncate font-semibold")}>
+                {display.merchandisingName}
+              </div>
+              <div className="flex justify-end">
+                <Switch
+                  checked={row.live}
+                  label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
+                  onCheckedChange={(live) => onToggleLive(row.id, live)}
+                />
+              </div>
+            </div>
+            <div className="mt-2 pl-[44px]">
+              <IdPill>{row.id}</IdPill>
+              <div className={cn(BODY, "mt-2 min-w-0 truncate")}>{display.source}</div>
+              <div className={cn(BODY, "mt-1 font-semibold")}>
+                {formatSalePrice(display.salesPrice)}
+                <span className="ml-2 font-medium text-[#6B6B6B]">
+                  {display.unitOfSales}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center gap-3">
+                <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
+                  View
+                </button>
+                <button
+                  type="button"
+                  className={EDIT_LINK}
+                  onClick={() => onRemove(row)}
+                  aria-label={`Remove ${display.merchandisingName}`}
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+    <ScrollTable minWidth={1140} className="hidden md:block">
       <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
         <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
           {title}
@@ -287,7 +369,7 @@ function SubcategoryTable({
           PRODUCT_COLUMNS,
           TABLE_HEADER,
           PINNED_HEADER,
-          "min-h-10 py-2 shadow-[inset_0_-1px_0_#00000014]",
+          "min-h-10 py-2 whitespace-nowrap shadow-[inset_0_-1px_0_#00000014]",
         )}
       >
         <span>ID</span>
@@ -372,6 +454,7 @@ function SubcategoryTable({
       })}
       </div>
     </ScrollTable>
+    </>
   );
 }
 

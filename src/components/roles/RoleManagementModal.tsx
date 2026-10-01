@@ -154,8 +154,8 @@ export function RoleManagementModal({
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1">
-          <aside className="flex w-[200px] shrink-0 flex-col border-r border-[#00000014] bg-white p-3">
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <aside className="flex w-full shrink-0 flex-col border-b border-[#00000014] bg-white p-3 sm:w-[200px] sm:border-r sm:border-b-0">
             <Button
               variant="outline"
               size="lg"
@@ -166,7 +166,7 @@ export function RoleManagementModal({
               Create Role
             </Button>
 
-            <div className="mt-3 flex-1 space-y-1 overflow-y-auto">
+            <div className="mt-3 flex gap-1 overflow-x-auto sm:block sm:min-h-0 sm:flex-1 sm:space-y-1 sm:overflow-y-auto">
               {draftRoles.map((role) => {
                 const active = role.id === selectedId;
                 return (
@@ -175,7 +175,7 @@ export function RoleManagementModal({
                     type="button"
                     onClick={() => setSelectedId(role.id)}
                     className={cn(
-                      "w-full rounded-[8px] px-3 py-2.5 text-left text-[13px] font-medium transition-colors",
+                      "shrink-0 rounded-[8px] px-3 py-2.5 text-left text-[13px] font-medium whitespace-nowrap transition-colors sm:w-full sm:whitespace-normal",
                       active
                         ? "text-[#111118]"
                         : "text-[#111118] hover:bg-[#F5F5F3]",
@@ -189,10 +189,10 @@ export function RoleManagementModal({
             </div>
           </aside>
 
-          <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {selected ? (
               <>
-                <div className="flex-1 overflow-y-auto px-5 py-4">
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
                   <label className="mb-1.5 block text-[11px] font-semibold text-[#2E2E2E]">
                     Role Name
                   </label>
@@ -248,7 +248,11 @@ export function RoleManagementModal({
                   <Button variant="ghost" onClick={onClose}>
                     Cancel
                   </Button>
-                  <Button variant="dark" onClick={handleSave}>
+                  <Button
+                    variant="dark"
+                    onClick={handleSave}
+                    className="shrink-0 whitespace-nowrap"
+                  >
                     Save Role
                   </Button>
                 </div>

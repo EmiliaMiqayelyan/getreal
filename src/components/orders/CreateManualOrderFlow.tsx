@@ -201,6 +201,14 @@ export function CreateManualOrderFlow({
     }
   }
 
+  function requestClose() {
+    const dirty =
+      Boolean(distributor || deliveryDate || timeSlot) ||
+      lines.some((line) => line.quantity > 0);
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  }
+
   return (
     <div className="relative flex h-full min-h-0 flex-col bg-[#FAFAFA]">
       <div
@@ -498,13 +506,20 @@ export function CreateManualOrderFlow({
           <button
             type="button"
             onClick={() => setStep("create")}
-            className="inline-flex items-center gap-1 text-[14px] font-medium text-[#5A5A5A] hover:text-[#111118]"
+            className="inline-flex items-center gap-1 text-[14px] font-medium text-[#111118] hover:opacity-80"
           >
             <ChevronLeft className="size-4" />
             Back
           </button>
         ) : (
-          <span />
+          <button
+            type="button"
+            onClick={requestClose}
+            className="inline-flex items-center gap-1 text-[14px] font-medium text-[#111118] hover:opacity-80"
+          >
+            <ChevronLeft className="size-4" />
+            Back
+          </button>
         )}
         <div className="flex items-center gap-3">
           <Button variant="ghost" onClick={() => setConfirmClose(true)}>
