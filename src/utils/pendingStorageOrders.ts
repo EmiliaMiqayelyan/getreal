@@ -126,15 +126,37 @@ function orderLines(order: ApiOrder): ApiOrderItem[] {
   return [];
 }
 
+function uuidText(value: unknown) {
+  const text = textOf(value);
+  return text && isUuid(text) ? text : undefined;
+}
+
+function field(record: Record<string, unknown> | null, key: string) {
+  if (!record) return undefined;
+  const snake = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  return uuidText(record[key]) ?? uuidText(record[snake]);
+}
+
+/**
+ * Inventory store needs the catalog item UUID (`items.id`).
+ * Order lines are products, so `productId` / `product.id` must not be used
+ * until they are translated to `product.itemId`.
+ */
 function lineItemUuid(line: ApiOrderItem) {
   const raw = line as ApiOrderItem & Record<string, unknown>;
-  const nested = asRecord(raw.item);
-  const candidates = [
-    textOf(raw.itemId),
-    nested ? textOf(nested.id) : undefined,
-    textOf(line.productId),
-  ];
-  return candidates.find((value) => value && isUuid(value)) ?? "";
+  const product = asRecord(raw.product);
+  const nestedItem =
+    asRecord(raw.item) ?? (product ? asRecord(product.item) : null);
+  const productUuid = field(raw, "productId") ?? field(product, "id");
+  const linkedItem =
+    field(product, "itemId") ??
+    field(nestedItem, "itemId") ??
+    field(nestedItem, "id");
+  const direct = field(raw, "itemId");
+
+  if (linkedItem && linkedItem !== productUuid) return linkedItem;
+  if (direct && direct !== productUuid) return direct;
+  return productUuid ?? "";
 }
 
 function linePriceLabel(line: ApiOrderItem) {

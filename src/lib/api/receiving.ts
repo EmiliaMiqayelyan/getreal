@@ -20,7 +20,12 @@ export type ApiDeliveryLine = {
   /** Integer cents on the live API. */
   price?: number;
   cost?: number;
-  product?: { id?: string; name?: string } | null;
+  product?: {
+    id?: string;
+    name?: string;
+    itemId?: string;
+    item?: { id?: string } | null;
+  } | null;
 };
 
 export type ApiDelivery = {
@@ -52,6 +57,8 @@ export type ApiDeliveryGroup = {
 export type ValidateDeliveryItem = {
   productId: string;
   status: "accepted" | "rejected";
+  /** ISO-8601. Saved on the line and copied onto the warehouse inventory row. */
+  expirationDate?: string;
   reason?: string;
   evidenceUrl?: string;
 };
@@ -98,8 +105,9 @@ export const receivingApi = {
 
   /**
    * POST /receiving/:orderId/validate
-   * `items` is required. `evidenceUrl` must be an http(s) URL when sent.
-   * Expiration and lot id are not accepted by the current schema.
+   * Saves each line (status, reason, evidenceUrl, expirationDate) and creates
+   * inventory at the default Warehouse location for accepted lines.
+   * `evidenceUrl` must be an http(s) URL when sent.
    */
   validate(orderId: string, items: ValidateDeliveryItem[]) {
     return apiRequest<unknown>(`/receiving/${orderId}/validate`, {
@@ -108,6 +116,7 @@ export const receivingApi = {
         items: items.map((item) => ({
           productId: item.productId,
           status: item.status,
+          ...(item.expirationDate ? { expirationDate: item.expirationDate } : {}),
           ...(item.reason ? { reason: item.reason } : {}),
           ...(item.evidenceUrl ? { evidenceUrl: item.evidenceUrl } : {}),
         })),

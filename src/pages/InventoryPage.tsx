@@ -12,7 +12,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
-import { useAppCatalog } from "@/context/AppCatalogContext";
+import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -31,7 +31,7 @@ import { mapApiItemToItem } from "@/lib/api/mappers";
 import type { ApiInventory, ApiItem } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
 import { categoryNamesFromCatalog } from "@/utils/categories";
-import { isUuid } from "@/utils/entityIds";
+import { isUuid, recordRef } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   appendUnreceivedItems,
@@ -43,6 +43,7 @@ import {
   type InventorySection,
 } from "@/utils/inventoryView";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
+import { resolveInventoryStoreItemIds } from "@/utils/inventoryStoreItem";
 import {
   loadPendingStorageOrders,
   withoutStoredHandoffs,
@@ -1094,11 +1095,13 @@ export default function InventoryPage() {
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
   const {
     items: catalogItems,
+    products,
     categories,
     distributors,
     sources,
     subcategoryRecords,
   } = useAppCatalog();
+  useCatalogSlice(["products", "items"]);
   const { notifyApiError, showError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
@@ -1508,6 +1511,30 @@ export default function InventoryPage() {
         return { ok: false, storedIds: [] as string[] };
       }
 
+      let itemIds: Map<string, string>;
+      try {
+        const knownItemIds = [
+          ...apiItems.map((item) => item.id ?? ""),
+          ...catalogItems.map((item) => recordRef(item) ?? ""),
+        ];
+        itemIds = await resolveInventoryStoreItemIds(
+          ready.map((item) => item.catalogItemId),
+          knownItemIds,
+          products,
+        );
+      } catch (error) {
+        notifyApiError(error, "Failed to match products to catalog items.");
+        return { ok: false, storedIds: [] as string[] };
+      }
+
+      const unresolved = ready.find((item) => !itemIds.get(item.catalogItemId));
+      if (unresolved) {
+        showError(
+          `${unresolved.itemName} is linked to a product that has no catalog item, so this order cannot be stored.`,
+        );
+        return { ok: false, storedIds: [] as string[] };
+      }
+
       try {
         await inventoryApi.store({
           distributorOrderId: order.id,
@@ -1515,7 +1542,7 @@ export default function InventoryPage() {
             placementsFor(item).map((placement) => {
               const expirationDate = expirationTimestamp(item.expirationIso);
               return {
-                itemId: item.catalogItemId,
+                itemId: itemIds.get(item.catalogItemId) ?? item.catalogItemId,
                 quantity: Math.max(1, Math.round(placement.qty)),
                 location: placement.location.trim(),
                 ...(expirationDate ? { expirationDate } : {}),

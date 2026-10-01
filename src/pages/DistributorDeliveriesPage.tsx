@@ -39,6 +39,7 @@ import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { collectPaginated, isApiConfigured, ordersApi, receivingApi } from "@/lib/api";
+import { expirationTimestamp } from "@/lib/api/inventory";
 import { centsToDollars } from "@/lib/api/mappers";
 import type {
   ApiDelivery,
@@ -74,6 +75,11 @@ type LineItem = {
   id: string;
   /** Sellable product UUID sent to POST /receiving/:orderId/validate. */
   productId: string;
+  /**
+   * Catalog item UUID for POST /inventory/store.
+   * Falls back to `productId` when the line has not included `itemId` yet.
+   */
+  catalogItemId: string;
   itemCode: string;
   name: string;
   category: string;
@@ -534,6 +540,18 @@ function lineProductId(line: ApiDeliveryLine) {
   return line.productId?.trim() || line.product?.id?.trim() || "";
 }
 
+/** Catalog item UUID. A product UUID is not a valid inventory `itemId`. */
+function lineCatalogItemId(line: ApiDeliveryLine) {
+  const productId = lineProductId(line);
+  const linked =
+    line.product?.itemId?.trim() ||
+    line.product?.item?.id?.trim() ||
+    line.itemId?.trim() ||
+    "";
+  if (linked && isUuid(linked) && linked !== productId) return linked;
+  return productId;
+}
+
 function lineDisplayName(line: ApiDeliveryLine) {
   return (
     readLineText(line.name) ||
@@ -576,6 +594,7 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
     return {
       id: line.id || `${productId || code}-${lineIndex + 1}`,
       productId,
+      catalogItemId: lineCatalogItemId(line),
       itemCode:
         line.itemCode?.trim() ||
         line.itemId?.trim() ||
@@ -1468,9 +1487,21 @@ export default function DistributorDeliveriesPage() {
           if (status === "rejected" && result?.photoFile) {
             evidenceUrl = await uploadImage(result.photoFile);
           }
+          const expirationDate =
+            status === "accepted"
+              ? expirationTimestamp(result?.expiration)
+              : undefined;
+          if (status === "accepted" && !expirationDate) {
+            notifyApiError(
+              new Error("Missing expiration date"),
+              `${item.name} needs an expiration date before it can be validated.`,
+            );
+            return;
+          }
           payload.push({
             productId: item.productId,
             status,
+            ...(expirationDate ? { expirationDate } : {}),
             ...(status === "rejected" && result?.reason
               ? { reason: result.reason }
               : {}),
@@ -1516,7 +1547,7 @@ export default function DistributorDeliveriesPage() {
       return {
         lineId: item.id,
         itemId: result?.itemId || item.itemCode || item.productId,
-        catalogItemId: item.productId,
+        catalogItemId: item.catalogItemId,
         itemName: item.name,
         category: item.category,
         source: item.source,
@@ -1539,7 +1570,7 @@ export default function DistributorDeliveriesPage() {
       items: lines,
     });
 
-    if (handoff.items.length > 0) {
+    if (!isApiConfigured() && handoff.items.length > 0) {
       pushHandoff(handoff);
     } else {
       markDeliveryReceived(order.id);
