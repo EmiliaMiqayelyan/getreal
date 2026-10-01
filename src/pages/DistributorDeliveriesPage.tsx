@@ -1462,7 +1462,7 @@ export default function DistributorDeliveriesPage() {
               )}
             >
               <div />
-              <div>Delivery ID</div>
+              <div className="-ml-3">Delivery ID</div>
               <div>Distributor</div>
               <div>Order Date</div>
               <div>Expected Delivery</div>

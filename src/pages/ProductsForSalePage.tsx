@@ -290,8 +290,8 @@ function SubcategoryTable({
           "min-h-10 py-2 shadow-[inset_0_-1px_0_#00000014]",
         )}
       >
-        <span aria-hidden />
         <span>ID</span>
+        <span aria-hidden />
         <span>Live</span>
         <span>Merchandising Name</span>
         <span>Source</span>

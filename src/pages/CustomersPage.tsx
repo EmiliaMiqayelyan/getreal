@@ -183,11 +183,11 @@ type SelectedOrder = {
 };
 
 const ORDER_ROW =
-  "grid grid-cols-[260px_100px_90px_120px_minmax(0,1fr)_88px_52px] items-center gap-x-4 px-4";
+  "grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)_72px_52px] items-center gap-x-3 px-4";
 const GRID_PLAIN =
-  "grid grid-cols-[112px_minmax(0,1.15fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_56px_72px_88px_96px] items-center gap-x-4 px-4";
+  "grid grid-cols-[96px_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_40px_72px_76px_88px] items-center gap-x-3 px-4";
 const GRID_ARROW =
-  "grid grid-cols-[28px_112px_minmax(0,1.15fr)_minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1fr)_56px_72px_88px_96px] items-center gap-x-4 px-4";
+  "grid grid-cols-[28px_96px_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_40px_72px_76px_88px] items-center gap-x-3 px-4";
 
 function OrderDetailDrawer({
   selected,
@@ -454,7 +454,7 @@ function CustomerOrdersPanel({
 
       {/* Desktop: nested table left edge aligns to expand-arrow center */}
       <div className="relative hidden md:block">
-        <ScrollTable minWidth={920} bare>
+        <ScrollTable minWidth="100%" bare>
           <div
             className={cn(
               ORDER_ROW,
@@ -640,7 +640,7 @@ function CustomerTable({
       {/* Desktop table */}
       <div className="hidden md:block">
         <ScrollTable
-          minWidth={1280}
+          minWidth="100%"
           className="max-h-[min(640px,calc(100dvh-18rem))]"
         >
           <div>
@@ -652,16 +652,16 @@ function CustomerTable({
                 "h-10 border-b border-[#00000014]",
               )}
             >
-              {showArrows ? <div /> : null}
-              <div className="whitespace-nowrap">ID</div>
-              <div className="whitespace-nowrap">Customer</div>
-              <div className="whitespace-nowrap">Email</div>
-              <div className="whitespace-nowrap">Phone</div>
-              <div className="whitespace-nowrap">Address</div>
-              <div className="whitespace-nowrap">Orders</div>
-              <div className="whitespace-nowrap">Total</div>
-              <div className="whitespace-nowrap">Last Order</div>
-              <div className="whitespace-nowrap">Delivery Day</div>
+              {showArrows ? <div className="min-w-0" /> : null}
+              <div className="min-w-0 whitespace-nowrap">ID</div>
+              <div className="min-w-0 whitespace-nowrap">Customer</div>
+              <div className="min-w-0 whitespace-nowrap">Email</div>
+              <div className="min-w-0 whitespace-nowrap">Phone</div>
+              <div className="min-w-0 whitespace-nowrap">Address</div>
+              <div className="min-w-0 whitespace-nowrap">Orders</div>
+              <div className="min-w-0 whitespace-nowrap">Total</div>
+              <div className="min-w-0 whitespace-nowrap">Last Order</div>
+              <div className="min-w-0 whitespace-nowrap">Delivery Day</div>
             </div>
 
             {customers.map((customer, index) => {

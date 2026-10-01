@@ -1693,22 +1693,6 @@ export default function InventoryPage() {
                               <span className="col-span-4 truncate text-[14px] font-semibold tracking-normal text-[#111118] normal-case">
                                 {section.title}
                               </span>
-                              <span
-                                className={cn(
-                                  TABLE_HEADER,
-                                  "col-start-6 w-max justify-self-start -ml-1.5 -translate-x-1/2 text-center whitespace-nowrap",
-                                )}
-                              >
-                                In Stock
-                              </span>
-                              <span
-                                className={cn(
-                                  TABLE_HEADER,
-                                  "col-start-9 whitespace-nowrap",
-                                )}
-                              >
-                                Date Receiving By
-                              </span>
                             </div>
 
                             <div>
@@ -1720,10 +1704,8 @@ export default function InventoryPage() {
                                   TABLE_HEADER,
                                 )}
                               >
-                                <div />
-                                <div className="whitespace-nowrap">
-                                  Order ID
-                                </div>
+                                <div className="min-w-0 whitespace-nowrap">Order ID</div>
+                                <div aria-hidden />
                                 <div className="whitespace-nowrap">
                                   Distributor
                                 </div>
@@ -1780,7 +1762,7 @@ export default function InventoryPage() {
                                       </span>
                                       <span
                                         className={cn(
-                                          "col-start-6 w-max justify-self-start -ml-1.5 -translate-x-1/2 text-center text-[13px] font-semibold whitespace-nowrap",
+                                          "col-start-7 text-left text-[13px] font-semibold whitespace-nowrap",
                                           total <= 0
                                             ? "text-[#E25B5B]"
                                             : "text-[#111118]",
@@ -1802,15 +1784,15 @@ export default function InventoryPage() {
                                                 "group border-b border-[#00000014] bg-[#FBF9F9] text-[12px] text-[#111118] last:border-b-0",
                                               )}
                                             >
-                                              <span />
-                                              <span className="min-w-0 overflow-hidden">
+                                              <span className="z-10 w-max min-w-0 justify-self-start">
                                                 <span
-                                                  className="bg-id-pill inline-flex h-5 max-w-full items-center truncate rounded-[6px] px-1.5 font-mono text-[11px] leading-none font-medium text-[#6B7180]"
+                                                  className="bg-id-pill inline-flex h-5 items-center rounded-[6px] px-1.5 font-mono text-[11px] leading-none font-medium whitespace-nowrap text-[#6B7180]"
                                                   title={lot.recordId}
                                                 >
                                                   {lot.orderId}
                                                 </span>
                                               </span>
+                                              <span aria-hidden />
                                               <div className="min-w-0 truncate">
                                                 {lot.distributor}
                                               </div>
@@ -1825,7 +1807,7 @@ export default function InventoryPage() {
                                               </div>
                                               <div
                                                 className={cn(
-                                                  "text-center font-semibold",
+                                                  "text-left font-semibold",
                                                   lot.qty <= 0 &&
                                                     "text-[#E25B5B]",
                                                 )}
@@ -1856,15 +1838,15 @@ export default function InventoryPage() {
                                               "bg-[#FBF9F9] text-[12px] text-[#8A8A8A]",
                                             )}
                                           >
-                                            <span />
                                             <span
                                               className={cn(
                                                 ID_PILL,
-                                                "justify-self-start",
+                                                "z-10 w-max justify-self-start",
                                               )}
                                             >
                                               -
                                             </span>
+                                            <span aria-hidden />
                                             <div className="col-span-7">
                                               Inventory Empty
                                             </div>
