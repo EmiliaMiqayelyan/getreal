@@ -238,12 +238,36 @@ export async function loadDistributorOrderScreen(input: {
     ),
   ]);
 
-  const mappedDemand = mapAggregateDemand({
+  const summaryDates = mapAggregateDemand({
     demand: demandResult.demand,
     products: input.products,
     items: input.items,
+  }).dateIds;
+  let demandPayloads = [demandResult.demand];
+  if (!demandResult.error && summaryDates.length > 1) {
+    const filtered = await Promise.all(
+      summaryDates.map((dateId) =>
+        ordersApi.aggregateDemand(dateId).catch(() => null),
+      ),
+    );
+    const loaded = filtered.filter(
+      (entry): entry is NonNullable<typeof entry> => entry != null,
+    );
+    if (loaded.length > 0) demandPayloads = loaded;
+  }
+
+  const demand = demandPayloads.flatMap((payload, index) => {
+    const dateId = summaryDates.length > 1 ? summaryDates[index] : undefined;
+    return mapAggregateDemand({
+      demand: payload,
+      products: input.products,
+      items: input.items,
+      assignDateId: dateId,
+    }).orders;
   });
-  const demand = mappedDemand.orders;
+  const demandDateIds = summaryDates.length
+    ? summaryDates
+    : demand.map((order) => order.deliveryDateId);
   const inProgress: PlacedOrder[] = [];
   const delivered: DeliveredOrder[] = [];
 
@@ -260,7 +284,7 @@ export async function loadDistributorOrderScreen(input: {
 
   return {
     demand,
-    demandDateIds: mappedDemand.dateIds,
+    demandDateIds,
     demandError: demandResult.error,
     inProgress,
     delivered,

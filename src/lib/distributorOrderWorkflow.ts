@@ -8,7 +8,7 @@ import type {
 } from "@/types/distributorOrder";
 import type { AggregateDemand } from "@/lib/api/orders";
 import { centsToDollars } from "@/lib/api/mappers";
-import { recordRef } from "@/utils/entityIds";
+import { isUuid, recordRef } from "@/utils/entityIds";
 import {
   deliveryDateIdFromValue,
   formatExpectedDelivery,
@@ -131,10 +131,12 @@ function uniqueWednesdayIds(ids: string[]) {
 }
 
 function resolveOrderProductId(
+  explicitProductId: string | undefined,
   itemId: string,
   itemCode: string,
   products: ProductForSale[],
 ) {
+  if (explicitProductId && isUuid(explicitProductId)) return explicitProductId;
   const refs = [itemId, itemCode].filter(Boolean);
   const product = products.find((entry) =>
     refs.some(
@@ -172,13 +174,14 @@ function formatReceivingBy(value: string | null | undefined, fallback: string) {
 }
 
 /**
- * One Order List batch per item `dateReceivingBy`.
- * `dates` on the payload is a separate chip list and is not used to place lines.
+ * Lines belong to `dates` (customer delivery). `dateReceivingBy` is only the
+ * column value. Pass `assignDateId` when this payload was loaded for one day.
  */
 export function mapAggregateDemand(input: {
   demand: AggregateDemand;
   products: ProductForSale[];
   items: Item[];
+  assignDateId?: string;
   today?: Date;
 }): { orders: DemandOrder[]; dateIds: string[] } {
   const today = input.today ?? new Date();
@@ -205,6 +208,8 @@ export function mapAggregateDemand(input: {
           const suggestedQty =
             qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
           const lineDateId =
+            input.assignDateId ||
+            (announcedDateIds.length === 1 ? announcedDateIds[0] : "") ||
             calendarDayId(item.dateReceivingBy?.trim() || "") ||
             announcedDateIds[0] ||
             toDeliveryDateId(upcomingWednesday(today));
@@ -229,7 +234,12 @@ export function mapAggregateDemand(input: {
             ),
             suggestedQty,
             quantity: 0,
-            productId: resolveOrderProductId(itemId, itemCode, input.products),
+            productId: resolveOrderProductId(
+              item.productId,
+              itemId,
+              itemCode,
+              input.products,
+            ),
             options: [
               {
                 distributor: distributorName,
@@ -243,7 +253,7 @@ export function mapAggregateDemand(input: {
                   itemId,
                   itemCode,
                   input.items,
-                  item.buyingUnit || item.unit,
+                  item.buyingUnit || item.singleItemUnit || item.unit,
                 ),
                 qtyPerUnit: Math.max(0, readNumber(item.qtyPerUnit)),
               },

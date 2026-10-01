@@ -67,6 +67,8 @@ export type OrdersListParams = {
 /** One line inside GET /orders/distributor/aggregate-demand. Prices are integer cents. */
 export type AggregateDemandItem = {
   itemId?: string;
+  /** Sellable product UUID for POST /orders. */
+  productId?: string;
   itemCode?: string;
   itemName?: string;
   categoryId?: string;
@@ -79,6 +81,7 @@ export type AggregateDemandItem = {
   buyingPrice?: number;
   /** Present on the live API. Often null. */
   buyingUnit?: string | null;
+  singleItemUnit?: string | null;
   qtyNeeded?: number;
   /** Integer cents. */
   lineSubtotal?: number;
@@ -287,9 +290,12 @@ export const ordersApi = {
   },
 
   /** Open distributor demand, grouped distributor → source → category → item. */
-  aggregateDemand() {
-    return apiRequest<unknown>("/orders/distributor/aggregate-demand").then(
-      normalizeAggregateDemand,
-    );
+  aggregateDemand(deliveryDate?: string) {
+    const search = new URLSearchParams();
+    if (deliveryDate) search.set("deliveryDate", deliveryDate);
+    const qs = search.toString();
+    return apiRequest<unknown>(
+      `/orders/distributor/aggregate-demand${qs ? `?${qs}` : ""}`,
+    ).then(normalizeAggregateDemand);
   },
 };
