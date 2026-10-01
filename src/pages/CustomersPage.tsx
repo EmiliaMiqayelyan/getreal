@@ -380,10 +380,24 @@ function OrderDetailDrawer({
 function CustomerOrdersPanel({
   customer,
   onViewOrder,
+  loading = false,
 }: {
   customer: AdminCustomer;
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
+  loading?: boolean;
 }) {
+  if (loading && customer.orders.length === 0) {
+    return (
+      <div className={cn("border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
+        <AppLoader
+          variant="section"
+          label="Loading details"
+          className="min-h-[96px] bg-transparent py-6"
+        />
+      </div>
+    );
+  }
+
   if (!customer.orders.length) {
     return (
       <div
@@ -528,11 +542,13 @@ function CustomerOrdersPanel({
 function CustomerTable({
   customers,
   expandedId,
+  detailLoadingId,
   onToggle,
   onViewOrder,
 }: {
   customers: AdminCustomer[];
   expandedId: string | null;
+  detailLoadingId: string | null;
   onToggle: (id: string) => void;
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
@@ -629,6 +645,7 @@ function CustomerTable({
               {open ? (
                 <CustomerOrdersPanel
                   customer={customer}
+                  loading={detailLoadingId === customer.id}
                   onViewOrder={onViewOrder}
                 />
               ) : null}
@@ -760,6 +777,7 @@ function CustomerTable({
                     <div className="col-span-full">
                       <CustomerOrdersPanel
                         customer={customer}
+                        loading={detailLoadingId === customer.id}
                         onViewOrder={onViewOrder}
                       />
                     </div>
@@ -788,6 +806,7 @@ export default function CustomersPage() {
   const [zipFilter, setZipFilter] = useState("");
   const [orderCountFilter, setOrderCountFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [selected, setSelected] = useState<SelectedOrder | null>(null);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(() =>
@@ -872,6 +891,7 @@ export default function CustomersPage() {
         : undefined;
     if (!recordId) return;
     let cancelled = false;
+    setDetailLoadingId(expandedId);
     void usersApi
       .getById(recordId)
       .then((user) => {
@@ -887,9 +907,19 @@ export default function CustomersPage() {
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load customer details.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoadingId((current) =>
+            current === expandedId ? null : current,
+          );
+        }
       });
     return () => {
       cancelled = true;
+      setDetailLoadingId((current) =>
+        current === expandedId ? null : current,
+      );
     };
   }, [apiConfigured, expandedId, notifyApiError]);
 
@@ -1071,6 +1101,7 @@ export default function CustomersPage() {
                 <CustomerTable
                   customers={active}
                   expandedId={expandedId}
+                  detailLoadingId={detailLoadingId}
                   onToggle={(id) =>
                     setExpandedId((current) => (current === id ? null : id))
                   }
@@ -1090,6 +1121,7 @@ export default function CustomersPage() {
                 <CustomerTable
                   customers={inactive}
                   expandedId={expandedId}
+                  detailLoadingId={detailLoadingId}
                   onToggle={(id) =>
                     setExpandedId((current) => (current === id ? null : id))
                   }

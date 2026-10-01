@@ -144,6 +144,7 @@ export default function RolesPage() {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -227,6 +228,7 @@ export default function RolesPage() {
     const roleId = isUuid(user?.roleId) ? user?.roleId : undefined;
     if (!roleId) return;
     let cancelled = false;
+    setDetailLoadingId(expandedId);
     void rolesApi
       .getById(roleId)
       .then((role) => {
@@ -242,9 +244,19 @@ export default function RolesPage() {
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load role details.");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setDetailLoadingId((current) =>
+            current === expandedId ? null : current,
+          );
+        }
       });
     return () => {
       cancelled = true;
+      setDetailLoadingId((current) =>
+        current === expandedId ? null : current,
+      );
     };
   }, [expandedId, notifyApiError, users]);
 
@@ -606,6 +618,20 @@ export default function RolesPage() {
                 </div>
 
                 {open ? (
+                  detailLoadingId === user.id ? (
+                    <div
+                      className={cn(
+                        "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
+                        SUB_ROW_PAD,
+                      )}
+                    >
+                      <AppLoader
+                        variant="section"
+                        label="Loading permissions"
+                        className="min-h-[96px] bg-transparent py-6"
+                      />
+                    </div>
+                  ) : (
                   <div className={cn("col-span-full border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
@@ -657,6 +683,7 @@ export default function RolesPage() {
                       </Button>
                     </div>
                   </div>
+                  )
                 ) : null}
               </div>
             );

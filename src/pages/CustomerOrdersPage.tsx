@@ -1313,9 +1313,11 @@ const DETAIL_COLUMNS =
 
 function OrderDetailPanel({
   order,
+  itemsLoading = false,
   onClose,
 }: {
   order: CustomerOrderRow;
+  itemsLoading?: boolean;
   onClose: () => void;
 }) {
   const panelRef = useRef<HTMLElement>(null);
@@ -1379,7 +1381,14 @@ function OrderDetailPanel({
             <div>Unit Price</div>
             <div className="text-right">Total</div>
           </div>
-          {order.items.map((item, itemIndex) => {
+          {itemsLoading ? (
+            <AppLoader
+              variant="section"
+              label="Loading items"
+              className="min-h-[96px] rounded-none border-0 bg-white py-6"
+            />
+          ) : (
+          order.items.map((item, itemIndex) => {
             const label = item.name;
             return (
               <div
@@ -1402,7 +1411,8 @@ function OrderDetailPanel({
                 </div>
               </div>
             );
-          })}
+          })
+          )}
           <div className="flex items-center justify-between bg-white px-4 py-3 text-[#111118]">
             <span className="text-[13px] font-medium">Order Total</span>
             <span className="text-[15px] font-bold tracking-tight">
@@ -1492,6 +1502,7 @@ export default function CustomerOrdersPage() {
   const [sortBy, setSortBy] = useState("");
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [orderDetail, setOrderDetail] = useState<CustomerOrderRow | null>(null);
+  const [orderItemsLoading, setOrderItemsLoading] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [total, setTotal] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -1699,6 +1710,7 @@ export default function CustomerOrdersPage() {
   useEffect(() => {
     if (!apiConfigured || !selectedOrderId || !selectedRecordId) {
       setOrderDetail(null);
+      setOrderItemsLoading(false);
       return;
     }
     const listRow = packingRowsRef.current.find(
@@ -1706,6 +1718,8 @@ export default function CustomerOrdersPage() {
     );
     if (!listRow) return;
     let cancelled = false;
+    const waitingForItems = listRow.items.length === 0;
+    if (waitingForItems) setOrderItemsLoading(true);
     void ordersApi
       .getById(selectedRecordId)
       .then((order) => {
@@ -1732,9 +1746,13 @@ export default function CustomerOrdersPage() {
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      })
+      .finally(() => {
+        if (!cancelled) setOrderItemsLoading(false);
       });
     return () => {
       cancelled = true;
+      setOrderItemsLoading(false);
     };
   }, [apiConfigured, notifyApiError, selectedOrderId, selectedRecordId]);
   const statusChangeOrder =
@@ -2442,6 +2460,12 @@ export default function CustomerOrdersPage() {
         <OrderDetailPanel
           order={
             orderDetail?.id === selectedOrder.id ? orderDetail : selectedOrder
+          }
+          itemsLoading={
+            orderItemsLoading &&
+            (orderDetail?.id === selectedOrder.id
+              ? orderDetail.items.length === 0
+              : selectedOrder.items.length === 0)
           }
           onClose={() => setSelectedOrderId(null)}
         />

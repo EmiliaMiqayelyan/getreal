@@ -216,10 +216,12 @@ function ExpandableOrders({
   orders,
   expandedId,
   onToggle,
+  loadingId = null,
 }: {
   orders: PlacedOrder[];
   expandedId: string | null;
   onToggle: (id: string) => void;
+  loadingId?: string | null;
 }) {
   return (
     <ScrollTable minWidth={1120}>
@@ -293,8 +295,17 @@ function ExpandableOrders({
                 </button>
               </div>
             </div>
-            {open
-              ? order.items.map((item, itemIndex) => (
+            {open ? (
+              loadingId === order.id && order.items.length === 0 ? (
+                <div className="border-b border-[#00000014] bg-[#FBF9F9]">
+                  <AppLoader
+                    variant="section"
+                    label="Loading items"
+                    className="min-h-[96px] bg-transparent py-6"
+                  />
+                </div>
+              ) : (
+              order.items.map((item, itemIndex) => (
                   <div
                     key={`${order.id}-${item.sku}-${itemIndex}`}
                     className={cn(
@@ -323,7 +334,8 @@ function ExpandableOrders({
                     <div />
                   </div>
                 ))
-              : null}
+              )
+            ) : null}
           </div>
         );
       })}
@@ -371,6 +383,7 @@ export default function ProductOrdersPage() {
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
     null,
   );
+  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
 
   const [rows, setRows] = useState<WorkingOrderRow[]>([]);
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
@@ -965,6 +978,7 @@ export default function ProductOrdersPage() {
     const order = source.find((entry) => entry.id === id);
     if (!order?.recordId || order.items.length > 0) return;
 
+    setDetailLoadingId(id);
     void ordersApi
       .getById(order.recordId)
       .then((detail) => {
@@ -986,6 +1000,9 @@ export default function ProductOrdersPage() {
       })
       .catch((error) => {
         notifyApiError(error, "Failed to load order details.");
+      })
+      .finally(() => {
+        setDetailLoadingId((current) => (current === id ? null : current));
       });
   }
 
@@ -1266,6 +1283,7 @@ export default function ProductOrdersPage() {
                       <ExpandableOrders
                         orders={inProgressWindow.visible}
                         expandedId={expandedId}
+                        loadingId={detailLoadingId}
                         onToggle={(id) => togglePlacedOrder(id)}
                       />
                     </section>
@@ -1349,6 +1367,7 @@ export default function ProductOrdersPage() {
                         <ExpandableOrders
                           orders={orders}
                           expandedId={expandedDeliveredId}
+                          loadingId={detailLoadingId}
                           onToggle={(id) => togglePlacedOrder(id, true)}
                         />
                       </div>

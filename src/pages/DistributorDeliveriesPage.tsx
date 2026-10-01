@@ -747,10 +747,12 @@ function CheckOrderView({
   readOnly = false,
   onClose,
   onAccepted,
+  detailsLoading = false,
 }: {
   order: DeliveryOrder;
   initialChecks?: Record<string, ItemCheckState>;
   readOnly?: boolean;
+  detailsLoading?: boolean;
   onClose: () => void;
   onAccepted: (
     orderId: string,
@@ -879,6 +881,9 @@ function CheckOrderView({
           </div>
         ) : null}
 
+        {detailsLoading ? (
+          <AppLoader variant="table" label="Loading items" />
+        ) : (
         <div className="space-y-6">
           {categories.map(([category, items]) => (
             <section key={category}>
@@ -1078,6 +1083,7 @@ function CheckOrderView({
             </section>
           ))}
         </div>
+        )}
       </div>
 
       {!readOnly && rejectFor && rejectAnchor ? (
@@ -1214,6 +1220,9 @@ export default function DistributorDeliveriesPage() {
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const loadedDeliveryIds = useRef(new Set<string>());
+  const [detailLoadingIds, setDetailLoadingIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   useEffect(() => {
     if (!isApiConfigured()) return;
@@ -1231,7 +1240,21 @@ export default function DistributorDeliveriesPage() {
     );
     if (!pending.length) return;
 
+    const pendingIds = pending.map((order) => order.id);
+    setDetailLoadingIds((current) => {
+      const next = new Set(current);
+      for (const id of pendingIds) next.add(id);
+      return next;
+    });
+
     let cancelled = false;
+    const clearPending = () => {
+      setDetailLoadingIds((current) => {
+        const next = new Set(current);
+        for (const id of pendingIds) next.delete(id);
+        return next;
+      });
+    };
     void Promise.all(
       pending.map(async (order) => {
         const recordId = order.recordId;
@@ -1268,9 +1291,13 @@ export default function DistributorDeliveriesPage() {
           };
         }),
       );
+    })
+    .finally(() => {
+      if (!cancelled) clearPending();
     });
     return () => {
       cancelled = true;
+      clearPending();
     };
   }, [checkingId, expanded, notifyApiError, viewingId]);
 
@@ -1535,6 +1562,7 @@ export default function DistributorDeliveriesPage() {
     return (
       <CheckOrderView
         order={checkingOrder}
+        detailsLoading={detailLoadingIds.has(checkingOrder.id)}
         onClose={() => setCheckingId(null)}
         onAccepted={handleAccepted}
       />
@@ -1548,6 +1576,7 @@ export default function DistributorDeliveriesPage() {
         initialChecks={
           itemResults[viewingOrder.id] ?? emptyChecks(viewingOrder.items)
         }
+        detailsLoading={detailLoadingIds.has(viewingOrder.id)}
         readOnly
         onClose={() => setViewingId(null)}
         onAccepted={() => undefined}
@@ -1783,8 +1812,17 @@ export default function DistributorDeliveriesPage() {
                     </div>
                   </div>
 
-                  {open
-                    ? order.items.map((item, itemIndex) => {
+                  {open ? (
+                    detailLoadingIds.has(order.id) ? (
+                      <div className="border-b border-[#00000014] bg-[#FBF9F9]">
+                        <AppLoader
+                          variant="section"
+                          label="Loading items"
+                          className="min-h-[96px] bg-transparent py-6"
+                        />
+                      </div>
+                    ) : (
+                    order.items.map((item, itemIndex) => {
                         const result = results?.[item.id];
                         const rejected = result?.status === "rejected";
                         const hasPhoto = Boolean(
@@ -1850,7 +1888,8 @@ export default function DistributorDeliveriesPage() {
                           </div>
                         );
                       })
-                    : null}
+                    )
+                  ) : null}
                 </div>
               );
             })}
