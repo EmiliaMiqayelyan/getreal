@@ -139,23 +139,28 @@ export function weekdayKeyForDateId(dateYmd: string) {
   return WEEKDAY_SHORT[date.getDay()] ?? "";
 }
 
-/** Times configured on the distributor for the selected calendar day. */
+/** Times for the selected day, or the distributor's times when that day has none. */
 export function deliveryTimesForDate(
   distributor: Distributor | undefined,
   dateYmd: string,
 ) {
   if (!distributor || !dateYmd) return [];
+  const slots = distributor.deliveryDays ?? [];
   const weekday = weekdayKeyForDateId(dateYmd);
-  if (!weekday) return [];
-  const times = (distributor.deliveryDays ?? [])
-    .filter((slot) => slot.day === weekday && slot.time.trim())
-    .map((slot) => slot.time.trim());
+  const forDay = weekday
+    ? slots
+        .filter((slot) => slot.day === weekday && slot.time.trim())
+        .map((slot) => slot.time.trim())
+    : [];
+  const times =
+    forDay.length > 0
+      ? forDay
+      : slots.map((slot) => slot.time.trim()).filter(Boolean);
   return Array.from(new Set(times));
 }
 
 /**
- * Manual orders must be scheduled in the future, on a day and time the
- * distributor already delivers.
+ * Manual orders must be scheduled in the future. Any calendar day is allowed.
  */
 export function manualDeliveryError(input: {
   distributor: Distributor | undefined;
@@ -171,7 +176,7 @@ export function manualDeliveryError(input: {
   if (!input.dateYmd) return "Select a delivery date.";
   const times = deliveryTimesForDate(input.distributor, input.dateYmd);
   if (times.length === 0) {
-    return "This distributor does not deliver on that day.";
+    return "This distributor has no delivery times.";
   }
   if (!input.timeSlot) return "Select a delivery time.";
   if (!times.includes(input.timeSlot)) {

@@ -41,7 +41,8 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { isApiConfigured, ordersApi } from "@/lib/api";
+import { inventoryApi, isApiConfigured, ordersApi } from "@/lib/api";
+import { orderRecordId } from "@/lib/api/mappers";
 import {
   loadDistributorOrderScreen,
   mapApiDistributorDelivered,
@@ -73,6 +74,7 @@ import { exportFilename } from "@/utils/csvExport";
 import {
   appendInProgressOrders,
   applyCalculatedQuantitiesForCategory,
+  onHandForOrderLine,
   createPlacedOrderFromManualDraft,
   createPlacedOrderFromReviewGroup,
   type DeliveredFilterCriteria,
@@ -98,7 +100,6 @@ import {
   pickDefaultDeliveryChipId,
   toDeliveryDateId,
   upcomingWednesday,
-  WEDNESDAY_WEEKDAYS,
   wednesdayChipsFromDateIds,
 } from "@/utils/deliveryCalendar";
 import { toOrderDeliveryDateIso } from "@/utils/manualOrder";
@@ -169,10 +170,7 @@ function filterPlacedOrders(
   });
 }
 
-function distributorContactEmail(
-  name: string,
-  distributors: Distributor[],
-) {
+function distributorContactEmail(name: string, distributors: Distributor[]) {
   const match = distributors.find(
     (entry) => entry.name === name || entry.id === name,
   );
@@ -335,7 +333,7 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { notifyApiError } = useApiFeedback();
+  const { notifyApiError, showError } = useApiFeedback();
   const { distributors, products, items } = useAppCatalog();
   const catalogRef = useRef({ distributors, products, items });
   catalogRef.current = { distributors, products, items };
@@ -445,7 +443,13 @@ export default function ProductOrdersPage() {
         if (!search.trim() && !productFilter) return true;
         return entry.lines.length > 0;
       });
-  }, [expectedDeliveryLabel, orderDemandCriteria, ordersForDate, productFilter, search]);
+  }, [
+    expectedDeliveryLabel,
+    orderDemandCriteria,
+    ordersForDate,
+    productFilter,
+    search,
+  ]);
 
   const filteredPreview = useMemo(
     () => visibleDemandOrders.flatMap((entry) => entry.lines),
@@ -481,7 +485,7 @@ export default function ProductOrdersPage() {
       activeChipIndex < visibleDeliveryChips.length - 1);
 
   function selectDeliveryDate(dateId: string) {
-    if (!isWednesdayDateId(dateId) || !isCurrentOrFutureDateId(dateId)) return;
+    if (!parseDeliveryDateId(dateId)) return;
     setActiveDeliveryDateId(dateId);
   }
 
@@ -520,6 +524,7 @@ export default function ProductOrdersPage() {
         setAnnouncedDateIds(snapshot.demandDateIds);
         setInProgress(snapshot.inProgress);
         setDeliveredOrders(snapshot.delivered);
+        if (snapshot.demandError) showError(snapshot.demandError);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -536,17 +541,11 @@ export default function ProductOrdersPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError, orderCatalogReady]);
+  }, [notifyApiError, orderCatalogReady, showError]);
 
   useEffect(() => {
     if (!demandReady) return;
-    if (
-      activeDeliveryDateId &&
-      isWednesdayDateId(activeDeliveryDateId) &&
-      isCurrentOrFutureDateId(activeDeliveryDateId)
-    ) {
-      return;
-    }
+    if (activeDeliveryDateId && parseDeliveryDateId(activeDeliveryDateId)) return;
     const dateId = pickDefaultDeliveryChipId(visibleDeliveryChips);
     if (dateId) setActiveDeliveryDateId(dateId);
   }, [activeDeliveryDateId, demandReady, visibleDeliveryChips]);
@@ -629,9 +628,9 @@ export default function ProductOrdersPage() {
     tab === "Orders"
       ? Boolean(
           search.trim() ||
-            productFilter ||
-            distributorFilter ||
-            activeDeliveryDateId,
+          productFilter ||
+          distributorFilter ||
+          activeDeliveryDateId,
         )
       : Boolean(
           search.trim() ||
@@ -671,7 +670,9 @@ export default function ProductOrdersPage() {
   const distributorOptions = useMemo(() => {
     const names = new Set([
       ...demandOrders.flatMap((order) =>
-        order.lines.flatMap((line) => line.options.map((option) => option.distributor)),
+        order.lines.flatMap((line) =>
+          line.options.map((option) => option.distributor),
+        ),
       ),
       ...inProgress.map((order) => order.distributor),
       ...deliveredSource.map((order) => order.distributor),
@@ -679,7 +680,9 @@ export default function ProductOrdersPage() {
     return Array.from(names).sort();
   }, [deliveredSource, demandOrders, inProgress]);
 
-  const activeDemand = demandOrders.find((order) => order.id === activeDemandId);
+  const activeDemand = demandOrders.find(
+    (order) => order.id === activeDemandId,
+  );
 
   function showToast(message = "Orders created successfully") {
     setToastMessage(message);
@@ -728,11 +731,39 @@ export default function ProductOrdersPage() {
     setTab("Orders");
   }
 
-  function cancelOrderRequest() {
-    // INTEGRATION: Cancel Order exits this screen only. Do not cancel the
-    // customer order, and do not DELETE distributor orders already posted.
-    // Product still needs to confirm that second rule.
-    resetToList();
+  async function cancelOrderRequest() {
+    const parent = demandOrders.find((order) => order.id === activeDemandId);
+    const orderIds = [
+      ...new Set(
+        (parent?.sentGroups ?? [])
+          .map((group) => group.orderId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    if (!isApiConfigured() || orderIds.length === 0) {
+      resetToList();
+      return;
+    }
+
+    setPlacing("cancel");
+    try {
+      for (const id of orderIds) {
+        await ordersApi.updateStatus(id, "cancelled");
+      }
+      const snapshot = await loadDistributorOrderScreen(catalogRef.current);
+      setDemandOrders(snapshot.demand);
+      setAnnouncedDateIds(snapshot.demandDateIds);
+      setInProgress(snapshot.inProgress);
+      setDeliveredOrders(snapshot.delivered);
+      if (snapshot.demandError) showError(snapshot.demandError);
+      showToast("Order cancelled");
+      resetToList();
+    } catch (error) {
+      notifyApiError(error, "Failed to cancel order.");
+    } finally {
+      setPlacing(null);
+    }
   }
 
   async function handleManualCreated(draft: ManualOrderDraft) {
@@ -753,15 +784,21 @@ export default function ProductOrdersPage() {
         setDemandOrders(snapshot.demand);
         setAnnouncedDateIds(snapshot.demandDateIds);
         setDeliveredOrders(snapshot.delivered);
+        if (snapshot.demandError) showError(snapshot.demandError);
         setInProgress(
-          alreadyListed ? snapshot.inProgress : [mapped, ...snapshot.inProgress],
+          alreadyListed
+            ? snapshot.inProgress
+            : [mapped, ...snapshot.inProgress],
         );
-        if (mapped.deliveryDateId && isWednesdayDateId(mapped.deliveryDateId)) {
+        if (mapped.deliveryDateId && parseDeliveryDateId(mapped.deliveryDateId)) {
           setActiveDeliveryDateId(mapped.deliveryDateId);
         }
         setExpandedId(mapped.id);
       } catch (error) {
-        notifyApiError(error, "Order was created, but the list failed to refresh.");
+        notifyApiError(
+          error,
+          "Order was created, but the list failed to refresh.",
+        );
       }
       showToast("Order created successfully");
       resetToList();
@@ -773,7 +810,7 @@ export default function ProductOrdersPage() {
       nextDeliveryId(inProgress),
     );
     setInProgress((prev) => appendInProgressOrders(prev, [order]));
-    if (order.deliveryDateId && isWednesdayDateId(order.deliveryDateId)) {
+    if (order.deliveryDateId && parseDeliveryDateId(order.deliveryDateId)) {
       setActiveDeliveryDateId(order.deliveryDateId);
     }
     setExpandedId(order.id);
@@ -781,8 +818,20 @@ export default function ProductOrdersPage() {
     resetToList();
   }
 
-  function calculateQty(category: string) {
-    rememberLines(applyCalculatedQuantitiesForCategory(rows, category));
+  async function calculateQty(category: string) {
+    let onHand: ((row: WorkingOrderRow) => number | null) | undefined;
+    if (isApiConfigured()) {
+      try {
+        const records = await inventoryApi.list();
+        onHand = (row) => onHandForOrderLine(records, row);
+      } catch (error) {
+        notifyApiError(
+          error,
+          "Failed to load inventory. QTY uses the stock already shown.",
+        );
+      }
+    }
+    rememberLines(applyCalculatedQuantitiesForCategory(rows, category, onHand));
   }
 
   function setQty(id: string, quantity: number) {
@@ -798,6 +847,7 @@ export default function ProductOrdersPage() {
 
     const group = reviewGroups.find((entry) => reviewGroupKey(entry) === key);
     if (!group || !activeDemandId) return;
+    let createdOrderId: string | undefined;
 
     if (isApiConfigured()) {
       setPlacing(key);
@@ -810,11 +860,13 @@ export default function ProductOrdersPage() {
           toOrderDeliveryDateIso(activeDeliveryDateId),
         );
         if (!created) return;
+        createdOrderId = orderRecordId(created);
       } finally {
         setPlacing(null);
       }
     }
 
+    const sentGroup = { ...group, orderId: createdOrderId };
     setOrderedDistributors((prev) => new Set(prev).add(key));
     setDemandOrders((current) =>
       current.map((order) => {
@@ -829,7 +881,7 @@ export default function ProductOrdersPage() {
             ...order.sentGroups.filter(
               (entry) => reviewGroupKey(entry) !== key,
             ),
-            group,
+            sentGroup,
           ],
         };
       }),
@@ -865,6 +917,7 @@ export default function ProductOrdersPage() {
         const snapshot = await loadDistributorOrderScreen(catalogRef.current);
         setInProgress(snapshot.inProgress);
         setDeliveredOrders(snapshot.delivered);
+        if (snapshot.demandError) showError(snapshot.demandError);
         setDemandOrders((current) =>
           current.filter((order) => order.id !== parent.id),
         );
@@ -1192,8 +1245,6 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
-                      deliveryWeekdays={WEDNESDAY_WEEKDAYS}
-                      disablePast
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}
@@ -1664,7 +1715,11 @@ export default function ProductOrdersPage() {
           <span />
         )}
         <div className="flex items-center gap-3">
-          <Button variant="ghost" onClick={() => setConfirmClose(true)}>
+          <Button
+            variant="ghost"
+            disabled={placing !== null}
+            onClick={() => setConfirmClose(true)}
+          >
             Cancel & Close
           </Button>
           <Button

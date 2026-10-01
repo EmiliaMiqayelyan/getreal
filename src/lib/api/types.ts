@@ -136,6 +136,7 @@ export type ApiInventory = {
   id?: string;
   inventoryCode?: string;
   itemId?: string;
+  itemCode?: string | null;
   /** Filled from a nested `item` when the list does not send a flat name. */
   itemName?: string | null;
   category?: string | null;

@@ -148,9 +148,8 @@ export function isCurrentOrFutureDateId(dateId: string, from = new Date()) {
 }
 
 /**
- * One chip per Wednesday that appears in `dateIds`.
- * Past Wednesdays are omitted. `selectedDateId` is included with a zero
- * count when it is a current or future Wednesday with no matching orders yet.
+ * One chip per current or future Wednesday in `dateIds`.
+ * The selected calendar day is included even when it is not a Wednesday.
  */
 export function wednesdayChipsFromDateIds(
   dateIds: Iterable<string>,
@@ -159,15 +158,17 @@ export function wednesdayChipsFromDateIds(
 ): WednesdayOrderChip[] {
   const counts = new Map<string, number>();
   for (const id of dateIds) {
-    if (!id || !isWednesdayDateId(id) || !isCurrentOrFutureDateId(id, from)) {
-      continue;
-    }
+    if (!id) continue;
+    const selected = id === selectedDateId;
+    const upcomingWednesday =
+      isWednesdayDateId(id) &&
+      (isCurrentOrFutureDateId(id, from) || selected);
+    if (!selected && !upcomingWednesday) continue;
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   if (
     selectedDateId &&
-    isWednesdayDateId(selectedDateId) &&
-    isCurrentOrFutureDateId(selectedDateId, from) &&
+    parseDeliveryDateId(selectedDateId) &&
     !counts.has(selectedDateId)
   ) {
     counts.set(selectedDateId, 0);

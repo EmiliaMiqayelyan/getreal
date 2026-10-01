@@ -20,6 +20,8 @@ export type OrderListItem = {
   options: SupplierOption[];
   /** Item / product code carried onto the invoice. */
   sku?: string;
+  /** Catalog item UUID, used to match on-hand inventory. */
+  catalogItemId?: string;
   /**
    * Product-for-sale id to send as `productId` on POST /orders.
    * INTEGRATION: prefer the server UUID (`recordId`) over the display code.
@@ -48,6 +50,8 @@ export type ReviewGroup = {
   distributorId?: string;
   /** Source this section is ordered from. Order Now submits this source only. */
   source: string;
+  /** UUID returned by POST /orders. Cancel sends this to PATCH /orders/:id/status. */
+  orderId?: string;
   email: string;
   items: ReviewLine[];
   itemCount: number;

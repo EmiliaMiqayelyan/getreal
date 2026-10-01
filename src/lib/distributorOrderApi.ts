@@ -7,6 +7,7 @@ import type {
   PlacedOrder,
 } from "@/types/distributorOrder";
 import { collectPaginated, ordersApi } from "@/lib/api";
+import { formatApiError } from "@/lib/api/errors";
 import { centsToDollars, orderModelId, orderRecordId } from "@/lib/api/mappers";
 import type { ApiOrder, ApiOrderItem } from "@/lib/api/types";
 import { isUuid } from "@/utils/entityIds";
@@ -80,6 +81,11 @@ function readZip(order: ApiOrder, distributors: Distributor[]) {
     (value) => typeof value === "string" && value.trim(),
   );
   if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const nested = raw.distributor;
+  if (nested && typeof nested === "object" && "zipCode" in nested) {
+    const zip = readString((nested as { zipCode?: unknown }).zipCode);
+    if (zip) return zip;
+  }
   return findDistributor(order, distributors)?.zip?.trim() || "";
 }
 
@@ -215,18 +221,25 @@ export async function loadDistributorOrderScreen(input: {
 }): Promise<{
   demand: DemandOrder[];
   demandDateIds: string[];
+  demandError: string | null;
   inProgress: PlacedOrder[];
   delivered: DeliveredOrder[];
 }> {
-  const [demandPayload, remote] = await Promise.all([
-    ordersApi.aggregateDemand(),
+  const [demandResult, remote] = await Promise.all([
+    ordersApi.aggregateDemand().then(
+      (demand) => ({ demand, error: null as string | null }),
+      (error: unknown) => ({
+        demand: { dates: [], distributors: [] },
+        error: formatApiError(error, "Failed to load order demand."),
+      }),
+    ),
     collectPaginated((page, limit) =>
       ordersApi.list({ page, limit, type: "distributor" }),
     ),
   ]);
 
   const mappedDemand = mapAggregateDemand({
-    demand: demandPayload,
+    demand: demandResult.demand,
     products: input.products,
     items: input.items,
   });
@@ -245,5 +258,11 @@ export async function loadDistributorOrderScreen(input: {
     inProgress.push(mapApiDistributorOrder(order, input.distributors, index));
   });
 
-  return { demand, demandDateIds: mappedDemand.dateIds, inProgress, delivered };
+  return {
+    demand,
+    demandDateIds: mappedDemand.dateIds,
+    demandError: demandResult.error,
+    inProgress,
+    delivered,
+  };
 }

@@ -11,7 +11,6 @@ import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
-import { getDeliveryWeekdayIndices } from "@/utils/deliveryCalendar";
 import { formatClock } from "@/utils/format";
 import {
   createManualLines,
@@ -115,14 +114,6 @@ export function CreateManualOrderFlow({
   const selectedDistributor = useMemo(
     () => distributors.find((entry) => entry.name === distributor),
     [distributor, distributors],
-  );
-
-  const deliveryWeekdays = useMemo(
-    () =>
-      selectedDistributor
-        ? getDeliveryWeekdayIndices([selectedDistributor])
-        : undefined,
-    [selectedDistributor],
   );
 
   const timeOptions = useMemo(
@@ -343,7 +334,6 @@ export function CreateManualOrderFlow({
                   <DatePicker
                     value={deliveryDate}
                     onChange={selectDeliveryDate}
-                    deliveryWeekdays={deliveryWeekdays}
                     className="w-full max-w-[220px] sm:w-[220px]"
                     placeholder="Select Date"
                     aria-label="Select Date"

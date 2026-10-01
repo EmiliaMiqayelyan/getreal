@@ -217,6 +217,7 @@ export function mapAggregateDemand(input: {
               itemId || itemCode || itemName,
             ].join("::"),
             sku: itemCode || itemId,
+            catalogItemId: itemId || undefined,
             itemName,
             category: item.categoryName?.trim() || categoryName,
             custOrderTotal,

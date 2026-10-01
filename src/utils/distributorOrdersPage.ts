@@ -3,6 +3,7 @@ import {
   ORDER_ITEM_CATEGORIES,
   ORDER_LIST_ITEMS,
 } from "@/constants/distributorOrders";
+import type { ApiInventory } from "@/lib/api/types";
 import type {
   DeliveredOrder,
   ManualOrderDraft,
@@ -184,10 +185,7 @@ export function filterOrderDemandRows(
 /**
  * QTY NEEDED = customer demand minus on-hand stock.
  * Stock that covers demand yields 0. The admin may still type a higher number.
- *
- * INTEGRATION: `inStock` must be inventory on-hand for that product, not a
- * placeholder. Do not round by pack size here — the spec is a plain difference
- * (9 ordered, 3 in stock → 6).
+ * Plain difference: 9 ordered and 3 in stock means order 6.
  */
 export function calculateNeededQuantity(
   row: Pick<OrderListItem, "custOrderTotal" | "inStock">,
@@ -197,21 +195,81 @@ export function calculateNeededQuantity(
   return Math.max(0, netDemand);
 }
 
+const NOT_ON_HAND = new Set(["wasted", "shipped"]);
+
+function stockText(value: string | null | undefined) {
+  const text = value?.trim().toLowerCase() ?? "";
+  return text;
+}
+
+/** Sum of inventory still on hand for this order line. Null when nothing matches. */
+export function onHandForOrderLine(
+  records: ApiInventory[],
+  line: Pick<OrderListItem, "catalogItemId" | "sku" | "itemName">,
+): number | null {
+  const itemId = line.catalogItemId?.trim() ?? "";
+  const code = line.sku?.trim().toLowerCase() ?? "";
+  const name = line.itemName.trim().toLowerCase();
+
+  function available(record: ApiInventory) {
+    if (NOT_ON_HAND.has(stockText(record.status))) return 0;
+    const quantity = record.quantity ?? 0;
+    return Number.isFinite(quantity) && quantity > 0 ? quantity : 0;
+  }
+
+  function sumWhere(match: (record: ApiInventory) => boolean) {
+    let total = 0;
+    let found = false;
+    for (const record of records) {
+      if (!match(record)) continue;
+      found = true;
+      total += available(record);
+    }
+    return found ? total : null;
+  }
+
+  if (itemId) {
+    const byId = sumWhere((record) => record.itemId?.trim() === itemId);
+    if (byId != null) return byId;
+  }
+
+  if (code) {
+    const byCode = sumWhere((record) => {
+      const recordCode = record.itemCode?.trim().toLowerCase() ?? "";
+      const recordId = record.itemId?.trim().toLowerCase() ?? "";
+      return recordCode === code || recordId === code;
+    });
+    if (byCode != null) return byCode;
+  }
+
+  if (!name) return null;
+  return sumWhere(
+    (record) => (record.itemName?.trim().toLowerCase() ?? "") === name,
+  );
+}
+
+function sameOrderCategory(rowCategory: string, category: string) {
+  return (rowCategory.trim() || "Other") === (category.trim() || "Other");
+}
+
+/**
+ * Fill QTY Needed for one category: customer order total minus on-hand stock.
+ * `onHand` returns inventory for that line, or null when inventory has no match
+ * and the row's existing stock figure should be kept.
+ */
 export function applyCalculatedQuantitiesForCategory(
   rows: WorkingOrderRow[],
   category: string,
+  onHand?: (row: WorkingOrderRow) => number | null,
 ): WorkingOrderRow[] {
-  return rows.map((row) =>
-    row.category === category
-      ? {
-          ...row,
-          quantity:
-            row.suggestedQty >= 0
-              ? row.suggestedQty
-              : calculateNeededQuantity(row),
-        }
-      : row,
-  );
+  return rows.map((row) => {
+    if (!sameOrderCategory(row.category, category)) return row;
+    const counted = onHand?.(row);
+    const inStock = counted == null ? row.inStock : counted;
+    const next = { ...row, inStock };
+    const quantity = calculateNeededQuantity(next);
+    return { ...next, quantity, suggestedQty: quantity };
+  });
 }
 
 export function makeWorkingRowsForDate(dateId: string): WorkingOrderRow[] {

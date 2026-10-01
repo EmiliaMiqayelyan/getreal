@@ -347,6 +347,7 @@ function expandInventoryGroups(rows: ApiInventory[]): ApiInventory[] {
       subcategory: row.subcategory || defaults.subcategory,
       itemName: row.itemName || defaults.itemName,
       itemId: row.itemId || defaults.itemId,
+      itemCode: row.itemCode || defaults.itemCode,
     });
   }
 
@@ -368,6 +369,7 @@ function expandInventoryGroups(rows: ApiInventory[]): ApiInventory[] {
           const itemName =
             textOf(itemRecord.itemName) ?? textOf(itemRecord.name);
           const itemId = textOf(itemRecord.itemId);
+          const itemCode = textOf(itemRecord.itemCode);
           const records = itemRecord.records;
           if (!Array.isArray(records)) continue;
           for (const record of records) {
@@ -378,6 +380,7 @@ function expandInventoryGroups(rows: ApiInventory[]): ApiInventory[] {
               subcategory,
               itemName,
               itemId,
+              itemCode,
             });
           }
         }
