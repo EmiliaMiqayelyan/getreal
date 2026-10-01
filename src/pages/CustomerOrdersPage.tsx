@@ -55,6 +55,7 @@ import { cn } from "@/utils/cn";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import {
   deliveryDateIdFromValue,
+  isCurrentOrFutureDateId,
   isWednesdayDateId,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
@@ -1813,7 +1814,11 @@ export default function CustomerOrdersPage() {
   }, [appliedDateId, deliveryChips]);
 
   useEffect(() => {
-    if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
+    if (
+      appliedDateId &&
+      (!isWednesdayDateId(appliedDateId) ||
+        !isCurrentOrFutureDateId(appliedDateId))
+    ) {
       const dateId = pickDefaultDeliveryChipId(deliveryChips);
       setAppliedDateId(dateId);
       if (dateId) defaultDeliveryApplied.current = true;
@@ -2134,6 +2139,7 @@ export default function CustomerOrdersPage() {
                   {calendarOpen ? (
                     <DeliveryDateCalendar
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
+                      disablePast
                       selectedDateId={appliedDateId}
                       onSelectDate={commitDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

@@ -142,23 +142,32 @@ export type WednesdayOrderChip = {
   count: number;
 };
 
+/** Calendar day id is today or later. `YYYY-MM-DD` sorts in date order. */
+export function isCurrentOrFutureDateId(dateId: string, from = new Date()) {
+  return dateId >= toDeliveryDateId(startOfLocalDay(from));
+}
+
 /**
  * One chip per Wednesday that appears in `dateIds`.
- * `selectedDateId` is included with a zero count when it is a Wednesday
- * that has no matching orders yet.
+ * Past Wednesdays are omitted. `selectedDateId` is included with a zero
+ * count when it is a current or future Wednesday with no matching orders yet.
  */
 export function wednesdayChipsFromDateIds(
   dateIds: Iterable<string>,
   selectedDateId = "",
+  from = new Date(),
 ): WednesdayOrderChip[] {
   const counts = new Map<string, number>();
   for (const id of dateIds) {
-    if (!id || !isWednesdayDateId(id)) continue;
+    if (!id || !isWednesdayDateId(id) || !isCurrentOrFutureDateId(id, from)) {
+      continue;
+    }
     counts.set(id, (counts.get(id) ?? 0) + 1);
   }
   if (
     selectedDateId &&
     isWednesdayDateId(selectedDateId) &&
+    isCurrentOrFutureDateId(selectedDateId, from) &&
     !counts.has(selectedDateId)
   ) {
     counts.set(selectedDateId, 0);

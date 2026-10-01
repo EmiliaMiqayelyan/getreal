@@ -92,6 +92,7 @@ import {
   formatDeliveryChipLabel,
   deliveryDateIdFromValue,
   formatExpectedDelivery,
+  isCurrentOrFutureDateId,
   isWednesdayDateId,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
@@ -391,7 +392,12 @@ export default function ProductOrdersPage() {
     const chips = wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
     const present = new Set(chips.map((chip) => chip.id));
     const extras = announcedDateIds
-      .filter((id) => isWednesdayDateId(id) && !present.has(id))
+      .filter(
+        (id) =>
+          isWednesdayDateId(id) &&
+          isCurrentOrFutureDateId(id) &&
+          !present.has(id),
+      )
       .map((id) => {
         const date = parseDeliveryDateId(id);
         return {
@@ -475,7 +481,7 @@ export default function ProductOrdersPage() {
       activeChipIndex < visibleDeliveryChips.length - 1);
 
   function selectDeliveryDate(dateId: string) {
-    if (!isWednesdayDateId(dateId)) return;
+    if (!isWednesdayDateId(dateId) || !isCurrentOrFutureDateId(dateId)) return;
     setActiveDeliveryDateId(dateId);
   }
 
@@ -534,7 +540,13 @@ export default function ProductOrdersPage() {
 
   useEffect(() => {
     if (!demandReady) return;
-    if (activeDeliveryDateId && isWednesdayDateId(activeDeliveryDateId)) return;
+    if (
+      activeDeliveryDateId &&
+      isWednesdayDateId(activeDeliveryDateId) &&
+      isCurrentOrFutureDateId(activeDeliveryDateId)
+    ) {
+      return;
+    }
     const dateId = pickDefaultDeliveryChipId(visibleDeliveryChips);
     if (dateId) setActiveDeliveryDateId(dateId);
   }, [activeDeliveryDateId, demandReady, visibleDeliveryChips]);
@@ -1181,6 +1193,7 @@ export default function ProductOrdersPage() {
                   {calendarOpen ? (
                     <DeliveryDateCalendar
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
+                      disablePast
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}
