@@ -17,10 +17,12 @@ import {
  * received-at. Distributor Receiving already pushes a local handoff; merge
  * that with this list until the received-orders endpoint exists.
  *
- * API: storage locations come from the backend location list, not this array.
+ * API: location is a plain string (the name below). There is no locations endpoint.
  * API: Complete Storage → POST /inventory/store
  *   { distributorOrderId, items: [{ itemId, quantity, location, expirationDate }] }
- *   itemId is the catalog item UUID (catalogItemId below), one entry per allocation.
+ *   itemId is the catalog item UUID. location is a name such as "Freezer 1".
+ *   expirationDate is an ISO-8601 timestamp, e.g. "2027-01-01T00:00:00.000Z".
+ *   One items entry per allocation.
  * API: Edit Location → POST /inventory/:recordId/split
  *   { splits: [{ quantity, location }] }
  *   then replace this list with GET /inventory.
@@ -52,7 +54,7 @@ type MockStockItem = {
   unit: string;
   qtyAfterUnpack: string;
   expDate: string;
-  /** API: ISO date sent as expirationDate. */
+  /** API: sent as expirationDate, an ISO-8601 timestamp. */
   expirationIso: string;
   location: string;
   splits: Array<{ qty: number; location: string }>;

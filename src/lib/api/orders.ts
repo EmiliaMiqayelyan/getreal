@@ -1,6 +1,7 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { apiRequest } from "./client";
+import { collectPaginated } from "./collectPages";
 import type { ApiOrder } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
@@ -38,8 +39,7 @@ export type CreateStandardOrderPayload = {
 };
 
 export type CreateOrderPayload =
-  | CreateDistributorOrderPayload
-  | CreateStandardOrderPayload;
+  CreateDistributorOrderPayload | CreateStandardOrderPayload;
 
 export type UpdateOrderPayload = {
   distributorId?: string;
@@ -55,9 +55,102 @@ export type OrdersListParams = {
   limit?: number;
   status?: string;
   type?: string;
+  /**
+   * Delivered distributor orders that have no inventory records yet.
+   * They leave this list after POST /inventory/store.
+   */
+  pendingStorage?: boolean;
   /** Calendar day `YYYY-MM-DD`. Backend `getOrdersQuerySchema.deliveryDate`. */
   deliveryDate?: string;
 };
+
+/** One line inside GET /orders/distributor/aggregate-demand. Prices are integer cents. */
+export type AggregateDemandItem = {
+  itemId?: string;
+  itemCode?: string;
+  itemName?: string;
+  categoryId?: string;
+  categoryName?: string;
+  customerOrderTotal?: number;
+  inStock?: number | null;
+  quantityReceiving?: number;
+  qtyPerUnit?: number;
+  /** Integer cents. */
+  buyingPrice?: number;
+  /** Present on the live API. Often null. */
+  buyingUnit?: string | null;
+  qtyNeeded?: number;
+  /** Integer cents. */
+  lineSubtotal?: number;
+  unit?: string;
+  dateReceivingBy?: string | null;
+  distributorId?: string;
+  distributorName?: string;
+  sourceId?: string;
+  sourceName?: string;
+};
+
+export type AggregateDemandCategory = {
+  id?: string;
+  name?: string;
+  items?: AggregateDemandItem[];
+};
+
+export type AggregateDemandSource = {
+  id?: string;
+  name?: string;
+  /** Integer cents. */
+  subtotal?: number;
+  categories?: AggregateDemandCategory[];
+};
+
+export type AggregateDemandDistributor = {
+  id?: string;
+  name?: string;
+  /** Integer cents. */
+  subtotal?: number;
+  sources?: AggregateDemandSource[];
+};
+
+export type AggregateDemandDate = {
+  /** `YYYY-MM-DD HH:mm:ss` on the live API. */
+  deliveryDate?: string;
+  orderCount?: number;
+};
+
+export type AggregateDemand = {
+  /**
+   * Live API: `{ deliveryDate, orderCount }`.
+   * Older docs used display strings such as "Wed, Jul 14".
+   */
+  dates?: Array<string | AggregateDemandDate>;
+  distributors?: AggregateDemandDistributor[];
+  /** Integer cents. */
+  grandTotal?: number;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function normalizeAggregateDemand(payload: unknown): AggregateDemand {
+  const record = asRecord(payload);
+  if (!record) return { dates: [], distributors: [] };
+  if (Array.isArray(record.distributors) || Array.isArray(record.dates)) {
+    return record as AggregateDemand;
+  }
+  const nested = asRecord(record.data);
+  if (
+    nested &&
+    (Array.isArray(nested.distributors) || Array.isArray(nested.dates))
+  ) {
+    return nested as AggregateDemand;
+  }
+  return { dates: [], distributors: [] };
+}
 
 export const ordersApi = {
   create(body: CreateOrderPayload) {
@@ -79,6 +172,7 @@ export const ordersApi = {
     search.set("limit", String(limit));
     if (params.status) search.set("status", params.status);
     if (params.type) search.set("type", params.type);
+    if (params.pendingStorage) search.set("pendingStorage", "true");
     // Exact match on the stored timestamp. A calendar day (YYYY-MM-DD) does not
     // match values like 2026-09-30T02:00:00.000Z, so day chips filter locally.
     if (params.deliveryDate) search.set("deliveryDate", params.deliveryDate);
@@ -173,6 +267,29 @@ export const ordersApi = {
     }).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  /**
+   * Delivered distributor orders still waiting for POST /inventory/store.
+   * GET /orders?type=distributor&status=delivered&pendingStorage=true
+   */
+  listPendingStorage() {
+    return collectPaginated((page, limit) =>
+      ordersApi.list({
+        page,
+        limit,
+        type: "distributor",
+        status: "delivered",
+        pendingStorage: true,
+      }),
+    );
+  },
+
+  /** Open distributor demand, grouped distributor → source → category → item. */
+  aggregateDemand() {
+    return apiRequest<unknown>("/orders/distributor/aggregate-demand").then(
+      normalizeAggregateDemand,
     );
   },
 };

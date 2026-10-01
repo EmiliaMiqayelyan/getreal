@@ -23,8 +23,9 @@ export type StoreInventoryItemPayload = {
   /** Catalog item UUID. The store contract uses `itemId`, not `productId`. */
   itemId: string;
   quantity: number;
+  /** Free-text storage name, for example `Freezer 1`. */
   location: string;
-  /** Date only, `YYYY-MM-DD`, as documented for POST /inventory/store. */
+  /** ISO-8601 timestamp, for example `2027-01-01T00:00:00.000Z`. */
   expirationDate?: string;
 };
 
@@ -211,11 +212,20 @@ export function flattenInventory(row: ApiInventory): ApiInventory {
           ? readLabel(order, ["deliveryDate", "Delivery Date", "receivedAt"])
           : undefined,
       ) ?? null,
+    buyingPrice: readCents(raw, "buyingPrice") ?? row.buyingPrice ?? null,
     purchased: (() => {
+      const cents = readCents(raw, "buyingPrice");
+      if (cents != null) return cents / 100;
       const current = row.purchased ?? raw.purchased;
       if (typeof current === "number" && Number.isFinite(current))
         return current;
-      if (typeof current === "string" && current.trim()) return current.trim();
+      if (
+        typeof current === "string" &&
+        current.trim() &&
+        !/^\d{4}-\d{2}-\d{2}/.test(current.trim())
+      ) {
+        return current.trim();
+      }
       return (
         readMoney(raw, [
           "purchasedPrice",
@@ -223,9 +233,7 @@ export function flattenInventory(row: ApiInventory): ApiInventory {
           "unitPrice",
           "price",
         ]) ??
-        (order
-          ? readMoney(order, ["purchased", "unitPrice", "price"])
-          : undefined) ??
+        (order ? readMoney(order, ["unitPrice", "price"]) : undefined) ??
         null
       );
     })(),
@@ -256,7 +264,8 @@ function cleanText(value: string | null | undefined) {
   return trimmed;
 }
 
-function isoDateTime(value: string | null | undefined) {
+/** Calendar day or timestamp → `2027-01-01T00:00:00.000Z` style ISO-8601. */
+export function expirationTimestamp(value: string | null | undefined) {
   const text = cleanText(value);
   if (!text) return undefined;
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return `${text}T00:00:00.000Z`;
@@ -293,7 +302,7 @@ export function buildInventoryPayload(input: {
   };
   const location = cleanText(input.location);
   if (location) body.location = location;
-  const expirationDate = isoDateTime(input.expirationDate);
+  const expirationDate = expirationTimestamp(input.expirationDate);
   if (expirationDate) body.expirationDate = expirationDate;
   const orderId = cleanText(input.distributorOrderId);
   if (orderId && isUuid(orderId)) body.distributorOrderId = orderId;
@@ -301,22 +310,90 @@ export function buildInventoryPayload(input: {
   return body;
 }
 
-/** Live `GET /inventory` returns `{ inventory: [{ category, items: [...] }] }`, not a flat list. */
+function readCents(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = readRaw(record, key);
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function textOf(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+/**
+ * GET /inventory returns
+ * `[{ category, subcategories: [{ subcategory, items: [{ itemName, records }] }] }]`.
+ * Older payloads used a flat list or `{ category, items }`.
+ */
 function expandInventoryGroups(rows: ApiInventory[]): ApiInventory[] {
   const flat: ApiInventory[] = [];
+
+  function pushRecord(
+    record: Record<string, unknown>,
+    defaults: Partial<ApiInventory>,
+  ) {
+    const row = record as ApiInventory;
+    flat.push({
+      ...defaults,
+      ...row,
+      category: row.category || defaults.category,
+      subcategory: row.subcategory || defaults.subcategory,
+      itemName: row.itemName || defaults.itemName,
+      itemId: row.itemId || defaults.itemId,
+    });
+  }
+
   for (const row of rows) {
     const raw = row as Record<string, unknown>;
+    const subcategories = raw.subcategories;
+    if (Array.isArray(subcategories)) {
+      const groupCategory = textOf(raw.category);
+      for (const sub of subcategories) {
+        const subRecord = asRecord(sub);
+        if (!subRecord) continue;
+        const subcategory =
+          textOf(subRecord.subcategory) ?? textOf(subRecord.name);
+        const items = subRecord.items;
+        if (!Array.isArray(items)) continue;
+        for (const item of items) {
+          const itemRecord = asRecord(item);
+          if (!itemRecord) continue;
+          const itemName =
+            textOf(itemRecord.itemName) ?? textOf(itemRecord.name);
+          const itemId = textOf(itemRecord.itemId);
+          const records = itemRecord.records;
+          if (!Array.isArray(records)) continue;
+          for (const record of records) {
+            const recordRow = asRecord(record);
+            if (!recordRow) continue;
+            pushRecord(recordRow, {
+              category: groupCategory,
+              subcategory,
+              itemName,
+              itemId,
+            });
+          }
+        }
+      }
+      continue;
+    }
+
     if (!Array.isArray(raw.items)) {
       flat.push(row);
       continue;
     }
-    const groupCategory =
-      typeof raw.category === "string" ? raw.category : undefined;
+    const groupCategory = textOf(raw.category);
     for (const entry of raw.items) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-      const item = { ...(entry as ApiInventory) };
-      if (groupCategory && !item.category) item.category = groupCategory;
-      flat.push(item);
+      const itemRecord = asRecord(entry);
+      if (!itemRecord) continue;
+      pushRecord(itemRecord, { category: groupCategory });
     }
   }
   return flat;
@@ -369,7 +446,19 @@ export const inventoryApi = {
   store(body: StoreInventoryPayload) {
     return apiRequest<unknown>("/inventory/store", {
       method: "POST",
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        distributorOrderId: body.distributorOrderId,
+        items: body.items.map((item) => {
+          const location = item.location.trim();
+          const expirationDate = expirationTimestamp(item.expirationDate);
+          return {
+            itemId: item.itemId,
+            quantity: item.quantity,
+            location,
+            ...(expirationDate ? { expirationDate } : {}),
+          };
+        }),
+      }),
     });
   },
 

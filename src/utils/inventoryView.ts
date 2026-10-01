@@ -236,14 +236,20 @@ export function buildInventorySections(
     const matches = catalogMatches(items, row);
     const grouped = sameCatalogIdentity(matches);
     const item = grouped ? matches[0] : undefined;
-    const catalogItemId =
-      matches.length === 1 ? catalogItemUuid(matches[0], row.itemId) : "";
+    const catalogItemId = catalogItemUuid(
+      matches.length === 1 ? matches[0] : undefined,
+      row.itemId,
+    );
     const lot = lotFromRow(row, item, index, catalogItemId);
     const apiName = row.itemName?.trim();
-    const name = item
-      ? item.merchandisingName?.trim() || item.name?.trim() || apiName || "N/A"
-      : apiName || "N/A";
-    const category = parentCategory(row.category || item?.category || "");
+    const name = apiName
+      ? apiName
+      : item
+        ? item.merchandisingName?.trim() || item.name?.trim() || "N/A"
+        : "N/A";
+    // GET /inventory already groups by its own category and subcategory.
+    const category =
+      row.category?.trim() || parentCategory(item?.category || "");
     const subcategory =
       row.subcategory?.trim() ||
       item?.subcategory?.trim() ||
@@ -314,6 +320,61 @@ export function buildInventorySections(
   }
 
   return list;
+}
+
+/**
+ * Items that have never been received are absent from GET /inventory.
+ * They come from GET /items and stay on the screen as Empty.
+ */
+export function appendUnreceivedItems(
+  sections: InventorySection[],
+  items: Item[],
+): InventorySection[] {
+  const received = new Set<string>();
+  for (const section of sections) {
+    for (const product of section.products) {
+      if (isUuid(product.id)) received.add(product.id);
+      for (const lot of product.lots) {
+        if (lot.catalogItemId) received.add(lot.catalogItemId);
+      }
+    }
+  }
+
+  const next = sections.map((section) => ({
+    ...section,
+    products: [...section.products],
+  }));
+
+  for (const item of items) {
+    const id = item.recordId && isUuid(item.recordId) ? item.recordId : "";
+    if (!id || received.has(id)) continue;
+    const category = item.category.trim() || "Uncategorized";
+    const title = item.subcategory.trim() || category;
+    let section = next.find(
+      (entry) => entry.category === category && entry.title === title,
+    );
+    if (!section) {
+      section = {
+        id: `${category}::${title}`,
+        category,
+        title,
+        sourceLabel: sourceColumnLabel(title),
+        products: [],
+      };
+      next.push(section);
+    }
+    section.products.push({
+      id,
+      name: item.merchandisingName.trim() || item.name.trim() || "N/A",
+      distributor: item.distributor.trim() || "—",
+      unit: item.singleItemUnit.trim() || "—",
+      lots: [],
+    });
+    section.products.sort((left, right) => left.name.localeCompare(right.name));
+    received.add(id);
+  }
+
+  return next;
 }
 
 /**

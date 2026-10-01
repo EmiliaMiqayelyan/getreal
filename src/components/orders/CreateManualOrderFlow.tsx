@@ -29,7 +29,7 @@ const REVIEW_LINE_GRID =
 
 type CreateManualOrderFlowProps = {
   onClose: () => void;
-  onCreated: (draft: ManualOrderDraft) => void;
+  onCreated: (draft: ManualOrderDraft) => void | Promise<void>;
 };
 
 function money(value: number) {
@@ -80,6 +80,7 @@ export function CreateManualOrderFlow({
   const [deliveryDate, setDeliveryDate] = useState("");
   const [timeSlot, setTimeSlot] = useState("");
   const [confirmClose, setConfirmClose] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const distributorOptions = useMemo(
     () =>
@@ -170,7 +171,8 @@ export function CreateManualOrderFlow({
     );
   }
 
-  function createOrder() {
+  async function createOrder() {
+    if (saving) return;
     if (manualDeliveryError({
       distributor: selectedDistributor,
       dateYmd: deliveryDate,
@@ -178,23 +180,25 @@ export function CreateManualOrderFlow({
     })) {
       return;
     }
-    // INTEGRATION: POST /orders { type: "distributor", distributorId: selectedDistributor.recordId,
-    // deliveryDate: deliveryDateIso, items: [{ productId, quantity }] }.
-    // On success, show the created order under In Progress. Do not create it locally twice.
-    onCreated({
-      distributor,
-      deliveryDate: expectedDeliveryLabel,
-      deliveryDateIso: toOrderDeliveryDateIso(deliveryDate, timeSlot),
-      totalPrice: total,
-      items: selectedLines.map((line) => ({
-        sku: line.sku,
-        itemName: line.name,
-        source: line.source,
-        quantity: line.quantity,
-        price: line.price,
-        unit: line.unit,
-      })),
-    });
+    setSaving(true);
+    try {
+      await onCreated({
+        distributor,
+        deliveryDate: expectedDeliveryLabel,
+        deliveryDateIso: toOrderDeliveryDateIso(deliveryDate, timeSlot),
+        totalPrice: total,
+        items: selectedLines.map((line) => ({
+          sku: line.sku,
+          itemName: line.name,
+          source: line.source,
+          quantity: line.quantity,
+          price: line.price,
+          unit: line.unit,
+        })),
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -439,10 +443,11 @@ export function CreateManualOrderFlow({
                 <div className="col-span-4 flex min-w-0 flex-wrap items-center gap-3">
                   <Button
                     variant="primary"
+                    disabled={saving}
                     onClick={createOrder}
                     className="font-semibold"
                   >
-                    Order now
+                    {saving ? "Sending..." : "Order now"}
                   </Button>
                   <span className="text-[13px] text-[#8A8A8A]">
                     Expected delivery{" "}
@@ -508,14 +513,18 @@ export function CreateManualOrderFlow({
           <Button
             variant="primary"
             size="lg"
-            disabled={step === "create" && !canReview}
+            disabled={saving || (step === "create" && !canReview)}
             onClick={() => {
               if (step === "create") setStep("review");
               else createOrder();
             }}
             className="font-semibold"
           >
-            {step === "create" ? "Review Order" : "Create Order"}
+            {step === "create"
+              ? "Review Order"
+              : saving
+                ? "Sending..."
+                : "Create Order"}
           </Button>
         </div>
       </div>

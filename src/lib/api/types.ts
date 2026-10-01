@@ -150,8 +150,13 @@ export type ApiInventory = {
   distributorName?: string | null;
   sourceName?: string | null;
   deliveryDate?: string | null;
-  /** Purchase price, as returned by the inventory list. */
+  /**
+   * Purchase date from GET /inventory. The price is `buyingPrice`.
+   * Older payloads used this field for the price, so both are accepted.
+   */
   purchased?: string | number | null;
+  /** Purchase price in integer cents. */
+  buyingPrice?: number | null;
   unit?: string | null;
   expirationDate?: string | null;
   status?: string | null;

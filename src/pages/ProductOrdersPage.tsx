@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -37,13 +37,25 @@ import {
 } from "@/constants/distributorOrders";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { isApiConfigured, ordersApi } from "@/lib/api";
 import {
-  buildLocalDemandOrders,
+  loadDistributorOrderScreen,
+  mapApiDistributorDelivered,
+  mapApiDistributorOrder,
+} from "@/lib/distributorOrderApi";
+import {
+  syncManualDistributorOrder,
+  syncReviewGroupOrder,
+} from "@/lib/api/orderSync";
+import {
   buildReviewGroups,
   categorySections,
+  demandDateIds,
+  demandOrdersForDate,
   previewRowsForOrder,
   reviewGroupKey,
   type DemandOrder,
@@ -88,6 +100,7 @@ import {
   WEDNESDAY_WEEKDAYS,
   wednesdayChipsFromDateIds,
 } from "@/utils/deliveryCalendar";
+import { toOrderDeliveryDateIso } from "@/utils/manualOrder";
 
 const LINK = "text-[13px] font-medium text-[#3B7DC4] hover:underline";
 const REVIEW_LINE_GRID =
@@ -126,9 +139,11 @@ function filterPlacedOrders(
   return orders.filter((order) => {
     if (seen.has(order.id)) return false;
     seen.add(order.id);
+    const orderDateId = placedOrderDateId(order);
     if (
       criteria.deliveryDateId &&
-      placedOrderDateId(order) !== criteria.deliveryDateId
+      orderDateId &&
+      orderDateId !== criteria.deliveryDateId
     ) {
       return false;
     }
@@ -319,7 +334,10 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
-  const { distributors, products, items, sources } = useAppCatalog();
+  const { notifyApiError } = useApiFeedback();
+  const { distributors, products, items } = useAppCatalog();
+  const catalogRef = useRef({ distributors, products, items });
+  catalogRef.current = { distributors, products, items };
 
   const [view, setView] = useState<View>("list");
   const { ready: orderCatalogReady } = useCatalogSlice([
@@ -344,10 +362,11 @@ export default function ProductOrdersPage() {
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
-  // INTEGRATION: load with GET /orders?type=distributor&status=delivered.
-  const [deliveredOrders] = useState<DeliveredOrder[]>([]);
+  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
   const [demandOrders, setDemandOrders] = useState<DemandOrder[]>([]);
+  const [announcedDateIds, setAnnouncedDateIds] = useState<string[]>([]);
   const [demandReady, setDemandReady] = useState(false);
+  const [placing, setPlacing] = useState<string | null>(null);
   const [activeDemandId, setActiveDemandId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [expandedDeliveredId, setExpandedDeliveredId] = useState<string | null>(
@@ -366,11 +385,25 @@ export default function ProductOrdersPage() {
 
   const visibleDeliveryChips = useMemo(() => {
     const dateIds = [
-      ...demandOrders.map((order) => order.deliveryDateId),
+      ...demandOrders.flatMap((order) => demandDateIds(order)),
       ...inProgress.map((order) => placedOrderDateId(order)),
     ];
-    return wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
-  }, [activeDeliveryDateId, demandOrders, inProgress]);
+    const chips = wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
+    const present = new Set(chips.map((chip) => chip.id));
+    const extras = announcedDateIds
+      .filter((id) => isWednesdayDateId(id) && !present.has(id))
+      .map((id) => {
+        const date = parseDeliveryDateId(id);
+        return {
+          id,
+          label: date ? formatDeliveryChipLabel(date) : id,
+          count: 0,
+        };
+      });
+    return [...chips, ...extras].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    );
+  }, [activeDeliveryDateId, announcedDateIds, demandOrders, inProgress]);
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? upcomingWednesday();
@@ -386,10 +419,7 @@ export default function ProductOrdersPage() {
   );
 
   const ordersForDate = useMemo(
-    () =>
-      demandOrders.filter(
-        (order) => order.deliveryDateId === activeDeliveryDateId,
-      ),
+    () => demandOrdersForDate(demandOrders, activeDeliveryDateId),
     [activeDeliveryDateId, demandOrders],
   );
 
@@ -400,13 +430,16 @@ export default function ProductOrdersPage() {
         lines: filterOrderDemandRows(
           previewRowsForOrder(order),
           orderDemandCriteria,
-        ),
+        ).map((row) => ({
+          ...row,
+          dateReceivingBy: row.dateReceivingBy || expectedDeliveryLabel,
+        })),
       }))
       .filter((entry) => {
         if (!search.trim() && !productFilter) return true;
         return entry.lines.length > 0;
       });
-  }, [orderDemandCriteria, ordersForDate, productFilter, search]);
+  }, [expectedDeliveryLabel, orderDemandCriteria, ordersForDate, productFilter, search]);
 
   const filteredPreview = useMemo(
     () => visibleDemandOrders.flatMap((entry) => entry.lines),
@@ -461,19 +494,43 @@ export default function ProductOrdersPage() {
   }
 
   useEffect(() => {
-    if (!orderCatalogReady || demandReady) return;
-    setDemandOrders(
-      buildLocalDemandOrders({ items, products, sources, distributors }),
-    );
-    setDemandReady(true);
-  }, [
-    demandReady,
-    distributors,
-    items,
-    orderCatalogReady,
-    products,
-    sources,
-  ]);
+    if (!orderCatalogReady) return;
+    let cancelled = false;
+
+    if (!isApiConfigured()) {
+      setDemandOrders([]);
+      setAnnouncedDateIds([]);
+      setInProgress([]);
+      setDeliveredOrders([]);
+      setDemandReady(true);
+      return;
+    }
+
+    setDemandReady(false);
+    void loadDistributorOrderScreen(catalogRef.current)
+      .then((snapshot) => {
+        if (cancelled) return;
+        setDemandOrders(snapshot.demand);
+        setAnnouncedDateIds(snapshot.demandDateIds);
+        setInProgress(snapshot.inProgress);
+        setDeliveredOrders(snapshot.delivered);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load distributor orders.");
+        setDemandOrders([]);
+        setAnnouncedDateIds([]);
+        setInProgress([]);
+        setDeliveredOrders([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDemandReady(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [notifyApiError, orderCatalogReady]);
 
   useEffect(() => {
     if (!demandReady) return;
@@ -666,7 +723,39 @@ export default function ProductOrdersPage() {
     resetToList();
   }
 
-  function handleManualCreated(draft: ManualOrderDraft) {
+  async function handleManualCreated(draft: ManualOrderDraft) {
+    if (isApiConfigured()) {
+      const created = await syncManualDistributorOrder(
+        draft,
+        distributors,
+        products,
+        items,
+      );
+      if (!created) return;
+      try {
+        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
+        const mapped = mapApiDistributorOrder(created, distributors, 0);
+        const alreadyListed = snapshot.inProgress.some(
+          (order) => order.recordId && order.recordId === mapped.recordId,
+        );
+        setDemandOrders(snapshot.demand);
+        setAnnouncedDateIds(snapshot.demandDateIds);
+        setDeliveredOrders(snapshot.delivered);
+        setInProgress(
+          alreadyListed ? snapshot.inProgress : [mapped, ...snapshot.inProgress],
+        );
+        if (mapped.deliveryDateId && isWednesdayDateId(mapped.deliveryDateId)) {
+          setActiveDeliveryDateId(mapped.deliveryDateId);
+        }
+        setExpandedId(mapped.id);
+      } catch (error) {
+        notifyApiError(error, "Order was created, but the list failed to refresh.");
+      }
+      showToast("Order created successfully");
+      resetToList();
+      return;
+    }
+
     const order = createPlacedOrderFromManualDraft(
       draft,
       nextDeliveryId(inProgress),
@@ -675,9 +764,6 @@ export default function ProductOrdersPage() {
     if (order.deliveryDateId && isWednesdayDateId(order.deliveryDateId)) {
       setActiveDeliveryDateId(order.deliveryDateId);
     }
-    // INTEGRATION: syncManualDistributorOrder(draft, distributors, products, items)
-    // in src/lib/api/orderSync.ts. Call it here after the local row is shown,
-    // and replace this row with the server order (recordId) on success.
     setExpandedId(order.id);
     showToast("Order created successfully");
     resetToList();
@@ -695,11 +781,27 @@ export default function ProductOrdersPage() {
     );
   }
 
-  function submitDistributorOrder(key: string) {
-    if (orderedDistributors.has(key)) return;
+  async function submitDistributorOrder(key: string) {
+    if (placing || orderedDistributors.has(key)) return;
 
     const group = reviewGroups.find((entry) => reviewGroupKey(entry) === key);
     if (!group || !activeDemandId) return;
+
+    if (isApiConfigured()) {
+      setPlacing(key);
+      try {
+        const created = await syncReviewGroupOrder(
+          group,
+          distributors,
+          products,
+          items,
+          toOrderDeliveryDateIso(activeDeliveryDateId),
+        );
+        if (!created) return;
+      } finally {
+        setPlacing(null);
+      }
+    }
 
     setOrderedDistributors((prev) => new Set(prev).add(key));
     setDemandOrders((current) =>
@@ -720,23 +822,50 @@ export default function ProductOrdersPage() {
         };
       }),
     );
-    // INTEGRATION: POST /orders for this source's distributor
-    // (syncReviewGroupOrder in src/lib/api/orderSync.ts). The screen submits
-    // one source at a time. If two sources share a distributorId, decide
-    // whether the API wants one combined order or two. Leave the parent
-    // customer order in the Order List until Order All.
     showToast(`Order sent to ${group.source}`);
   }
 
-  function orderAll() {
+  async function orderAll() {
     const parent = demandOrders.find((order) => order.id === activeDemandId);
-    if (!parent || reviewGroups.length === 0) return;
+    if (!parent || reviewGroups.length === 0 || placing) return;
 
     const remaining = reviewGroups.filter(
       (group) => !orderedDistributors.has(reviewGroupKey(group)),
     );
     const groups = [...parent.sentGroups, ...remaining];
     if (groups.length === 0) return;
+
+    if (isApiConfigured()) {
+      setPlacing("all");
+      try {
+        for (const group of remaining) {
+          const created = await syncReviewGroupOrder(
+            group,
+            distributors,
+            products,
+            items,
+            toOrderDeliveryDateIso(activeDeliveryDateId),
+          );
+          if (!created) return;
+          const key = reviewGroupKey(group);
+          setOrderedDistributors((prev) => new Set(prev).add(key));
+        }
+        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
+        setInProgress(snapshot.inProgress);
+        setDeliveredOrders(snapshot.delivered);
+        setDemandOrders((current) =>
+          current.filter((order) => order.id !== parent.id),
+        );
+        setExpandedId(snapshot.inProgress[0]?.id ?? null);
+        showToast("Orders created successfully");
+        resetToList();
+      } catch (error) {
+        notifyApiError(error, "Failed to place distributor orders.");
+      } finally {
+        setPlacing(null);
+      }
+      return;
+    }
 
     let deliveryCounter = inProgress;
     const created = groups.map((group) => {
@@ -755,12 +884,44 @@ export default function ProductOrdersPage() {
     setDemandOrders((current) =>
       current.filter((order) => order.id !== parent.id),
     );
-    // INTEGRATION: POST /orders only for `remaining` (distributors not in
-    // parent.sentDistributors). Then mark the customer batch ordered so it
-    // leaves the Order List. The sent ones were already posted on Order Now.
     setExpandedId(created[0]?.id ?? null);
     showToast("Orders created successfully");
     resetToList();
+  }
+
+  function togglePlacedOrder(id: string, delivered = false) {
+    const setOpen = delivered ? setExpandedDeliveredId : setExpandedId;
+    const openId = delivered ? expandedDeliveredId : expandedId;
+    const nextOpen = openId === id ? null : id;
+    setOpen(nextOpen);
+    if (!nextOpen || !isApiConfigured()) return;
+
+    const source = delivered ? deliveredOrders : inProgress;
+    const order = source.find((entry) => entry.id === id);
+    if (!order?.recordId || order.items.length > 0) return;
+
+    void ordersApi
+      .getById(order.recordId)
+      .then((detail) => {
+        if (delivered) {
+          const mapped = mapApiDistributorDelivered(detail, distributors, 0);
+          setDeliveredOrders((current) =>
+            current.map((entry) =>
+              entry.id === id ? { ...entry, items: mapped.items } : entry,
+            ),
+          );
+          return;
+        }
+        const mapped = mapApiDistributorOrder(detail, distributors, 0);
+        setInProgress((current) =>
+          current.map((entry) =>
+            entry.id === id ? { ...entry, items: mapped.items } : entry,
+          ),
+        );
+      })
+      .catch((error) => {
+        notifyApiError(error, "Failed to load order details.");
+      });
   }
 
   function invoiceForDistributor(key: string) {
@@ -1041,9 +1202,7 @@ export default function ProductOrdersPage() {
                       <ExpandableOrders
                         orders={inProgressWindow.visible}
                         expandedId={expandedId}
-                        onToggle={(id) =>
-                          setExpandedId((cur) => (cur === id ? null : id))
-                        }
+                        onToggle={(id) => togglePlacedOrder(id)}
                       />
                     </section>
                   ) : null}
@@ -1126,11 +1285,7 @@ export default function ProductOrdersPage() {
                         <ExpandableOrders
                           orders={orders}
                           expandedId={expandedDeliveredId}
-                          onToggle={(id) =>
-                            setExpandedDeliveredId((cur) =>
-                              cur === id ? null : id,
-                            )
-                          }
+                          onToggle={(id) => togglePlacedOrder(id, true)}
                         />
                       </div>
                     ))}
@@ -1287,7 +1442,9 @@ export default function ProductOrdersPage() {
                         </span>
                         <span className="min-w-0 truncate text-[13px] text-[#111118]">
                           {option
-                            ? `${money(option.price)} / ${option.unit}`
+                            ? option.unit
+                              ? `${money(option.price)} / ${option.unit}`
+                              : money(option.price)
                             : "—"}
                         </span>
                         <span className="text-[13px] text-[#111118]">
@@ -1399,10 +1556,11 @@ export default function ProductOrdersPage() {
                             <Button
                               variant="primary"
                               size="sm"
+                              disabled={placing !== null}
                               onClick={() => submitDistributorOrder(key)}
                               className="font-semibold"
                             >
-                              Order now
+                              {placing === key ? "Sending..." : "Order now"}
                             </Button>
                             <span className="text-[12px] text-[#8A8A8A]">
                               Expected delivery{" "}
@@ -1499,14 +1657,21 @@ export default function ProductOrdersPage() {
           <Button
             variant="primary"
             size="lg"
-            disabled={view === "orderList" ? !canReview : !canOrderAll}
+            disabled={
+              placing !== null ||
+              (view === "orderList" ? !canReview : !canOrderAll)
+            }
             onClick={() => {
               if (view === "review") orderAll();
               else setView("review");
             }}
             className="font-semibold"
           >
-            {view === "review" ? "Order All" : "Review Order"}
+            {view === "review"
+              ? placing === "all"
+                ? "Sending..."
+                : "Order All"
+              : "Review Order"}
           </Button>
         </div>
       </div>

@@ -9,6 +9,7 @@ import type {
 import { isApiConfigured } from "./client";
 import { formatApiError } from "./errors";
 import { ordersApi, type CreateOrderItemPayload } from "./orders";
+import type { ApiOrder } from "./types";
 import { toastFromApi } from "@/lib/toastBridge";
 import { apiId, findByEntityRef, isUuid } from "@/utils/entityIds";
 
@@ -61,12 +62,25 @@ function findProductForLine(
 }
 
 function toOrderItemPayloads(
-  lines: Array<{ sku?: string; itemName: string; quantity: number }>,
+  lines: Array<{
+    sku?: string;
+    itemName: string;
+    quantity: number;
+    productId?: string;
+  }>,
   products: ProductForSale[],
   catalogItems: Item[] = [],
 ): CreateOrderItemPayload[] {
   const payloads: CreateOrderItemPayload[] = [];
   for (const line of lines) {
+    if (line.productId && isUuid(line.productId)) {
+      payloads.push({
+        productId: line.productId,
+        quantity: Math.max(0.01, Number(line.quantity) || 1),
+        frequency: "one_time",
+      });
+      continue;
+    }
     const product = findProductForLine(line, products, catalogItems);
     if (!product) continue;
     const productId = product.recordId && isUuid(product.recordId)
@@ -84,22 +98,29 @@ function toOrderItemPayloads(
   return payloads;
 }
 
-function postDistributorOrder(input: {
-  distributor: Distributor;
+function distributorRecordId(
+  distributor: Distributor | undefined,
+  explicitId?: string,
+) {
+  if (explicitId && isUuid(explicitId)) return explicitId;
+  if (!distributor) return undefined;
+  if (isUuid(distributor.recordId)) return distributor.recordId;
+  if (isUuid(distributor.id)) return distributor.id;
+  return undefined;
+}
+
+async function postDistributorOrder(input: {
+  distributorId: string;
   items: CreateOrderItemPayload[];
   deliveryDate?: string;
-}) {
-  const distributorId = isUuid(input.distributor.recordId)
-    ? input.distributor.recordId!
-    : isUuid(input.distributor.id)
-      ? input.distributor.id
-      : undefined;
+}): Promise<ApiOrder | null> {
+  const distributorId = input.distributorId;
   if (!distributorId) {
     toastFromApi(
       "Could not sync order: distributor has no server id.",
       "error",
     );
-    return;
+    return null;
   }
   const body: Parameters<typeof ordersApi.create>[0] = {
     type: "distributor",
@@ -114,33 +135,38 @@ function postDistributorOrder(input: {
       : new Date(parsed).toISOString();
   }
 
-  void ordersApi.create(body).catch((error) => {
+  try {
+    return await ordersApi.create(body);
+  } catch (error) {
     toastFromApi(
       formatApiError(error, "Failed to sync distributor order."),
       "error",
     );
-  });
+    return null;
+  }
 }
 
 /**
- * Push a distributor review group to POST /orders.
- * `productId` and `distributorId` are model codes, not record UUIDs.
+ * Push one source group to POST /orders.
+ * `distributorId` and each `productId` must be UUIDs.
  */
-export function syncReviewGroupOrder(
+export async function syncReviewGroupOrder(
   group: ReviewGroup,
   distributors: Distributor[],
   products: ProductForSale[],
   catalogItems: Item[] = [],
-): void {
-  if (!isApiConfigured()) return;
+  deliveryDate?: string,
+): Promise<ApiOrder | null> {
+  if (!isApiConfigured()) return null;
 
   const distributor = findDistributor(group.distributor, distributors);
-  if (!distributor) {
+  const distributorId = distributorRecordId(distributor, group.distributorId);
+  if (!distributorId) {
     toastFromApi(
       `Could not sync order: distributor "${group.distributor}" has no API id.`,
       "error",
     );
-    return;
+    return null;
   }
 
   const items = toOrderItemPayloads(group.items, products, catalogItems);
@@ -149,30 +175,31 @@ export function syncReviewGroupOrder(
       "Could not sync order: no matching products for sale were found.",
       "error",
     );
-    return;
+    return null;
   }
 
-  postDistributorOrder({ distributor, items });
+  return postDistributorOrder({ distributorId, items, deliveryDate });
 }
 
 /**
  * Persist a Create Manual Order draft via POST /orders so it survives refresh.
  */
-export function syncManualDistributorOrder(
+export async function syncManualDistributorOrder(
   draft: ManualOrderDraft,
   distributors: Distributor[],
   products: ProductForSale[],
   catalogItems: Item[] = [],
-): void {
-  if (!isApiConfigured()) return;
+): Promise<ApiOrder | null> {
+  if (!isApiConfigured()) return null;
 
   const distributor = findDistributor(draft.distributor, distributors);
-  if (!distributor) {
+  const distributorId = distributorRecordId(distributor);
+  if (!distributorId) {
     toastFromApi(
       `Could not sync order: distributor "${draft.distributor}" has no API id.`,
       "error",
     );
-    return;
+    return null;
   }
 
   const items = toOrderItemPayloads(draft.items, products, catalogItems);
@@ -181,11 +208,11 @@ export function syncManualDistributorOrder(
       "Could not sync order: add matching products for sale for these items first.",
       "error",
     );
-    return;
+    return null;
   }
 
-  postDistributorOrder({
-    distributor,
+  return postDistributorOrder({
+    distributorId,
     items,
     deliveryDate: draft.deliveryDateIso,
   });

@@ -1,5 +1,7 @@
 export type SupplierOption = {
   distributor: string;
+  /** Distributor UUID from aggregate demand, used by POST /orders. */
+  distributorId?: string;
   source: string;
   price: number;
   unit: string;
@@ -42,6 +44,8 @@ export type ReviewLine = {
 
 export type ReviewGroup = {
   distributor: string;
+  /** UUID for POST /orders. Falls back to the distributors catalog when absent. */
+  distributorId?: string;
   /** Source this section is ordered from. Order Now submits this source only. */
   source: string;
   email: string;

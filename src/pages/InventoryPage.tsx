@@ -25,13 +25,16 @@ import {
   createMockReceivedOrders,
   type MockReceivedOrder,
 } from "@/data/inventoryMock";
-import { inventoryApi, isApiConfigured } from "@/lib/api";
-import type { ApiInventory } from "@/lib/api/types";
+import { inventoryApi, isApiConfigured, itemsApi } from "@/lib/api";
+import { expirationTimestamp } from "@/lib/api/inventory";
+import { mapApiItemToItem } from "@/lib/api/mappers";
+import type { ApiInventory, ApiItem } from "@/lib/api/types";
 import { cn } from "@/utils/cn";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
+  appendUnreceivedItems,
   buildInventorySections,
   groupInventorySections,
   sourceColumnLabel,
@@ -40,11 +43,15 @@ import {
   type InventorySection,
 } from "@/utils/inventoryView";
 import { handoffToStockSections } from "@/utils/receivingHandoff";
+import {
+  loadPendingStorageOrders,
+  type PendingStorageOrder,
+} from "@/utils/pendingStorageOrders";
 
 const ORANGE = "#F57850";
 const GREEN = "#2B5B31";
 
-/** API: swap for the storage-location list. See STORAGE_LOCATIONS in inventoryMock. */
+/** Location is a name string sent as-is. This list is local; there is no locations endpoint. */
 const LOCATION_OPTIONS = STORAGE_LOCATIONS;
 
 type LocationSplit = {
@@ -1007,15 +1014,6 @@ function placementsFor(item: StockItem): LocationSplit[] {
   return location ? [{ qty: unpack, location }] : [];
 }
 
-/** `POST /inventory/store` example uses `YYYY-MM-DD`, not a full timestamp. */
-function expirationDateOnly(value: string) {
-  const text = value.trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text.slice(0, 10);
-  const parsed = Date.parse(text);
-  if (Number.isNaN(parsed)) return undefined;
-  return new Date(parsed).toISOString().slice(0, 10);
-}
-
 /**
  * Offline stand-in for POST /inventory/store. Live mode reloads GET /inventory
  * after the store call instead of using this.
@@ -1090,9 +1088,14 @@ function withStoredOrder(current: InventorySection[], order: ReceivedOrder) {
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
   const liveInventory = isApiConfigured();
-  // Received banners are not loaded from the API yet. See the note at the bottom of this file.
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
-  const { items: catalogItems, categories } = useAppCatalog();
+  const {
+    items: catalogItems,
+    categories,
+    distributors,
+    sources,
+    subcategoryRecords,
+  } = useAppCatalog();
   const { notifyApiError, showError } = useApiFeedback();
 
   const [query, setQuery] = useState("");
@@ -1101,6 +1104,7 @@ export default function InventoryPage() {
   const [unitFilter, setUnitFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
   const [liveRows, setLiveRows] = useState<ApiInventory[] | null>(null);
+  const [apiItems, setApiItems] = useState<ApiItem[]>([]);
   const [localSections, setLocalSections] = useState<InventorySection[]>(
     createMockInventorySections,
   );
@@ -1114,23 +1118,82 @@ export default function InventoryPage() {
   const [pendingOrders, setPendingOrders] = useState<MockReceivedOrder[]>(() =>
     liveInventory ? [] : createMockReceivedOrders(),
   );
+  const [storageOrders, setStorageOrders] = useState<PendingStorageOrder[]>([]);
+
+  const unreceivedItems = useMemo(
+    () =>
+      apiItems.map((item, index) =>
+        mapApiItemToItem(item, index, {
+          categoriesById: new Map(
+            categories
+              .filter((entry) => entry.id && entry.name)
+              .map((entry) => [entry.id as string, entry.name as string]),
+          ),
+          subcategoriesById: new Map(
+            subcategoryRecords
+              .filter((entry) => entry.id)
+              .map((entry) => [entry.id as string, entry.name]),
+          ),
+          distributorsById: new Map(
+            distributors.flatMap((entry) =>
+              entry.recordId ? [[entry.recordId, entry.name] as const] : [],
+            ),
+          ),
+          sourcesById: new Map(
+            sources.flatMap((entry) =>
+              entry.recordId ? [[entry.recordId, entry.name] as const] : [],
+            ),
+          ),
+        }),
+      ),
+    [apiItems, categories, distributors, sources, subcategoryRecords],
+  );
 
   const sections = useMemo(() => {
     if (!liveInventory) return localSections;
-    return buildInventorySections(
-      catalogItems,
-      liveRows ?? [],
-      categoryNamesFromCatalog(categories),
+    return appendUnreceivedItems(
+      buildInventorySections(
+        catalogItems,
+        liveRows ?? [],
+        categoryNamesFromCatalog(categories),
+      ),
+      unreceivedItems,
     );
-  }, [catalogItems, categories, liveInventory, liveRows, localSections]);
+  }, [
+    catalogItems,
+    categories,
+    liveInventory,
+    liveRows,
+    localSections,
+    unreceivedItems,
+  ]);
 
   useEffect(() => {
     if (!liveInventory) return;
     let cancelled = false;
-    void inventoryApi
-      .list()
-      .then((rows) => {
-        if (!cancelled) setLiveRows(rows);
+    void Promise.all([
+      inventoryApi.list(),
+      itemsApi.list().catch((error) => {
+        if (!cancelled) {
+          notifyApiError(
+            error,
+            "Failed to load items that have never been received.",
+          );
+        }
+        return [] as ApiItem[];
+      }),
+      loadPendingStorageOrders().catch((error) => {
+        if (!cancelled) {
+          notifyApiError(error, "Failed to load orders waiting for storage.");
+        }
+        return [] as PendingStorageOrder[];
+      }),
+    ])
+      .then(([rows, items, waiting]) => {
+        if (cancelled) return;
+        setLiveRows(rows);
+        setApiItems(items);
+        setStorageOrders(waiting);
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load inventory.");
@@ -1163,11 +1226,12 @@ export default function InventoryPage() {
 
   const orders = useMemo(() => {
     const handoffIds = new Set(handoffOrders.map((order) => order.id));
+    const waiting = liveInventory ? storageOrders : pendingOrders;
     return [
       ...handoffOrders,
-      ...pendingOrders.filter((order) => !handoffIds.has(order.id)),
+      ...waiting.filter((order) => !handoffIds.has(order.id)),
     ];
-  }, [handoffOrders, pendingOrders]);
+  }, [handoffOrders, liveInventory, pendingOrders, storageOrders]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
 
@@ -1430,7 +1494,7 @@ export default function InventoryPage() {
           distributorOrderId: order.id,
           items: ready.flatMap((item) =>
             placementsFor(item).map((placement) => {
-              const expirationDate = expirationDateOnly(item.expirationIso);
+              const expirationDate = expirationTimestamp(item.expirationIso);
               return {
                 itemId: item.catalogItemId,
                 quantity: Math.max(1, Math.round(placement.qty)),
@@ -1471,6 +1535,14 @@ export default function InventoryPage() {
         notifyApiError(
           error,
           "Stored items, but inventory could not be refreshed.",
+        );
+      }
+
+      try {
+        setStorageOrders(await loadPendingStorageOrders());
+      } catch {
+        setStorageOrders((current) =>
+          current.filter((pending) => pending.id !== order.id),
         );
       }
     } else {

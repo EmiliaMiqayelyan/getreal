@@ -203,7 +203,13 @@ export function applyCalculatedQuantitiesForCategory(
 ): WorkingOrderRow[] {
   return rows.map((row) =>
     row.category === category
-      ? { ...row, quantity: calculateNeededQuantity(row) }
+      ? {
+          ...row,
+          quantity:
+            row.suggestedQty >= 0
+              ? row.suggestedQty
+              : calculateNeededQuantity(row),
+        }
       : row,
   );
 }

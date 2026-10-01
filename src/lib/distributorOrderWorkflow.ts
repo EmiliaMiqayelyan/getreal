@@ -1,47 +1,43 @@
-import type { Distributor } from "@/types/distributor";
 import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
-import type { Source } from "@/types/source";
 import type {
   PreviewRow,
   ReviewGroup,
   ReviewLine,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
+import type { AggregateDemand } from "@/lib/api/orders";
+import { centsToDollars } from "@/lib/api/mappers";
+import { recordRef } from "@/utils/entityIds";
 import {
+  deliveryDateIdFromValue,
   formatExpectedDelivery,
+  isWednesdayDateId,
+  parseDeliveryDateId,
+  startOfLocalDay,
   toDeliveryDateId,
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
 
+const MONTH_INDEX: Record<string, number> = {
+  jan: 0,
+  feb: 1,
+  mar: 2,
+  apr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  aug: 7,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dec: 11,
+};
+
 /**
- * Frontend stand-in for the Distributor Order Workflow.
- *
- * INTEGRATION: Delete `sampleDemandOrder` and stop calling
- * `buildLocalDemandOrders` once customer orders and inventory are wired.
- * Replace the local list with:
- *
- * 1. GET /orders?type=customer for orders that still need a distributor
- *    purchase. One customer order (ORD001) is one Order List row. Sum line
- *    quantities into `custOrderTotal`.
- * 2. On-hand stock for each product → `inStock`. QTY NEEDED is
- *    max(0, custOrderTotal - inStock). See `calculateNeededQuantity`.
- * 3. Distributor, source, and unit cost come from the item / product-for-sale
- *    record (`buyingPrice` until the API returns a distributor unit cost).
- * 4. Order Now for one source: POST /orders
- *    { type: "distributor", distributorId, deliveryDate, items: [{ productId, quantity }] }.
- *    Keep the parent customer order in the Order List (`phase: "partial"`)
- *    and remember which distributors were sent so Review Order can reopen.
- * 5. Order All: POST only the distributors not already sent, then mark the
- *    parent batch ordered so it leaves the Order List and its source orders
- *    show under In Progress.
- * 6. Cancel Order leaves the screen only. It does not cancel the customer
- *    order and does not void source orders already sent. Confirm that last
- *    rule with product before deleting sent distributor orders on cancel.
- * 7. Delivered tab: GET /orders?type=distributor&status=delivered.
- *    This module does not load it.
- * 8. Manual orders use the same POST, with a deliveryDate that is in the
- *    future and on that distributor's delivery schedule. See `manualOrder.ts`.
+ * Order List demand comes from GET /orders/distributor/aggregate-demand.
+ * Placed orders come from GET /orders?type=distributor.
+ * Order Now / Order All / Create Order call POST /orders.
  */
 
 export type DemandPhase = "open" | "partial";
@@ -49,6 +45,11 @@ export type DemandPhase = "open" | "partial";
 export type DemandOrder = {
   id: string;
   deliveryDateId: string;
+  /**
+   * Every delivery label from aggregate-demand. The payload does not split
+   * items by date, so the same lines are shown for each of these dates.
+   */
+  appliesToDateIds: string[];
   deliveryLabel: string;
   phase: DemandPhase;
   lines: WorkingOrderRow[];
@@ -57,107 +58,241 @@ export type DemandOrder = {
   sentGroups: ReviewGroup[];
 };
 
-/** Offline order so the workflow can be used before customer orders exist. */
-function sampleDemandOrder(deliveryDate = upcomingWednesday()): DemandOrder {
-  const deliveryDateId = toDeliveryDateId(deliveryDate);
-  const deliveryLabel = formatExpectedDelivery(deliveryDate);
-  const lines: WorkingOrderRow[] = [
-    {
-      id: "sample-lemons",
-      sku: "LEM-001",
-      itemName: "Lemons",
-      category: "Fruits",
-      custOrderTotal: 9,
-      inStock: 3,
-      qtyReceiving: 0,
-      dateReceivingBy: deliveryLabel,
-      suggestedQty: 6,
-      quantity: 0,
-      options: [
-        {
-          distributor: "Green Valley",
-          source: "Hudson Farm",
-          price: 1.5,
-          unit: "Each",
-          qtyPerUnit: 1,
-        },
-      ],
-    },
-    {
-      id: "sample-rice",
-      sku: "RCE-001",
-      itemName: "Rice",
-      category: "Grains",
-      custOrderTotal: 4,
-      inStock: 6,
-      qtyReceiving: 0,
-      dateReceivingBy: deliveryLabel,
-      suggestedQty: 0,
-      quantity: 0,
-      options: [
-        {
-          distributor: "Metro Foods",
-          source: "Valley Mill",
-          price: 3,
-          unit: "lb",
-          qtyPerUnit: 1,
-        },
-      ],
-    },
-    {
-      id: "sample-chicken",
-      sku: "CHK-001",
-      itemName: "Chicken",
-      category: "Meat",
-      custOrderTotal: 5,
-      inStock: 1,
-      qtyReceiving: 0,
-      dateReceivingBy: deliveryLabel,
-      suggestedQty: 4,
-      quantity: 0,
-      options: [
-        {
-          distributor: "Metro Foods",
-          source: "North Ranch",
-          price: 8,
-          unit: "lb",
-          qtyPerUnit: 1,
-        },
-      ],
-    },
-  ];
+function readNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
 
-  return {
-    id: "ORD001",
-    deliveryDateId,
-    deliveryLabel,
-    phase: "open",
-    lines,
-    sentDistributors: [],
-    sentGroups: [],
-  };
+function readOptionalNumber(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+/** "Wed, Jul 14" or "2026-07-14" → `YYYY-MM-DD`. Year is inferred when omitted. */
+export function parseAggregateDateLabel(label: string, today = new Date()) {
+  const trimmed = label.trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) {
+    const [year, month, day] = trimmed.slice(0, 10).split("-").map(Number);
+    if (!year || !month || !day) return "";
+    return toDeliveryDateId(new Date(year, month - 1, day));
+  }
+
+  const match = trimmed.match(
+    /(?:[A-Za-z]{3},?\s+)?([A-Za-z]{3})\s+(\d{1,2})(?:,?\s+(\d{4}))?$/,
+  );
+  if (!match) return "";
+  const month = MONTH_INDEX[match[1].toLowerCase()];
+  const day = Number(match[2]);
+  const explicitYear = match[3] ? Number(match[3]) : undefined;
+  if (month == null || !day) return "";
+
+  if (explicitYear) {
+    return toDeliveryDateId(new Date(explicitYear, month, day));
+  }
+
+  const start = startOfLocalDay(today).getTime();
+  const thisYear = new Date(today.getFullYear(), month, day);
+  if (thisYear.getTime() >= start - 30 * 24 * 60 * 60 * 1000) {
+    return toDeliveryDateId(thisYear);
+  }
+  return toDeliveryDateId(new Date(today.getFullYear() + 1, month, day));
+}
+
+function calendarDayId(value: string) {
+  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  return deliveryDateIdFromValue(value);
+}
+
+function dateIdFromAggregateEntry(
+  entry: string | { deliveryDate?: string } | null | undefined,
+  today: Date,
+) {
+  if (!entry) return "";
+  if (typeof entry === "string") {
+    return calendarDayId(entry) || parseAggregateDateLabel(entry, today);
+  }
+  const value = entry.deliveryDate?.trim() ?? "";
+  if (!value) return "";
+  return calendarDayId(value) || parseAggregateDateLabel(value, today);
+}
+
+function uniqueWednesdayIds(ids: string[]) {
+  return [...new Set(ids.filter((id) => id && isWednesdayDateId(id)))];
+}
+
+function resolveOrderProductId(
+  itemId: string,
+  itemCode: string,
+  products: ProductForSale[],
+) {
+  const refs = [itemId, itemCode].filter(Boolean);
+  const product = products.find((entry) =>
+    refs.some(
+      (ref) =>
+        entry.itemId === ref || entry.id === ref || entry.recordId === ref,
+    ),
+  );
+  return product ? recordRef(product) : undefined;
+}
+
+function resolveUnit(
+  itemId: string,
+  itemCode: string,
+  items: Item[],
+  apiUnit?: string,
+) {
+  if (apiUnit?.trim()) return apiUnit.trim();
+  const match = items.find(
+    (item) =>
+      item.recordId === itemId ||
+      item.id === itemId ||
+      item.id === itemCode ||
+      item.recordId === itemCode,
+  );
+  return match?.singleItemUnit?.trim() || "";
+}
+
+function formatReceivingBy(value: string | null | undefined, fallback: string) {
+  const raw = value?.trim() ?? "";
+  if (!raw) return fallback;
+  const dayId = calendarDayId(raw);
+  const date = dayId ? parseDeliveryDateId(dayId) : null;
+  if (!date) return fallback;
+  return formatExpectedDelivery(date);
 }
 
 /**
- * Order List until customer orders are connected.
- *
- * INTEGRATION: Replace this sample with one DemandOrder per open customer
- * order from GET /orders?type=customer. Attach distributor, source, unit
- * cost, and productId from the item and product-for-sale records. Set
- * inStock from inventory on-hand. Suggested qty is max(0, demand - stock).
+ * One Order List batch per item `dateReceivingBy`.
+ * `dates` on the payload is a separate chip list and is not used to place lines.
  */
-export function buildLocalDemandOrders(input: {
-  items: Item[];
+export function mapAggregateDemand(input: {
+  demand: AggregateDemand;
   products: ProductForSale[];
-  sources: Source[];
-  distributors: Distributor[];
-}): DemandOrder[] {
-  void input;
-  return [sampleDemandOrder()];
+  items: Item[];
+  today?: Date;
+}): { orders: DemandOrder[]; dateIds: string[] } {
+  const today = input.today ?? new Date();
+  const announcedDateIds = uniqueWednesdayIds(
+    (input.demand.dates ?? []).map((entry) =>
+      dateIdFromAggregateEntry(entry, today),
+    ),
+  );
+  const buckets = new Map<string, WorkingOrderRow[]>();
+
+  for (const distributor of input.demand.distributors ?? []) {
+    const distributorName = distributor.name?.trim() || "Distributor";
+    for (const source of distributor.sources ?? []) {
+      const sourceName = source.name?.trim() || "Source";
+      for (const category of source.categories ?? []) {
+        const categoryName = category.name?.trim() || "Other";
+        for (const item of category.items ?? []) {
+          const itemId = item.itemId?.trim() || "";
+          const itemCode = item.itemCode?.trim() || "";
+          const itemName = item.itemName?.trim() || "Item";
+          const custOrderTotal = readNumber(item.customerOrderTotal);
+          const inStock = readOptionalNumber(item.inStock);
+          const qtyNeeded = readOptionalNumber(item.qtyNeeded);
+          const suggestedQty =
+            qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
+          const lineDateId =
+            calendarDayId(item.dateReceivingBy?.trim() || "") ||
+            announcedDateIds[0] ||
+            toDeliveryDateId(upcomingWednesday(today));
+          const lineDate =
+            parseDeliveryDateId(lineDateId) ?? upcomingWednesday(today);
+          const row: WorkingOrderRow = {
+            id: [
+              distributor.id || distributorName,
+              source.id || sourceName,
+              itemId || itemCode || itemName,
+            ].join("::"),
+            sku: itemCode || itemId,
+            itemName,
+            category: item.categoryName?.trim() || categoryName,
+            custOrderTotal,
+            inStock,
+            qtyReceiving: readNumber(item.quantityReceiving),
+            dateReceivingBy: formatReceivingBy(
+              item.dateReceivingBy,
+              formatExpectedDelivery(lineDate),
+            ),
+            suggestedQty,
+            quantity: 0,
+            productId: resolveOrderProductId(itemId, itemCode, input.products),
+            options: [
+              {
+                distributor: distributorName,
+                distributorId:
+                  item.distributorId?.trim() ||
+                  distributor.id?.trim() ||
+                  undefined,
+                source: item.sourceName?.trim() || sourceName,
+                price: centsToDollars(readNumber(item.buyingPrice)),
+                unit: resolveUnit(
+                  itemId,
+                  itemCode,
+                  input.items,
+                  item.buyingUnit || item.unit,
+                ),
+                qtyPerUnit: Math.max(0, readNumber(item.qtyPerUnit)),
+              },
+            ],
+          };
+          const bucket = buckets.get(lineDateId) ?? [];
+          bucket.push(row);
+          buckets.set(lineDateId, bucket);
+        }
+      }
+    }
+  }
+
+  const orders = [...buckets.entries()]
+    .filter(([, lines]) => lines.length > 0)
+    .map(([dateId, lines]) => {
+      const date = parseDeliveryDateId(dateId) ?? upcomingWednesday(today);
+      return {
+        id: `aggregate-${dateId}`,
+        deliveryDateId: dateId,
+        appliesToDateIds: [dateId],
+        deliveryLabel: formatExpectedDelivery(date),
+        phase: "open" as const,
+        lines,
+        sentDistributors: [],
+        sentGroups: [],
+      };
+    });
+
+  return {
+    orders,
+    dateIds: uniqueWednesdayIds([
+      ...announcedDateIds,
+      ...orders.map((order) => order.deliveryDateId),
+    ]),
+  };
+}
+
+export function demandDateIds(order: DemandOrder) {
+  return order.appliesToDateIds.length > 0
+    ? order.appliesToDateIds
+    : [order.deliveryDateId];
+}
+
+export function demandVisibleOnDate(order: DemandOrder, dateId: string) {
+  return demandDateIds(order).includes(dateId);
 }
 
 export function demandOrdersForDate(orders: DemandOrder[], dateId: string) {
-  return orders.filter((order) => order.deliveryDateId === dateId);
+  return orders.filter((order) => demandVisibleOnDate(order, dateId));
 }
 
 export function countDemandForDate(orders: DemandOrder[], dateId: string) {
@@ -170,7 +305,7 @@ export function previewRowsForOrder(order: DemandOrder): PreviewRow[] {
     itemName: line.itemName,
     custOrderTotal: line.custOrderTotal,
     inStock: line.inStock,
-    qtyReceiving: line.suggestedQty,
+    qtyReceiving: line.qtyReceiving,
     dateReceivingBy: line.dateReceivingBy,
   }));
 }
@@ -208,6 +343,7 @@ export function buildReviewGroups(
     if (!existing) {
       map.set(key, {
         distributor: option.distributor,
+        distributorId: option.distributorId,
         source: option.source,
         email: emailForDistributor(option.distributor),
         items: [line],
