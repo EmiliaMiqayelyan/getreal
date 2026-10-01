@@ -33,6 +33,10 @@ export type PendingStorageSection = {
 export type PendingStorageOrder = {
   /** Distributor order UUID sent as distributorOrderId on POST /inventory/store. */
   id: string;
+  /** Public code such as ORD-BCBC2800. Several orders can share a distributor and time. */
+  orderCode: string;
+  /** Backend order number, used when two rows share an order code. */
+  orderNumber: string;
   supplier: string;
   itemsCount: string;
   receivedAt: string;
@@ -161,9 +165,33 @@ export async function loadPendingStorageOrders(): Promise<
       }
     }),
   );
+  const seen = new Set<string>();
   return detailed
     .map(mapPendingStorageOrder)
-    .filter((order): order is PendingStorageOrder => order != null);
+    .filter((order): order is PendingStorageOrder => {
+      if (!order || seen.has(order.id)) return false;
+      seen.add(order.id);
+      return true;
+    });
+}
+
+/**
+ * Session handoffs use the order code as their id, while pending-storage rows
+ * use the order UUID. Drop a handoff once that order is already in the API list.
+ */
+export function withoutStoredHandoffs<
+  T extends { id: string; orderCode?: string },
+>(handoffs: T[], waiting: Array<{ id: string; orderCode?: string }>): T[] {
+  const keys = new Set<string>();
+  for (const order of waiting) {
+    keys.add(order.id);
+    if (order.orderCode) keys.add(order.orderCode);
+  }
+  return handoffs.filter((order) => {
+    if (keys.has(order.id)) return false;
+    if (order.orderCode && keys.has(order.orderCode)) return false;
+    return true;
+  });
 }
 
 export function mapPendingStorageOrder(
@@ -171,7 +199,9 @@ export function mapPendingStorageOrder(
 ): PendingStorageOrder | null {
   const id = orderRecordId(order);
   if (!id) return null;
+  const raw = order as ApiOrder & Record<string, unknown>;
   const code = order.orderCode?.trim() || order.code?.trim() || id;
+  const orderNumber = readText(raw, ["orderNumber"]) ?? "";
   const sections = new Map<string, PendingStorageSection>();
 
   orderLines(order).forEach((line, index) => {
@@ -226,6 +256,8 @@ export function mapPendingStorageOrder(
 
   return {
     id,
+    orderCode: code,
+    orderNumber,
     supplier: distributorName(order),
     itemsCount: `${count} item${count === 1 ? "" : "s"}`,
     receivedAt: receivedAt(order),

@@ -30,7 +30,10 @@ export type ReceivingHandoffLine = {
 
 /** Payload handed from Distributor Receiving → Inventory (accepted lines only). */
 export type ReceivingHandoffOrder = {
+  /** Distributor order UUID when the delivery row has one. */
   deliveryId: string;
+  /** Public order code, kept so a handoff can match a pending-storage row. */
+  orderCode?: string;
   distributor: string;
   receivedAt: string;
   items: ReceivingHandoffLine[];

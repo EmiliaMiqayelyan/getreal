@@ -45,6 +45,7 @@ import {
 import { handoffToStockSections } from "@/utils/receivingHandoff";
 import {
   loadPendingStorageOrders,
+  withoutStoredHandoffs,
   type PendingStorageOrder,
 } from "@/utils/pendingStorageOrders";
 
@@ -85,6 +86,8 @@ type StockSection = {
 
 type ReceivedOrder = {
   id: string;
+  orderCode?: string;
+  orderNumber?: string;
   supplier: string;
   itemsCount: string;
   receivedAt: string;
@@ -1206,6 +1209,23 @@ export default function InventoryPage() {
     };
   }, [liveInventory, notifyApiError]);
 
+  useEffect(() => {
+    if (!liveInventory || storageOrders.length === 0) return;
+    const covered = new Set(
+      storageOrders.flatMap((order) =>
+        order.orderCode ? [order.id, order.orderCode] : [order.id],
+      ),
+    );
+    for (const handoff of pendingHandoffs) {
+      if (
+        covered.has(handoff.deliveryId) ||
+        (handoff.orderCode && covered.has(handoff.orderCode))
+      ) {
+        removeHandoff(handoff.deliveryId);
+      }
+    }
+  }, [liveInventory, pendingHandoffs, removeHandoff, storageOrders]);
+
   const handoffOrders = useMemo<ReceivedOrder[]>(() => {
     return pendingHandoffs.map((handoff) => {
       const sectionsFromHandoff = handoffToStockSections(
@@ -1216,6 +1236,9 @@ export default function InventoryPage() {
       const itemCount = handoff.items.length;
       return {
         id: handoff.deliveryId,
+        orderCode:
+          handoff.orderCode ||
+          (isUuid(handoff.deliveryId) ? undefined : handoff.deliveryId),
         supplier: handoff.distributor,
         itemsCount: `${itemCount} item${itemCount === 1 ? "" : "s"}`,
         receivedAt: handoff.receivedAt,
@@ -1225,12 +1248,8 @@ export default function InventoryPage() {
   }, [catalogItems, pendingHandoffs]);
 
   const orders = useMemo(() => {
-    const handoffIds = new Set(handoffOrders.map((order) => order.id));
     const waiting = liveInventory ? storageOrders : pendingOrders;
-    return [
-      ...handoffOrders,
-      ...waiting.filter((order) => !handoffIds.has(order.id)),
-    ];
+    return [...withoutStoredHandoffs(handoffOrders, waiting), ...waiting];
   }, [handoffOrders, liveInventory, pendingOrders, storageOrders]);
 
   const activeOrder = orders.find((order) => order.id === storingId) ?? null;
@@ -1656,6 +1675,13 @@ export default function InventoryPage() {
                   aria-hidden
                   className="mx-5 h-[18px] w-px shrink-0 self-center bg-white/70"
                 />
+                {order.orderCode && !isUuid(order.orderCode) ? (
+                  <span className="w-[148px] shrink-0 truncate text-[13px] font-medium">
+                    {order.orderNumber
+                      ? `${order.orderCode} #${order.orderNumber}`
+                      : order.orderCode}
+                  </span>
+                ) : null}
                 <span className="min-w-0 flex-[1.4] truncate pl-0 text-[14px] font-semibold">
                   {order.supplier}
                 </span>

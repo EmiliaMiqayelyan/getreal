@@ -1532,7 +1532,8 @@ export default function DistributorDeliveriesPage() {
     });
 
     const handoff = acceptedLinesOnly({
-      deliveryId: order.id,
+      deliveryId: order.recordId || order.id,
+      orderCode: order.recordId ? order.id : undefined,
       distributor: order.distributor,
       receivedAt: formatReceivedAt(),
       items: lines,

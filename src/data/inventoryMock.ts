@@ -70,6 +70,8 @@ type MockStockSection = {
 export type MockReceivedOrder = {
   /** API: distributor order UUID. */
   id: string;
+  orderCode?: string;
+  orderNumber?: string;
   supplier: string;
   itemsCount: string;
   receivedAt: string;
