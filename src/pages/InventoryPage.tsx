@@ -29,6 +29,7 @@ import { inventoryApi, isApiConfigured, itemsApi } from "@/lib/api";
 import { expirationTimestamp } from "@/lib/api/inventory";
 import { mapApiItemToItem } from "@/lib/api/mappers";
 import type { ApiInventory, ApiItem } from "@/lib/api/types";
+import type { Item } from "@/types/item";
 import { cn } from "@/utils/cn";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { isUuid, recordRef } from "@/utils/entityIds";
@@ -1009,6 +1010,63 @@ type EditLocationTarget = {
   lotIndex: number;
 };
 
+function inventoryRowsFromStorage(
+  order: ReceivedOrder,
+  ready: StockItem[],
+  itemIds: Map<string, string>,
+  catalog: Item[],
+): ApiInventory[] {
+  const rows: ApiInventory[] = [];
+  for (const item of ready) {
+    const itemId = itemIds.get(item.catalogItemId) ?? item.catalogItemId;
+    const match = catalog.find((entry) => recordRef(entry) === itemId);
+    placementsFor(item).forEach((placement, index) => {
+      rows.push({
+        id: `stored-${order.id}-${item.id}-${index}`,
+        itemId,
+        itemName: item.itemName,
+        category: match?.category || null,
+        subcategory: match?.subcategory || null,
+        quantity: Math.max(1, Math.round(placement.qty)),
+        location: placement.location.trim(),
+        address: placement.location.trim(),
+        distributorOrderId: order.id,
+        orderCode:
+          order.orderCode && !isUuid(order.orderCode) ? order.orderCode : null,
+        distributorName: order.supplier,
+        sourceName: item.source?.trim() || match?.source || null,
+        unit: item.unit,
+        purchased: item.purchased ?? null,
+        expirationDate: expirationTimestamp(item.expirationIso) ?? null,
+        deliveryDate: order.receivedAt,
+      });
+    });
+  }
+  return rows;
+}
+
+/** Keep the lines just stored when GET /inventory has not caught up yet. */
+function mergeStoredInventory(
+  serverRows: ApiInventory[],
+  storedRows: ApiInventory[],
+  orderId: string,
+) {
+  if (serverRows.some((row) => row.distributorOrderId?.trim() === orderId)) {
+    return serverRows;
+  }
+  const extras = storedRows.filter((stored) => {
+    const itemId = stored.itemId?.trim();
+    const location = stored.location?.trim().toLowerCase();
+    return !serverRows.some(
+      (row) =>
+        row.itemId?.trim() === itemId &&
+        (row.location ?? "").trim().toLowerCase() === location &&
+        row.quantity === stored.quantity,
+    );
+  });
+  return extras.length ? [...serverRows, ...extras] : serverRows;
+}
+
 function placementsFor(item: StockItem): LocationSplit[] {
   const unpack = parseUnpackQty(item.qtyAfterUnpack);
   const splitPlacements = item.splits.filter(
@@ -1128,6 +1186,8 @@ export default function InventoryPage() {
   const [storageOrders, setStorageOrders] = useState<PendingStorageOrder[]>([]);
   /** Orders stored in this visit. A late pending-storage response must not restore their banners. */
   const completedStorageIds = useRef(new Set<string>());
+  /** Ignore an inventory list that started before the latest store or reload. */
+  const inventoryLoadId = useRef(0);
 
   const unreceivedItems = useMemo(
     () =>
@@ -1180,6 +1240,7 @@ export default function InventoryPage() {
   useEffect(() => {
     if (!liveInventory) return;
     let cancelled = false;
+    const loadId = ++inventoryLoadId.current;
     void Promise.all([
       inventoryApi.list(),
       itemsApi.list().catch((error) => {
@@ -1199,7 +1260,7 @@ export default function InventoryPage() {
       }),
     ])
       .then(([rows, items, waiting]) => {
-        if (cancelled) return;
+        if (cancelled || loadId !== inventoryLoadId.current) return;
         setLiveRows(rows);
         setApiItems(items);
         setStorageOrders(
@@ -1480,7 +1541,9 @@ export default function InventoryPage() {
             location: row.location.trim(),
           })),
         });
-        setLiveRows(await inventoryApi.list());
+        const loadId = ++inventoryLoadId.current;
+        const rows = await inventoryApi.list({ fresh: true });
+        if (loadId === inventoryLoadId.current) setLiveRows(rows);
         setEditTarget(null);
       } catch (error) {
         notifyApiError(error, "Failed to update location.");
@@ -1584,29 +1647,60 @@ export default function InventoryPage() {
         return { ok: false, storedIds: [] as string[] };
       }
 
+      const storedRows = inventoryRowsFromStorage(
+        order,
+        ready,
+        itemIds,
+        catalogItems,
+      );
+      const loadId = ++inventoryLoadId.current;
       try {
-        const rows = await inventoryApi.list();
-        setLiveRows(rows);
-        const next = buildInventorySections(
-          catalogItems,
-          rows,
-          categoryNamesFromCatalog(categories),
-        );
-        const storedItemIds = new Set(ready.map((item) => item.catalogItemId));
-        setExpanded((current) => {
-          const open = new Set(current);
-          for (const section of next) {
-            for (const product of section.products) {
-              if (
-                product.lots.some((lot) => storedItemIds.has(lot.catalogItemId))
-              ) {
-                open.add(product.id);
+        const [rows, items] = await Promise.all([
+          inventoryApi.list({ fresh: true }),
+          itemsApi.list({ fresh: true }).catch((error) => {
+            notifyApiError(
+              error,
+              "Stored items, but the item list could not be refreshed.",
+            );
+            return null;
+          }),
+        ]);
+        if (loadId === inventoryLoadId.current) {
+          const nextRows = mergeStoredInventory(rows, storedRows, order.id);
+          setLiveRows(nextRows);
+          if (items) setApiItems(items);
+          const next = buildInventorySections(
+            catalogItems,
+            nextRows,
+            categoryNamesFromCatalog(categories),
+          );
+          const storedItemIds = new Set(
+            ready.map(
+              (item) => itemIds.get(item.catalogItemId) ?? item.catalogItemId,
+            ),
+          );
+          setExpanded((current) => {
+            const open = new Set(current);
+            for (const section of next) {
+              for (const product of section.products) {
+                if (
+                  product.lots.some((lot) =>
+                    storedItemIds.has(lot.catalogItemId),
+                  )
+                ) {
+                  open.add(product.id);
+                }
               }
             }
-          }
-          return open;
-        });
+            return open;
+          });
+        }
       } catch (error) {
+        if (loadId === inventoryLoadId.current) {
+          setLiveRows((current) =>
+            mergeStoredInventory(current ?? [], storedRows, order.id),
+          );
+        }
         notifyApiError(
           error,
           "Stored items, but inventory could not be refreshed.",

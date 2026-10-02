@@ -30,9 +30,10 @@ export type UpdateItemPayload = Partial<
 const inflightCreates = new Map<string, Promise<ApiItem>>();
 
 export const itemsApi = {
-  list() {
+  list(options?: { fresh?: boolean }) {
     return apiRequest<unknown>("/items", {
-      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+      cacheTtlMs: options?.fresh ? 0 : CATALOG_LIST_CACHE_MS,
+      ...(options?.fresh ? { dedupe: false, cache: "no-store" as const } : {}),
     }).then((payload) =>
       normalizeNamedList<ApiItem>(payload, ["items", "data", "results"]),
     );

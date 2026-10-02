@@ -415,8 +415,13 @@ async function writeInventory(
 }
 
 export const inventoryApi = {
-  list() {
-    return apiRequest<unknown>("/inventory").then((payload) =>
+  list(options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/inventory", {
+      // Inventory changes as soon as stock is stored. A cached GET would keep
+      // the page on the pre-store list until a full browser refresh.
+      cache: "no-store",
+      ...(options?.fresh ? { dedupe: false } : {}),
+    }).then((payload) =>
       expandInventoryGroups(
         normalizeNamedList<ApiInventory>(payload, [
           "inventory",
