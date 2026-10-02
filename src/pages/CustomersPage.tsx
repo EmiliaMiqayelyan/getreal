@@ -21,6 +21,8 @@ import {
   collectPaginated,
   isApiConfigured,
   mapApiUserToAdminCustomer,
+  orderModelId,
+  orderRecordId,
   ordersApi,
   usersApi,
   type ApiOrder,
@@ -33,15 +35,195 @@ import type {
   AdminCustomerOrderStatus,
 } from "@/types/admin";
 import { cn } from "@/utils/cn";
-import { isUuid } from "@/utils/entityIds";
+import { isUuid, publicCode } from "@/utils/entityIds";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { resolveFullAddress } from "@/utils/format";
 
-function applyOrderDetail(
-  order: ApiOrder,
-  fallback: AdminCustomerOrder,
-): AdminCustomerOrder {
-  const items = (order.items ?? []).map((line) => {
+const COMPLETED_ORDER_STATUSES = [
+  "delivered",
+  "cooler_pickup",
+  "return",
+  "archived",
+] as const;
+
+let standardOrdersPromise: Promise<ApiOrder[]> | null = null;
+
+function loadStandardOrders() {
+  if (!standardOrdersPromise) {
+    standardOrdersPromise = (async () => {
+      const open = await collectPaginated((page, limit) =>
+        ordersApi.list({ page, limit, type: "standard" }),
+      );
+      const extras = await Promise.allSettled(
+        COMPLETED_ORDER_STATUSES.map((status) =>
+          collectPaginated((page, limit) =>
+            ordersApi.list({ page, limit, type: "standard", status }),
+          ),
+        ),
+      );
+      const seen = new Set<string>();
+      const orders: ApiOrder[] = [];
+      const groups = [
+        open,
+        ...extras.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value] : [],
+        ),
+      ];
+      for (const group of groups) {
+        for (const order of group) {
+          const key = order.id || order.orderCode || order.code || "";
+          if (key && seen.has(key)) continue;
+          if (key) seen.add(key);
+          orders.push(order);
+        }
+      }
+      return orders;
+    })().catch((error) => {
+      standardOrdersPromise = null;
+      throw error;
+    });
+  }
+  return standardOrdersPromise;
+}
+
+function isoDateOnly(value: string | null | undefined) {
+  const match = value?.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+  return match?.[1] ?? "";
+}
+
+function formatOrderedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function readString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function orderOwnerIds(order: ApiOrder) {
+  const ids = new Set<string>();
+  const push = (value: unknown) => {
+    const text = readString(value);
+    if (text) ids.add(text);
+  };
+  push(order.customerId);
+  const raw = order as ApiOrder & Record<string, unknown>;
+  push(raw.userId);
+  push(raw.customerCode);
+  const users = Array.isArray(order.users)
+    ? order.users
+    : order.users
+      ? [order.users]
+      : [];
+  for (const user of users) {
+    push(user?.id);
+    push(user?.customerCode);
+  }
+  const customer = raw.customer;
+  if (customer && typeof customer === "object") {
+    const record = customer as Record<string, unknown>;
+    push(record.id);
+    push(record.customerCode);
+  }
+  return ids;
+}
+
+function orderBelongsToCustomer(order: ApiOrder, customer: AdminCustomer) {
+  const owners = orderOwnerIds(order);
+  return (
+    (Boolean(customer.recordId) && owners.has(customer.recordId!)) ||
+    owners.has(customer.id)
+  );
+}
+
+function mapOrderStatus(status?: string): AdminCustomerOrderStatus {
+  switch ((status ?? "").trim().toLowerCase()) {
+    case "packing":
+    case "cooler_ready":
+    case "loaded":
+      return "Packing";
+    case "on_route":
+      return "Delivering";
+    case "delivered":
+    case "cooler_pickup":
+    case "return":
+    case "archived":
+    case "completed":
+    case "complete":
+      return "Completed";
+    case "cancelled":
+    case "canceled":
+      return "Canceled";
+    default:
+      return "In Progress";
+  }
+}
+
+function readPaymentStatus(order: ApiOrder) {
+  const raw = readString(order.paymentStatus).toLowerCase();
+  if (raw === "paid") return "Paid";
+  if (raw === "unpaid") return "Unpaid";
+  if (raw === "failed") return "Failed";
+  if (raw === "card") return "Card";
+  if (raw === "cash") return "Cash";
+  if (raw === "terminal") return "Terminal";
+  if (!raw) return "Unpaid";
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
+
+function readPackerName(order: ApiOrder) {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const packer = raw.packer ?? raw.assignedPacker;
+  if (packer && typeof packer === "object") {
+    const record = packer as Record<string, unknown>;
+    const name = [record.firstName, record.lastName]
+      .map(readString)
+      .filter(Boolean)
+      .join(" ");
+    if (name) return name;
+    const direct = readString(record.name);
+    if (direct) return direct;
+  }
+  const named = readString(raw.packerName);
+  if (named) return named;
+  const id = readString(order.packerId);
+  return id && !isUuid(id) ? id : undefined;
+}
+
+function readCoolerIds(order: ApiOrder) {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const ids: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value === "string") {
+      const code = publicCode(value);
+      if (code) ids.push(code);
+      return;
+    }
+    if (!value || typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    const code = publicCode(
+      readString(record.coolerCode),
+      readString(record.code),
+      readString(record.id),
+    );
+    if (code) ids.push(code);
+  };
+  push(raw.cooler);
+  if (Array.isArray(raw.coolers)) raw.coolers.forEach(push);
+  if (Array.isArray(raw.coolerIds)) raw.coolerIds.forEach(push);
+  push(order.coolerId);
+  return [...new Set(ids)];
+}
+
+function mapOrderItems(order: ApiOrder) {
+  return (order.items ?? []).map((line) => {
     const price = centsToDollars(line.price);
     const quantity = line.quantity ?? 0;
     return {
@@ -52,13 +234,45 @@ function applyOrderDetail(
       totalPrice: price * quantity,
     };
   });
+}
+
+function mapApiOrderToCustomerOrder(
+  order: ApiOrder,
+  index: number,
+): AdminCustomerOrder {
+  const created = order.createdAt ?? "";
+  return {
+    id: orderModelId(order, `ORD-${index + 1}`),
+    recordId: orderRecordId(order),
+    orderDate: isoDateOnly(created),
+    deliveryDate: isoDateOnly(order.deliveryDate),
+    deliveryAddress: "",
+    orderPrice:
+      order.totalPrice != null ? centsToDollars(order.totalPrice) : 0,
+    paymentStatus: readPaymentStatus(order),
+    status: mapOrderStatus(order.status),
+    items: mapOrderItems(order),
+    packerAssigned: readPackerName(order),
+    coolerIds: readCoolerIds(order),
+    orderedAt: created ? formatOrderedAt(created) : undefined,
+  };
+}
+
+function applyOrderDetail(
+  order: ApiOrder,
+  fallback: AdminCustomerOrder,
+): AdminCustomerOrder {
+  const mapped = mapApiOrderToCustomerOrder(order, 0);
   return {
     ...fallback,
-    items: items.length ? items : fallback.items,
+    ...mapped,
+    id: fallback.id,
+    deliveryAddress: fallback.deliveryAddress,
+    items: mapped.items.length ? mapped.items : fallback.items,
     orderPrice:
-      order.totalPrice != null
-        ? centsToDollars(order.totalPrice)
-        : fallback.orderPrice,
+      order.totalPrice != null ? mapped.orderPrice : fallback.orderPrice,
+    packerAssigned: mapped.packerAssigned ?? fallback.packerAssigned,
+    coolerIds: mapped.coolerIds?.length ? mapped.coolerIds : fallback.coolerIds,
   };
 }
 
@@ -183,9 +397,7 @@ type SelectedOrder = {
 };
 
 const ORDER_ROW =
-  "grid grid-cols-[minmax(0,1.4fr)_minmax(0,0.9fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,1fr)_72px_52px] items-center gap-x-3 px-4";
-const GRID_PLAIN =
-  "grid grid-cols-[96px_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_40px_72px_76px_88px] items-center gap-x-3 px-4";
+  "grid grid-cols-[148px_120px_112px_128px_minmax(24px,1fr)_84px_52px] items-center gap-x-6 px-4";
 const GRID_ARROW =
   "grid grid-cols-[28px_96px_minmax(0,1.1fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_minmax(0,0.9fr)_40px_72px_76px_88px] items-center gap-x-3 px-4";
 
@@ -200,7 +412,7 @@ function OrderDetailDrawer({
   const address = parseAddress(order.deliveryAddress || customer.fullAddress);
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-40 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white shadow-[-8px_0_32px_rgba(0,0,0,0.08)]">
+    <aside className="absolute top-[52px] right-0 bottom-0 z-30 flex w-full max-w-[600px] flex-col border-l border-[#00000014] bg-white">
       <div className="flex items-start justify-between border-b border-[#00000014] px-5 pt-3 pb-4">
         <div className="min-w-0 pr-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -242,10 +454,10 @@ function OrderDetailDrawer({
             Requested Items
           </h3>
           <div className="overflow-x-auto">
-            <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#00000014] bg-[#FBF9F9]">
+            <div className="min-w-[320px] overflow-hidden rounded-[12px] border border-[#EBEBEB] bg-white">
               <div
                 className={cn(
-                  "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
+                  "grid h-9 grid-cols-[1.6fr_50px_minmax(108px,1fr)_72px] items-center gap-2 border-b border-[#EBEBEB] bg-[#F9FAFB] px-4 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase",
                 )}
               >
                 <div>Item / Order ID</div>
@@ -257,7 +469,7 @@ function OrderDetailDrawer({
                 <div
                   key={`${order.id}-${item.itemName}`}
                   className={cn(
-                    "grid grid-cols-[1.6fr_50px_90px_70px] gap-2 border-b border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[12px] text-[#111118] last:border-b-0",
+                    "grid min-h-[30px] grid-cols-[1.6fr_50px_minmax(108px,1fr)_72px] items-center gap-2 border-b border-[#E5E7EB] bg-white px-4 py-1 text-[12px] text-[#111118]",
                   )}
                 >
                   <div className="min-w-0">
@@ -280,7 +492,7 @@ function OrderDetailDrawer({
               ))}
               <div
                 className={cn(
-                  "flex items-center justify-between border-t border-[#00000014] bg-[#FBF9F9] px-4 py-[10px] text-[#111118]",
+                  "flex h-[30px] items-center justify-between border-t border-[#E5E7EB] bg-white px-4 text-[#111118]",
                 )}
               >
                 <span className="text-[14px] font-semibold">Order Total</span>
@@ -412,22 +624,22 @@ function CustomerOrdersPanel({
   }
 
   return (
-    <div
-      className={cn(
-        "relative border-t border-[#00000014] bg-[#FBF9F9]",
-        SUB_ROW_PAD,
-      )}
-    >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-0 bottom-0 left-[23px] hidden w-px bg-[#00000014] md:block"
-      />
+    <div className="relative border-t border-[#00000014] bg-[#F3F4F6]">
       {/* Mobile: stacked order cards */}
-      <div className="relative space-y-2 md:hidden">
+      <div className={cn("relative space-y-2 md:hidden", SUB_ROW_PAD)}>
         {customer.orders.map((order) => (
           <div
             key={order.id}
-            className="rounded-[10px] border border-[#00000014] bg-white p-3"
+            role="button"
+            tabIndex={0}
+            onClick={() => onViewOrder(customer, order)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onViewOrder(customer, order);
+              }
+            }}
+            className="cursor-pointer rounded-[10px] border border-[#00000014] bg-white p-3 hover:bg-[#F7F5F4]"
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -443,13 +655,9 @@ function CustomerOrdersPanel({
                 <div className="text-[13px] font-semibold text-[#111118]">
                   {currency(order.orderPrice)}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => onViewOrder(customer, order)}
-                  className="mt-1 inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#155DFC]"
-                >
+                <span className="mt-1 inline-flex h-10 items-center px-1 text-[13px] font-medium text-[#155DFC]">
                   View
-                </button>
+                </span>
               </div>
             </div>
             <div className="mt-2">
@@ -468,13 +676,12 @@ function CustomerOrdersPanel({
 
       {/* Desktop: nested table left edge aligns to expand-arrow center */}
       <div className="relative hidden md:block">
-        <ScrollTable minWidth="100%" bare>
+        <ScrollTable minWidth={760} bare>
           <div
             className={cn(
               ORDER_ROW,
               TABLE_HEADER,
-              PINNED_HEADER,
-              "h-10 border-b border-[#00000014] bg-[#FBF9F9]",
+              "h-9 border-b border-[#00000014] bg-[#F3F4F6]",
             )}
           >
             <div>Order ID</div>
@@ -483,7 +690,7 @@ function CustomerOrdersPanel({
             <div>Status</div>
             <div aria-hidden />
             <div>Total</div>
-            <div />
+            <div className="text-right">View</div>
           </div>
           {customer.orders.map((order) => {
             const timeLabel = order.orderedAt
@@ -492,16 +699,25 @@ function CustomerOrdersPanel({
             return (
               <div
                 key={order.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => onViewOrder(customer, order)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onViewOrder(customer, order);
+                  }
+                }}
                 className={cn(
                   ORDER_ROW,
-                  "border-b border-[#00000014] bg-[#FBF9F9] py-2.5 text-[13px] text-[#111118] last:border-b-0",
+                  "cursor-pointer border-b border-[#00000014] bg-[#F3F4F6] py-2.5 text-[13px] text-[#111118] last:border-b-0 hover:bg-[#E9EBEF]",
                 )}
               >
                 <IdPill>{order.id}</IdPill>
                 <div>
                   <div>{formatShortDate(order.orderDate)}</div>
                   {timeLabel ? (
-                    <div className="mt-0.5 text-[11px] text-[#8A8A8A]">
+                    <div className="mt-0.5 text-[11px] leading-none text-[#8A8A8A]">
                       {timeLabel}
                     </div>
                   ) : null}
@@ -518,17 +734,9 @@ function CustomerOrdersPanel({
                   </span>
                 </div>
                 <div aria-hidden />
-                <div className="font-semibold">
-                  {currency(order.orderPrice)}
-                </div>
-                <div className="text-right">
-                  <button
-                    type="button"
-                    onClick={() => onViewOrder(customer, order)}
-                    className="inline-flex h-10 items-center rounded-[10px] px-3 text-[13px] font-medium text-[#155DFC]"
-                  >
-                    View
-                  </button>
+                <div className="font-semibold">{currency(order.orderPrice)}</div>
+                <div className="text-right text-[13px] font-medium text-[#155DFC]">
+                  View
                 </div>
               </div>
             );
@@ -560,45 +768,38 @@ function CustomerTable({
     );
   }
 
-  const showArrows = customers.some((customer) => customer.orders.length > 0);
-  const grid = showArrows ? GRID_ARROW : GRID_PLAIN;
+  const grid = GRID_ARROW;
 
   return (
     <>
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {customers.map((customer) => {
-          const canExpand = customer.orders.length > 0;
-          const open = canExpand && expandedId === customer.id;
+          const open = expandedId === customer.id;
           return (
             <div
               key={customer.id}
               className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white"
             >
               <div className="flex w-full items-start gap-3 p-3.5">
-                {canExpand ? (
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse" : "Expand"}
-                    onClick={() => onToggle(customer.id)}
-                    className="mt-1 shrink-0"
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={cn(
-                        "text-[#B0B0B0] transition-transform",
-                        open && "rotate-90 text-[#F57850]",
-                      )}
-                    />
-                  </button>
-                ) : null}
                 <button
                   type="button"
-                  onClick={canExpand ? () => onToggle(customer.id) : undefined}
-                  className={cn(
-                    "min-w-0 flex-1 text-left",
-                    !canExpand && "cursor-default",
-                  )}
+                  aria-label={open ? "Collapse" : "Expand"}
+                  onClick={() => onToggle(customer.id)}
+                  className="mt-1 shrink-0"
+                >
+                  <ChevronRight
+                    size={14}
+                    className={cn(
+                      "text-[#B0B0B0] transition-transform",
+                      open && "rotate-90 text-[#F57850]",
+                    )}
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggle(customer.id)}
+                  className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
                     <IdPill>{customer.id}</IdPill>
@@ -669,7 +870,7 @@ function CustomerTable({
                 "h-10 border-b border-[#00000014]",
               )}
             >
-              {showArrows ? <div className="min-w-0" /> : null}
+              <div className="min-w-0" />
               <div className="min-w-0 whitespace-nowrap">ID</div>
               <div className="min-w-0 whitespace-nowrap">Customer</div>
               <div className="min-w-0 whitespace-nowrap">Email</div>
@@ -682,8 +883,7 @@ function CustomerTable({
             </div>
 
             {customers.map((customer, index) => {
-              const canExpand = customer.orders.length > 0;
-              const open = canExpand && expandedId === customer.id;
+              const open = expandedId === customer.id;
               const isLast = index === customers.length - 1;
 
               return (
@@ -695,38 +895,29 @@ function CustomerTable({
                       !isLast || open ? "border-b border-[#00000014]" : "",
                     )}
                   >
-                    {showArrows ? (
-                      canExpand ? (
-                        <button
-                          type="button"
-                          aria-label={open ? "Collapse" : "Expand"}
-                          onClick={() => onToggle(customer.id)}
-                          className="relative z-[1] flex justify-self-start"
-                        >
-                          <ChevronRight
-                            size={14}
-                            className={cn(
-                              "text-[#B0B0B0] transition-transform",
-                              open && "rotate-90 text-[#F57850]",
-                            )}
-                          />
-                        </button>
-                      ) : (
-                        <span className="w-3.5" aria-hidden />
-                      )
-                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={open ? "Collapse" : "Expand"}
+                      aria-expanded={open}
+                      onClick={() => onToggle(customer.id)}
+                      className="relative z-[1] flex justify-self-start"
+                    >
+                      <ChevronRight
+                        size={14}
+                        className={cn(
+                          "text-[#B0B0B0] transition-transform",
+                          open && "rotate-90 text-[#F57850]",
+                        )}
+                      />
+                    </button>
 
-                    {canExpand ? (
-                      <button
-                        type="button"
-                        onClick={() => onToggle(customer.id)}
-                        className="text-left"
-                      >
-                        <IdPill>{customer.id}</IdPill>
-                      </button>
-                    ) : (
+                    <button
+                      type="button"
+                      onClick={() => onToggle(customer.id)}
+                      className="text-left"
+                    >
                       <IdPill>{customer.id}</IdPill>
-                    )}
+                    </button>
 
                     <div className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] font-semibold text-[#111118]">
                       <span className="truncate">
@@ -816,6 +1007,7 @@ export default function CustomersPage() {
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
   const loadedOrderIds = useRef(new Set<string>());
+  const loadedCustomerOrders = useRef(new Set<string>());
   const customersRef = useRef(customers);
   customersRef.current = customers;
 
@@ -825,6 +1017,9 @@ export default function CustomersPage() {
     setSearchForPage(debouncedQuery);
     setPage(1);
     setListExhausted(false);
+    setExpandedId(null);
+    setSelected(null);
+    loadedCustomerOrders.current.clear();
     if (apiConfigured) setCustomers([]);
   }
 
@@ -847,9 +1042,16 @@ export default function CustomersPage() {
         if (cancelled) return;
         const mapped = result.items.map(mapApiUserToAdminCustomer);
         setCustomers((current) => {
-          if (!append) return mapped;
+          const previousOrders = new Map(
+            current.map((customer) => [customer.id, customer.orders]),
+          );
+          const withOrders = mapped.map((customer) => ({
+            ...customer,
+            orders: previousOrders.get(customer.id) ?? [],
+          }));
+          if (!append) return withOrders;
           const seen = new Set(current.map((customer) => customer.id));
-          const extra = mapped.filter((customer) => !seen.has(customer.id));
+          const extra = withOrders.filter((customer) => !seen.has(customer.id));
           return extra.length === 0 ? current : [...current, ...extra];
         });
         setTotal(result.total);
@@ -883,30 +1085,29 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (!apiConfigured || !expandedId) return;
+    if (loadedCustomerOrders.current.has(expandedId)) return;
     const customer = customersRef.current.find((row) => row.id === expandedId);
-    const recordId = isUuid(customer?.recordId)
-      ? customer?.recordId
-      : isUuid(customer?.id)
-        ? customer?.id
-        : undefined;
-    if (!recordId) return;
+    if (!customer) return;
     let cancelled = false;
     setDetailLoadingId(expandedId);
-    void usersApi
-      .getById(recordId)
-      .then((user) => {
+    void loadStandardOrders()
+      .then((orders) => {
         if (cancelled) return;
-        const mapped = mapApiUserToAdminCustomer(user, 0);
+        const mine = orders
+          .filter((order) => orderBelongsToCustomer(order, customer))
+          .map((order, index) => mapApiOrderToCustomerOrder(order, index))
+          .sort((left, right) =>
+            right.orderDate.localeCompare(left.orderDate),
+          );
+        loadedCustomerOrders.current.add(expandedId);
         setCustomers((current) =>
           current.map((row) =>
-            row.id === expandedId
-              ? { ...row, ...mapped, id: row.id, orders: row.orders }
-              : row,
+            row.id === expandedId ? { ...row, orders: mine } : row,
           ),
         );
       })
       .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load customer details.");
+        if (!cancelled) notifyApiError(error, "Failed to load customer orders.");
       })
       .finally(() => {
         if (!cancelled) {
@@ -999,7 +1200,7 @@ export default function CustomersPage() {
   const inactive = visibleCustomers.filter((customer) => customer.blocked);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
+    <div className="relative flex h-full min-h-0 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Customers"
         toolbar={
@@ -1085,7 +1286,7 @@ export default function CustomersPage() {
         }
       />
 
-      <div className="relative flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
+      <div className="flex min-h-0 flex-1 flex-col bg-[#FAFAFA]">
         <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-7 md:py-5">
           {loading && customers.length === 0 ? (
             <AppLoader variant="table" label="Loading customers" />
@@ -1142,14 +1343,14 @@ export default function CustomersPage() {
             </>
           )}
         </div>
-
-        {selected ? (
-          <OrderDetailDrawer
-            selected={selected}
-            onClose={() => setSelected(null)}
-          />
-        ) : null}
       </div>
+
+      {selected ? (
+        <OrderDetailDrawer
+          selected={selected}
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
     </div>
   );
 }

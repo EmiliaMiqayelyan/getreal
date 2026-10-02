@@ -76,7 +76,7 @@ export type AdminCustomerOrder = {
   deliveryDate: string;
   deliveryAddress: string;
   orderPrice: number;
-  paymentStatus: "Card" | "Cash" | "Terminal" | "Paid";
+  paymentStatus: string;
   status: AdminCustomerOrderStatus;
   items: AdminCustomerOrderItem[];
   packerAssigned?: string;
