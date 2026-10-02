@@ -53,6 +53,7 @@ import {
   syncReviewGroupOrder,
 } from "@/lib/api/orderSync";
 import {
+  applyAggregateDemandSnapshot,
   buildReviewGroups,
   categorySections,
   demandDateIds,
@@ -66,6 +67,7 @@ import type {
   DeliveredOrder,
   ManualOrderDraft,
   PlacedOrder,
+  ReviewGroup,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
 import type { ExportRequest } from "@/types/export";
@@ -397,7 +399,9 @@ export default function ProductOrdersPage() {
 
   const visibleDeliveryChips = useMemo(() => {
     const dateIds = [
-      ...demandOrders.flatMap((order) => demandDateIds(order)),
+      ...demandOrders
+        .filter((order) => order.lines.length > 0)
+        .flatMap((order) => demandDateIds(order)),
       ...inProgress.map((order) => placedOrderDateId(order)),
     ];
     const chips = wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
@@ -452,10 +456,7 @@ export default function ProductOrdersPage() {
           dateReceivingBy: row.dateReceivingBy || expectedDeliveryLabel,
         })),
       }))
-      .filter((entry) => {
-        if (!search.trim() && !productFilter) return true;
-        return entry.lines.length > 0;
-      });
+      .filter((entry) => entry.lines.length > 0);
   }, [
     expectedDeliveryLabel,
     orderDemandCriteria,
@@ -860,7 +861,9 @@ export default function ProductOrdersPage() {
 
     const group = reviewGroups.find((entry) => reviewGroupKey(entry) === key);
     if (!group || !activeDemandId) return;
-    let createdOrderId: string | undefined;
+
+    const sentGroup: ReviewGroup = { ...group };
+    let listRefreshed = false;
 
     if (isApiConfigured()) {
       setPlacing(key);
@@ -873,32 +876,55 @@ export default function ProductOrdersPage() {
           toOrderDeliveryDateIso(activeDeliveryDateId),
         );
         if (!created) return;
-        createdOrderId = orderRecordId(created);
+        sentGroup.orderId = orderRecordId(created);
+        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
+        setInProgress(snapshot.inProgress);
+        setDeliveredOrders(snapshot.delivered);
+        if (snapshot.demandError) {
+          showError(snapshot.demandError);
+        } else {
+          setAnnouncedDateIds(snapshot.demandDateIds);
+          setDemandOrders((current) =>
+            applyAggregateDemandSnapshot(
+              current,
+              snapshot.demand,
+              activeDemandId,
+              { key, group: sentGroup },
+            ),
+          );
+          listRefreshed = true;
+        }
+      } catch (error) {
+        notifyApiError(
+          error,
+          "Order was sent, but the list failed to refresh.",
+        );
       } finally {
         setPlacing(null);
       }
     }
 
-    const sentGroup = { ...group, orderId: createdOrderId };
     setOrderedDistributors((prev) => new Set(prev).add(key));
-    setDemandOrders((current) =>
-      current.map((order) => {
-        if (order.id !== activeDemandId) return order;
-        return {
-          ...order,
-          phase: "partial",
-          sentDistributors: order.sentDistributors.includes(key)
-            ? order.sentDistributors
-            : [...order.sentDistributors, key],
-          sentGroups: [
-            ...order.sentGroups.filter(
-              (entry) => reviewGroupKey(entry) !== key,
-            ),
-            sentGroup,
-          ],
-        };
-      }),
-    );
+    if (!listRefreshed) {
+      setDemandOrders((current) =>
+        current.map((order) => {
+          if (order.id !== activeDemandId) return order;
+          return {
+            ...order,
+            phase: "partial",
+            sentDistributors: order.sentDistributors.includes(key)
+              ? order.sentDistributors
+              : [...order.sentDistributors, key],
+            sentGroups: [
+              ...order.sentGroups.filter(
+                (entry) => reviewGroupKey(entry) !== key,
+              ),
+              sentGroup,
+            ],
+          };
+        }),
+      );
+    }
     showToast(`Order sent to ${group.source}`);
   }
 
@@ -930,10 +956,15 @@ export default function ProductOrdersPage() {
         const snapshot = await loadDistributorOrderScreen(catalogRef.current);
         setInProgress(snapshot.inProgress);
         setDeliveredOrders(snapshot.delivered);
-        if (snapshot.demandError) showError(snapshot.demandError);
-        setDemandOrders((current) =>
-          current.filter((order) => order.id !== parent.id),
-        );
+        if (snapshot.demandError) {
+          showError(snapshot.demandError);
+          setDemandOrders((current) =>
+            current.filter((order) => order.id !== parent.id),
+          );
+        } else {
+          setAnnouncedDateIds(snapshot.demandDateIds);
+          setDemandOrders(snapshot.demand);
+        }
         setExpandedId(snapshot.inProgress[0]?.id ?? null);
         showToast("Orders created successfully");
         resetToList();

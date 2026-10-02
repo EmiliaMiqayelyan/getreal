@@ -307,7 +307,59 @@ export function demandOrdersForDate(orders: DemandOrder[], dateId: string) {
 }
 
 export function countDemandForDate(orders: DemandOrder[], dateId: string) {
-  return demandOrdersForDate(orders, dateId).length;
+  return demandOrdersForDate(orders, dateId).filter(
+    (order) => order.lines.length > 0,
+  ).length;
+}
+
+/**
+ * Replace Order List lines with the latest aggregate-demand.
+ * A batch still open in review keeps the sources already sent, so Cancel
+ * can void those distributor orders after the customer lines are gone.
+ */
+export function applyAggregateDemandSnapshot(
+  current: DemandOrder[],
+  fresh: DemandOrder[],
+  activeId: string | null,
+  sent?: { key: string; group: ReviewGroup },
+): DemandOrder[] {
+  if (!activeId) return fresh;
+  const previous = current.find((order) => order.id === activeId);
+  const sentDistributors = previous
+    ? previous.sentDistributors.includes(sent?.key ?? "")
+      ? previous.sentDistributors
+      : sent
+        ? [...previous.sentDistributors, sent.key]
+        : previous.sentDistributors
+    : sent
+      ? [sent.key]
+      : [];
+  const sentGroups = sent
+    ? [
+        ...(previous?.sentGroups.filter(
+          (entry) => reviewGroupKey(entry) !== sent.key,
+        ) ?? []),
+        sent.group,
+      ]
+    : (previous?.sentGroups ?? []);
+
+  if (sentDistributors.length === 0 && sentGroups.length === 0) return fresh;
+
+  const decorate = (order: DemandOrder): DemandOrder =>
+    order.id === activeId
+      ? {
+          ...order,
+          phase: "partial",
+          sentDistributors,
+          sentGroups,
+        }
+      : order;
+
+  if (fresh.some((order) => order.id === activeId)) {
+    return fresh.map(decorate);
+  }
+  if (!previous) return fresh;
+  return [...fresh, decorate({ ...previous, lines: [] })];
 }
 
 export function previewRowsForOrder(order: DemandOrder): PreviewRow[] {
