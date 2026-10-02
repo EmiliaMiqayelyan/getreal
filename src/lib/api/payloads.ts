@@ -143,7 +143,8 @@ export function toCreateDistributorPayload(
 function persistableLogoUrl(
   url: string | null | undefined,
 ): string | undefined {
-  if (!url || url.startsWith("blob:") || url.startsWith("data:")) return undefined;
+  if (!url || url.startsWith("blob:") || url.startsWith("data:"))
+    return undefined;
   return url;
 }
 
@@ -191,7 +192,9 @@ export function toCreateSourcePayload(
   };
 }
 
-function relationRecordId<T extends { id: string; recordId?: string; name: string }>(
+function relationRecordId<
+  T extends { id: string; recordId?: string; name: string },
+>(
   ref: string | undefined,
   name: string | undefined,
   entities: T[],
@@ -267,7 +270,7 @@ export function toCreateItemPayload(
         : item.sourcePer || undefined,
     singleItemUnit:
       item.sourcePer === "Case" && item.caseBy === "Units / case"
-        ? undefined
+        ? ""
         : item.singleItemUnit || undefined,
     description: item.description.trim() || undefined,
     photos: photoUrls.filter((url) => typeof url === "string"),

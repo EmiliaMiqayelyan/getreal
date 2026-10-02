@@ -44,8 +44,7 @@ export type { CatalogSubcategory };
 /** Title-case an API role name and match the labels used on the Roles page. */
 export function formatApiRoleName(roleName: string | null | undefined): string {
   const raw = roleName?.trim() || "Manager";
-  const display =
-    raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");
+  const display = raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");
   const lower = display.toLowerCase();
   if (lower.includes("admin")) return "Superadmin";
   if (lower.includes("warehouse")) return "Warehouse Worker";
@@ -270,9 +269,7 @@ function sourcePerFromBuyingUnit(
 }
 
 /** Case type is stored in buyingUnit. Older rows only say "Case". */
-function caseByFromBuyingUnit(
-  buyingUnit: string | null | undefined,
-): CaseBy {
+function caseByFromBuyingUnit(buyingUnit: string | null | undefined): CaseBy {
   const normalized = buyingUnit?.trim().toLowerCase() ?? "";
   if (normalized.startsWith("lb")) return "Lbs / case";
   return "Units / case";
@@ -309,10 +306,10 @@ export function mapApiItemToItem(
   const itemKey = recordId ?? item.itemCode ?? String(index);
   const photos = mapApiItemPhotos(item.photos, itemKey);
   const sourcePer = sourcePerFromBuyingUnit(item.buyingUnit);
-  const caseBy = sourcePer === "Case" ? caseByFromBuyingUnit(item.buyingUnit) : "";
+  const caseBy =
+    sourcePer === "Case" ? caseByFromBuyingUnit(item.buyingUnit) : "";
   const singleItemUnit =
-    item.singleItemUnit?.trim() ||
-    (sourcePer === "Unit" ? "Each" : "");
+    item.singleItemUnit?.trim() || (sourcePer === "Unit" ? "Each" : "");
   const pieceWeightOz =
     sourcePer === "Unit" ? pieceWeightOzFromLabel(singleItemUnit) : 0;
   const contents = Math.max(1, item.contents ?? 1);

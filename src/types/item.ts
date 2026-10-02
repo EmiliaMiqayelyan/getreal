@@ -36,7 +36,7 @@ export type Item = {
   buyingPrice: number;
   /** Pieces per case when sourcing by Case; 1 when Unit. */
   contents: number;
-  /** Sellable unit label shown in catalogs. */
+  /** Piece label for Unit and Lbs / case. Units / case does not use one. */
   singleItemUnit: string;
   sellingPrice: number;
   photos: ItemPhoto[];

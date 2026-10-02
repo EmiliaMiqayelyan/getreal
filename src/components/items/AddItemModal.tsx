@@ -21,10 +21,7 @@ import {
   type SourcePer,
 } from "@/types/item";
 import { resolveDistributorId } from "@/utils/distributorSync";
-import {
-  resolveSourceId,
-  sourceNamesForDistributor,
-} from "@/utils/sources";
+import { resolveSourceId, sourceNamesForDistributor } from "@/utils/sources";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
 import {
@@ -71,7 +68,7 @@ function uid() {
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
-  return <p className="mt-1 text-[11px] text-danger">{message}</p>;
+  return <p className="text-danger mt-1 text-[11px]">{message}</p>;
 }
 
 export function AddItemModal({
@@ -511,13 +508,13 @@ export function AddItemModal({
                     onChange={(event) => {
                       setName(event.target.value);
                       if (errors.name) {
-                        setErrors((current) => ({ ...current, name: undefined }));
+                        setErrors((current) => ({
+                          ...current,
+                          name: undefined,
+                        }));
                       }
                     }}
-                    className={cn(
-                      "w-full",
-                      errors.name && INVALID_BORDER,
-                    )}
+                    className={cn("w-full", errors.name && INVALID_BORDER)}
                   />
                 </Field>
                 <FieldError message={errors.name} />
@@ -1238,10 +1235,7 @@ function MoneyInput({
         placeholder={placeholder}
         inputMode="decimal"
         onChange={(event) => onChange(event.target.value)}
-        className={cn(
-          "w-full pl-7",
-          invalid && INVALID_BORDER,
-        )}
+        className={cn("w-full pl-7", invalid && INVALID_BORDER)}
       />
     </div>
   );

@@ -81,8 +81,7 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
   } else if (!input.source) {
     errors.source = "Select a source.";
   } else if (!input.sourceOptions.includes(input.source)) {
-    errors.source =
-      "Select a source associated with the selected distributor.";
+    errors.source = "Select a source associated with the selected distributor.";
   }
 
   if (!input.category) {
