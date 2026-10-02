@@ -6,7 +6,7 @@ import type {
   ReviewLine,
   WorkingOrderRow,
 } from "@/types/distributorOrder";
-import type { AggregateDemand } from "@/lib/api/orders";
+import type { AggregateDemand, AggregateDemandItem } from "@/lib/api/orders";
 import { centsToDollars } from "@/lib/api/mappers";
 import { isUuid, recordRef } from "@/utils/entityIds";
 import {
@@ -130,6 +130,41 @@ function uniqueWednesdayIds(ids: string[]) {
   return [...new Set(ids.filter((id) => id && isWednesdayDateId(id)))];
 }
 
+function eachAggregateItem(
+  demand: AggregateDemand,
+  visit: (item: AggregateDemandItem) => void,
+) {
+  for (const distributor of demand.distributors ?? []) {
+    for (const source of distributor.sources ?? []) {
+      for (const category of source.categories ?? []) {
+        for (const item of category.items ?? []) visit(item);
+      }
+    }
+  }
+}
+
+/** True when aggregate-demand includes at least one order line. */
+export function aggregateDemandHasItems(demand: AggregateDemand) {
+  let found = false;
+  eachAggregateItem(demand, () => {
+    found = true;
+  });
+  return found;
+}
+
+/** Stable line identity so a per-date payload can be compared with the summary. */
+export function aggregateDemandItemKeys(demand: AggregateDemand) {
+  const keys: string[] = [];
+  eachAggregateItem(demand, (item) => {
+    keys.push(
+      [item.itemId, item.itemCode, item.itemName, item.customerOrderTotal].join(
+        "|",
+      ),
+    );
+  });
+  return keys.sort();
+}
+
 function resolveOrderProductId(
   explicitProductId: string | undefined,
   itemId: string,
@@ -207,11 +242,12 @@ export function mapAggregateDemand(input: {
           const qtyNeeded = readOptionalNumber(item.qtyNeeded);
           const suggestedQty =
             qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
+          // dateReceivingBy is the column only. Customer delivery dates come
+          // from `dates`. A later receiving day must not hide the line.
           const lineDateId =
             input.assignDateId ||
-            (announcedDateIds.length === 1 ? announcedDateIds[0] : "") ||
-            calendarDayId(item.dateReceivingBy?.trim() || "") ||
             announcedDateIds[0] ||
+            calendarDayId(item.dateReceivingBy?.trim() || "") ||
             toDeliveryDateId(upcomingWednesday(today));
           const lineDate =
             parseDeliveryDateId(lineDateId) ?? upcomingWednesday(today);
@@ -274,7 +310,10 @@ export function mapAggregateDemand(input: {
       return {
         id: `aggregate-${dateId}`,
         deliveryDateId: dateId,
-        appliesToDateIds: [dateId],
+        appliesToDateIds:
+          !input.assignDateId && announcedDateIds.length > 1
+            ? announcedDateIds
+            : [dateId],
         deliveryLabel: formatExpectedDelivery(date),
         phase: "open" as const,
         lines,

@@ -58,6 +58,7 @@ import {
   categorySections,
   demandDateIds,
   demandOrdersForDate,
+  demandVisibleOnDate,
   previewRowsForOrder,
   reviewGroupKey,
   type DemandOrder,
@@ -386,6 +387,7 @@ export default function ProductOrdersPage() {
     null,
   );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const pickedInitialDate = useRef(false);
 
   const [rows, setRows] = useState<WorkingOrderRow[]>([]);
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
@@ -558,11 +560,36 @@ export default function ProductOrdersPage() {
   }, [notifyApiError, orderCatalogReady, showError]);
 
   useEffect(() => {
-    if (!demandReady) return;
-    if (activeDeliveryDateId && parseDeliveryDateId(activeDeliveryDateId)) return;
-    const dateId = pickDefaultDeliveryChipId(visibleDeliveryChips);
+    if (!demandReady || pickedInitialDate.current) return;
+    const datesWithLines = visibleDeliveryChips.filter((chip) =>
+      demandOrders.some(
+        (order) =>
+          order.lines.length > 0 && demandVisibleOnDate(order, chip.id),
+      ),
+    );
+    if (
+      demandOrders.some((order) => order.lines.length > 0) &&
+      datesWithLines.length === 0
+    ) {
+      return;
+    }
+    pickedInitialDate.current = true;
+    const alreadyVisible = demandOrders.some(
+      (order) =>
+        order.lines.length > 0 &&
+        demandVisibleOnDate(order, activeDeliveryDateId),
+    );
+    if (alreadyVisible) return;
+    const dateId = pickDefaultDeliveryChipId(
+      datesWithLines.length > 0 ? datesWithLines : visibleDeliveryChips,
+    );
     if (dateId) setActiveDeliveryDateId(dateId);
-  }, [activeDeliveryDateId, demandReady, visibleDeliveryChips]);
+  }, [
+    activeDeliveryDateId,
+    demandOrders,
+    demandReady,
+    visibleDeliveryChips,
+  ]);
 
   const filteredInProgress = useMemo(
     () =>

@@ -160,19 +160,22 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     if (!isValidPositiveDecimalInput(input.caseWeightLbs)) {
       errors.caseWeightLbs = "Enter total case weight in lbs.";
     }
+
+    const validUnit =
+      PIECE_WEIGHT_OPTIONS.some(
+        (entry) => entry.label === input.singleItemUnit,
+      ) ||
+      (SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit);
+    if (!input.singleItemUnit) {
+      errors.singleItemUnit = "Select a single item unit.";
+    } else if (!validUnit) {
+      errors.singleItemUnit = "Select a valid single item unit.";
+    }
   }
 
   const contents = parseContentsInput(input.contents);
   if (!input.contents.trim() || contents <= 0) {
     errors.contents = "Pieces per case must be greater than zero.";
-  }
-
-  if (!input.singleItemUnit) {
-    errors.singleItemUnit = "Select a single item unit.";
-  } else if (
-    !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
-  ) {
-    errors.singleItemUnit = "Select a valid single item unit.";
   }
 
   if (!isValidMoneyInput(input.sellingPrice)) {

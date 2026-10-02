@@ -13,7 +13,6 @@ import { findSubcategoryIdByName } from "@/lib/api/mappers";
 import {
   CASE_BY_OPTIONS,
   PIECE_WEIGHT_OPTIONS,
-  SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
   pieceWeightLabel,
   type CaseBy,
@@ -302,7 +301,9 @@ export function AddItemModal({
     const resolvedSingleUnit =
       resolvedSourcePer === "Unit"
         ? pieceWeightLabel(resolvedPieceOz) || "Each"
-        : singleItemUnit;
+        : resolvedCaseBy === "Lbs / case"
+          ? singleItemUnit
+          : "";
 
     savingRef.current = true;
     setSaving(true);
@@ -699,6 +700,7 @@ export function AddItemModal({
                         setCaseWeightLbs("");
                         setContents("");
                         setPieceWeightOz("");
+                        setSingleItemUnit("");
                         if (errors.sourcePer || errors.caseBy) {
                           setErrors((current) => ({
                             ...current,
@@ -787,6 +789,7 @@ export function AddItemModal({
                           setCaseBy(next);
                           if (next !== "Lbs / case") {
                             setCaseWeightLbs("");
+                            setSingleItemUnit("");
                           }
                           if (errors.caseBy || errors.caseWeightLbs) {
                             setErrors((current) => ({
@@ -953,10 +956,21 @@ export function AddItemModal({
                           )}
                           options={[
                             { value: "", label: "Select" },
-                            ...SINGLE_ITEM_UNITS.map((entry) => ({
-                              value: entry,
-                              label: entry,
+                            ...PIECE_WEIGHT_OPTIONS.map((entry) => ({
+                              value: entry.label,
+                              label: entry.label,
                             })),
+                            ...(singleItemUnit &&
+                            !PIECE_WEIGHT_OPTIONS.some(
+                              (entry) => entry.label === singleItemUnit,
+                            )
+                              ? [
+                                  {
+                                    value: singleItemUnit,
+                                    label: singleItemUnit,
+                                  },
+                                ]
+                              : []),
                           ]}
                         />
                       </Field>
@@ -1035,36 +1049,6 @@ export function AddItemModal({
                         />
                       </Field>
                       <FieldError message={errors.contents} />
-                    </div>
-                    <div data-field="singleItemUnit">
-                      <Field label="Single Item Unit" required>
-                        <Select
-                          value={singleItemUnit}
-                          onChange={(value) => {
-                            setSingleItemUnit(value);
-                            if (errors.singleItemUnit) {
-                              setErrors((current) => ({
-                                ...current,
-                                singleItemUnit: undefined,
-                              }));
-                            }
-                          }}
-                          className="w-full"
-                          aria-label="Single Item Unit"
-                          placeholder="Select"
-                          buttonClassName={cn(
-                            errors.singleItemUnit && INVALID_BORDER,
-                          )}
-                          options={[
-                            { value: "", label: "Select" },
-                            ...SINGLE_ITEM_UNITS.map((entry) => ({
-                              value: entry,
-                              label: entry,
-                            })),
-                          ]}
-                        />
-                      </Field>
-                      <FieldError message={errors.singleItemUnit} />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">

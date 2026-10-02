@@ -6,7 +6,7 @@ import type {
   DistributorDeliverySlot,
   DistributorDocument,
 } from "@/types/distributor";
-import type { Item, ItemPhoto, SourcePer } from "@/types/item";
+import type { CaseBy, Item, ItemPhoto, SourcePer } from "@/types/item";
 import { pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { PushNotification } from "@/types/notification";
@@ -269,6 +269,15 @@ function sourcePerFromBuyingUnit(
   return "Case";
 }
 
+/** Case type is stored in buyingUnit. Older rows only say "Case". */
+function caseByFromBuyingUnit(
+  buyingUnit: string | null | undefined,
+): CaseBy {
+  const normalized = buyingUnit?.trim().toLowerCase() ?? "";
+  if (normalized.startsWith("lb")) return "Lbs / case";
+  return "Units / case";
+}
+
 export function mapApiItemToItem(
   item: ApiItem,
   index: number,
@@ -300,7 +309,10 @@ export function mapApiItemToItem(
   const itemKey = recordId ?? item.itemCode ?? String(index);
   const photos = mapApiItemPhotos(item.photos, itemKey);
   const sourcePer = sourcePerFromBuyingUnit(item.buyingUnit);
-  const singleItemUnit = item.singleItemUnit?.trim() || "Each";
+  const caseBy = sourcePer === "Case" ? caseByFromBuyingUnit(item.buyingUnit) : "";
+  const singleItemUnit =
+    item.singleItemUnit?.trim() ||
+    (sourcePer === "Unit" ? "Each" : "");
   const pieceWeightOz =
     sourcePer === "Unit" ? pieceWeightOzFromLabel(singleItemUnit) : 0;
   const contents = Math.max(1, item.contents ?? 1);
@@ -322,7 +334,7 @@ export function mapApiItemToItem(
     source: sourceName,
     sourceId: item.sourceId ?? undefined,
     sourcePer,
-    caseBy: sourcePer === "Case" ? "Units / case" : "",
+    caseBy,
     pieceWeightOz,
     caseWeightLbs: 0,
     buyingPrice,

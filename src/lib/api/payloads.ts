@@ -261,8 +261,14 @@ export function toCreateItemPayload(
     ...(sourceId ? { sourceId } : {}),
     buyingPrice: buyingPriceCents,
     contents,
-    buyingUnit: item.sourcePer || undefined,
-    singleItemUnit: item.singleItemUnit || undefined,
+    buyingUnit:
+      item.sourcePer === "Case"
+        ? item.caseBy || "Units / case"
+        : item.sourcePer || undefined,
+    singleItemUnit:
+      item.sourcePer === "Case" && item.caseBy === "Units / case"
+        ? undefined
+        : item.singleItemUnit || undefined,
     description: item.description.trim() || undefined,
     photos: photoUrls.filter((url) => typeof url === "string"),
   };

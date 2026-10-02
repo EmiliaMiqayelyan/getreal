@@ -17,6 +17,8 @@ import {
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
+  aggregateDemandHasItems,
+  aggregateDemandItemKeys,
   mapAggregateDemand,
   type DemandOrder,
 } from "@/lib/distributorOrderWorkflow";
@@ -238,33 +240,42 @@ export async function loadDistributorOrderScreen(input: {
     ),
   ]);
 
-  const summaryDates = mapAggregateDemand({
+  const summary = mapAggregateDemand({
     demand: demandResult.demand,
     products: input.products,
     items: input.items,
-  }).dateIds;
-  let demandPayloads = [demandResult.demand];
+  });
+  const summaryDates = summary.dateIds;
+  let demand = summary.orders;
+  // A calendar day does not match a stored timestamp, so a per-date call can
+  // come back with no lines and used to replace the list that had the order.
   if (!demandResult.error && summaryDates.length > 1) {
     const filtered = await Promise.all(
       summaryDates.map((dateId) =>
         ordersApi.aggregateDemand(dateId).catch(() => null),
       ),
     );
-    const loaded = filtered.filter(
-      (entry): entry is NonNullable<typeof entry> => entry != null,
-    );
-    if (loaded.length > 0) demandPayloads = loaded;
+    const summaryKeys = new Set(aggregateDemandItemKeys(demandResult.demand));
+    const splitKeys = new Set<string>();
+    const split = summaryDates.flatMap((dateId, index) => {
+      const payload = filtered[index];
+      if (!payload || !aggregateDemandHasItems(payload)) return [];
+      const keys = aggregateDemandItemKeys(payload);
+      const sameAsSummary =
+        keys.length === summaryKeys.size &&
+        keys.every((key) => summaryKeys.has(key));
+      if (sameAsSummary) return [];
+      for (const key of keys) splitKeys.add(key);
+      return mapAggregateDemand({
+        demand: payload,
+        products: input.products,
+        items: input.items,
+        assignDateId: dateId,
+      }).orders;
+    });
+    const coversSummary = [...summaryKeys].every((key) => splitKeys.has(key));
+    if (split.length > 0 && coversSummary) demand = split;
   }
-
-  const demand = demandPayloads.flatMap((payload, index) => {
-    const dateId = summaryDates.length > 1 ? summaryDates[index] : undefined;
-    return mapAggregateDemand({
-      demand: payload,
-      products: input.products,
-      items: input.items,
-      assignDateId: dateId,
-    }).orders;
-  });
   const demandDateIds = summaryDates.length
     ? summaryDates
     : demand.map((order) => order.deliveryDateId);
