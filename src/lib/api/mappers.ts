@@ -322,7 +322,7 @@ export function mapApiItemToItem(
     merchandisingName:
       item.merchandisingName?.trim() || item.name?.trim() || "N/A",
     description: item.description ?? "",
-    preorderInfo: "",
+    preorderInfo: item.preorderInfo ?? "",
     category: categoryName,
     subcategory: subcategoryName,
     subcategoryId: item.subcategoryId ?? undefined,

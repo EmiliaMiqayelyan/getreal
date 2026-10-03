@@ -97,13 +97,11 @@ import {
   formatDeliveryChipLabel,
   deliveryDateIdFromValue,
   formatExpectedDelivery,
-  isCurrentOrFutureDateId,
-  isWednesdayDateId,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
   toDeliveryDateId,
   upcomingWednesday,
-  wednesdayChipsFromDateIds,
+  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import { toOrderDeliveryDateIso } from "@/utils/manualOrder";
 
@@ -378,7 +376,6 @@ export default function ProductOrdersPage() {
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
   const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
   const [demandOrders, setDemandOrders] = useState<DemandOrder[]>([]);
-  const [announcedDateIds, setAnnouncedDateIds] = useState<string[]>([]);
   const [demandReady, setDemandReady] = useState(false);
   const [placing, setPlacing] = useState<string | null>(null);
   const [activeDemandId, setActiveDemandId] = useState<string | null>(null);
@@ -400,33 +397,19 @@ export default function ProductOrdersPage() {
   );
 
   const visibleDeliveryChips = useMemo(() => {
+    const counts = new Map<string, number>();
     const dateIds = [
       ...demandOrders
         .filter((order) => order.lines.length > 0)
         .flatMap((order) => demandDateIds(order)),
       ...inProgress.map((order) => placedOrderDateId(order)),
     ];
-    const chips = wednesdayChipsFromDateIds(dateIds, activeDeliveryDateId);
-    const present = new Set(chips.map((chip) => chip.id));
-    const extras = announcedDateIds
-      .filter(
-        (id) =>
-          isWednesdayDateId(id) &&
-          isCurrentOrFutureDateId(id) &&
-          !present.has(id),
-      )
-      .map((id) => {
-        const date = parseDeliveryDateId(id);
-        return {
-          id,
-          label: date ? formatDeliveryChipLabel(date) : id,
-          count: 0,
-        };
-      });
-    return [...chips, ...extras].sort((left, right) =>
-      left.id.localeCompare(right.id),
-    );
-  }, [activeDeliveryDateId, announcedDateIds, demandOrders, inProgress]);
+    for (const id of dateIds) {
+      if (!id) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    return weekWindowChips(activeDeliveryDateId, counts);
+  }, [activeDeliveryDateId, demandOrders, inProgress]);
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? upcomingWednesday();
@@ -525,7 +508,6 @@ export default function ProductOrdersPage() {
 
     if (!isApiConfigured()) {
       setDemandOrders([]);
-      setAnnouncedDateIds([]);
       setInProgress([]);
       setDeliveredOrders([]);
       setDemandReady(true);
@@ -537,7 +519,6 @@ export default function ProductOrdersPage() {
       .then((snapshot) => {
         if (cancelled) return;
         setDemandOrders(snapshot.demand);
-        setAnnouncedDateIds(snapshot.demandDateIds);
         setInProgress(snapshot.inProgress);
         setDeliveredOrders(snapshot.delivered);
         if (snapshot.demandError) showError(snapshot.demandError);
@@ -546,7 +527,6 @@ export default function ProductOrdersPage() {
         if (cancelled) return;
         notifyApiError(error, "Failed to load distributor orders.");
         setDemandOrders([]);
-        setAnnouncedDateIds([]);
         setInProgress([]);
         setDeliveredOrders([]);
       })
@@ -794,7 +774,6 @@ export default function ProductOrdersPage() {
       }
       const snapshot = await loadDistributorOrderScreen(catalogRef.current);
       setDemandOrders(snapshot.demand);
-      setAnnouncedDateIds(snapshot.demandDateIds);
       setInProgress(snapshot.inProgress);
       setDeliveredOrders(snapshot.delivered);
       if (snapshot.demandError) showError(snapshot.demandError);
@@ -823,7 +802,6 @@ export default function ProductOrdersPage() {
           (order) => order.recordId && order.recordId === mapped.recordId,
         );
         setDemandOrders(snapshot.demand);
-        setAnnouncedDateIds(snapshot.demandDateIds);
         setDeliveredOrders(snapshot.delivered);
         if (snapshot.demandError) showError(snapshot.demandError);
         setInProgress(
@@ -910,7 +888,6 @@ export default function ProductOrdersPage() {
         if (snapshot.demandError) {
           showError(snapshot.demandError);
         } else {
-          setAnnouncedDateIds(snapshot.demandDateIds);
           setDemandOrders((current) =>
             applyAggregateDemandSnapshot(
               current,
@@ -989,7 +966,6 @@ export default function ProductOrdersPage() {
             current.filter((order) => order.id !== parent.id),
           );
         } else {
-          setAnnouncedDateIds(snapshot.demandDateIds);
           setDemandOrders(snapshot.demand);
         }
         setExpandedId(snapshot.inProgress[0]?.id ?? null);

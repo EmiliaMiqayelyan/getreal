@@ -75,6 +75,7 @@ export type ApiItem = {
   photos?: string[] | null;
   merchandisingName?: string;
   description?: string | null;
+  preorderInfo?: string | null;
   category?: string;
   subcategory?: string;
   createdAt?: string;

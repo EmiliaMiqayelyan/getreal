@@ -142,48 +142,35 @@ export type WednesdayOrderChip = {
   count: number;
 };
 
-/** Calendar day id is today or later. `YYYY-MM-DD` sorts in date order. */
-export function isCurrentOrFutureDateId(dateId: string, from = new Date()) {
-  return dateId >= toDeliveryDateId(startOfLocalDay(from));
+/** Move a calendar-day id by `days`. Invalid ids start from `fallback`. */
+export function shiftDateId(dateId: string, days: number, fallback = new Date()) {
+  const date = parseDeliveryDateId(dateId) ?? startOfLocalDay(fallback);
+  date.setDate(date.getDate() + days);
+  return toDeliveryDateId(date);
 }
 
 /**
- * One chip per current or future Wednesday in `dateIds`.
- * The selected calendar day is included even when it is not a Wednesday.
+ * Three chips centered on `centerDateId`: one week before, that day, and one week after.
+ * A new calendar selection replaces this window instead of appending another chip.
  */
-export function wednesdayChipsFromDateIds(
-  dateIds: Iterable<string>,
-  selectedDateId = "",
-  from = new Date(),
+export function weekWindowChips(
+  centerDateId: string,
+  counts: ReadonlyMap<string, number> = new Map(),
+  fallback = new Date(),
 ): WednesdayOrderChip[] {
-  const counts = new Map<string, number>();
-  for (const id of dateIds) {
-    if (!id) continue;
-    const selected = id === selectedDateId;
-    const upcomingWednesday =
-      isWednesdayDateId(id) &&
-      (isCurrentOrFutureDateId(id, from) || selected);
-    if (!selected && !upcomingWednesday) continue;
-    counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-  if (
-    selectedDateId &&
-    parseDeliveryDateId(selectedDateId) &&
-    !counts.has(selectedDateId)
-  ) {
-    counts.set(selectedDateId, 0);
-  }
+  const center = parseDeliveryDateId(centerDateId)
+    ? centerDateId
+    : toDeliveryDateId(startOfLocalDay(fallback));
 
-  return [...counts.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([id, count]) => {
-      const date = parseDeliveryDateId(id);
-      return {
-        id,
-        label: date ? formatDeliveryChipLabel(date) : id,
-        count,
-      };
-    });
+  return [-7, 0, 7].map((offset) => {
+    const id = offset === 0 ? center : shiftDateId(center, offset);
+    const date = parseDeliveryDateId(id);
+    return {
+      id,
+      label: date ? formatDeliveryChipLabel(date) : id,
+      count: counts.get(id) ?? 0,
+    };
+  });
 }
 
 /** Today, otherwise the next chip, otherwise the most recent one. */

@@ -273,6 +273,7 @@ export function toCreateItemPayload(
         ? ""
         : item.singleItemUnit || undefined,
     description: item.description.trim() || undefined,
+    preorderInfo: item.preorderInfo.trim() || undefined,
     photos: photoUrls.filter((url) => typeof url === "string"),
   };
 }

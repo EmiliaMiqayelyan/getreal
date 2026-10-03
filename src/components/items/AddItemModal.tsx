@@ -3,7 +3,6 @@ import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
 import { ManageSubcategoriesModal } from "@/components/items/ManageSubcategoriesModal";
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INVALID_FIELD_BORDER } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -57,8 +56,6 @@ type AddItemModalProps = {
   open: boolean;
   onClose: () => void;
   onSave: (item: Item) => void | Promise<void>;
-  /** Remove the item being edited from the list. Edit mode only. */
-  onRemove?: () => void;
   item?: Item | null;
 };
 
@@ -75,7 +72,6 @@ export function AddItemModal({
   open,
   onClose,
   onSave,
-  onRemove,
   item = null,
 }: AddItemModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -112,7 +108,6 @@ export function AddItemModal({
   const [singleItemUnit, setSingleItemUnit] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [errors, setErrors] = useState<ItemFormErrors>({});
-  const [confirmRemove, setConfirmRemove] = useState(false);
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [manageSubcategoriesOpen, setManageSubcategoriesOpen] = useState(false);
@@ -177,7 +172,6 @@ export function AddItemModal({
     if (!open) return;
 
     setErrors({});
-    setConfirmRemove(false);
     setSaving(false);
     savingRef.current = false;
 
@@ -236,15 +230,6 @@ export function AddItemModal({
     setErrors({});
     setManageSubcategoriesOpen(false);
     onClose();
-  }
-
-  function handleRemove() {
-    setConfirmRemove(true);
-  }
-
-  function confirmRemoveItem() {
-    onRemove?.();
-    handleClose();
   }
 
   async function handleSave() {
@@ -650,7 +635,7 @@ export function AddItemModal({
                   </button>
                 ) : (
                   <div className="flex flex-wrap gap-3">
-                    {photos.map((photo) => (
+                    {photos.map((photo, index) => (
                       <div key={photo.id} className="w-[160px]">
                         <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#00000014]">
                           <img
@@ -659,17 +644,47 @@ export function AddItemModal({
                             className="size-full object-cover"
                           />
                         </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPhotos((current) =>
-                              current.filter((entry) => entry.id !== photo.id),
-                            )
-                          }
-                          className="mt-1.5 cursor-pointer text-[12px] font-medium text-[#3B7DC4] hover:underline"
-                        >
-                          Delete
-                        </button>
+                        <div className="mt-1.5 flex items-center gap-3">
+                          {index === 0 ? (
+                            <span className="text-[12px] font-medium text-[#8A8A8A]">
+                              Selected
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPhotos((current) => {
+                                  const selectedIndex = current.findIndex(
+                                    (entry) => entry.id === photo.id,
+                                  );
+                                  if (selectedIndex <= 0) return current;
+                                  const next = [...current];
+                                  const [selected] = next.splice(
+                                    selectedIndex,
+                                    1,
+                                  );
+                                  return [selected, ...next];
+                                })
+                              }
+                              className="cursor-pointer text-[12px] font-medium text-[#2165D4] hover:underline"
+                            >
+                              Make primary
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPhotos((current) =>
+                                current.filter(
+                                  (entry) => entry.id !== photo.id,
+                                ),
+                              )
+                            }
+                            className="cursor-pointer text-[12px] font-medium text-[#E25B5B] hover:underline"
+                          >
+                            Delete
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -1104,26 +1119,13 @@ export function AddItemModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-6 py-4">
-          {isEdit ? (
-            <button
-              type="button"
-              onClick={handleRemove}
-              className="cursor-pointer text-[13px] font-medium text-[#111118] underline"
-            >
-              Remove Item
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" onClick={handleClose}>
-              Cancel
-            </Button>
-            <Button variant="dark" onClick={handleSave} disabled={saving}>
-              {isEdit ? "Save Item" : "Create Item"}
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-4 border-t border-[#00000014] px-6 py-4">
+          <Button variant="ghost" onClick={handleClose}>
+            Cancel
+          </Button>
+          <Button variant="dark" onClick={handleSave} disabled={saving}>
+            {isEdit ? "Save Item" : "Create Item"}
+          </Button>
         </div>
       </div>
 
@@ -1143,15 +1145,6 @@ export function AddItemModal({
         }}
       />
 
-      <ConfirmDialog
-        open={confirmRemove}
-        title="Delete item"
-        message={`Delete ${merchandisingName.trim() || name.trim() || "this item"}?`}
-        confirmLabel="Delete"
-        confirmVariant="danger"
-        onClose={() => setConfirmRemove(false)}
-        onConfirm={confirmRemoveItem}
-      />
     </div>
   );
 }

@@ -401,7 +401,12 @@ export default function ItemsPage() {
         });
         setEditing((current) =>
           current?.id === latest.id
-            ? { ...mapped, id: current.id, sellingPrice: mapped.sellingPrice || current.sellingPrice }
+            ? {
+                ...mapped,
+                id: current.id,
+                sellingPrice: mapped.sellingPrice || current.sellingPrice,
+                preorderInfo: mapped.preorderInfo || current.preorderInfo,
+              }
             : current,
         );
       })
@@ -413,30 +418,6 @@ export default function ItemsPage() {
   function closeModal() {
     setModalOpen(false);
     setEditing(null);
-  }
-
-  function handleRemoveItem() {
-    if (!editing) return;
-    const id = editing.id;
-    const previous = rows;
-    setItems((current) => current.filter((row) => row.id !== id));
-    if (isApiConfigured()) {
-      const pathId = recordRef(editing);
-      if (!pathId) {
-        setItems(previous);
-        notifyApiError(
-          new Error(
-            "This item is not linked to a server record. Reload the page and try again.",
-          ),
-          "Failed to delete item.",
-        );
-        return;
-      }
-      void itemsApi.remove(pathId).catch((error) => {
-        setItems(previous);
-        notifyApiError(error, "Failed to delete item.");
-      });
-    }
   }
 
   return (
@@ -702,7 +683,6 @@ export default function ItemsPage() {
         open={modalOpen}
         item={editing}
         onClose={closeModal}
-        onRemove={handleRemoveItem}
         onSave={async (item) => {
           if (itemSaveLock.current) return;
           itemSaveLock.current = true;

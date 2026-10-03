@@ -16,6 +16,7 @@ export type CreateItemPayload = {
   buyingUnit?: string;
   singleItemUnit?: string;
   description?: string;
+  preorderInfo?: string;
   /** Uploaded image URLs. */
   photos?: string[];
 };

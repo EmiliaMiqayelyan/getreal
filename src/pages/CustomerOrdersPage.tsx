@@ -59,8 +59,9 @@ import {
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
   toDeliveryDateId,
+  upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
-  wednesdayChipsFromDateIds,
+  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
@@ -431,19 +432,76 @@ function timestampForStep(order: ApiOrder, key: TimelineStepKey) {
   return value ? formatOrderStamp(value) : undefined;
 }
 
-function stepsForStatus(order: CustomerOrderRow, doneCount: number): TimelineStep[] {
+function responseLooksLikeOrder(order: ApiOrder | null | undefined) {
+  return Boolean(order && (order.id || order.status || order.orderCode));
+}
+
+function stepsForStatus(
+  order: CustomerOrderRow,
+  doneCount: number,
+  source?: ApiOrder | null,
+): TimelineStep[] {
   return STEPS_META.map((meta, index) => {
     const previous = order.steps.find((step) => step.key === meta.key);
     const done = index < doneCount;
+    const fromServer =
+      source && done ? timestampForStep(source, meta.key) : undefined;
+    const at = done
+      ? fromServer ||
+        previous?.at ||
+        (index === doneCount - 1
+          ? formatOrderStamp(new Date().toISOString())
+          : undefined)
+      : undefined;
     return {
       key: meta.key,
       done,
       final: meta.key === "return" && done,
-      at: done ? previous?.at : undefined,
+      at,
       person: done ? previous?.person : undefined,
       shortLabel: done ? previous?.shortLabel : undefined,
     };
   });
+}
+
+function applySavedOrder(
+  order: CustomerOrderRow,
+  saved: ApiOrder | null,
+  apiStatus: OrderStatus,
+  doneCount: number,
+): CustomerOrderRow {
+  const requestedCount = ORDER_STATUS_DONE_COUNT[apiStatus] ?? doneCount;
+  const savedCount =
+    saved?.status && saved.status in ORDER_STATUS_DONE_COUNT
+      ? ORDER_STATUS_DONE_COUNT[saved.status]
+      : 0;
+  const status =
+    savedCount >= requestedCount ? (saved?.status ?? apiStatus) : apiStatus;
+  const steps = stepsForStatus(
+    order,
+    Math.max(requestedCount, savedCount, doneCount),
+    saved,
+  );
+  if (!responseLooksLikeOrder(saved) || !saved) {
+    return { ...order, status, steps };
+  }
+  const mapped = mapApiOrderToActive(saved, order.id);
+  return {
+    ...order,
+    status,
+    paymentStatus:
+      mapped.paymentStatus !== "N/A" ? mapped.paymentStatus : order.paymentStatus,
+    orderDate: mapped.orderDate || order.orderDate,
+    deliveryDate: mapped.deliveryDate || order.deliveryDate,
+    deliveryDateId: mapped.deliveryDateId || order.deliveryDateId,
+    deliveryLabel: mapped.deliveryLabel || order.deliveryLabel,
+    packerAssigned: mapped.packerAssigned || order.packerAssigned,
+    coolerIds: mapped.coolerIds?.length ? mapped.coolerIds : order.coolerIds,
+    items: mapped.items.length ? mapped.items : order.items,
+    itemCount: mapped.items.length ? mapped.itemCount : order.itemCount,
+    total: mapped.total || order.total,
+    steps,
+  };
 }
 
 function readNumber(value: unknown) {
@@ -1634,15 +1692,23 @@ export default function CustomerOrdersPage() {
   );
 
   const deliveryChips = useMemo(() => {
-    const dateIds: string[] = [];
+    const counts = new Map<string, number>();
     for (const order of filterActiveOrders(
       ordersWithPacking,
       search,
       statusFilter,
     )) {
-      if (order.deliveryDateId) dateIds.push(order.deliveryDateId);
+      if (!order.deliveryDateId) continue;
+      counts.set(
+        order.deliveryDateId,
+        (counts.get(order.deliveryDateId) ?? 0) + 1,
+      );
     }
-    return wednesdayChipsFromDateIds(dateIds, appliedDateId);
+    const center =
+      appliedDateId && isWednesdayDateId(appliedDateId)
+        ? appliedDateId
+        : toDeliveryDateId(upcomingWednesday());
+    return weekWindowChips(center, counts);
   }, [appliedDateId, ordersWithPacking, search, statusFilter]);
 
   const filteredActive = useMemo(
@@ -1832,11 +1898,8 @@ export default function CustomerOrdersPage() {
 
   useEffect(() => {
     if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
-      const dateId = pickDefaultDeliveryChipId(
-        deliveryChips.filter((chip) => isWednesdayDateId(chip.id)),
-      );
-      setAppliedDateId(dateId);
-      if (dateId) defaultDeliveryApplied.current = true;
+      setAppliedDateId(toDeliveryDateId(upcomingWednesday()));
+      defaultDeliveryApplied.current = true;
       return;
     }
     if (defaultDeliveryApplied.current || appliedDateId) {
@@ -1905,22 +1968,34 @@ export default function CustomerOrdersPage() {
     )?.recordId;
     setStatusSaving(true);
     try {
+      let saved: ApiOrder | null = null;
       if (apiConfigured) {
         if (!recordId) {
           throw new Error("This order is missing a database id.");
         }
-        await ordersApi.updateStatus(recordId, apiStatus);
+        const updated = await ordersApi.updateStatus(recordId, apiStatus);
+        saved = responseLooksLikeOrder(updated) ? updated : null;
+        if (!saved || !timestampForStep(saved, stepKey)) {
+          try {
+            const fresh = await ordersApi.getById(recordId);
+            if (responseLooksLikeOrder(fresh)) saved = fresh;
+          } catch {
+            // Status is already saved. Keep the patch body and stamp the step locally.
+          }
+        }
       }
+      const doneCount = targetIndex + 1;
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? {
-                ...order,
-                status: apiStatus,
-                steps: stepsForStatus(order, targetIndex + 1),
-              }
+            ? applySavedOrder(order, saved, apiStatus, doneCount)
             : order,
         ),
+      );
+      setOrderDetail((current) =>
+        current?.id === orderId
+          ? applySavedOrder(current, saved, apiStatus, doneCount)
+          : current,
       );
       setStatusChange(null);
     } catch (error) {

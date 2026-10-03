@@ -40,9 +40,10 @@ import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   deliveryDateIdFromValue,
-  formatDeliveryChipLabel,
   formatTodayLabel,
   parseDeliveryDateId,
+  shiftDateId,
+  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 
 const ORANGE = "#F57850";
@@ -603,17 +604,8 @@ export default function PackingCoolersPage() {
         (counts.get(order.deliveryDateId) ?? 0) + 1,
       );
     }
-    return [...counts.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([id, count]) => {
-        const date = parseDeliveryDateId(id);
-        return {
-          id,
-          label: date ? formatDeliveryChipLabel(date) : id,
-          count,
-        };
-      });
-  }, [orders, packingByCode]);
+    return weekWindowChips(activeDateId, counts);
+  }, [activeDateId, orders, packingByCode]);
 
   const activeOrder =
     orders.find((order) => order.id === activeOrderId) ?? null;
@@ -726,14 +718,7 @@ export default function PackingCoolersPage() {
   }
 
   function cycleChip(delta: number) {
-    if (deliveryChips.length === 0) return;
-    const index = Math.max(
-      0,
-      deliveryChips.findIndex((chip) => chip.id === activeDateId),
-    );
-    const next =
-      (index + delta + deliveryChips.length) % deliveryChips.length;
-    setActiveDateId(deliveryChips[next]!.id);
+    setActiveDateId((current) => shiftDateId(current, delta * 7));
   }
 
   if (activeOrder) {

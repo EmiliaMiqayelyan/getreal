@@ -1,10 +1,12 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type DragEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 
 import { AddProductForSaleModal } from "@/components/products/AddProductForSaleModal";
@@ -76,6 +78,273 @@ function DragHandle() {
       <span className="block h-[2px] w-[10px] rounded-full bg-current" />
       <span className="block h-[2px] w-[10px] rounded-full bg-current" />
     </span>
+  );
+}
+
+type DragLayout = "mobile" | "desktop";
+
+type DragSession = {
+  id: string;
+  pointerId: number;
+  layout: DragLayout;
+  width: number;
+  offsetY: number;
+  heights: Record<string, number>;
+};
+
+function moveItem(ids: string[], id: string, toIndex: number) {
+  const fromIndex = ids.indexOf(id);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return ids;
+  const next = ids.filter((item) => item !== id);
+  next.splice(Math.min(toIndex, next.length), 0, id);
+  return next;
+}
+
+function shiftsFor(
+  sourceIds: string[],
+  visualIds: string[],
+  heights: Record<string, number>,
+) {
+  const sourceTop = new Map<string, number>();
+  let sourceY = 0;
+  for (const id of sourceIds) {
+    sourceTop.set(id, sourceY);
+    sourceY += heights[id] ?? 0;
+  }
+
+  const visualTop = new Map<string, number>();
+  let visualY = 0;
+  for (const id of visualIds) {
+    visualTop.set(id, visualY);
+    visualY += heights[id] ?? 0;
+  }
+
+  const shifts: Record<string, number> = {};
+  for (const id of sourceIds) {
+    shifts[id] = (visualTop.get(id) ?? 0) - (sourceTop.get(id) ?? 0);
+  }
+  return shifts;
+}
+
+function dropIndexForPointer(
+  clientY: number,
+  visualIds: string[],
+  draggedId: string,
+  heights: Record<string, number>,
+  listTop: number,
+  offsetY: number,
+) {
+  const draggedHeight = heights[draggedId] ?? 0;
+  const probe = clientY - offsetY + draggedHeight / 2;
+  const currentIndex = visualIds.indexOf(draggedId);
+  let y = listTop;
+  let target = Math.max(0, visualIds.length - 1);
+
+  for (let index = 0; index < visualIds.length; index += 1) {
+    const height = heights[visualIds[index]] ?? 0;
+    if (probe <= y + height / 2) {
+      target = index;
+      break;
+    }
+    y += height;
+  }
+
+  if (currentIndex < 0 || target === currentIndex) return target;
+
+  let currentTop = listTop;
+  for (let index = 0; index < currentIndex; index += 1) {
+    currentTop += heights[visualIds[index]] ?? 0;
+  }
+
+  // Stay put until the lifted row's center clearly passes the neighboring slot.
+  if (target > currentIndex && probe < currentTop + draggedHeight + 8) {
+    return currentIndex;
+  }
+  if (target < currentIndex && probe > currentTop - 8) return currentIndex;
+  return target;
+}
+
+function findScrollParent(element: HTMLElement | null) {
+  let node = element?.parentElement ?? null;
+  while (node) {
+    const style = getComputedStyle(node);
+    const overflow = `${style.overflowY} ${style.overflow}`;
+    if (
+      /(auto|scroll)/.test(overflow) &&
+      node.scrollHeight > node.clientHeight + 1
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+function DragHandleControl({
+  label,
+  className,
+  interactive,
+  onPointerDown,
+}: {
+  label: string;
+  className?: string;
+  interactive: boolean;
+  onPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) {
+  if (!interactive) {
+    return (
+      <span className={className} aria-hidden>
+        <DragHandle />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={cn(
+        className,
+        "relative cursor-grab touch-none before:absolute before:-inset-2 active:cursor-grabbing",
+      )}
+      aria-label={label}
+      onPointerDown={onPointerDown}
+    >
+      <DragHandle />
+    </button>
+  );
+}
+
+function ProductCells({
+  layout,
+  row,
+  catalog,
+  onToggleLive,
+  onView,
+  onRemove,
+  interactive,
+  onHandlePointerDown,
+}: {
+  layout: DragLayout;
+  row: ProductForSale;
+  catalog: Item[];
+  onToggleLive: (id: string, live: boolean) => void;
+  onView: (row: ProductForSale) => void;
+  onRemove: (row: ProductForSale) => void;
+  interactive: boolean;
+  onHandlePointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) {
+  const display = resolveProductTableDisplay(row, catalog);
+  const handle = (
+    <DragHandleControl
+      label={`Reorder ${display.merchandisingName}`}
+      interactive={interactive}
+      onPointerDown={onHandlePointerDown}
+      className={
+        layout === "mobile"
+          ? "inline-flex h-5 w-8 items-center justify-start p-0 leading-none"
+          : "inline-flex h-5 items-center justify-center p-0 leading-none"
+      }
+    />
+  );
+
+  if (layout === "mobile") {
+    return (
+      <>
+        <div className="grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3">
+          {handle}
+          <div className={cn(BODY, "min-w-0 truncate font-semibold")}>
+            {display.merchandisingName}
+          </div>
+          <div className="flex justify-end">
+            <Switch
+              checked={row.live}
+              label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
+              onCheckedChange={(live) => onToggleLive(row.id, live)}
+            />
+          </div>
+        </div>
+        <div className="mt-2 pl-[44px]">
+          <IdPill>{row.id}</IdPill>
+          <div className={cn(BODY, "mt-2 min-w-0 truncate")}>
+            {display.source}
+          </div>
+          <div className={cn(BODY, "mt-1 font-semibold")}>
+            {formatSalePrice(display.salesPrice)}
+            <span className="ml-2 font-medium text-[#6B6B6B]">
+              {display.unitOfSales}
+            </span>
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <button
+              type="button"
+              className={EDIT_LINK}
+              onClick={() => onView(row)}
+            >
+              View
+            </button>
+            <button
+              type="button"
+              className={EDIT_LINK}
+              onClick={() => onRemove(row)}
+              aria-label={`Remove ${display.merchandisingName}`}
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="flex items-center">{handle}</div>
+      <div className="flex items-center">
+        <IdPill>{row.id}</IdPill>
+      </div>
+      <div className="flex items-center">
+        <Switch
+          checked={row.live}
+          label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
+          onCheckedChange={(live) => onToggleLive(row.id, live)}
+        />
+      </div>
+      <div
+        className={cn(
+          BODY,
+          "flex h-5 min-w-0 items-center truncate font-semibold",
+        )}
+      >
+        {display.merchandisingName}
+      </div>
+      <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>
+        {display.source}
+      </div>
+      <div
+        className={cn(
+          BODY,
+          "flex h-5 items-center font-semibold whitespace-nowrap",
+        )}
+      >
+        {formatSalePrice(display.salesPrice)}
+      </div>
+      <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>
+        {display.unitOfSales}
+      </div>
+      <div className="flex items-center justify-end gap-3">
+        <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
+          View
+        </button>
+        <button
+          type="button"
+          className={EDIT_LINK}
+          onClick={() => onRemove(row)}
+          aria-label={`Remove ${display.merchandisingName}`}
+        >
+          Remove
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -209,251 +478,347 @@ function SubcategoryTable({
     visibleIds: string[],
   ) => void;
 }) {
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [session, setSession] = useState<DragSession | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
+  const rowRefs = useRef(new Map<string, HTMLDivElement>());
+  const listMarkers = useRef(new Map<DragLayout, HTMLDivElement>());
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const sessionRef = useRef<DragSession | null>(null);
+  const previewRef = useRef<string[] | null>(null);
+  const sourceIdsRef = useRef<string[]>([]);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  const onReorderRef = useRef(onReorder);
+  const finishDragRef = useRef<(commit: boolean) => void>(() => {});
+  const placeGhostRef = useRef<() => void>(() => {});
+  const syncDropTargetRef = useRef<(clientY: number) => void>(() => {});
+  const stopDragListenersRef = useRef<(() => void) | null>(null);
 
   const sourceIds = useMemo(() => rows.map((row) => row.id), [rows]);
   const rowById = useMemo(
     () => new Map(rows.map((row) => [row.id, row])),
     [rows],
   );
-  const displayIds = previewIds ?? sourceIds;
-  const displayRows = displayIds
-    .map((id) => rowById.get(id))
-    .filter((row): row is ProductForSale => Boolean(row));
+  const shifts = useMemo(
+    () =>
+      session
+        ? shiftsFor(sourceIds, previewIds ?? sourceIds, session.heights)
+        : {},
+    [previewIds, session, sourceIds],
+  );
+
+  sourceIdsRef.current = sourceIds;
+  previewRef.current = previewIds ?? sourceIds;
+  onReorderRef.current = onReorder;
+  sessionRef.current = session;
+
+  placeGhostRef.current = () => {
+    const current = sessionRef.current;
+    const node = ghostRef.current;
+    const pointer = pointerRef.current;
+    if (!current || !node || !pointer) return;
+    const row = rowRefs.current.get(`${current.layout}:${current.id}`);
+    const left = row?.getBoundingClientRect().left ?? 0;
+    const top = pointer.y - current.offsetY - 6;
+    node.style.width = `${row?.offsetWidth ?? current.width}px`;
+    node.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+  };
+
+  syncDropTargetRef.current = (clientY: number) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    const scroller = scrollerRef.current;
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect();
+      const edge = 72;
+      const maxStep = 16;
+      if (clientY < bounds.top + edge) {
+        const intensity = (bounds.top + edge - clientY) / edge;
+        scroller.scrollTop -= Math.ceil(maxStep * intensity);
+      } else if (clientY > bounds.bottom - edge) {
+        const intensity = (clientY - (bounds.bottom - edge)) / edge;
+        scroller.scrollTop += Math.ceil(maxStep * intensity);
+      }
+    }
+
+    const visualIds = previewRef.current ?? sourceIdsRef.current;
+    const listTop =
+      listMarkers.current.get(current.layout)?.getBoundingClientRect().top ?? 0;
+    const index = dropIndexForPointer(
+      clientY,
+      visualIds,
+      current.id,
+      current.heights,
+      listTop,
+      current.offsetY,
+    );
+    const next = moveItem(visualIds, current.id, index);
+    if (next === visualIds) return;
+    previewRef.current = next;
+    setPreviewIds(next);
+  };
+
+  finishDragRef.current = (commit: boolean) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    const order = previewRef.current ?? sourceIdsRef.current;
+    const source = sourceIdsRef.current;
+    stopDragListenersRef.current?.();
+    stopDragListenersRef.current = null;
+    sessionRef.current = null;
+    pointerRef.current = null;
+    setSession(null);
+    setPreviewIds(null);
+    if (!commit) return;
+
+    const fromIndex = source.indexOf(current.id);
+    const toIndex = order.indexOf(current.id);
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
+    const targetId = source[toIndex];
+    if (!targetId || targetId === current.id) return;
+    onReorderRef.current(current.id, targetId, source);
+  };
+
+  useLayoutEffect(() => {
+    if (!session) return;
+    placeGhostRef.current();
+  }, [previewIds, session]);
 
   useEffect(() => {
-    if (!draggingId) setPreviewIds(null);
-  }, [draggingId]);
+    return () => {
+      stopDragListenersRef.current?.();
+      stopDragListenersRef.current = null;
+    };
+  }, []);
+
+  function startDrag(
+    event: ReactPointerEvent<HTMLButtonElement>,
+    id: string,
+    layout: DragLayout,
+  ) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    const rowEl = rowRefs.current.get(`${layout}:${id}`);
+    if (!rowEl) return;
+
+    const rect = rowEl.getBoundingClientRect();
+    const heights: Record<string, number> = {};
+    for (const row of rows) {
+      heights[row.id] =
+        rowRefs.current.get(`${layout}:${row.id}`)?.offsetHeight ?? 0;
+    }
+
+    const nextSession: DragSession = {
+      id,
+      pointerId: event.pointerId,
+      layout,
+      width: rowEl.offsetWidth,
+      offsetY: event.clientY - rect.top,
+      heights,
+    };
+    sessionRef.current = nextSession;
+    previewRef.current = sourceIds;
+    pointerRef.current = { x: event.clientX, y: event.clientY };
+    scrollerRef.current = findScrollParent(rowEl);
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    stopDragListenersRef.current?.();
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+
+    function onMove(pointerEvent: PointerEvent) {
+      const current = sessionRef.current;
+      if (!current || pointerEvent.pointerId !== current.pointerId) return;
+      pointerRef.current = { x: pointerEvent.clientX, y: pointerEvent.clientY };
+      placeGhostRef.current();
+      syncDropTargetRef.current(pointerEvent.clientY);
+    }
+
+    function onUp(pointerEvent: PointerEvent) {
+      const current = sessionRef.current;
+      if (!current || pointerEvent.pointerId !== current.pointerId) return;
+      finishDragRef.current(pointerEvent.type !== "pointercancel");
+    }
+
+    function onKey(keyEvent: KeyboardEvent) {
+      if (keyEvent.key === "Escape") finishDragRef.current(false);
+    }
+
+    let frame = 0;
+    const tick = () => {
+      if (!sessionRef.current || !pointerRef.current) return;
+      placeGhostRef.current();
+      syncDropTargetRef.current(pointerRef.current.y);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("keydown", onKey);
+    stopDragListenersRef.current = () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+
+    setPreviewIds(sourceIds);
+    setSession(nextSession);
+  }
+
+  function renderRow(row: ProductForSale, index: number, layout: DragLayout) {
+    const isDragging = session?.id === row.id && session.layout === layout;
+    const active = session?.layout === layout;
+    const isLast = index === rows.length - 1;
+
+    return (
+      <div
+        key={row.id}
+        ref={(node) => {
+          const key = `${layout}:${row.id}`;
+          if (node) rowRefs.current.set(key, node);
+          else rowRefs.current.delete(key);
+        }}
+        className={cn(
+          "relative bg-white",
+          !isLast && "border-b border-[#00000014]",
+          active &&
+            "z-[1] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none",
+          active && !isDragging && "bg-[#F4F4F1]",
+          isDragging && "z-[3]",
+        )}
+        style={
+          active
+            ? { transform: `translate3d(0, ${shifts[row.id] ?? 0}px, 0)` }
+            : undefined
+        }
+      >
+        {isDragging ? (
+          <div className="pointer-events-none absolute inset-x-2 inset-y-1 rounded-[8px] bg-[#DCDCD6] shadow-[inset_0_0_0_1.5px_#C4C4BE]" />
+        ) : null}
+        <div
+          className={cn(
+            layout === "desktop" ? cn(PRODUCT_COLUMNS, "py-3") : "px-4 py-3",
+            isDragging && "invisible",
+          )}
+        >
+          <ProductCells
+            layout={layout}
+            row={row}
+            catalog={catalog}
+            onToggleLive={onToggleLive}
+            onView={onView}
+            onRemove={onRemove}
+            interactive
+            onHandlePointerDown={(event) => startDrag(event, row.id, layout)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   if (rows.length === 0) return null;
 
-  function clearDragState() {
-    setDraggingId(null);
-    setPreviewIds(null);
-  }
-
-  function handleDragStart(event: DragEvent<HTMLButtonElement>, id: string) {
-    setDraggingId(id);
-    setPreviewIds(sourceIds);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", id);
-  }
-
-  function handleDragOver(
-    event: DragEvent<HTMLDivElement>,
-    targetId: string,
-  ) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    if (!draggingId || draggingId === targetId || !previewIds) return;
-
-    const fromIndex = previewIds.indexOf(draggingId);
-    const toIndex = previewIds.indexOf(targetId);
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-
-    const next = [...previewIds];
-    next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, draggingId);
-    setPreviewIds(next);
-  }
-
-  function handleDrop(event: DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    const draggedId = draggingId ?? event.dataTransfer.getData("text/plain");
-    const order = previewIds ?? sourceIds;
-    clearDragState();
-    if (!draggedId) return;
-
-    const fromIndex = sourceIds.indexOf(draggedId);
-    const toIndex = order.indexOf(draggedId);
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-
-    const targetId = sourceIds[toIndex];
-    if (!targetId || targetId === draggedId) return;
-    onReorder(draggedId, targetId, sourceIds);
-  }
+  const draggedRow = session ? rowById.get(session.id) : undefined;
 
   return (
     <>
-    <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white md:hidden">
-      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
-        <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
-          {title}
-        </h3>
+      <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white md:hidden">
+        <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
+          <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
+            {title}
+          </h3>
+        </div>
+        <div
+          className={cn(
+            TABLE_HEADER,
+            "grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3 px-4 py-2",
+          )}
+        >
+          <span className="whitespace-nowrap">ID</span>
+          <span className="min-w-0 truncate whitespace-nowrap">
+            Merchandising Name
+          </span>
+          <span className="text-right whitespace-nowrap">Live</span>
+        </div>
+        <div
+          ref={(node) => {
+            if (node) listMarkers.current.set("mobile", node);
+            else listMarkers.current.delete("mobile");
+          }}
+        />
+        {rows.map((row, index) => renderRow(row, index, "mobile"))}
       </div>
-      <div
-        className={cn(
-          TABLE_HEADER,
-          "grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3 px-4 py-2",
-        )}
-      >
-        <span className="whitespace-nowrap">ID</span>
-        <span className="min-w-0 truncate whitespace-nowrap">Merchandising Name</span>
-        <span className="whitespace-nowrap text-right">Live</span>
-      </div>
-      {displayRows.map((row, index) => {
-        const display = resolveProductTableDisplay(row, catalog);
-        const isDragging = draggingId === row.id;
-        const isLast = index === displayRows.length - 1;
-        return (
+      <ScrollTable minWidth={1140} className="hidden md:block">
+        <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
+          <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
+            {title}
+          </h3>
+        </div>
+        <div>
           <div
-            key={row.id}
-            onDragOver={(event) => handleDragOver(event, row.id)}
-            onDrop={handleDrop}
-            className={cn(
-              "bg-white px-4 py-3",
-              !isLast && "border-b border-[#00000014]",
-              draggingId && !isDragging && "bg-[#F7F7F5]",
-              isDragging && "bg-[#F3F3F1] opacity-55",
-            )}
-          >
-            <div className="grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3">
-              <button
-                type="button"
-                draggable
-                onDragStart={(event) => handleDragStart(event, row.id)}
-                onDragEnd={clearDragState}
-                className="inline-flex h-5 w-8 cursor-grab items-center justify-start p-0 leading-none active:cursor-grabbing"
-                aria-label={`Reorder ${display.merchandisingName}`}
-              >
-                <DragHandle />
-              </button>
-              <div className={cn(BODY, "min-w-0 truncate font-semibold")}>
-                {display.merchandisingName}
-              </div>
-              <div className="flex justify-end">
-                <Switch
-                  checked={row.live}
-                  label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
-                  onCheckedChange={(live) => onToggleLive(row.id, live)}
-                />
-              </div>
-            </div>
-            <div className="mt-2 pl-[44px]">
-              <IdPill>{row.id}</IdPill>
-              <div className={cn(BODY, "mt-2 min-w-0 truncate")}>{display.source}</div>
-              <div className={cn(BODY, "mt-1 font-semibold")}>
-                {formatSalePrice(display.salesPrice)}
-                <span className="ml-2 font-medium text-[#6B6B6B]">
-                  {display.unitOfSales}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
-                  View
-                </button>
-                <button
-                  type="button"
-                  className={EDIT_LINK}
-                  onClick={() => onRemove(row)}
-                  aria-label={`Remove ${display.merchandisingName}`}
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-    <ScrollTable minWidth={1140} className="hidden md:block">
-      <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
-        <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
-          {title}
-        </h3>
-      </div>
-      <div>
-      <div
-        className={cn(
-          PRODUCT_COLUMNS,
-          TABLE_HEADER,
-          PINNED_HEADER,
-          "min-h-10 py-2 whitespace-nowrap shadow-[inset_0_-1px_0_#00000014]",
-        )}
-      >
-        <span>ID</span>
-        <span aria-hidden />
-        <span>Live</span>
-        <span>Merchandising Name</span>
-        <span>Source</span>
-        <span>Sales Price</span>
-        <span>Unit of Sales</span>
-        <span />
-      </div>
-      {displayRows.map((row, index) => {
-        const display = resolveProductTableDisplay(row, catalog);
-        const isDragging = draggingId === row.id;
-        const isLast = index === displayRows.length - 1;
-        return (
-          <div
-            key={row.id}
-            onDragOver={(event) => handleDragOver(event, row.id)}
-            onDrop={handleDrop}
             className={cn(
               PRODUCT_COLUMNS,
-              "bg-white py-3",
-              !isLast && "border-b border-[#00000014]",
-              "transition-[background-color,opacity,box-shadow] duration-150 ease-out",
-              draggingId && !isDragging && "bg-[#F7F7F5]",
-              isDragging &&
-                "bg-[#F3F3F1] opacity-55 shadow-[inset_0_0_0_1px_#0000000A]",
+              TABLE_HEADER,
+              PINNED_HEADER,
+              "min-h-10 py-2 whitespace-nowrap shadow-[inset_0_-1px_0_#00000014]",
             )}
           >
-            <div className="flex items-center">
-              <button
-                type="button"
-                draggable
-                onDragStart={(event) => handleDragStart(event, row.id)}
-                onDragEnd={clearDragState}
-                className="inline-flex h-5 cursor-grab items-center justify-center p-0 leading-none active:cursor-grabbing"
-                aria-label={`Reorder ${display.merchandisingName}`}
-              >
-                <DragHandle />
-              </button>
-            </div>
-            <div className="flex items-center">
-              <IdPill>{row.id}</IdPill>
-            </div>
-            <div className="flex items-center">
-              <Switch
-                checked={row.live}
-                label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
-                onCheckedChange={(live) => onToggleLive(row.id, live)}
-              />
-            </div>
-            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate font-semibold")}>
-              {display.merchandisingName}
-            </div>
-            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>{display.source}</div>
-            <div className={cn(BODY, "flex h-5 items-center whitespace-nowrap font-semibold")}>
-              {formatSalePrice(display.salesPrice)}
-            </div>
-            <div className={cn(BODY, "flex h-5 min-w-0 items-center truncate")}>
-              {display.unitOfSales}
-            </div>
-            <div className="flex items-center justify-end gap-3">
-              <button
-                type="button"
-                className={EDIT_LINK}
-                onClick={() => onView(row)}
-              >
-                View
-              </button>
-              <button
-                type="button"
-                className={EDIT_LINK}
-                onClick={() => onRemove(row)}
-                aria-label={`Remove ${display.merchandisingName}`}
-              >
-                Remove
-              </button>
-            </div>
+            <span aria-hidden />
+            <span>ID</span>
+            <span>Live</span>
+            <span>Merchandising Name</span>
+            <span>Source</span>
+            <span>Sales Price</span>
+            <span>Unit of Sales</span>
+            <span />
           </div>
-        );
-      })}
-      </div>
-    </ScrollTable>
+          <div
+            ref={(node) => {
+              if (node) listMarkers.current.set("desktop", node);
+              else listMarkers.current.delete("desktop");
+            }}
+          />
+          {rows.map((row, index) => renderRow(row, index, "desktop"))}
+        </div>
+      </ScrollTable>
+      {session && draggedRow
+        ? createPortal(
+            <div
+              ref={(node) => {
+                ghostRef.current = node;
+                if (node) placeGhostRef.current();
+              }}
+              inert
+              aria-hidden
+              className={cn(
+                "pointer-events-none fixed top-0 left-0 z-30 bg-white shadow-[0_18px_42px_rgba(17,17,24,0.22),0_0_0_1px_rgba(17,17,24,0.08)]",
+                session.layout === "desktop"
+                  ? cn(PRODUCT_COLUMNS, "rounded-[10px] py-3")
+                  : "rounded-[10px] px-4 py-3",
+              )}
+              style={{ width: session.width }}
+            >
+              <ProductCells
+                layout={session.layout}
+                row={draggedRow}
+                catalog={catalog}
+                onToggleLive={onToggleLive}
+                onView={onView}
+                onRemove={onRemove}
+                interactive={false}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </>
   );
 }
@@ -888,7 +1253,6 @@ export default function ProductsForSalePage() {
             />
           </div>
         )}
-
         </div>
 
         <AddProductForSaleModal

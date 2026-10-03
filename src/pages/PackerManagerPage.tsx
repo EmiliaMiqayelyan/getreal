@@ -35,9 +35,10 @@ import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   deliveryDateIdFromValue,
-  formatDeliveryChipLabel,
   formatTodayLabel,
   parseDeliveryDateId,
+  shiftDateId,
+  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 
 const MUTED_HEADER =
@@ -233,17 +234,8 @@ export default function PackerManagerPage() {
         (counts.get(order.deliveryDateId) ?? 0) + 1,
       );
     }
-    return [...counts.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([id, count]) => {
-        const date = parseDeliveryDateId(id);
-        return {
-          id,
-          label: date ? formatDeliveryChipLabel(date) : id,
-          count,
-        };
-      });
-  }, [orders]);
+    return weekWindowChips(activeDateId, counts);
+  }, [activeDateId, orders]);
 
   useEffect(() => {
     if (!isApiConfigured()) return;
@@ -333,14 +325,7 @@ export default function PackerManagerPage() {
   const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeDateId}`);
 
   function cycleChip(delta: number) {
-    if (deliveryChips.length === 0) return;
-    const index = Math.max(
-      0,
-      deliveryChips.findIndex((chip) => chip.id === activeDateId),
-    );
-    const next =
-      (index + delta + deliveryChips.length) % deliveryChips.length;
-    setActiveDateId(deliveryChips[next]!.id);
+    setActiveDateId((current) => shiftDateId(current, delta * 7));
   }
 
   function handleAssign(orderCode: string, packer: Packer) {

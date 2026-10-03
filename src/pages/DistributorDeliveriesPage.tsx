@@ -55,10 +55,10 @@ import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   deliveryDateIdFromValue,
-  formatDeliveryChipLabel,
   formatExpectedDelivery,
   parseDeliveryDateId,
-  toDeliveryDateId,
+  shiftDateId,
+  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
@@ -69,7 +69,6 @@ import {
 
 const ORANGE = "#F57850";
 const LINK_BLUE = "#3B82F6";
-const CHIP_WINDOW_SIZE = 3;
 
 type LineItem = {
   id: string;
@@ -1183,7 +1182,6 @@ export default function DistributorDeliveriesPage() {
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
   const [activeDateId, setActiveDateId] = useState("");
-  const [chipWindowStart, setChipWindowStart] = useState(0);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
@@ -1218,12 +1216,6 @@ export default function DistributorDeliveriesPage() {
         const preferred = dateIds[dateIds.length - 1] ?? "";
         if (!preferred) return;
         setActiveDateId((current) => current || preferred);
-        const index = dateIds.indexOf(preferred);
-        setChipWindowStart((current) =>
-          current === 0
-            ? Math.max(0, index - CHIP_WINDOW_SIZE + 1)
-            : current,
-        );
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load deliveries.");
@@ -1352,35 +1344,10 @@ export default function DistributorDeliveriesPage() {
     return counts;
   }, [activeTab, orders]);
 
-  const receivingDates = useMemo(() => {
-    const unique = new Map<string, Date>();
-    for (const order of orders) {
-      if (order.checked) continue;
-      const parsed = parseDeliveryDateId(order.deliveryDateId);
-      if (parsed) unique.set(order.deliveryDateId, parsed);
-    }
-    const fromOrders = [...unique.values()].sort(
-      (left, right) => left.getTime() - right.getTime(),
-    );
-    return fromOrders;
-  }, [orders]);
-
-  const visibleChips = useMemo(() => {
-    return receivingDates
-      .slice(chipWindowStart, chipWindowStart + CHIP_WINDOW_SIZE)
-      .map((date) => {
-      const id = toDeliveryDateId(date);
-      return {
-        id,
-        label: formatDeliveryChipLabel(date),
-        count: dateCounts.get(id) ?? 0,
-      };
-    });
-  }, [chipWindowStart, dateCounts, receivingDates]);
-
-  const canShiftBack = chipWindowStart > 0;
-  const canShiftForward =
-    chipWindowStart + CHIP_WINDOW_SIZE < receivingDates.length;
+  const visibleChips = useMemo(
+    () => weekWindowChips(activeDateId, dateCounts),
+    [activeDateId, dateCounts],
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1423,26 +1390,10 @@ export default function DistributorDeliveriesPage() {
 
   function selectDeliveryDate(dateId: string) {
     setActiveDateId(dateId);
-    const index = receivingDates.findIndex(
-      (date) => toDeliveryDateId(date) === dateId,
-    );
-    if (index === -1) return;
-    if (index < chipWindowStart) {
-      setChipWindowStart(index);
-      return;
-    }
-    if (index >= chipWindowStart + CHIP_WINDOW_SIZE) {
-      setChipWindowStart(Math.max(0, index - CHIP_WINDOW_SIZE + 1));
-    }
   }
 
   function shiftChipWindow(delta: number) {
-    setChipWindowStart((current) =>
-      Math.max(
-        0,
-        Math.min(current + delta, receivingDates.length - CHIP_WINDOW_SIZE),
-      ),
-    );
+    setActiveDateId((current) => shiftDateId(current, delta * 7));
   }
 
   function toggleExpanded(id: string) {
@@ -1714,14 +1665,12 @@ export default function DistributorDeliveriesPage() {
           <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
             <DateNavButton
               aria-label="Previous dates"
-              disabled={!canShiftBack}
               onClick={() => shiftChipWindow(-1)}
             >
               <ChevronLeft size={14} />
             </DateNavButton>
             <DateNavButton
               aria-label="Next dates"
-              disabled={!canShiftForward}
               onClick={() => shiftChipWindow(1)}
             >
               <ChevronRight size={14} />
