@@ -43,12 +43,16 @@ export function AdminShell({ children }: AdminShellProps) {
     };
   }, [navOpen]);
 
-  if (!allowed) {
+  if (
+    !allowed &&
+    home !== pathname &&
+    canAccessPath(sessionPermissions, home)
+  ) {
     return <Navigate to={home} replace />;
   }
 
   return (
-    <div className="flex h-dvh overflow-hidden bg-background">
+    <div className="bg-background flex h-dvh overflow-hidden">
       {navOpen ? (
         <button
           type="button"

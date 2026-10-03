@@ -120,9 +120,7 @@ export const ROLE_PERMISSION_GROUPS: RolePermissionGroup[] = [
     label: "Cooler Packing",
     accessKey: "accessCoolerPacking",
     accessLabel: "Access Cooler Packing page",
-    actions: [
-      { key: "coolerPackingMakeActions", label: "Can Make Actions" },
-    ],
+    actions: [{ key: "coolerPackingMakeActions", label: "Can Make Actions" }],
   },
   {
     label: "Packer Manager",
@@ -259,6 +257,31 @@ export function permissionsFromKeys(keys: string[]): RolePermissions {
   return next;
 }
 
+/**
+ * Use API permission keys only when they match this admin UI.
+ * An empty list or foreign keys (for example `read:content`) keep the
+ * role-type defaults so the signed-in admin is not locked out of the app.
+ */
+export function permissionsFromApiKeys(
+  keys: string[] | null | undefined,
+  fallback: RolePermissions,
+): RolePermissions {
+  if (!keys?.length) return fallback;
+  const known = keys.filter((key) => key in DEFAULT_ROLE_PERMISSIONS);
+  if (!known.length) return fallback;
+  return permissionsFromKeys(known);
+}
+
+/** True when at least one page-access flag is on. */
+export function hasPageAccess(
+  permissions: RolePermissions | null | undefined,
+): boolean {
+  if (!permissions) return false;
+  return (
+    Object.entries(permissions) as Array<[keyof RolePermissions, boolean]>
+  ).some(([key, enabled]) => key.startsWith("access") && enabled);
+}
+
 /** Checked permission keys sent as `permissions: string[]`. */
 export function checkedPermissionKeys(permissions: RolePermissions): string[] {
   return (
@@ -272,6 +295,7 @@ export function permissionsForRoleType(type: string): RolePermissions {
   const normalized = type.trim().toLowerCase();
   if (normalized.includes("super")) return { ...ADMIN_ROLE_PERMISSIONS };
   if (normalized.includes("manager")) return { ...MANAGER_ROLE_PERMISSIONS };
-  if (normalized.includes("warehouse")) return { ...WAREHOUSE_ROLE_PERMISSIONS };
+  if (normalized.includes("warehouse"))
+    return { ...WAREHOUSE_ROLE_PERMISSIONS };
   return { ...DEFAULT_ROLE_PERMISSIONS };
 }

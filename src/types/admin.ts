@@ -9,17 +9,10 @@ export type AdminItemCategory =
   | "Grain"
   | "Specials";
 
-export type AdminProductOrderStatus =
-  | "In Progress"
-  | "Completed"
-  | "Canceled";
+export type AdminProductOrderStatus = "In Progress" | "Completed" | "Canceled";
 
 export type AdminCustomerOrderStatus =
-  | "In Progress"
-  | "Packing"
-  | "Delivering"
-  | "Completed"
-  | "Canceled";
+  "In Progress" | "Packing" | "Delivering" | "Completed" | "Canceled";
 
 export type AdminItemSupplier = {
   supplierName: string;
@@ -194,5 +187,7 @@ export type ManagedRole = {
   roleCode?: string;
   recordId?: string;
   name: string;
+  /** Original API `name`, sent back when the display label was not edited. */
+  apiName?: string;
   permissions: RolePermissions;
 };

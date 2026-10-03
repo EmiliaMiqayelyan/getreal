@@ -8,6 +8,8 @@ import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 export type RolesListParams = {
   page?: number;
   limit?: number;
+  /** Bypass the short list cache after a create, update, or delete. */
+  fresh?: boolean;
 };
 
 export type CreateRolePayload = {
@@ -31,7 +33,8 @@ export const rolesApi = {
     search.set("page", String(page));
     search.set("limit", String(limit));
     return apiRequest<unknown>(`/roles?${search.toString()}`, {
-      cacheTtlMs: CATALOG_LIST_CACHE_MS,
+      cacheTtlMs: params.fresh ? 0 : CATALOG_LIST_CACHE_MS,
+      dedupe: params.fresh ? false : undefined,
       preserveEnvelope: true,
     }).then((payload) =>
       normalizePaginatedList<ApiRole>(

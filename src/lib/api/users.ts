@@ -9,6 +9,7 @@ export type CreateUserPayload = {
   password: string;
   name: string;
   role?: string;
+  roleId?: string;
   status?: string;
   isSubscribed?: boolean;
   heardFrom?: string;
@@ -27,6 +28,7 @@ export type AdminAddUserPayload = {
   email?: string;
   name: string;
   role: string;
+  roleId?: string;
   status?: string;
   isSubscribed?: boolean;
   isBlocked?: boolean;
@@ -54,6 +56,7 @@ export type UpdateUserPayload = {
   zipCode?: string;
   heardFrom?: string;
   role?: string;
+  roleId?: string;
   status?: string;
   isSubscribed?: boolean;
   isBlocked?: boolean;
@@ -125,9 +128,10 @@ export const usersApi = {
     );
   },
 
-  block(id: string) {
+  block(id: string, reason = "Removed by an administrator") {
     return apiRequest<unknown>(`/users/${id}/block`, {
       method: "POST",
+      body: JSON.stringify({ reason }),
     });
   },
 

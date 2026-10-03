@@ -17,7 +17,8 @@ type RoleManagementModalProps = {
   open: boolean;
   roles: ManagedRole[];
   onClose: () => void;
-  onSave: (roles: ManagedRole[]) => void;
+  onSave: (role: ManagedRole) => Promise<ManagedRole>;
+  onDelete: (role: ManagedRole) => Promise<void>;
   onLoadRole?: (role: ManagedRole) => Promise<Partial<ManagedRole> | null>;
 };
 
@@ -30,26 +31,34 @@ export function RoleManagementModal({
   roles,
   onClose,
   onSave,
+  onDelete,
   onLoadRole,
 }: RoleManagementModalProps) {
   const [draftRoles, setDraftRoles] = useState<ManagedRole[]>(roles);
   const [selectedId, setSelectedId] = useState<string | null>(
     roles[0]?.id ?? null,
   );
+  const [busy, setBusy] = useState<"save" | "delete" | null>(null);
   const loadedRoleIds = useRef(new Set<string>());
+  const openedRef = useRef(false);
   useScrollLock(open);
 
   useEffect(() => {
     if (!open) {
+      openedRef.current = false;
       loadedRoleIds.current.clear();
+      setBusy(null);
       return;
     }
+    if (openedRef.current) return;
+    openedRef.current = true;
     setDraftRoles(roles);
     setSelectedId(roles[0]?.id ?? null);
   }, [open, roles]);
 
-  const selectedRecordId = draftRoles.find((role) => role.id === selectedId)
-    ?.recordId;
+  const selectedRecordId = draftRoles.find(
+    (role) => role.id === selectedId,
+  )?.recordId;
 
   useEffect(() => {
     if (!open || !onLoadRole || !selectedId || !selectedRecordId) return;
@@ -110,15 +119,42 @@ export function RoleManagementModal({
     });
   }
 
-  function handleSave() {
-    const cleaned = draftRoles
-      .map((role) => ({
-        ...role,
-        name: role.name.trim() || "New Role Name",
-      }))
-      .filter((role) => role.name);
-    onSave(cleaned);
-    onClose();
+  async function handleSave() {
+    if (!selected || busy) return;
+    const cleaned: ManagedRole = {
+      ...selected,
+      name: selected.name.trim() || "New Role Name",
+    };
+    setBusy("save");
+    try {
+      const saved = await onSave(cleaned);
+      setDraftRoles((current) =>
+        current.map((role) =>
+          role.id === selected.id ? { ...role, ...saved } : role,
+        ),
+      );
+      setSelectedId(saved.id);
+    } catch {
+      // The page reports the API error.
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!selected || busy) return;
+    const removedId = selected.id;
+    setBusy("delete");
+    try {
+      await onDelete(selected);
+      const remaining = draftRoles.filter((role) => role.id !== removedId);
+      setDraftRoles(remaining);
+      setSelectedId(remaining[0]?.id ?? null);
+    } catch {
+      // The page reports the API error.
+    } finally {
+      setBusy(null);
+    }
   }
 
   return (
@@ -127,7 +163,10 @@ export function RoleManagementModal({
         type="button"
         aria-label="Close dialog overlay"
         className="absolute inset-0 bg-[#333333]/55"
-        onClick={onClose}
+        onClick={() => {
+          if (busy) return;
+          onClose();
+        }}
       />
 
       <div
@@ -147,7 +186,10 @@ export function RoleManagementModal({
           <button
             type="button"
             aria-label="Close"
-            onClick={onClose}
+            onClick={() => {
+              if (busy) return;
+              onClose();
+            }}
             className="rounded-md p-1 text-[#8A8A8A] hover:bg-[#F5F5F3]"
           >
             <X size={18} />
@@ -160,6 +202,7 @@ export function RoleManagementModal({
               variant="outline"
               size="lg"
               onClick={createRole}
+              disabled={busy !== null}
               className="w-full"
             >
               <Plus size={14} />
@@ -221,9 +264,7 @@ export function RoleManagementModal({
                             <PermissionRow
                               checked={accessChecked}
                               label={group.accessLabel}
-                              onToggle={() =>
-                                togglePermission(group.accessKey)
-                              }
+                              onToggle={() => togglePermission(group.accessKey)}
                             />
                             <div className="space-y-2 border-l border-[#00000014] pl-4">
                               {group.actions.map((action) => (
@@ -244,17 +285,31 @@ export function RoleManagementModal({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center justify-end gap-4 border-t border-[#00000014] px-5 py-4">
-                  <Button variant="ghost" onClick={onClose}>
-                    Cancel
-                  </Button>
+                <div className="flex shrink-0 items-center justify-between gap-4 border-t border-[#00000014] px-5 py-4">
                   <Button
-                    variant="dark"
-                    onClick={handleSave}
-                    className="shrink-0 whitespace-nowrap"
+                    variant="dangerGhost"
+                    onClick={handleDelete}
+                    disabled={busy !== null}
                   >
-                    Save Role
+                    {busy === "delete" ? "Deleting..." : "Delete Role"}
                   </Button>
+                  <div className="flex items-center gap-4">
+                    <Button
+                      variant="ghost"
+                      onClick={onClose}
+                      disabled={busy !== null}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="dark"
+                      onClick={handleSave}
+                      disabled={busy !== null}
+                      className="shrink-0 whitespace-nowrap"
+                    >
+                      {busy === "save" ? "Saving..." : "Save Role"}
+                    </Button>
+                  </div>
                 </div>
               </>
             ) : (

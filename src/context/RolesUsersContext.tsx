@@ -7,12 +7,10 @@ import {
   type ReactNode,
 } from "react";
 
-import {
-  ADMIN_ROLE_PERMISSIONS,
-  DEFAULT_ROLE_PERMISSIONS,
-} from "@/data/admin";
+import { ADMIN_ROLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "@/data/admin";
 import { getRole } from "@/lib/auth";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
+import { hasPageAccess } from "@/utils/rolePermissions";
 import {
   loadManagedRoles,
   loadRoleUsers,
@@ -95,12 +93,16 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
       const warehouse =
         users.find((user) => user.type === "Warehouse Worker") ??
         users.find((user) => user.id === "U003");
-      return warehouse?.permissions ?? DEFAULT_ROLE_PERMISSIONS;
+      const permissions = warehouse?.permissions ?? DEFAULT_ROLE_PERMISSIONS;
+      return hasPageAccess(permissions)
+        ? permissions
+        : DEFAULT_ROLE_PERMISSIONS;
     }
     const superadmin =
       users.find((user) => user.type === "Superadmin") ??
       users.find((user) => user.id === "U001");
-    return superadmin?.permissions ?? ADMIN_ROLE_PERMISSIONS;
+    const permissions = superadmin?.permissions ?? ADMIN_ROLE_PERMISSIONS;
+    return hasPageAccess(permissions) ? permissions : ADMIN_ROLE_PERMISSIONS;
   }, [users]);
 
   const value = useMemo(

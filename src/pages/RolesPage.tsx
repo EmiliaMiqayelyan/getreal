@@ -18,15 +18,19 @@ import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useScrollLock } from "@/hooks/useScrollLock";
 import {
-  collectPaginated,
   isApiConfigured,
-  mapApiRolesToRoleUsers,
-  mapApiUserToRoleUser,
+  mapApiRoleToManagedRole,
   mapRoleUserTypeToApiRole,
+  roleWriteName,
   rolesApi,
-  uniqueManagedRoles,
   usersApi,
 } from "@/lib/api";
+import {
+  findManagedRoleForUser,
+  isUnsavedRole,
+  loadRolesDirectory,
+  serverRoleId,
+} from "@/lib/rolesDirectory";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
 import { isUuid, publicCode } from "@/utils/entityIds";
@@ -37,15 +41,15 @@ import {
   permissionsForRoleType,
   permissionsFromKeys,
 } from "@/utils/rolePermissions";
-import {
-  type UserFormErrors,
-  validateUserForm,
-} from "@/utils/rolesUsers";
+import { type UserFormErrors, validateUserForm } from "@/utils/rolesUsers";
 
 function rolePreviewId(user: RoleUser, roles: ManagedRole[]) {
   const type = user.type.trim().toLowerCase();
   const match = roles.find((role) => {
-    if (user.roleId && (role.recordId === user.roleId || role.id === user.roleId)) {
+    if (
+      user.roleId &&
+      (role.recordId === user.roleId || role.id === user.roleId)
+    ) {
       return true;
     }
     return role.name.trim().toLowerCase() === type;
@@ -134,8 +138,15 @@ const ROLE_ROW =
 export default function RolesPage() {
   useDocumentTitle("Roles");
 
-  const { users, setUsers, applyPermissions, removeUser, managedRoles, setManagedRoles, sessionPermissions } =
-    useRolesUsers();
+  const {
+    users,
+    setUsers,
+    applyPermissions,
+    removeUser,
+    managedRoles,
+    setManagedRoles,
+    sessionPermissions,
+  } = useRolesUsers();
   const [loadingUsers, setLoadingUsers] = useState(() => isApiConfigured());
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [draftPermissions, setDraftPermissions] = useState<
@@ -150,12 +161,15 @@ export default function RolesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [roleMgmtOpen, setRoleMgmtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   useScrollLock(modalOpen);
 
   const roleOptions = useMemo(() => {
     const fromTemplates = managedRoles.map((role) => role.name);
     const fromUsers = users.map((user) => user.type);
+    if (fromTemplates.length > 0) {
+      return Array.from(new Set([...fromTemplates, ...fromUsers]));
+    }
     return Array.from(
       new Set([...FALLBACK_ROLE_OPTIONS, ...fromTemplates, ...fromUsers]),
     );
@@ -188,29 +202,16 @@ export default function RolesPage() {
     setExpandedId((current) => (current === id ? null : id));
   }
 
+  const refreshDirectory = useCallback(async () => {
+    const next = await loadRolesDirectory();
+    setUsers(next.users);
+    setManagedRoles(next.roles);
+  }, [setManagedRoles, setUsers]);
+
   useEffect(() => {
     if (!isApiConfigured()) return;
     let cancelled = false;
-    void Promise.all([
-      usersApi.list({ page: 1, limit: 100 }),
-      collectPaginated((page, limit) => rolesApi.list({ page, limit })),
-    ])
-      .then(([usersResult, roles]) => {
-        if (cancelled) return;
-        if (roles.length > 0) {
-          setUsers(mapApiRolesToRoleUsers(roles));
-          setManagedRoles(uniqueManagedRoles(roles));
-          return;
-        }
-        const apiUsers = usersResult.items.map(mapApiUserToRoleUser);
-        if (apiUsers.length > 0) {
-          setUsers((current) => {
-            const byId = new Map(current.map((entry) => [entry.id, entry]));
-            for (const entry of apiUsers) byId.set(entry.id, entry);
-            return Array.from(byId.values());
-          });
-        }
-      })
+    void refreshDirectory()
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load roles.");
       })
@@ -220,7 +221,7 @@ export default function RolesPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError, setManagedRoles, setUsers]);
+  }, [notifyApiError, refreshDirectory]);
 
   useEffect(() => {
     if (!expandedId || !isApiConfigured()) return;
@@ -274,15 +275,71 @@ export default function RolesPage() {
     }));
   }
 
-  function applyChanges(user: RoleUser) {
+  async function applyChanges(user: RoleUser) {
+    if (pending) return;
     const next = draftPermissions[user.id] ?? user.permissions;
-    applyPermissions(user.id, next);
-    setDraftPermissions((current) => {
-      const { [user.id]: _, ...rest } = current;
-      return rest;
-    });
-    setToast("Permissions updated");
-    window.setTimeout(() => setToast(null), 2000);
+    const role = findManagedRoleForUser(user, managedRoles);
+
+    if (!isApiConfigured()) {
+      applyPermissions(user.id, next);
+      if (role) {
+        setManagedRoles((current) =>
+          current.map((entry) =>
+            entry.id === role.id ? { ...entry, permissions: next } : entry,
+          ),
+        );
+      }
+      setDraftPermissions((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      showSuccess("Permissions updated.");
+      return;
+    }
+
+    const pathId = role ? serverRoleId(role) : undefined;
+    if (!role || !pathId) {
+      notifyApiError(
+        new Error("This role is not linked to a server record."),
+        "Failed to update permissions.",
+      );
+      return;
+    }
+
+    setPending(`apply:${user.id}`);
+    try {
+      const updated = await rolesApi.update(pathId, {
+        name: roleWriteName(role),
+        permissions: checkedPermissionKeys(next),
+      });
+      const saved = mapApiRoleToManagedRole(updated, 0);
+      const permissions = Array.isArray(updated.permissions)
+        ? saved.permissions
+        : next;
+      setManagedRoles((current) =>
+        current.map((entry) =>
+          serverRoleId(entry) === pathId ? { ...entry, permissions } : entry,
+        ),
+      );
+      setUsers((current) =>
+        current.map((entry) =>
+          findManagedRoleForUser(entry, [role])
+            ? { ...entry, permissions }
+            : entry,
+        ),
+      );
+      setDraftPermissions((current) => {
+        const next = { ...current };
+        delete next[user.id];
+        return next;
+      });
+      showSuccess("Permissions updated.");
+    } catch (error) {
+      notifyApiError(error, "Failed to update permissions.");
+    } finally {
+      setPending(null);
+    }
   }
 
   function openCreateModal() {
@@ -310,7 +367,9 @@ export default function RolesPage() {
             ? {
                 ...current,
                 name:
-                  [remote.firstName, remote.lastName].filter(Boolean).join(" ") ||
+                  [remote.firstName, remote.lastName]
+                    .filter(Boolean)
+                    .join(" ") ||
                   remote.name ||
                   current.name,
                 email: remote.email || current.email,
@@ -324,33 +383,60 @@ export default function RolesPage() {
       });
   }
 
-  const loadManagedRole = useCallback(async (role: ManagedRole) => {
-    const pathId =
-      role.recordId && isUuid(role.recordId) ? role.recordId : undefined;
-    if (!pathId) return null;
-    try {
-      const remote = await rolesApi.getById(pathId);
-      const keys = (remote.permissions ?? []).filter(
-        (key) => key in DEFAULT_ROLE_PERMISSIONS,
-      );
-      return {
-        name: remote.roleName?.trim() || remote.name?.trim() || role.name,
-        recordId: isUuid(remote.id) ? remote.id : role.recordId,
-        permissions: keys.length ? permissionsFromKeys(keys) : role.permissions,
-      };
-    } catch (error) {
-      notifyApiError(error, "Failed to load role details.");
-      return null;
-    }
-  }, [notifyApiError]);
+  const loadManagedRole = useCallback(
+    async (role: ManagedRole) => {
+      const pathId =
+        role.recordId && isUuid(role.recordId) ? role.recordId : undefined;
+      if (!pathId) return null;
+      try {
+        const remote = await rolesApi.getById(pathId);
+        const keys = (remote.permissions ?? []).filter(
+          (key) => key in DEFAULT_ROLE_PERMISSIONS,
+        );
+        return {
+          name: remote.roleName?.trim() || remote.name?.trim() || role.name,
+          apiName:
+            (remote.roleName ?? remote.name ?? "").trim() || role.apiName,
+          recordId: isUuid(remote.id) ? remote.id : role.recordId,
+          permissions: keys.length
+            ? permissionsFromKeys(keys)
+            : role.permissions,
+        };
+      } catch (error) {
+        notifyApiError(error, "Failed to load role details.");
+        return null;
+      }
+    },
+    [notifyApiError],
+  );
 
   function closeModal() {
+    if (pending) return;
     setModalOpen(false);
     setCopied(false);
     setFormErrors({});
   }
 
+  function splitName(name: string) {
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    return {
+      firstName: parts[0],
+      lastName: parts.slice(1).join(" ") || undefined,
+    };
+  }
+
+  function roleAssignment(type: string) {
+    const match = managedRoles.find((role) => role.name === type);
+    const role = mapRoleUserTypeToApiRole(match?.apiName || type);
+    const roleId = match ? serverRoleId(match) : undefined;
+    return {
+      role,
+      ...(roleId ? { roleId } : {}),
+    };
+  }
+
   async function saveUser() {
+    if (pending) return;
     const errors = validateUserForm({
       name: draft.name,
       email: draft.email,
@@ -359,125 +445,295 @@ export default function RolesPage() {
       type: draft.type,
       isEdit: Boolean(draft.id),
     });
+    if (
+      isApiConfigured() &&
+      !draft.id &&
+      draft.password &&
+      draft.password.length < 8
+    ) {
+      errors.password = "Password must be at least 8 characters.";
+    }
+    if (isApiConfigured() && draft.id && draft.password) {
+      errors.password = "Password changes are not available from the API yet.";
+    }
+    if (isApiConfigured() && draft.id) {
+      const current = users.find((user) => user.id === draft.id);
+      if (current && current.email.trim() !== draft.email.trim()) {
+        errors.email = "Email changes are not available from the API yet.";
+      }
+    }
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
 
-    if (draft.id) {
+    const name = draft.name.trim();
+    const email = draft.email.trim();
+    const phone = draft.phone.trim();
+    const names = splitName(name);
+    const assignment = roleAssignment(draft.type);
+    const permissions =
+      managedRoles.find((role) => role.name === draft.type)?.permissions ??
+      permissionsForRoleType(draft.type);
+
+    if (!isApiConfigured()) {
+      if (draft.id) {
+        setUsers((current) =>
+          current.map((user) =>
+            user.id === draft.id
+              ? {
+                  ...user,
+                  name,
+                  email,
+                  phone,
+                  type: draft.type,
+                  password: draft.password ? draft.password : user.password,
+                  permissions,
+                }
+              : user,
+          ),
+        );
+      } else {
+        setUsers((current) => {
+          const max = current.reduce((acc, user) => {
+            const n = Number(user.id.replace(/\D/g, ""));
+            return Number.isFinite(n) ? Math.max(acc, n) : acc;
+          }, 0);
+          return [
+            ...current,
+            {
+              id: `U${String(max + 1).padStart(3, "0")}`,
+              name,
+              email,
+              phone,
+              type: draft.type,
+              password: draft.password,
+              permissions,
+            },
+          ];
+        });
+      }
+      setModalOpen(false);
+      setCopied(false);
+      setFormErrors({});
+      showSuccess(draft.id ? "User updated." : "User created.");
+      return;
+    }
+
+    setPending("save");
+    try {
+      if (draft.id) {
+        const pathId = serverUserId(draft);
+        if (!pathId) {
+          throw new Error("This user is not linked to a server record.");
+        }
+        await usersApi.update(pathId, {
+          name,
+          ...names,
+          role: assignment.role,
+          ...(assignment.roleId ? { roleId: assignment.roleId } : {}),
+          ...(phone ? { phoneNumber: phone } : {}),
+        });
+        showSuccess("User updated.");
+      } else {
+        await usersApi.create({
+          email,
+          password: draft.password,
+          name,
+          ...names,
+          role: assignment.role,
+          ...(assignment.roleId ? { roleId: assignment.roleId } : {}),
+          ...(phone ? { phoneNumber: phone } : {}),
+        });
+        showSuccess("User created.");
+      }
+      setModalOpen(false);
+      setCopied(false);
+      setFormErrors({});
+      try {
+        await refreshDirectory();
+      } catch (error) {
+        notifyApiError(error, "Saved, but the list could not be refreshed.");
+      }
+    } catch (error) {
+      notifyApiError(
+        error,
+        draft.id ? "Failed to update user." : "Failed to create user.",
+      );
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function deleteUser() {
+    if (!draft.id || pending) return;
+
+    if (!isApiConfigured()) {
+      removeUser(draft.id);
+      if (expandedId === draft.id) setExpandedId(null);
+      setModalOpen(false);
+      setCopied(false);
+      setFormErrors({});
+      showSuccess("User deleted.");
+      return;
+    }
+
+    const pathId = serverUserId(draft);
+    if (!pathId) {
+      notifyApiError(
+        new Error("This user is not linked to a server record."),
+        "Failed to delete user.",
+      );
+      return;
+    }
+
+    setPending("delete");
+    try {
+      await usersApi.block(pathId, "Removed from Roles");
+      if (expandedId === draft.id) setExpandedId(null);
+      setModalOpen(false);
+      setCopied(false);
+      setFormErrors({});
+      showSuccess("User removed.");
+      try {
+        await refreshDirectory();
+      } catch (error) {
+        notifyApiError(error, "Removed, but the list could not be refreshed.");
+      }
+    } catch (error) {
+      notifyApiError(error, "Failed to delete user.");
+    } finally {
+      setPending(null);
+    }
+  }
+
+  async function saveManagedRole(role: ManagedRole): Promise<ManagedRole> {
+    const permissions = checkedPermissionKeys(role.permissions);
+    const name = role.name.trim() || "New Role Name";
+
+    if (!isApiConfigured()) {
+      const next = { ...role, name };
+      setManagedRoles((current) => {
+        const exists = current.some((entry) => entry.id === role.id);
+        if (exists) {
+          return current.map((entry) => (entry.id === role.id ? next : entry));
+        }
+        return [...current, next];
+      });
+      showSuccess("Role saved.");
+      return next;
+    }
+
+    try {
+      if (isUnsavedRole(role)) {
+        const created = await rolesApi.create({
+          name,
+          permissions,
+        });
+        const mapped = mapApiRoleToManagedRole(created, 0);
+        const saved: ManagedRole = {
+          ...mapped,
+          name: mapped.name || name,
+          apiName: mapped.apiName || name,
+          permissions: Array.isArray(created.permissions)
+            ? mapped.permissions
+            : role.permissions,
+        };
+        setManagedRoles((current) => [
+          ...current.filter((entry) => entry.id !== role.id),
+          saved,
+        ]);
+        showSuccess("Role created.");
+        return saved;
+      }
+
+      const pathId = serverRoleId(role);
+      if (!pathId) {
+        throw new Error("This role is not linked to a server record.");
+      }
+      const previous =
+        managedRoles.find(
+          (entry) => entry.id === role.id || serverRoleId(entry) === pathId,
+        ) ?? role;
+      const updated = await rolesApi.update(pathId, {
+        name: roleWriteName({ ...role, name }),
+        permissions,
+      });
+      const mapped = mapApiRoleToManagedRole(updated, 0);
+      const saved: ManagedRole = {
+        ...role,
+        ...mapped,
+        id: role.id,
+        name: mapped.name || name,
+        apiName: mapped.apiName || role.apiName || name,
+        recordId: mapped.recordId || role.recordId,
+        permissions: Array.isArray(updated.permissions)
+          ? mapped.permissions
+          : role.permissions,
+      };
+      setManagedRoles((current) =>
+        current.map((entry) =>
+          entry.id === role.id || serverRoleId(entry) === pathId
+            ? saved
+            : entry,
+        ),
+      );
       setUsers((current) =>
         current.map((user) =>
-          user.id === draft.id
+          findManagedRoleForUser(user, [previous])
             ? {
                 ...user,
-                name: draft.name.trim(),
-                email: draft.email.trim(),
-                phone: draft.phone.trim(),
-                type: draft.type,
-                password: draft.password ? draft.password : user.password,
+                type: saved.name,
+                roleId: saved.recordId ?? user.roleId,
+                permissions: saved.permissions,
               }
             : user,
         ),
       );
-
-      if (isApiConfigured()) {
-        const pathId = serverUserId(draft);
-        if (!pathId) {
-          notifyApiError(
-            new Error("This user is not linked to a server record."),
-            "Failed to update user on server.",
-          );
-        } else {
-          void usersApi
-            .update(pathId, {
-              name: draft.name.trim(),
-              role: mapRoleUserTypeToApiRole(draft.type),
-              ...(draft.phone.trim()
-                ? { phoneNumber: draft.phone.trim() }
-                : {}),
-            })
-            .catch((error) => {
-              notifyApiError(error, "Failed to update user on server.");
-            });
-        }
-      }
-    } else {
-      let createdId: string | undefined;
-      let createdRecordId: string | undefined;
-      if (isApiConfigured()) {
-        try {
-          const name = draft.name.trim();
-          const role = mapRoleUserTypeToApiRole(draft.type);
-          const email = draft.email.trim();
-          const phoneNumber = draft.phone.trim() || undefined;
-          const created = draft.password
-            ? await usersApi.create({
-                email,
-                password: draft.password,
-                name,
-                role,
-                ...(phoneNumber ? { phoneNumber } : {}),
-              })
-            : await usersApi.adminAdd({
-                email,
-                name,
-                role,
-                ...(phoneNumber ? { phoneNumber } : {}),
-              });
-          createdId = publicCode(created.userCode) ?? created.id;
-          createdRecordId = isUuid(created.id) ? created.id : undefined;
-        } catch (error) {
-          notifyApiError(error, "Failed to create user on server.");
-        }
-      }
-
-      setUsers((current) => {
-        const max = current.reduce((acc, user) => {
-          const n = Number(user.id.replace(/\D/g, ""));
-          return Number.isFinite(n) ? Math.max(acc, n) : acc;
-        }, 0);
-        return [
-          ...current,
-          {
-            id: createdId ?? `U${String(max + 1).padStart(3, "0")}`,
-            recordId: createdRecordId,
-            name: draft.name.trim(),
-            email: draft.email.trim(),
-            phone: draft.phone.trim(),
-            type: draft.type,
-            password: draft.password,
-            permissions:
-              managedRoles.find((role) => role.name === draft.type)
-                ?.permissions ?? permissionsForRoleType(draft.type),
-          },
-        ];
-      });
+      showSuccess("Role updated.");
+      return saved;
+    } catch (error) {
+      notifyApiError(
+        error,
+        isUnsavedRole(role)
+          ? "Failed to create role."
+          : "Failed to update role.",
+      );
+      throw error;
     }
-
-    closeModal();
-    setToast(draft.id ? "User updated" : "User created");
-    window.setTimeout(() => setToast(null), 2000);
   }
 
-  function deleteUser() {
-    if (!draft.id) return;
-    if (isApiConfigured()) {
-      const pathId = serverUserId(draft);
-      if (!pathId) {
-        notifyApiError(
-          new Error("This user is not linked to a server record."),
-          "Failed to delete user on server.",
-        );
-      } else {
-        void usersApi.block(pathId).catch((error) => {
-          notifyApiError(error, "Failed to delete user on server.");
-        });
-      }
+  async function deleteManagedRole(role: ManagedRole) {
+    if (!isApiConfigured() || isUnsavedRole(role)) {
+      setManagedRoles((current) =>
+        current.filter((entry) => entry.id !== role.id),
+      );
+      showSuccess("Role deleted.");
+      return;
     }
-    // Soft-delete access: remove from active users; audit history elsewhere stays
-    removeUser(draft.id);
-    if (expandedId === draft.id) setExpandedId(null);
-    closeModal();
-    setToast("User deleted");
-    window.setTimeout(() => setToast(null), 2000);
+
+    const pathId = serverRoleId(role);
+    if (!pathId) {
+      const error = new Error("This role is not linked to a server record.");
+      notifyApiError(error, "Failed to delete role.");
+      throw error;
+    }
+
+    try {
+      await rolesApi.remove(pathId);
+      setManagedRoles((current) =>
+        current.filter(
+          (entry) => entry.id !== role.id && serverRoleId(entry) !== pathId,
+        ),
+      );
+      showSuccess("Role deleted.");
+      try {
+        await refreshDirectory();
+      } catch (error) {
+        notifyApiError(error, "Deleted, but the list could not be refreshed.");
+      }
+    } catch (error) {
+      notifyApiError(error, "Failed to delete role.");
+      throw error;
+    }
   }
 
   async function copyPassword() {
@@ -534,168 +790,180 @@ export default function RolesPage() {
         {loadingUsers ? (
           <AppLoader variant="table" label="Loading users" />
         ) : (
-        <>
-        <ScrollTable fill minWidth={1280}>
-          <div>
-          <div
-            className={cn(
-              PINNED_HEADER,
-              ROLE_ROW,
-              TABLE_HEADER,
-              "h-10 border-b border-[#00000014]",
-            )}
-          >
-            <div />
-            <div>ID</div>
-            <div>Name</div>
-            <div>Email</div>
-            <div>Phone</div>
-            <div>Role Name</div>
-            <div className="text-right" />
-          </div>
-
-          {userWindow.visible.map((user, index) => {
-            const open = expandedId === user.id;
-            const permissions = permissionsFor(user);
-            const isLast = index === userWindow.visible.length - 1;
-
-            return (
-              <div key={user.id} className="contents">
+          <>
+            <ScrollTable fill minWidth={1280}>
+              <div>
                 <div
                   className={cn(
+                    PINNED_HEADER,
                     ROLE_ROW,
-                    "py-3.5",
-                    !isLast || open ? "border-b border-[#00000014]" : "",
+                    TABLE_HEADER,
+                    "h-10 border-b border-[#00000014]",
                   )}
                 >
-                  <button
-                    type="button"
-                    aria-label={open ? "Collapse row" : "Expand row"}
-                    onClick={() => toggleExpand(user.id)}
-                    className="flex justify-center"
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={cn(
-                        "text-[#B0B0B0] transition-transform",
-                        open && "rotate-90 text-[#F57850]",
-                      )}
-                    />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => toggleExpand(user.id)}
-                    className="min-w-0 justify-self-start overflow-hidden text-left"
-                  >
-                    <IdPill>{rolePreviewId(user, managedRoles)}</IdPill>
-                  </button>
-
-                  <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
-                    {user.name}
-                  </div>
-
-                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
-                    {user.email}
-                  </div>
-                  <div className="min-w-0 truncate text-[13px] text-[#111118]">
-                    {user.phone}
-                  </div>
-                  <div>
-                    <span className="inline-flex rounded-[6px] bg-id-pill px-2 py-1 text-[12px] font-medium text-[#111118]">
-                      {user.type}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(user)}
-                      className="text-[13px] font-medium text-[#2165D4]"
-                    >
-                      Edit
-                    </button>
-                  </div>
+                  <div />
+                  <div>ID</div>
+                  <div>Name</div>
+                  <div>Email</div>
+                  <div>Phone</div>
+                  <div>Role Name</div>
+                  <div className="text-right" />
                 </div>
 
-                {open ? (
-                  detailLoadingId === user.id ? (
-                    <div
-                      className={cn(
-                        "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
-                        SUB_ROW_PAD,
-                      )}
-                    >
-                      <AppLoader
-                        variant="section"
-                        label="Loading permissions"
-                        className="min-h-[96px] bg-transparent py-6"
-                      />
-                    </div>
-                  ) : (
-                  <div className={cn("col-span-full border-t border-[#00000014] bg-[#FBF9F9]", SUB_ROW_PAD)}>
-                    <div className="overflow-x-auto">
-                      <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
-                        {ROLE_PERMISSION_GROUPS.map((group) => (
-                          <div key={group.label}>
-                            <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                              {group.label}
-                            </h3>
-                            <div className="space-y-2.5">
-                              <PermissionCheckbox
-                                checked={permissions[group.accessKey]}
-                                label={group.accessLabel}
-                                onChange={() =>
-                                  patchPermission(
-                                    user,
-                                    group.accessKey,
-                                    !permissions[group.accessKey],
-                                  )
-                                }
-                              />
-                              <div className="space-y-2.5 border-l border-[#00000014] pl-3">
-                                {group.actions.map((action) => (
-                                  <PermissionCheckbox
-                                    key={action.key}
-                                    checked={permissions[action.key]}
-                                    label={action.label}
-                                    onChange={() =>
-                                      patchPermission(
-                                        user,
-                                        action.key,
-                                        !permissions[action.key],
-                                      )
-                                    }
-                                  />
+                {userWindow.visible.map((user, index) => {
+                  const open = expandedId === user.id;
+                  const permissions = permissionsFor(user);
+                  const isLast = index === userWindow.visible.length - 1;
+
+                  return (
+                    <div key={user.id} className="contents">
+                      <div
+                        className={cn(
+                          ROLE_ROW,
+                          "py-3.5",
+                          !isLast || open ? "border-b border-[#00000014]" : "",
+                        )}
+                      >
+                        <button
+                          type="button"
+                          aria-label={open ? "Collapse row" : "Expand row"}
+                          onClick={() => toggleExpand(user.id)}
+                          className="flex justify-center"
+                        >
+                          <ChevronRight
+                            size={14}
+                            className={cn(
+                              "text-[#B0B0B0] transition-transform",
+                              open && "rotate-90 text-[#F57850]",
+                            )}
+                          />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => toggleExpand(user.id)}
+                          className="min-w-0 justify-self-start overflow-hidden text-left"
+                        >
+                          <IdPill>{rolePreviewId(user, managedRoles)}</IdPill>
+                        </button>
+
+                        <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
+                          {user.name}
+                        </div>
+
+                        <div className="min-w-0 truncate text-[13px] text-[#111118]">
+                          {user.email}
+                        </div>
+                        <div className="min-w-0 truncate text-[13px] text-[#111118]">
+                          {user.phone}
+                        </div>
+                        <div>
+                          <span className="bg-id-pill inline-flex rounded-[6px] px-2 py-1 text-[12px] font-medium text-[#111118]">
+                            {user.type}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <button
+                            type="button"
+                            onClick={() => openEditModal(user)}
+                            className="text-[13px] font-medium text-[#2165D4]"
+                          >
+                            Edit
+                          </button>
+                        </div>
+                      </div>
+
+                      {open ? (
+                        detailLoadingId === user.id ? (
+                          <div
+                            className={cn(
+                              "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
+                              SUB_ROW_PAD,
+                            )}
+                          >
+                            <AppLoader
+                              variant="section"
+                              label="Loading permissions"
+                              className="min-h-[96px] bg-transparent py-6"
+                            />
+                          </div>
+                        ) : (
+                          <div
+                            className={cn(
+                              "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
+                              SUB_ROW_PAD,
+                            )}
+                          >
+                            <p className="mb-4 text-[12px] text-[#6B6B6B]">
+                              These permissions belong to the {user.type} role.
+                              Saving updates every user with this role.
+                            </p>
+                            <div className="overflow-x-auto">
+                              <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
+                                {ROLE_PERMISSION_GROUPS.map((group) => (
+                                  <div key={group.label}>
+                                    <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                                      {group.label}
+                                    </h3>
+                                    <div className="space-y-2.5">
+                                      <PermissionCheckbox
+                                        checked={permissions[group.accessKey]}
+                                        label={group.accessLabel}
+                                        onChange={() =>
+                                          patchPermission(
+                                            user,
+                                            group.accessKey,
+                                            !permissions[group.accessKey],
+                                          )
+                                        }
+                                      />
+                                      <div className="space-y-2.5 border-l border-[#00000014] pl-3">
+                                        {group.actions.map((action) => (
+                                          <PermissionCheckbox
+                                            key={action.key}
+                                            checked={permissions[action.key]}
+                                            label={action.label}
+                                            onChange={() =>
+                                              patchPermission(
+                                                user,
+                                                action.key,
+                                                !permissions[action.key],
+                                              )
+                                            }
+                                          />
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
 
-                    <div className="mt-5 flex justify-end">
-                      <Button
-                        variant="dark"
-                        onClick={() => applyChanges(user)}
-                      >
-                        Apply Changes
-                      </Button>
+                            <div className="mt-5 flex justify-end">
+                              <Button
+                                variant="dark"
+                                onClick={() => applyChanges(user)}
+                                disabled={pending !== null}
+                              >
+                                {pending === `apply:${user.id}`
+                                  ? "Saving..."
+                                  : "Apply Changes"}
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      ) : null}
                     </div>
-                  </div>
-                  )
-                ) : null}
+                  );
+                })}
               </div>
-            );
-          })}
-          </div>
-          <InfiniteScrollSentinel
-            hasMore={userWindow.hasMore}
-            loadedCount={userWindow.loadedCount}
-            onLoadMore={userWindow.loadMore}
-          />
-        </ScrollTable>
-        </>
+              <InfiniteScrollSentinel
+                hasMore={userWindow.hasMore}
+                loadedCount={userWindow.loadedCount}
+                onLoadMore={userWindow.loadMore}
+              />
+            </ScrollTable>
+          </>
         )}
       </div>
 
@@ -750,7 +1018,9 @@ export default function RolesPage() {
                   className="w-full"
                 />
                 {formErrors.name ? (
-                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.name}</p>
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">
+                    {formErrors.name}
+                  </p>
                 ) : null}
               </div>
 
@@ -772,7 +1042,9 @@ export default function RolesPage() {
                   className="w-full"
                 />
                 {formErrors.email ? (
-                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.email}</p>
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">
+                    {formErrors.email}
+                  </p>
                 ) : null}
               </div>
 
@@ -835,7 +1107,9 @@ export default function RolesPage() {
                   className="w-full"
                 />
                 {formErrors.phone ? (
-                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.phone}</p>
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">
+                    {formErrors.phone}
+                  </p>
                 ) : null}
               </div>
 
@@ -861,26 +1135,40 @@ export default function RolesPage() {
                   }))}
                 />
                 {formErrors.type ? (
-                  <p className="mt-1 text-[12px] text-[#E25B5B]">{formErrors.type}</p>
+                  <p className="mt-1 text-[12px] text-[#E25B5B]">
+                    {formErrors.type}
+                  </p>
                 ) : null}
               </div>
             </div>
 
             <div className="flex items-center justify-between border-t border-[#00000014] px-6 py-4">
               {draft.id ? (
-                <Button variant="dangerGhost" onClick={deleteUser}>
-                  Delete User
+                <Button
+                  variant="dangerGhost"
+                  onClick={deleteUser}
+                  disabled={pending !== null}
+                >
+                  {pending === "delete" ? "Deleting..." : "Delete User"}
                 </Button>
               ) : (
                 <span />
               )}
 
               <div className="flex items-center gap-3">
-                <Button variant="ghost" onClick={closeModal}>
+                <Button
+                  variant="ghost"
+                  onClick={closeModal}
+                  disabled={pending !== null}
+                >
                   Cancel
                 </Button>
-                <Button variant="dark" onClick={saveUser}>
-                  Save
+                <Button
+                  variant="dark"
+                  onClick={saveUser}
+                  disabled={pending !== null}
+                >
+                  {pending === "save" ? "Saving..." : "Save"}
                 </Button>
               </div>
             </div>
@@ -893,77 +1181,9 @@ export default function RolesPage() {
         roles={managedRoles}
         onLoadRole={loadManagedRole}
         onClose={() => setRoleMgmtOpen(false)}
-        onSave={(next) => {
-          setManagedRoles(next);
-          if (isApiConfigured()) {
-            for (const role of next) {
-              const isLocal = role.id.startsWith("role-");
-              if (isLocal) {
-                const roleCode = role.id.startsWith("role-")
-                  ? undefined
-                  : publicCode(role.id);
-                void rolesApi
-                  .create({
-                    name: role.name,
-                    ...(roleCode ? { roleCode } : {}),
-                    permissions: checkedPermissionKeys(role.permissions),
-                  })
-                  .then((created) => {
-                    const code = publicCode(created.roleCode);
-                    setManagedRoles((current) =>
-                      current.map((entry) =>
-                        entry.id === role.id
-                          ? {
-                              ...entry,
-                              id: code ?? entry.id,
-                              roleCode: code ?? entry.roleCode,
-                              recordId: isUuid(created.id)
-                                ? created.id
-                                : entry.recordId,
-                            }
-                          : entry,
-                      ),
-                    );
-                  })
-                  .catch((error) => {
-                    notifyApiError(error, `Failed to create role "${role.name}".`);
-                  });
-              } else {
-                const pathId =
-                  role.recordId && isUuid(role.recordId)
-                    ? role.recordId
-                    : isUuid(role.id)
-                      ? role.id
-                      : undefined;
-                if (!pathId) {
-                  notifyApiError(
-                    new Error(`Role "${role.name}" is missing a server id.`),
-                    `Failed to update role "${role.name}".`,
-                  );
-                  continue;
-                }
-                void rolesApi
-                  .update(pathId, {
-                    name: role.name,
-                    permissions: checkedPermissionKeys(role.permissions),
-                  })
-                  .catch((error) => {
-                    notifyApiError(error, `Failed to update role "${role.name}".`);
-                  });
-              }
-            }
-          }
-          showSuccess("Roles saved");
-          setToast("Roles saved");
-          window.setTimeout(() => setToast(null), 2000);
-        }}
+        onSave={saveManagedRole}
+        onDelete={deleteManagedRole}
       />
-
-      {toast ? (
-        <div className="fixed right-6 bottom-6 z-50 rounded-[10px] bg-[#242424] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
-          {toast}
-        </div>
-      ) : null}
     </div>
   );
 }

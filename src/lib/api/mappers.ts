@@ -1,5 +1,13 @@
-import { permissionsForRoleType } from "@/utils/rolePermissions";
-import type { AdminCustomer, ManagedRole, RoleUser } from "@/types/admin";
+import {
+  permissionsForRoleType,
+  permissionsFromApiKeys,
+} from "@/utils/rolePermissions";
+import type {
+  AdminCustomer,
+  ManagedRole,
+  RolePermissions,
+  RoleUser,
+} from "@/types/admin";
 import type {
   Distributor,
   DistributorContact,
@@ -52,6 +60,28 @@ export function formatApiRoleName(roleName: string | null | undefined): string {
   return display;
 }
 
+/** Name written to the API. Keeps the stored name when the label was not edited. */
+export function roleWriteName(role: {
+  name: string;
+  apiName?: string;
+}): string {
+  const display = role.name.trim();
+  if (role.apiName && formatApiRoleName(role.apiName) === display) {
+    return role.apiName;
+  }
+  return display || role.apiName || "New Role Name";
+}
+
+function permissionsFromApiRole(
+  role: ApiRole,
+  displayName: string,
+): RolePermissions {
+  return permissionsFromApiKeys(
+    role.permissions,
+    permissionsForRoleType(displayName),
+  );
+}
+
 export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
   const type = formatApiRoleName(user.role);
 
@@ -96,14 +126,16 @@ export function mapApiRoleToManagedRole(
     : isUuid(role.roleId)
       ? role.roleId
       : undefined;
-  const name = formatApiRoleName(role.roleName ?? role.name);
+  const apiName = (role.roleName ?? role.name ?? "").trim();
+  const name = formatApiRoleName(apiName || undefined);
 
   return {
     id: roleCode ?? role.roleId ?? role.id ?? `role-${index}`,
     roleCode,
     recordId,
     name,
-    permissions: permissionsForRoleType(name),
+    apiName: apiName || name,
+    permissions: permissionsFromApiRole(role, name),
   };
 }
 
@@ -136,7 +168,7 @@ export function mapApiRoleAssignmentToRoleUser(
     roleId: role.roleId ?? role.id,
     name: member.name?.trim() || email || "User",
     email,
-    phone: member.phone?.trim() ?? "",
+    phone: member.phoneNumber?.trim() || member.phone?.trim() || "",
     type,
     password: "",
     permissions: permissionsForRoleType(type),

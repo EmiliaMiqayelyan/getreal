@@ -108,7 +108,6 @@ async function upsertItemSaleProduct(
     description: item.description.trim() || undefined,
     marginSugPrice: dollarsToCents(pricing.suggestedPrice),
     finalMargin: `${finalMargin.toFixed(2)}%`,
-    isLive: true,
   };
 
   const existing = existingProducts.find(
@@ -125,13 +124,24 @@ async function upsertItemSaleProduct(
     );
   }
 
-  const saved = existing
-    ? await productsApi.update(productPathId!, body)
-    : await productsApi.create(body);
+  const catalog = [{ ...item, recordId: itemRecordId }];
 
-  return mapApiProductToProductForSale(saved, 0, [
-    { ...item, recordId: itemRecordId },
-  ]);
+  if (existing) {
+    const saved = await productsApi.update(productPathId!, {
+      ...body,
+      isLive: existing.live,
+    });
+    return {
+      ...mapApiProductToProductForSale(saved, 0, catalog),
+      live: existing.live,
+    };
+  }
+
+  const saved = await productsApi.create({ ...body, isLive: false });
+  return {
+    ...mapApiProductToProductForSale(saved, 0, catalog),
+    live: false,
+  };
 }
 
 function SourceCell({ children }: { children: ReactNode }) {

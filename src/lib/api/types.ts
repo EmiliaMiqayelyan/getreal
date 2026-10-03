@@ -175,6 +175,16 @@ export type ApiOrderItem = {
   price?: number;
   unit?: string;
   frequency?: string;
+  itemCode?: string | null;
+  categoryName?: string | null;
+  subcategoryName?: string | null;
+  sourceName?: string | null;
+  expirationDate?: string | null;
+};
+
+export type ApiOrderCooler = {
+  id?: string;
+  coolerCode?: string | null;
 };
 
 export type ApiOrder = {
@@ -194,7 +204,19 @@ export type ApiOrder = {
   totalPrice?: number;
   paymentStatus?: string;
   packerId?: string | null;
+  /** Included packer, when the order has one. Null until assigned. */
+  packer?: {
+    id?: string | null;
+    name?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    userCode?: string | null;
+    packerCode?: string | null;
+  } | null;
   coolerId?: string | null;
+  /** Live orders include the assigned cooler records, not only `coolerId`. */
+  cooler?: ApiOrderCooler | null;
+  coolers?: Array<ApiOrderCooler | string> | null;
   packingStartedAt?: string | null;
   coolerReadyAt?: string | null;
   loadedAt?: string | null;
@@ -262,9 +284,11 @@ export type ApiRoleUser = {
   name?: string | null;
   email?: string | null;
   phone?: string | null;
+  phoneNumber?: string | null;
+  isBlocked?: boolean;
 };
 
-/** One roles-list row: a role plus the user assigned to it. */
+/** One roles-list row: a role, optionally with assigned users. */
 export type ApiRole = {
   id?: string;
   roleId?: string;
@@ -274,6 +298,7 @@ export type ApiRole = {
   description?: string;
   permissions?: string[];
   user?: ApiRoleUser | null;
+  users?: ApiRoleUser[] | null;
 };
 
 export type ApiNotificationRule = {

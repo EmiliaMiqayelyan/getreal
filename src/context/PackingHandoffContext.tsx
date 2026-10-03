@@ -2,12 +2,16 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
 
+import { createInitialPackingHandoff } from "@/data/packerManager";
 import type { PackingHandoffUpdate } from "@/types/packing";
+
+const HANDOFF_STORAGE_KEY = "getreal.packingHandoff.v2";
 
 type AssignPackerInput = {
   packerId: string;
@@ -27,12 +31,48 @@ const PackingHandoffContext = createContext<PackingHandoffContextValue | null>(
   null,
 );
 
-/** Temporary seed - one packing sample until Packing API owns this state. */
-const SEED: Record<string, PackingHandoffUpdate> = {};
+function isHandoffUpdate(value: unknown): value is PackingHandoffUpdate {
+  if (!value || typeof value !== "object") return false;
+  const row = value as PackingHandoffUpdate;
+  return (
+    typeof row.orderCode === "string" &&
+    typeof row.packerName === "string" &&
+    Array.isArray(row.coolerIds)
+  );
+}
+
+/** Recorded assignments and timestamps. A refresh restores them; it does not mint new ones. */
+function readStoredHandoff(): Record<string, PackingHandoffUpdate> | null {
+  try {
+    const raw = sessionStorage.getItem(HANDOFF_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return null;
+    }
+    const next: Record<string, PackingHandoffUpdate> = {};
+    for (const [code, value] of Object.entries(parsed)) {
+      if (!isHandoffUpdate(value) || value.orderCode !== code) continue;
+      next[code] = value;
+    }
+    return Object.keys(next).length ? next : null;
+  } catch {
+    return null;
+  }
+}
 
 export function PackingHandoffProvider({ children }: { children: ReactNode }) {
-  const [packingByCode, setPackingByCode] =
-    useState<Record<string, PackingHandoffUpdate>>(SEED);
+  const [packingByCode, setPackingByCode] = useState<
+    Record<string, PackingHandoffUpdate>
+  >(() => readStoredHandoff() ?? createInitialPackingHandoff());
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(HANDOFF_STORAGE_KEY, JSON.stringify(packingByCode));
+    } catch {
+      // Session storage can be unavailable. The in-memory record still works.
+    }
+  }, [packingByCode]);
 
   const upsertPacking = useCallback((update: PackingHandoffUpdate) => {
     setPackingByCode((current) => {

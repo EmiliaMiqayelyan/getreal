@@ -21,15 +21,24 @@ import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { PINNED_HEADER } from "@/constants/table";
+import {
+  createPackerManagerOrders,
+  PACKER_MANAGER_API_ENABLED,
+  workloadForPacker,
+  type PackerManagerOrder,
+} from "@/data/packerManager";
+import { ELIGIBLE_PACKERS, type EligiblePacker } from "@/data/packers";
 import { isApiConfigured, ordersApi, usersApi } from "@/lib/api";
 import { orderModelId, orderRecordId } from "@/lib/api/mappers";
-import type { ApiOrder } from "@/lib/api/types";
+import type { ApiOrder, ApiUser, PaginatedResult } from "@/lib/api/types";
+import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
@@ -38,41 +47,48 @@ import {
   formatTodayLabel,
   parseDeliveryDateId,
   shiftDateId,
+  toDeliveryDateId,
+  upcomingWednesday,
   weekWindowChips,
 } from "@/utils/deliveryCalendar";
+import { displayOperationalTimestamp } from "@/utils/packingTime";
 
 const MUTED_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
-/** Eligible packing-role users only (§6). */
-type Packer = {
-  id: string;
-  name: string;
-  code: string;
-  role: "packer";
-};
+/** Live orders and packers when the API URL is set. Timestamps stay read-only. */
+function packerManagerApiLive() {
+  return PACKER_MANAGER_API_ENABLED && isApiConfigured();
+}
 
-type ManagerOrder = {
-  id: string;
-  recordId?: string;
-  customer: string;
-  code: string;
-  itemCount: number;
-  deliveryDate: string;
-  deliveryDateId: string;
-  packerId?: string;
-};
+const PAGE_LIMIT = 100;
 
-/** Eligible packing-role users only (§6). Temporary seed - one packer. */
-const ELIGIBLE_PACKERS: Packer[] = [];
+async function listAllPages<T>(
+  load: (page: number) => Promise<PaginatedResult<T>>,
+) {
+  const items: T[] = [];
+  for (let page = 1; page < 50; page += 1) {
+    const result = await load(page);
+    items.push(...result.items);
+    if (result.items.length < PAGE_LIMIT) break;
+  }
+  return items;
+}
 
-/** Temporary seed - one order sample. */
-const INITIAL_ORDERS: ManagerOrder[] = [];
+/** Calendar day from `YYYY-MM-DD` or an ISO timestamp, without a timezone shift. */
+function orderDeliveryDateId(value?: string | null) {
+  const day = /^(\d{4}-\d{2}-\d{2})/.exec(value?.trim() ?? "");
+  return day?.[1] ?? deliveryDateIdFromValue(value);
+}
 
 const ROW_GRID =
   "grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,0.8fr)_minmax(0,0.8fr)] items-center gap-x-4 px-4";
 
 const ASSIGN_PANEL_WIDTH = 300;
+
+function itemLabel(count: number) {
+  return `${count} ${count === 1 ? "item" : "items"}`;
+}
 
 function AssignPackerMenu({
   anchor,
@@ -81,8 +97,8 @@ function AssignPackerMenu({
   onClose,
 }: {
   anchor: HTMLElement;
-  packers: (Packer & { orderCount: number })[];
-  onChoose: (packer: Packer) => void;
+  packers: (EligiblePacker & { orderCount: number })[];
+  onChoose: (packer: EligiblePacker) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -143,6 +159,7 @@ function AssignPackerMenu({
         <button
           key={packer.id}
           type="button"
+          role="option"
           onClick={() => onChoose(packer)}
           className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#00000014] px-3 py-2.5 text-left last:border-b-0 hover:bg-[#FAFAF8]"
         >
@@ -154,7 +171,7 @@ function AssignPackerMenu({
               ? "No orders"
               : `${packer.orderCount} order${packer.orderCount === 1 ? "" : "s"}`}
           </span>
-          <IdPill>{packer.code}</IdPill>
+          {packer.code ? <IdPill>{packer.code}</IdPill> : null}
         </button>
       ))}
       {!filtered.length ? (
@@ -164,6 +181,23 @@ function AssignPackerMenu({
       ) : null}
     </div>,
     document.body,
+  );
+}
+
+function packerNameFromOrder(order: ApiOrder) {
+  const packer = order.packer;
+  if (!packer) return undefined;
+  const joined = [packer.firstName, packer.lastName].filter(Boolean).join(" ");
+  return packer.name?.trim() || joined || undefined;
+}
+
+function packerCodeFromUser(user: ApiUser) {
+  const raw = user as ApiUser & { packerCode?: string | null; staffCode?: string | null };
+  return (
+    raw.userCode?.trim() ||
+    raw.packerCode?.trim() ||
+    raw.staffCode?.trim() ||
+    ""
   );
 }
 
@@ -184,24 +218,41 @@ function orderCustomerName(order: ApiOrder) {
   );
 }
 
-function mapManagerOrder(order: ApiOrder, index: number): ManagerOrder {
+/** Adapter for GET /orders. Timestamps are displayed, never edited here. */
+function mapManagerOrder(order: ApiOrder, index: number): PackerManagerOrder {
   const code = orderModelId(order, `ORD-${index + 1}`);
-  const itemCount = (order.items ?? []).reduce(
-    (sum, line) => sum + (line.quantity ?? 0),
-    0,
-  );
-  const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate) : null;
-  const hasDelivery =
-    deliveryDate != null && !Number.isNaN(deliveryDate.getTime());
+  const lines = order.items ?? [];
+  const deliveryDateId = orderDeliveryDateId(order.deliveryDate);
+  const deliveryDate = parseDeliveryDateId(deliveryDateId);
   return {
     id: code,
     recordId: orderRecordId(order),
     customer: orderCustomerName(order),
     code,
-    itemCount: itemCount || (order.items?.length ?? 0),
-    deliveryDate: hasDelivery ? deliveryDate.toLocaleDateString() : "",
-    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
-    packerId: order.packerId ?? undefined,
+    itemCount: lines.length,
+    deliveryDate: deliveryDate ? deliveryDate.toLocaleDateString() : "",
+    deliveryDateId,
+    packerId: order.packerId ?? order.packer?.id ?? undefined,
+    packerName: packerNameFromOrder(order),
+    packingStartedAt: displayOperationalTimestamp(order.packingStartedAt),
+    coolerReadyAt: displayOperationalTimestamp(order.coolerReadyAt),
+    loadedAt: displayOperationalTimestamp(order.loadedAt),
+  };
+}
+
+function withLiveAssignment(
+  order: PackerManagerOrder,
+  handoff: PackingHandoffUpdate | undefined,
+): PackerManagerOrder {
+  if (!handoff) return order;
+  return {
+    ...order,
+    packerId: handoff.packerId ?? order.packerId,
+    packerName: handoff.packerName || order.packerName,
+    packingStartedAt: handoff.packingStartedAt ?? order.packingStartedAt,
+    coolerReadyAt:
+      handoff.coolerReadyAt ?? handoff.packedAt ?? order.coolerReadyAt,
+    loadedAt: handoff.loadedAt ?? order.loadedAt,
   };
 }
 
@@ -210,14 +261,24 @@ export default function PackerManagerPage() {
 
   const { packingByCode, assignPacker: assignPackerHandoff } =
     usePackingHandoff();
+  const { sessionPermissions } = useRolesUsers();
+  const canAssign = sessionPermissions.packerManagerAssignPacker;
   const { notifyApiError } = useApiFeedback();
 
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [loading, setLoading] = useState(() => isApiConfigured());
-  const [packers, setPackers] = useState(ELIGIBLE_PACKERS);
+  const apiLive = packerManagerApiLive();
+  const [orders, setOrders] = useState(() =>
+    apiLive ? [] : createPackerManagerOrders(),
+  );
+  const [loading, setLoading] = useState(apiLive);
+  const [packers, setPackers] = useState(() =>
+    apiLive ? [] : ELIGIBLE_PACKERS,
+  );
+  const [savingCode, setSavingCode] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
-  const [activeDateId, setActiveDateId] = useState("");
+  const [activeDateId, setActiveDateId] = useState(() =>
+    toDeliveryDateId(upcomingWednesday()),
+  );
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [assignMenu, setAssignMenu] = useState<{
     orderId: string;
@@ -238,31 +299,46 @@ export default function PackerManagerPage() {
   }, [activeDateId, orders]);
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!apiLive) return;
     let cancelled = false;
     void Promise.all([
-      ordersApi.list({ type: "standard", limit: 100 }),
-      usersApi.list({ role: "packer", limit: 100 }),
+      listAllPages((page) =>
+        ordersApi.list({ type: "standard", page, limit: PAGE_LIMIT }),
+      ),
+      listAllPages((page) =>
+        usersApi.list({ role: "packer", page, limit: PAGE_LIMIT }),
+      ),
     ])
-      .then(([orderPage, userPage]) => {
+      .then(([orderItems, userItems]) => {
         if (cancelled) return;
-        setOrders(orderPage.items.map(mapManagerOrder));
-        const nextPackers = userPage.items
+        setOrders(orderItems.map(mapManagerOrder));
+        const nextPackers = userItems
           .map((user) => {
             const id = user.id?.trim() ?? "";
+            const role = user.role?.trim().toLowerCase();
             if (!isUuid(id)) return null;
+            if (role && role !== "packer") return null;
+            const name =
+              user.name?.trim() ||
+              [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+              "N/A";
             return {
               id,
-              name: user.name?.trim() || "N/A",
-              code: user.userCode?.trim() || id.slice(0, 8),
+              name,
+              code: packerCodeFromUser(user),
               role: "packer" as const,
+              outsideOrderCount: 0,
             };
           })
-          .filter((packer): packer is Packer => packer != null);
+          .filter((packer): packer is EligiblePacker => packer != null);
         setPackers(nextPackers);
       })
       .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load packer orders.");
+        if (!cancelled) {
+          setOrders([]);
+          setPackers([]);
+          notifyApiError(error, "Failed to load packer orders.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -270,57 +346,52 @@ export default function PackerManagerPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError]);
+  }, [apiLive, notifyApiError]);
+
+  const liveCatalog = useMemo(
+    () =>
+      orders.map((order) =>
+        withLiveAssignment(order, packingByCode[order.code]),
+      ),
+    [orders, packingByCode],
+  );
 
   const packersWithWorkload = useMemo(() => {
-    return packers.map((packer) => ({
-      ...packer,
-      orderCount: Object.values(packingByCode).filter(
-        (entry) => entry.packerId === packer.id,
-      ).length,
-    }));
-  }, [packers, packingByCode]);
+    return packers
+      .filter((packer) => packer.role === "packer")
+      .map((packer) => ({
+        ...packer,
+        orderCount: workloadForPacker(packer, liveCatalog),
+      }));
+  }, [packers, liveCatalog]);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    let next = orders
-      .filter((order) => {
-        const handoff = packingByCode[order.code];
-        const packerName = handoff?.packerName ?? "";
-        const matchesDate =
-          !activeDateId ||
-          !order.deliveryDateId ||
-          order.deliveryDateId === activeDateId;
-        const matchesSearch =
-          !q ||
-          order.customer.toLowerCase().includes(q) ||
-          order.code.toLowerCase().includes(q) ||
-          packerName.toLowerCase().includes(q);
-        return matchesDate && matchesSearch;
-      })
-      .map((order) => {
-        const handoff = packingByCode[order.code];
-        return {
-          ...order,
-          packerId: handoff?.packerId,
-          packerName: handoff?.packerName,
-          packingStartedAt: handoff?.packingStartedAt,
-          coolerReadyAt: handoff?.coolerReadyAt ?? handoff?.packedAt,
-          loadedAt: handoff?.loadedAt,
-        };
-      });
+    let next = liveCatalog.filter((order) => {
+      const matchesDate = order.deliveryDateId === activeDateId;
+      const matchesSearch =
+        !q ||
+        order.customer.toLowerCase().includes(q) ||
+        order.code.toLowerCase().includes(q) ||
+        (order.packerName ?? "").toLowerCase().includes(q);
+      return matchesDate && matchesSearch;
+    });
 
     if (sortBy === "assigned-first") {
       next = [...next].sort(
         (a, b) => Number(Boolean(b.packerId)) - Number(Boolean(a.packerId)),
+      );
+    } else if (sortBy === "unassigned-first") {
+      next = [...next].sort(
+        (a, b) => Number(Boolean(a.packerId)) - Number(Boolean(b.packerId)),
       );
     } else if (sortBy === "name") {
       next = [...next].sort((a, b) => a.customer.localeCompare(b.customer));
     }
 
     return next;
-  }, [orders, packingByCode, search, sortBy, activeDateId]);
+  }, [liveCatalog, search, sortBy, activeDateId]);
 
   const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeDateId}`);
 
@@ -328,9 +399,12 @@ export default function PackerManagerPage() {
     setActiveDateId((current) => shiftDateId(current, delta * 7));
   }
 
-  function handleAssign(orderCode: string, packer: Packer) {
+  async function handleAssign(orderCode: string, packer: EligiblePacker) {
+    if (!canAssign || savingCode) return;
     const order = orders.find((entry) => entry.code === orderCode);
-    if (isApiConfigured()) {
+    setAssignMenu(null);
+
+    if (apiLive) {
       if (!order?.recordId || !isUuid(packer.id)) {
         notifyApiError(
           new Error("This order or packer is missing a server id."),
@@ -338,20 +412,48 @@ export default function PackerManagerPage() {
         );
         return;
       }
-      void ordersApi.assignPacker(order.recordId, packer.id).catch((error) => {
+      setSavingCode(orderCode);
+      try {
+        const updated = await ordersApi.assignPacker(order.recordId, packer.id);
+        const mapped = mapManagerOrder(updated, 0);
+        setOrders((current) =>
+          current.map((entry) =>
+            entry.code === orderCode
+              ? {
+                  ...entry,
+                  packerId: mapped.packerId ?? packer.id,
+                  packerName: mapped.packerName || packer.name,
+                  packingStartedAt:
+                    mapped.packingStartedAt ?? entry.packingStartedAt,
+                  coolerReadyAt: mapped.coolerReadyAt ?? entry.coolerReadyAt,
+                  loadedAt: mapped.loadedAt ?? entry.loadedAt,
+                }
+              : entry,
+          ),
+        );
+        assignPackerHandoff(orderCode, {
+          packerId: mapped.packerId ?? packer.id,
+          packerName: mapped.packerName || packer.name,
+        });
+      } catch (error) {
         notifyApiError(error, "Failed to assign packer.");
-      });
+      } finally {
+        setSavingCode(null);
+      }
+      return;
     }
+
     assignPackerHandoff(orderCode, {
       packerId: packer.id,
       packerName: packer.name,
     });
     setOrders((current) =>
       current.map((entry) =>
-        entry.code === orderCode ? { ...entry, packerId: packer.id } : entry,
+        entry.code === orderCode
+          ? { ...entry, packerId: packer.id, packerName: packer.name }
+          : entry,
       ),
     );
-    setAssignMenu(null);
   }
 
   return (
@@ -369,11 +471,12 @@ export default function PackerManagerPage() {
               value={sortBy}
               onChange={setSortBy}
               aria-label="Sort by"
-              className="w-full sm:w-[140px]"
+              className="w-full sm:w-[160px]"
               options={[
                 { value: "", label: "Sort by" },
-                { value: "name", label: "Customer" },
+                { value: "unassigned-first", label: "Unassigned first" },
                 { value: "assigned-first", label: "Assigned first" },
+                { value: "name", label: "Customer" },
               ]}
             />
             <div className="ml-auto text-[12px] text-[#8A8A8A]">
@@ -456,6 +559,8 @@ export default function PackerManagerPage() {
             const assigned = packersWithWorkload.find(
               (packer) => packer.id === order.packerId,
             );
+            const packerLabel =
+              assigned?.name ?? order.packerName ?? "Assign Packer";
 
             return (
               <div
@@ -473,7 +578,7 @@ export default function PackerManagerPage() {
                   <div className="mt-1.5 flex items-center gap-2">
                     <IdPill>{order.code}</IdPill>
                     <span className="text-[12px] text-[#8A8A8A]">
-                      {order.itemCount} items
+                      {itemLabel(order.itemCount)}
                     </span>
                   </div>
                 </div>
@@ -481,7 +586,18 @@ export default function PackerManagerPage() {
                 <div>
                   <button
                     type="button"
+                    disabled={!canAssign || savingCode === order.code}
+                    aria-haspopup={canAssign ? "listbox" : undefined}
+                    aria-expanded={
+                      canAssign ? assignMenu?.orderId === order.id : undefined
+                    }
+                    title={
+                      canAssign
+                        ? "Assign packer"
+                        : "Only a Packer Manager can assign a packer"
+                    }
                     onClick={(event) => {
+                      if (!canAssign) return;
                       const anchor = event.currentTarget;
                       setAssignMenu((current) =>
                         current?.orderId === order.id
@@ -493,15 +609,13 @@ export default function PackerManagerPage() {
                             },
                       );
                     }}
-                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118]"
+                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <Package size={14} className="shrink-0 text-[#8A8A8A]" />
-                    <span className="truncate">
-                      {assigned?.name ?? order.packerName ?? "Assign Packer"}
-                    </span>
+                    <span className="truncate">{packerLabel}</span>
                     <ChevronDown size={13} className="shrink-0 text-[#8A8A8A]" />
                   </button>
-                  {assignMenu?.orderId === order.id ? (
+                  {canAssign && assignMenu?.orderId === order.id ? (
                     <AssignPackerMenu
                       anchor={assignMenu.anchor}
                       packers={packersWithWorkload}
@@ -512,13 +626,13 @@ export default function PackerManagerPage() {
                 </div>
 
                 <div className="text-[13px] text-[#111118]">
-                  {order.packingStartedAt || "N/A"}
+                  {displayOperationalTimestamp(order.packingStartedAt) ?? ""}
                 </div>
                 <div className="text-[13px] text-[#111118]">
-                  {order.coolerReadyAt || "N/A"}
+                  {displayOperationalTimestamp(order.coolerReadyAt) ?? ""}
                 </div>
                 <div className="text-[13px] text-[#111118]">
-                  {order.loadedAt || "N/A"}
+                  {displayOperationalTimestamp(order.loadedAt) ?? ""}
                 </div>
               </div>
             );

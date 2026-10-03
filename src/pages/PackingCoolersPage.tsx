@@ -31,20 +31,45 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { coolersApi, isApiConfigured, ordersApi } from "@/lib/api";
-import type { ApiOrder } from "@/lib/api/types";
-import type { PackingLine, PackingSourceOption } from "@/types/packing";
+import {
+  categoryForItem,
+  createPackingOrders,
+  PACKING_COOLERS,
+  sourcesForItem,
+} from "@/data/packingInventory";
+import { coolersApi, inventoryApi, isApiConfigured, ordersApi, productsApi } from "@/lib/api";
+import type { ApiOrder, ApiOrderCooler } from "@/lib/api/types";
+import type {
+  PackingCoolerOption,
+  PackingHandoffUpdate,
+  PackingLine,
+  PackingOrder,
+  PackingSourceOption,
+} from "@/types/packing";
 import { cn } from "@/utils/cn";
 import { orderModelId, orderRecordId } from "@/lib/api/mappers";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   deliveryDateIdFromValue,
+  formatExpectedDelivery,
   formatTodayLabel,
   parseDeliveryDateId,
   shiftDateId,
+  toDeliveryDateId,
+  upcomingWednesday,
   weekWindowChips,
 } from "@/utils/deliveryCalendar";
+import {
+  buildPackingCatalog,
+  productItemIdMap,
+  type PackingCatalog,
+} from "@/utils/packingSources";
+
+import {
+  displayOperationalTimestamp,
+  formatOperationalTimestamp,
+} from "@/utils/packingTime";
 
 const ORANGE = "#F57850";
 const PACKED_GREEN = "#3AA149";
@@ -52,50 +77,82 @@ const LINK_BLUE = "#2165D4";
 const MUTED_HEADER =
   "text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase";
 
-type PackOrder = {
-  id: string;
-  recordId?: string;
-  customer: string;
-  code: string;
-  itemCount: number;
-  deliveryDate: string;
-  deliveryDateId: string;
-  packedAt?: string;
-  loadedAt?: string;
-  packerId?: string;
-  coolerIds: string[];
-  items: PackingLine[];
-};
-
-const COOLER_OPTIONS: string[] = [];
+type PackOrder = PackingOrder;
 
 type SourceOption = PackingSourceOption;
 
-/** Temporary seed - one order shared with Packer Manager / Customer Orders. */
-const INITIAL_ORDERS: PackOrder[] = [];
+const COOLER_PLACEHOLDER = "Cooler";
 
 const SOURCE_PANEL_WIDTH = 460;
 
-/** Format like `7/29/26, 8:45am` */
+/** Format like `7/29/26, 8:45am`. */
 function formatPackTimestamp(date = new Date()): string {
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const year = String(date.getFullYear()).slice(-2);
-  let hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const suffix = hours >= 12 ? "pm" : "am";
-  hours = hours % 12 || 12;
-  return `${month}/${day}/${year}, ${hours}:${minutes}${suffix}`;
+  return formatOperationalTimestamp(date);
+}
+
+const OFFLINE_CATALOG: PackingCatalog = {
+  optionsFor(line) {
+    const name = line.name?.trim() || "N/A";
+    return {
+      category: categoryForItem(name),
+      options: sourcesForItem(name),
+    };
+  },
+};
+
+function coolerToken(entry: ApiOrderCooler | string | null | undefined) {
+  if (!entry) return "";
+  if (typeof entry === "string") return entry.trim();
+  return entry.coolerCode?.trim() || entry.id?.trim() || "";
+}
+
+function orderCoolerTokens(order: ApiOrder) {
+  const tokens = [
+    ...(order.coolers ?? []).map(coolerToken),
+    coolerToken(order.cooler),
+    order.coolerId?.trim() || "",
+  ].filter(Boolean);
+  return [...new Set(tokens)];
+}
+
+function displayCooler(token: string, labels: ReadonlyMap<string, string>) {
+  return labels.get(token) ?? token;
+}
+
+function coolerUuid(token: string, options: PackingCoolerOption[]) {
+  const match = options.find(
+    (option) => option.id === token || option.label === token,
+  );
+  if (match && isUuid(match.id)) return match.id;
+  return isUuid(token) ? token : "";
 }
 
 function coolerAssigned(coolerId: string) {
-  return Boolean(coolerId) && coolerId !== "Cooler";
+  return Boolean(coolerId) && coolerId !== COOLER_PLACEHOLDER;
 }
 
 function itemReady(item: PackingLine) {
   return Boolean(item.selected) && coolerAssigned(item.coolerId) && item.packed;
 }
 
+function applyHandoff(
+  order: PackOrder,
+  handoff: PackingHandoffUpdate | undefined,
+): PackOrder {
+  if (!handoff) return order;
+  const items = handoff.items?.length ? handoff.items : order.items;
+  return {
+    ...order,
+    items,
+    itemCount: items.length,
+    packingStartedAt: handoff.packingStartedAt ?? order.packingStartedAt,
+    packedAt: handoff.coolerReadyAt ?? handoff.packedAt ?? order.packedAt,
+    loadedAt: handoff.loadedAt ?? order.loadedAt,
+    coolerIds: handoff.coolerIds?.length ? handoff.coolerIds : order.coolerIds,
+    packerId: handoff.packerId ?? order.packerId,
+    packerName: handoff.packerName || order.packerName,
+  };
+}
 function collectCoolerIds(items: PackingLine[]): string[] {
   return Array.from(
     new Set(
@@ -114,9 +171,8 @@ function isDraftDirty(original: PackOrder, draft: PackOrder): boolean {
     return (
       item.packed !== base.packed ||
       item.coolerId !== base.coolerId ||
-      item.selected?.itemId !== base.selected?.itemId ||
-      item.selected?.distributor !== base.selected?.distributor ||
-      item.selected?.source !== base.selected?.source
+      item.selected?.inventoryRecordId !== base.selected?.inventoryRecordId ||
+      item.selected?.itemId !== base.selected?.itemId
     );
   });
 }
@@ -146,7 +202,9 @@ function SourcePicker({
     return (
       !q ||
       option.distributor.toLowerCase().includes(q) ||
-      option.source.toLowerCase().includes(q)
+      option.source.toLowerCase().includes(q) ||
+      option.expDate.toLowerCase().includes(q) ||
+      option.itemId.toLowerCase().includes(q)
     );
   });
 
@@ -189,7 +247,7 @@ function SourcePicker({
       <div className="px-1 pb-1.5">
         {filtered.map((option) => (
           <button
-            key={`${option.distributor}-${option.source}-${option.itemId}`}
+            key={option.inventoryRecordId}
             type="button"
             onClick={() => onChoose(option)}
             className="grid w-full grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_112px] items-center gap-x-4 rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]"
@@ -227,33 +285,76 @@ function packCustomerName(order: ApiOrder) {
   );
 }
 
-function mapStandardOrder(order: ApiOrder, index: number): PackOrder {
+async function loadStandardOrders() {
+  const orders: ApiOrder[] = [];
+  for (let page = 1; page < 50; page += 1) {
+    const result = await ordersApi.list({
+      type: "standard",
+      page,
+      limit: 100,
+    });
+    orders.push(...result.items);
+    if (result.items.length < 100) break;
+  }
+  return orders;
+}
+
+function mapStandardOrder(
+  order: ApiOrder,
+  index: number,
+  catalog: PackingCatalog,
+  coolerLabels: ReadonlyMap<string, string>,
+): PackOrder {
   const code = orderModelId(order, `ORD-${index + 1}`);
   const customer = packCustomerName(order);
-  const deliveryDate = order.deliveryDate ? new Date(order.deliveryDate) : null;
-  const hasDelivery =
-    deliveryDate != null && !Number.isNaN(deliveryDate.getTime());
-  const items: PackingLine[] = (order.items ?? []).map((line, lineIndex) => ({
-    id: `${code}-${lineIndex + 1}`,
-    name: line.name || line.itemName || "N/A",
-    category: "",
-    qty: line.quantity ?? 0,
-    coolerId: order.coolerId || "Cooler",
-    packed: Boolean(order.coolerReadyAt),
-    options: [],
-  }));
+  const deliveryDateId = deliveryDateIdFromValue(order.deliveryDate);
+  const deliveryDate = parseDeliveryDateId(deliveryDateId);
+  const coolerIds = orderCoolerTokens(order).map((token) =>
+    displayCooler(token, coolerLabels),
+  );
+  const lineCooler = coolerIds[0] || COOLER_PLACEHOLDER;
+  const items: PackingLine[] = (order.items ?? []).map((line, lineIndex) => {
+    const name = line.name || line.itemName || "N/A";
+    const match = catalog.optionsFor({
+      productId: line.productId,
+      name,
+      itemCode: line.itemCode,
+    });
+    const category =
+      match.category !== "Items"
+        ? match.category
+        : line.subcategoryName?.trim() ||
+          line.categoryName?.trim() ||
+          categoryForItem(name);
+    return {
+      id: `${code}-${lineIndex + 1}`,
+      catalogItemId: line.productId || `cat-${lineIndex + 1}`,
+      name,
+      category: category === "Items" ? categoryForItem(name) : category,
+      qty: line.quantity ?? 0,
+      coolerId: lineCooler,
+      packed: false,
+      options: match.options,
+    };
+  });
+  const packerName = [order.packer?.firstName, order.packer?.lastName]
+    .filter(Boolean)
+    .join(" ")
+    .trim() || order.packer?.name?.trim() || undefined;
   return {
     id: code,
     recordId: orderRecordId(order),
     customer,
     code,
-    itemCount: items.reduce((sum, line) => sum + line.qty, 0) || items.length,
-    deliveryDate: hasDelivery ? deliveryDate.toLocaleDateString() : "",
-    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
-    packedAt: order.coolerReadyAt ?? undefined,
-    loadedAt: order.loadedAt ?? undefined,
+    itemCount: items.length,
+    deliveryDate: deliveryDate ? formatExpectedDelivery(deliveryDate) : "",
+    deliveryDateId,
+    packingStartedAt: displayOperationalTimestamp(order.packingStartedAt),
+    packedAt: displayOperationalTimestamp(order.coolerReadyAt),
+    loadedAt: displayOperationalTimestamp(order.loadedAt),
     packerId: order.packerId ?? undefined,
-    coolerIds: order.coolerId ? [order.coolerId] : [],
+    packerName,
+    coolerIds: coolerIds.filter((id) => id !== COOLER_PLACEHOLDER),
     items,
   };
 }
@@ -261,11 +362,13 @@ function mapStandardOrder(order: ApiOrder, index: number): PackOrder {
 function PackingDetail({
   order,
   coolerOptions,
+  locked,
   onClose,
   onReady,
 }: {
   order: PackOrder;
-  coolerOptions: string[];
+  coolerOptions: PackingCoolerOption[];
+  locked: boolean;
   onClose: () => void;
   onReady: (order: PackOrder) => void;
 }) {
@@ -280,7 +383,7 @@ function PackingDetail({
   const groups = useMemo(() => {
     const grouped = new Map<string, PackingLine[]>();
     for (const item of draft.items) {
-      const title = item.category || "N/A";
+      const title = item.category || "Items";
       const rows = grouped.get(title) ?? [];
       rows.push(item);
       grouped.set(title, rows);
@@ -301,7 +404,7 @@ function PackingDetail({
   }
 
   function requestClose() {
-    if (isDraftDirty(order, draft)) {
+    if (!locked && isDraftDirty(order, draft)) {
       setLeaveConfirmOpen(true);
       return;
     }
@@ -319,6 +422,9 @@ function PackingDetail({
       setValidationError(
         `Complete all items before Cooler Ready. "${missing.name}" still needs ${parts.join(", ")}.`,
       );
+      document
+        .getElementById(`pack-item-${missing.id}`)
+        ?.scrollIntoView({ block: "center", behavior: "smooth" });
       return;
     }
 
@@ -326,9 +432,24 @@ function PackingDetail({
     onReady({
       ...draft,
       coolerIds,
-      packedAt: formatPackTimestamp(),
+      packedAt: order.packedAt ?? formatPackTimestamp(),
+      loadedAt: order.loadedAt,
       items: draft.items,
     });
+  }
+
+  function markPacked(item: PackingLine) {
+    if (locked) return;
+    if (!item.selected || !coolerAssigned(item.coolerId)) {
+      const parts: string[] = [];
+      if (!item.selected) parts.push("distributor/source");
+      if (!coolerAssigned(item.coolerId)) parts.push("cooler ID");
+      setValidationError(
+        `"${item.name}" still needs ${parts.join(" and ")} before it can be packed.`,
+      );
+      return;
+    }
+    updateItem(item.id, { packed: true });
   }
 
   const cell = "min-w-0 text-[13px] text-[#111118]";
@@ -350,6 +471,11 @@ function PackingDetail({
                 {draft.deliveryDate || "N/A"}
               </span>
             </p>
+            {locked && order.loadedAt ? (
+              <p className="mt-1 text-[13px] text-[#8A8A8A]">
+                Loaded {order.loadedAt}. Packing is locked.
+              </p>
+            ) : null}
           </div>
           <UserMenu className="items-center" />
         </div>
@@ -396,16 +522,16 @@ function PackingDetail({
                 </div>
                 <div>
                     {items.map((item) => {
-                      const canPack =
-                        Boolean(item.selected) &&
-                        coolerAssigned(item.coolerId);
+                      const sourceOpen = openMenu?.id === item.id;
 
                       return (
                         <div
                           key={item.id}
+                          id={`pack-item-${item.id}`}
                           className={cn(
                             PACK_COLUMNS,
                             "border-b border-[#00000014] py-3.5 last:border-b-0",
+                            sourceOpen && "bg-[#FAFAF8]",
                           )}
                         >
                           <div className={cn(cell, "truncate font-medium")}>
@@ -417,6 +543,7 @@ function PackingDetail({
                           <div className={cell}>
                             <button
                               type="button"
+                              disabled={locked}
                               onClick={(event) => {
                                 const anchor = event.currentTarget;
                                 setOpenMenu((current) =>
@@ -425,7 +552,12 @@ function PackingDetail({
                                     : { id: item.id, anchor },
                                 );
                               }}
-                              className="inline-flex max-w-full items-center gap-1 text-left text-[13px]"
+                              className="inline-flex max-w-full items-center gap-1 text-left text-[13px] disabled:cursor-default"
+                              title={
+                                item.selected
+                                  ? `${item.selected.distributor} / ${item.selected.source}`
+                                  : undefined
+                              }
                             >
                               <ChevronDown
                                 size={14}
@@ -444,13 +576,12 @@ function PackingDetail({
                                   : "Select"}
                               </span>
                             </button>
-                            {openMenu?.id === item.id ? (
+                            {sourceOpen ? (
                               <SourcePicker
                                 anchor={openMenu.anchor}
                                 options={item.options}
                                 onClose={() => setOpenMenu(null)}
                                 onChoose={(option) => {
-                                  // Inventory stock row → copy expDate / itemId / location via selected
                                   updateItem(item.id, {
                                     selected: option,
                                     packed: false,
@@ -463,13 +594,15 @@ function PackingDetail({
                           <div className={cn(cell, "truncate")}>
                             {item.selected?.expDate ?? ""}
                           </div>
-                          <div className={cn(cell, "truncate")}>
-                            {item.selected?.itemId ?? ""}
+                          <div className={cell}>
+                            {item.selected?.itemId ? (
+                              <IdPill>{item.selected.itemId}</IdPill>
+                            ) : null}
                           </div>
                           <div className={cell}>
                             <LocationHover
                               className="text-[13px] text-[#111118]"
-                              fullAddress={item.selected?.location ?? ""}
+                              fullAddress={item.selected?.address ?? ""}
                               label="Location"
                             >
                               {item.selected?.location ?? ""}
@@ -478,28 +611,31 @@ function PackingDetail({
                           <div className={cell}>
                             <Select
                               value={item.coolerId}
+                              disabled={locked}
                               onChange={(value) =>
                                 updateItem(item.id, {
                                   coolerId: value,
-                                  packed:
-                                    item.packed && coolerAssigned(value)
-                                      ? item.packed
-                                      : false,
+                                  packed: coolerAssigned(value)
+                                    ? item.packed
+                                    : false,
                                 })
                               }
                               aria-label="Cooler ID"
                               variant="flat"
                               className="w-auto"
                               buttonClassName={
-                                item.coolerId === "Cooler"
+                                item.coolerId === COOLER_PLACEHOLDER
                                   ? "text-[#8A8A8A]"
                                   : "text-[#111118]"
                               }
                               options={[
-                                { value: "Cooler", label: "Cooler" },
+                                {
+                                  value: COOLER_PLACEHOLDER,
+                                  label: COOLER_PLACEHOLDER,
+                                },
                                 ...coolerOptions.map((cooler) => ({
-                                  value: cooler,
-                                  label: cooler,
+                                  value: cooler.label,
+                                  label: cooler.label,
                                 })),
                               ]}
                             />
@@ -517,11 +653,9 @@ function PackingDetail({
                             ) : (
                               <button
                                 type="button"
-                                disabled={!canPack}
-                                onClick={() =>
-                                  updateItem(item.id, { packed: true })
-                                }
-                                className="text-[13px] font-medium text-[#3B82F6] disabled:text-[#93C5FD]"
+                                onClick={() => markPacked(item)}
+                                className="text-[13px] font-medium"
+                                style={{ color: LINK_BLUE }}
                               >
                                 Item Packed
                               </button>
@@ -545,17 +679,19 @@ function PackingDetail({
         >
           Cancel & Close
         </button>
-        <button
-          type="button"
-          onClick={handleReady}
-          className={cn(
-            "rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white",
-            !allReady && "opacity-40",
-          )}
-          style={{ background: ORANGE }}
-        >
-          Cooler Ready
-        </button>
+        {locked ? null : (
+          <button
+            type="button"
+            onClick={handleReady}
+            className={cn(
+              "rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white",
+              !allReady && "opacity-40",
+            )}
+            style={{ background: ORANGE }}
+          >
+            Cooler Ready
+          </button>
+        )}
       </div>
 
       <ConfirmDialog
@@ -583,21 +719,37 @@ export default function PackingCoolersPage() {
     usePackingHandoff();
   const { notifyApiError } = useApiFeedback();
 
-  const [orders, setOrders] = useState(INITIAL_ORDERS);
-  const [loading, setLoading] = useState(() => isApiConfigured());
-  const [coolerOptions, setCoolerOptions] = useState<string[]>(COOLER_OPTIONS);
+  const apiLive = isApiConfigured();
+  const catalogRef = useRef<PackingCatalog>(OFFLINE_CATALOG);
+  const coolerLabelsRef = useRef<Map<string, string>>(new Map());
+  const datePinned = useRef(false);
+
+  const [orders, setOrders] = useState(() =>
+    apiLive ? [] : createPackingOrders(),
+  );
+  const [loading, setLoading] = useState(apiLive);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [coolerOptions, setCoolerOptions] = useState<PackingCoolerOption[]>(
+    () => (apiLive ? [] : PACKING_COOLERS),
+  );
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("");
-  const [activeDateId, setActiveDateId] = useState("");
+  const [activeDateId, setActiveDateId] = useState(() =>
+    toDeliveryDateId(upcomingWednesday()),
+  );
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  const hydrated = useMemo(
+    () =>
+      orders.map((order) => applyHandoff(order, packingByCode[order.code])),
+    [orders, packingByCode],
+  );
+
   const deliveryChips = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const order of orders) {
-      const assigned = Boolean(
-        packingByCode[order.code]?.packerId || order.packerId,
-      );
+    for (const order of hydrated) {
+      const assigned = Boolean(order.packerId);
       if (!assigned || !order.deliveryDateId) continue;
       counts.set(
         order.deliveryDateId,
@@ -605,39 +757,26 @@ export default function PackingCoolersPage() {
       );
     }
     return weekWindowChips(activeDateId, counts);
-  }, [activeDateId, orders, packingByCode]);
+  }, [activeDateId, hydrated]);
 
   const activeOrder =
-    orders.find((order) => order.id === activeOrderId) ?? null;
+    hydrated.find((order) => order.id === activeOrderId) ?? null;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let next = orders
-      .filter((order) => {
-        // §11: available in Cooler Packing after Packer Manager assignment
-        const handoff = packingByCode[order.code];
-        const assigned = Boolean(handoff?.packerId || order.packerId);
-        const matchesDate =
-          !activeDateId ||
-          !order.deliveryDateId ||
-          order.deliveryDateId === activeDateId;
-        const matchesSearch =
-          !q ||
-          order.customer.toLowerCase().includes(q) ||
-          order.code.toLowerCase().includes(q);
-        return assigned && matchesDate && matchesSearch;
-      })
-      .map((order) => {
-        const handoff = packingByCode[order.code];
-        return {
-          ...order,
-          packedAt: handoff?.coolerReadyAt ?? handoff?.packedAt ?? order.packedAt,
-          loadedAt: handoff?.loadedAt ?? order.loadedAt,
-          coolerIds: handoff?.coolerIds?.length
-            ? handoff.coolerIds
-            : order.coolerIds,
-        };
-      });
+    let next = hydrated.filter((order) => {
+      const assigned = Boolean(order.packerId);
+      const matchesDate =
+        !activeDateId ||
+        !order.deliveryDateId ||
+        order.deliveryDateId === activeDateId;
+      const matchesSearch =
+        !q ||
+        order.customer.toLowerCase().includes(q) ||
+        order.code.toLowerCase().includes(q) ||
+        order.coolerIds.some((coolerId) => coolerId.toLowerCase().includes(q));
+      return assigned && matchesDate && matchesSearch;
+    });
 
     if (sortBy === "packed-first") {
       next = [...next].sort(
@@ -648,7 +787,7 @@ export default function PackingCoolersPage() {
     }
 
     return next;
-  }, [orders, search, sortBy, activeDateId, packingByCode]);
+  }, [hydrated, search, sortBy, activeDateId]);
 
   const listWindow = useLazyWindow(
     filtered,
@@ -656,22 +795,58 @@ export default function PackingCoolersPage() {
   );
 
   useEffect(() => {
-    if (!isApiConfigured()) return;
+    if (!apiLive) return;
     let cancelled = false;
     void Promise.all([
-      ordersApi.list({ type: "standard", limit: 100 }),
+      loadStandardOrders(),
       coolersApi.list(),
+      inventoryApi.list({ fresh: true }),
+      productsApi.list(),
     ])
-      .then(([orderPage, coolers]) => {
+      .then(([orderItems, coolers, inventoryRows, products]) => {
         if (cancelled) return;
-        setOrders(orderPage.items.map(mapStandardOrder));
-        const ids = coolers
-          .map((cooler) => cooler.id?.trim())
-          .filter((id): id is string => Boolean(id));
-        if (ids.length) setCoolerOptions(ids);
+        const labels = new Map<string, string>();
+        const options = coolers.flatMap((cooler) => {
+          const id = cooler.id?.trim() ?? "";
+          if (!id) return [];
+          const label = cooler.coolerCode?.trim() || id;
+          labels.set(id, label);
+          labels.set(label, label);
+          return [{ id, label }];
+        });
+        coolerLabelsRef.current = labels;
+        if (options.length) setCoolerOptions(options);
+        catalogRef.current = buildPackingCatalog(
+          inventoryRows,
+          productItemIdMap(products),
+        );
+        const mapped = orderItems.map((order, index) =>
+          mapStandardOrder(order, index, catalogRef.current, labels),
+        );
+        setOrders(mapped);
+        if (!datePinned.current) {
+          const dates = [
+            ...new Set(
+              mapped
+                .filter((order) => order.packerId && order.deliveryDateId)
+                .map((order) => order.deliveryDateId),
+            ),
+          ].sort();
+          if (dates.length) {
+            setActiveDateId((current) =>
+              dates.includes(current)
+                ? current
+                : (dates.find((date) => date >= current) ?? dates[dates.length - 1]!),
+            );
+          }
+          datePinned.current = true;
+        }
       })
       .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load packing orders.");
+        if (!cancelled) {
+          setLoadFailed(true);
+          notifyApiError(error, "Failed to load packing orders.");
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -679,21 +854,37 @@ export default function PackingCoolersPage() {
     return () => {
       cancelled = true;
     };
-  }, [notifyApiError]);
+  }, [apiLive, notifyApiError]);
 
   function openPacking(order: PackOrder) {
-    markPackingStarted(order.code, formatPackTimestamp());
-    if (isApiConfigured() && order.recordId && !order.packedAt) {
-      void ordersApi.startPacking(order.recordId).catch((error) => {
-        notifyApiError(error, "Failed to start packing.");
-      });
+    if (!order.packedAt && !order.loadedAt) {
+      if (apiLive && order.recordId) {
+        void ordersApi
+          .startPacking(order.recordId)
+          .then((remote) => {
+            const started =
+              displayOperationalTimestamp(remote.packingStartedAt) ??
+              formatPackTimestamp();
+            markPackingStarted(order.code, started);
+          })
+          .catch((error) => {
+            notifyApiError(error, "Failed to start packing.");
+          });
+      } else {
+        markPackingStarted(order.code, formatPackTimestamp());
+      }
     }
     setActiveOrderId(order.id);
-    if (isApiConfigured() && order.recordId) {
+    if (apiLive && order.recordId) {
       void ordersApi
         .getById(order.recordId)
         .then((remote) => {
-          const mapped = mapStandardOrder(remote, 0);
+          const mapped = mapStandardOrder(
+            remote,
+            0,
+            catalogRef.current,
+            coolerLabelsRef.current,
+          );
           setOrders((current) =>
             current.map((row) =>
               row.id === order.id
@@ -701,7 +892,7 @@ export default function PackingCoolersPage() {
                     ...row,
                     ...mapped,
                     id: row.id,
-                    recordId: row.recordId,
+                    recordId: row.recordId ?? mapped.recordId,
                     code: row.code,
                     customer:
                       mapped.customer !== "N/A" ? mapped.customer : row.customer,
@@ -724,42 +915,72 @@ export default function PackingCoolersPage() {
   if (activeOrder) {
     return (
       <PackingDetail
+        key={activeOrder.id}
         order={activeOrder}
         coolerOptions={coolerOptions}
+        locked={Boolean(activeOrder.loadedAt)}
         onClose={() => setActiveOrderId(null)}
         onReady={(updated) => {
-          if (isApiConfigured() && updated.recordId) {
-            const coolerIds = [...new Set(updated.coolerIds)].filter((id) =>
-              isUuid(id),
-            );
-            void (async () => {
+          void (async () => {
+            let saved = updated;
+            if (apiLive && updated.recordId) {
+              const uuids = [
+                ...new Set(
+                  updated.coolerIds
+                    .map((coolerId) => coolerUuid(coolerId, coolerOptions))
+                    .filter(Boolean),
+                ),
+              ];
+              if (updated.coolerIds.length && uuids.length !== new Set(updated.coolerIds).size) {
+                notifyApiError(
+                  new Error("A selected cooler has no server id."),
+                  "A selected cooler has no server id.",
+                );
+                return;
+              }
               try {
-                for (const coolerId of coolerIds) {
-                  await ordersApi.assignCooler(updated.recordId!, coolerId);
+                for (const coolerId of uuids) {
+                  await ordersApi.assignCooler(updated.recordId, coolerId);
                 }
-                await ordersApi.coolerReady(updated.recordId!);
+                const ready = await ordersApi.coolerReady(updated.recordId);
+                const packedAt =
+                  displayOperationalTimestamp(ready.coolerReadyAt) ??
+                  updated.packedAt ??
+                  formatPackTimestamp();
+                const remoteCoolers = orderCoolerTokens(ready).map((token) =>
+                  displayCooler(token, coolerLabelsRef.current),
+                );
+                saved = {
+                  ...updated,
+                  packedAt,
+                  loadedAt:
+                    displayOperationalTimestamp(ready.loadedAt) ?? updated.loadedAt,
+                  coolerIds: remoteCoolers.length ? remoteCoolers : updated.coolerIds,
+                };
               } catch (error) {
                 notifyApiError(error, "Failed to mark the cooler ready.");
+                return;
               }
-            })();
-          }
-          setOrders((current) =>
-            current.map((order) =>
-              order.id === updated.id ? updated : order,
-            ),
-          );
-          upsertPacking({
-            orderCode: updated.code,
-            packedAt: updated.packedAt,
-            coolerReadyAt: updated.packedAt,
-            loadedAt: updated.loadedAt,
-            coolerIds: updated.coolerIds,
-            packerName: packingByCode[updated.code]?.packerName ?? "",
-            packerId: packingByCode[updated.code]?.packerId,
-            packingStartedAt: packingByCode[updated.code]?.packingStartedAt,
-            items: updated.items,
-          });
-          setActiveOrderId(null);
+            }
+            setOrders((current) =>
+              current.map((order) =>
+                order.id === saved.id ? saved : order,
+              ),
+            );
+            upsertPacking({
+              orderCode: saved.code,
+              packedAt: saved.packedAt,
+              coolerReadyAt: saved.packedAt,
+              loadedAt: saved.loadedAt,
+              coolerIds: saved.coolerIds,
+              packerName:
+                packingByCode[saved.code]?.packerName || saved.packerName || "",
+              packerId: packingByCode[saved.code]?.packerId || saved.packerId,
+              packingStartedAt: packingByCode[saved.code]?.packingStartedAt,
+              items: saved.items,
+            });
+            setActiveOrderId(null);
+          })();
         }}
       />
     );
@@ -847,6 +1068,7 @@ export default function PackingCoolersPage() {
           <AppLoader variant="table" label="Loading orders" className="mt-4" />
         ) : (
         <>
+        {filtered.length ? (
         <ScrollTable fill minWidth={960} className="mt-4">
           <div
             className={cn(
@@ -886,7 +1108,8 @@ export default function PackingCoolersPage() {
                   <div className="mt-1.5 flex items-center gap-2">
                     <IdPill>{order.code}</IdPill>
                     <span className="text-[12px] text-[#8A8A8A]">
-                      {order.itemCount} items
+                      {order.itemCount}{" "}
+                      {order.itemCount === 1 ? "item" : "items"}
                     </span>
                   </div>
                 </button>
@@ -956,33 +1179,45 @@ export default function PackingCoolersPage() {
                       <Button
                         variant="dark"
                         onClick={() => {
-                          const loadedAt = formatPackTimestamp();
-                          if (isApiConfigured() && order.recordId) {
-                            void ordersApi.loaded(order.recordId).catch((error) => {
-                              notifyApiError(error, "Failed to mark the order loaded.");
+                          void (async () => {
+                            let loadedAt = formatPackTimestamp();
+                            if (apiLive && order.recordId) {
+                              try {
+                                const remote = await ordersApi.loaded(order.recordId);
+                                loadedAt =
+                                  displayOperationalTimestamp(remote.loadedAt) ??
+                                  loadedAt;
+                              } catch (error) {
+                                notifyApiError(error, "Failed to mark the order loaded.");
+                                return;
+                              }
+                            }
+                            setOrders((current) =>
+                              current.map((entry) =>
+                                entry.id === order.id
+                                  ? { ...entry, loadedAt }
+                                  : entry,
+                              ),
+                            );
+                            markLoaded(order.code, loadedAt);
+                            upsertPacking({
+                              orderCode: order.code,
+                              packedAt: order.packedAt,
+                              coolerReadyAt: order.packedAt,
+                              loadedAt,
+                              coolerIds: order.coolerIds,
+                              packerName:
+                                packingByCode[order.code]?.packerName ||
+                                order.packerName ||
+                                "",
+                              packerId:
+                                packingByCode[order.code]?.packerId ||
+                                order.packerId,
+                              packingStartedAt:
+                                packingByCode[order.code]?.packingStartedAt,
+                              items: order.items,
                             });
-                          }
-                          setOrders((current) =>
-                            current.map((entry) =>
-                              entry.id === order.id
-                                ? { ...entry, loadedAt }
-                                : entry,
-                            ),
-                          );
-                          markLoaded(order.code, loadedAt);
-                          upsertPacking({
-                            orderCode: order.code,
-                            packedAt: order.packedAt,
-                            coolerReadyAt: order.packedAt,
-                            loadedAt,
-                            coolerIds: order.coolerIds,
-                            packerName:
-                              packingByCode[order.code]?.packerName ?? "",
-                            packerId: packingByCode[order.code]?.packerId,
-                            packingStartedAt:
-                              packingByCode[order.code]?.packingStartedAt,
-                            items: order.items,
-                          });
+                          })();
                         }}
                         className="rounded-[10px] text-[12px]"
                       >
@@ -1000,12 +1235,15 @@ export default function PackingCoolersPage() {
             onLoadMore={listWindow.loadMore}
           />
         </ScrollTable>
-
-        {!filtered.length ? (
+        ) : (
           <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
-            No orders match your filters.
+            {loadFailed
+              ? "Couldn't load packing orders."
+              : apiLive && !hydrated.some((order) => order.packerId)
+                ? "No orders have a packer yet. Assign one in Packer Manager."
+                : "No orders match your filters."}
           </div>
-        ) : null}
+        )}
         </>
         )}
       </div>
