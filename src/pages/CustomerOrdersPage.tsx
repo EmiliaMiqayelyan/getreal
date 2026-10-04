@@ -878,7 +878,35 @@ function CoolerIds({ order }: { order: CustomerOrderRow }) {
   );
 }
 
-function AddressFields({ order }: { order: CustomerOrderRow }) {
+/** Timeline stamp for a status. Matches the date under that column. */
+function stepTimestamp(order: CustomerOrderRow, stepKey: TimelineStepKey) {
+  return order.steps.find((step) => step.key === stepKey)?.at?.trim() ?? "";
+}
+
+/**
+ * Date shown in a status modal. Uses the timeline stamp for that step.
+ * A step that is about to be set has no stamp yet, so the modal previews
+ * the same clock time the timeline will show after confirm.
+ */
+function modalStepDate(
+  order: CustomerOrderRow,
+  stepKey: TimelineStepKey,
+  fallback = "",
+) {
+  return (
+    stepTimestamp(order, stepKey) ||
+    fallback.trim() ||
+    formatOrderStamp(new Date().toISOString())
+  );
+}
+
+function AddressFields({
+  order,
+  deliveryDate,
+}: {
+  order: CustomerOrderRow;
+  deliveryDate: string;
+}) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <InfoField label="Street Address">{display(order.address)}</InfoField>
@@ -886,7 +914,7 @@ function AddressFields({ order }: { order: CustomerOrderRow }) {
       <InfoField label="City">{display(order.city)}</InfoField>
       <InfoField label="State">{display(order.state)}</InfoField>
       <InfoField label="Zip">{display(order.zip)}</InfoField>
-      <InfoField label="Delivery date">{display(order.deliveryDate)}</InfoField>
+      <InfoField label="Delivery date">{display(deliveryDate)}</InfoField>
     </div>
   );
 }
@@ -938,7 +966,9 @@ function StatusChangeDetails({
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <InfoField label="Customer">{display(order.customerName)}</InfoField>
-          <InfoField label="Order date">{display(order.orderDate)}</InfoField>
+          <InfoField label="Order date">
+            {display(modalStepDate(order, "requested", order.orderDate))}
+          </InfoField>
           <InfoField label="Payment">{order.paymentStatus}</InfoField>
           <InfoField label="Items">{order.itemCount}</InfoField>
         </div>
@@ -979,7 +1009,7 @@ function StatusChangeDetails({
           {display(order.packerAssigned)}
         </InfoField>
         <InfoField label="Delivery date">
-          {display(order.deliveryDate)}
+          {display(modalStepDate(order, "packing"))}
         </InfoField>
         <InfoField label="Cooler ID(s)">
           <CoolerIds order={order} />
@@ -992,7 +1022,10 @@ function StatusChangeDetails({
     return (
       <div className="space-y-4">
         <InfoField label="Customer">{display(order.customerName)}</InfoField>
-        <AddressFields order={order} />
+        <AddressFields
+          order={order}
+          deliveryDate={modalStepDate(order, "onRoute")}
+        />
       </div>
     );
   }
@@ -1004,7 +1037,10 @@ function StatusChangeDetails({
           <InfoField label="Customer">{display(order.customerName)}</InfoField>
           <InfoField label="Payment">{order.paymentStatus}</InfoField>
         </div>
-        <AddressFields order={order} />
+        <AddressFields
+          order={order}
+          deliveryDate={modalStepDate(order, "delivered")}
+        />
       </div>
     );
   }
@@ -1013,7 +1049,9 @@ function StatusChangeDetails({
     <div className="grid grid-cols-2 gap-4">
       <InfoField label="Customer">{display(order.customerName)}</InfoField>
       <InfoField label="Items">{order.itemCount}</InfoField>
-      <InfoField label="Delivery date">{display(order.deliveryDate)}</InfoField>
+      <InfoField label="Delivery date">
+        {display(modalStepDate(order, stepKey))}
+      </InfoField>
       <InfoField label="Cooler ID(s)">
         <CoolerIds order={order} />
       </InfoField>
