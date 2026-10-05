@@ -440,6 +440,7 @@ function stepsForStatus(
   order: CustomerOrderRow,
   doneCount: number,
   source?: ApiOrder | null,
+  stamp?: string,
 ): TimelineStep[] {
   return STEPS_META.map((meta, index) => {
     const previous = order.steps.find((step) => step.key === meta.key);
@@ -450,7 +451,7 @@ function stepsForStatus(
       ? fromServer ||
         previous?.at ||
         (index === doneCount - 1
-          ? formatOrderStamp(new Date().toISOString())
+          ? stamp || formatOrderStamp(new Date().toISOString())
           : undefined)
       : undefined;
     return {
@@ -469,6 +470,7 @@ function applySavedOrder(
   saved: ApiOrder | null,
   apiStatus: OrderStatus,
   doneCount: number,
+  stamp?: string,
 ): CustomerOrderRow {
   const requestedCount = ORDER_STATUS_DONE_COUNT[apiStatus] ?? doneCount;
   const savedCount =
@@ -481,6 +483,7 @@ function applySavedOrder(
     order,
     Math.max(requestedCount, savedCount, doneCount),
     saved,
+    stamp,
   );
   if (!responseLooksLikeOrder(saved) || !saved) {
     return { ...order, status, steps };
@@ -899,11 +902,11 @@ function AddressFields({
   );
 }
 
-/** Scheduled date until Delivered is set, then the timeline delivered stamp. */
+/** Delivered timestamp for the Set to Delivered popup. Never the scheduled day. */
 function deliveredModalDate(order: CustomerOrderRow) {
-  const delivered = order.steps.find((step) => step.key === "delivered");
-  if (delivered?.done && delivered.at?.trim()) return delivered.at;
-  return order.deliveryDate;
+  const delivered = order.steps.find((step) => step.key === "delivered")?.at;
+  if (delivered?.trim()) return delivered;
+  return formatOrderStamp(new Date().toISOString());
 }
 
 const STATUS_SUMMARY: Record<
@@ -944,9 +947,11 @@ const STATUS_SUMMARY: Record<
 function StatusChangeDetails({
   stepKey,
   order,
+  deliveredAt,
 }: {
   stepKey: TimelineStepKey;
   order: CustomerOrderRow;
+  deliveredAt?: string;
 }) {
   if (stepKey === "requested") {
     return (
@@ -1019,7 +1024,10 @@ function StatusChangeDetails({
           <InfoField label="Customer">{display(order.customerName)}</InfoField>
           <InfoField label="Payment">{order.paymentStatus}</InfoField>
         </div>
-        <AddressFields order={order} deliveryDate={deliveredModalDate(order)} />
+        <AddressFields
+          order={order}
+          deliveryDate={deliveredAt || deliveredModalDate(order)}
+        />
       </div>
     );
   }
@@ -1041,6 +1049,7 @@ function StatusChangeModal({
   direction,
   stepKey,
   order,
+  deliveredAt,
   saving,
   onClose,
   onConfirm,
@@ -1049,6 +1058,7 @@ function StatusChangeModal({
   direction: StatusDirection;
   stepKey: TimelineStepKey;
   order: CustomerOrderRow | null;
+  deliveredAt?: string;
   saving: boolean;
   onClose: () => void;
   onConfirm: () => void;
@@ -1081,7 +1091,13 @@ function StatusChangeModal({
       <p className="mb-4 text-[14px] leading-5 text-[#111118]">
         {STATUS_SUMMARY[stepKey][direction]}
       </p>
-      {order ? <StatusChangeDetails stepKey={stepKey} order={order} /> : null}
+      {order ? (
+        <StatusChangeDetails
+          stepKey={stepKey}
+          order={order}
+          deliveredAt={deliveredAt}
+        />
+      ) : null}
     </Modal>
   );
 }
@@ -1597,6 +1613,7 @@ export default function CustomerOrdersPage() {
     orderId: string;
     stepKey: TimelineStepKey;
     direction: StatusDirection;
+    at?: string;
   } | null>(null);
   const [statusSaving, setStatusSaving] = useState(false);
 
@@ -1964,13 +1981,18 @@ export default function CustomerOrdersPage() {
     if (!existing || statusMoveHint(stepKey, existing.steps, existing.status))
       return;
     setStatusMenu(null);
-    setStatusChange({ orderId, stepKey, direction: "next" });
+    setStatusChange({
+      orderId,
+      stepKey,
+      direction: "next",
+      at: stepKey === "delivered" ? deliveredModalDate(existing) : undefined,
+    });
   }
 
   async function confirmStatusChange() {
     if (!statusChange || statusSaving) return;
 
-    const { orderId, stepKey } = statusChange;
+    const { orderId, stepKey, at } = statusChange;
     const targetIndex = STEPS_META.findIndex((step) => step.key === stepKey);
     if (targetIndex < 0) return;
     const existing = ordersWithPacking.find((order) => order.id === orderId);
@@ -2003,13 +2025,13 @@ export default function CustomerOrdersPage() {
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId
-            ? applySavedOrder(order, saved, apiStatus, doneCount)
+            ? applySavedOrder(order, saved, apiStatus, doneCount, at)
             : order,
         ),
       );
       setOrderDetail((current) =>
         current?.id === orderId
-          ? applySavedOrder(current, saved, apiStatus, doneCount)
+          ? applySavedOrder(current, saved, apiStatus, doneCount, at)
           : current,
       );
       setStatusChange(null);
@@ -2537,6 +2559,7 @@ export default function CustomerOrdersPage() {
           direction={statusChange?.direction ?? "next"}
           stepKey={statusChange?.stepKey ?? "requested"}
           order={statusChangeOrder}
+          deliveredAt={statusChange?.at}
           saving={statusSaving}
           onClose={() => {
             if (!statusSaving) setStatusChange(null);
