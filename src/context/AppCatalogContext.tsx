@@ -67,8 +67,14 @@ type AppCatalogContextValue = {
   subcategoriesByCategory: SubcategoryMap;
   /** Slices already loaded from the API during this session. */
   loadedSlices: CatalogSlice[];
-  /** Load only these catalog resources. Already-loaded slices are not requested again. */
-  ensureCatalog: (slices: readonly CatalogSlice[]) => Promise<void>;
+  /**
+   * Load these catalog resources.
+   * `fresh` requests them again even when this session already has them.
+   */
+  ensureCatalog: (
+    slices: readonly CatalogSlice[],
+    options?: { fresh?: boolean },
+  ) => Promise<void>;
   setDistributors: (
     updater: Distributor[] | ((current: Distributor[]) => Distributor[]),
   ) => void;
@@ -102,12 +108,6 @@ type AppCatalogContextValue = {
 };
 
 const AppCatalogContext = createContext<AppCatalogContextValue | null>(null);
-
-function mergeById<T extends { id: string }>(seed: T[], api: T[]): T[] {
-  const byId = new Map(seed.map((entry) => [entry.id, entry]));
-  for (const entry of api) byId.set(entry.id, entry);
-  return Array.from(byId.values());
-}
 
 function bootstrapCatalog() {
   const distributors = [...DISTRIBUTORS];
@@ -565,77 +565,76 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   };
 
   const ensureCatalog = useCallback(
-    async (slices: readonly CatalogSlice[]) => {
-      if (!isApiConfigured()) return;
+    async (
+      slices: readonly CatalogSlice[],
+      options?: { fresh?: boolean },
+    ) => {
+      if (!isApiConfigured() || slices.length === 0) return;
 
-      const remaining = () =>
-        slices.filter((slice) => !loadedRef.current.has(slice));
+      const fresh = options?.fresh ?? false;
+      const needed = fresh
+        ? [...slices]
+        : slices.filter((slice) => !loadedRef.current.has(slice));
+      if (needed.length === 0) return;
 
-      let pending = remaining();
-      while (pending.length > 0) {
-        const waiting = pending.filter((slice) => inflightRef.current.has(slice));
-        const toStart = pending.filter((slice) => !inflightRef.current.has(slice));
+      const waiting = needed.filter((slice) => inflightRef.current.has(slice));
+      const toStart = needed.filter((slice) => !inflightRef.current.has(slice));
 
-        if (toStart.length === 0) {
-          await Promise.all(
-            waiting.map((slice) => inflightRef.current.get(slice)!),
-          );
-          return;
-        }
+      if (toStart.length === 0) {
+        await Promise.all(
+          waiting.map((slice) => inflightRef.current.get(slice)!),
+        );
+        return;
+      }
 
+      let finish = () => {};
+      const done = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      for (const slice of toStart) inflightRef.current.set(slice, done);
+
+      try {
         if (waiting.length > 0) {
           await Promise.all(
             waiting.map((slice) => inflightRef.current.get(slice)!),
           );
-          pending = remaining();
-          continue;
         }
-
-        let finish = () => {};
-        const done = new Promise<void>((resolve) => {
-          finish = resolve;
+        const result = await loadCatalogSlices(toStart, lookupRef.current, {
+          fresh,
         });
-        for (const slice of toStart) inflightRef.current.set(slice, done);
-
-        try {
-          const result = await loadCatalogSlices(toStart, lookupRef.current);
-          if (result.distributors && result.distributors.length > 0) {
-            setDistributors((current) => mergeById(current, result.distributors!));
-          }
-          if (result.sources && result.sources.length > 0) {
-            setSources((current) => mergeById(current, result.sources!));
-          }
-          if (result.categories && result.categories.length > 0) {
-            setCategories(result.categories);
-          }
-          if (result.subcategories) {
-            setSubcategoryRecords(result.subcategories);
-          }
-          if (result.items && result.items.length > 0) {
-            setItems((current) => mergeById(current, result.items!));
-          }
-          if (result.products && result.products.length > 0) {
-            setProducts((current) => mergeById(current, result.products!));
-          }
-          if (result.failures.length > 0) {
-            const preview = result.failures.slice(0, 2).join(" | ");
-            showError(
-              result.failures.length > 2
-                ? `Some data failed to load (${result.failures.length}). ${preview}`
-                : `Some data failed to load. ${preview}`,
-            );
-          }
-        } finally {
-          for (const slice of toStart) loadedRef.current.add(slice);
-          setLoadedSlices([...loadedRef.current]);
-          for (const slice of toStart) {
-            if (inflightRef.current.get(slice) === done) {
-              inflightRef.current.delete(slice);
-            }
-          }
-          finish();
+        // Replace the slice with the server list so removals show up on return.
+        if (result.distributors) setDistributors(result.distributors);
+        if (result.sources) setSources(result.sources);
+        if (result.categories) setCategories(result.categories);
+        if (result.subcategories) setSubcategoryRecords(result.subcategories);
+        if (result.items) setItems(result.items);
+        if (result.products) setProducts(result.products);
+        if (result.failures.length > 0) {
+          const preview = result.failures.slice(0, 2).join(" | ");
+          showError(
+            result.failures.length > 2
+              ? `Some data failed to load (${result.failures.length}). ${preview}`
+              : `Some data failed to load. ${preview}`,
+          );
         }
-        return;
+      } finally {
+        for (const slice of toStart) loadedRef.current.add(slice);
+        setLoadedSlices((current) => {
+          const next = [...loadedRef.current];
+          if (
+            current.length === next.length &&
+            next.every((slice) => current.includes(slice))
+          ) {
+            return current;
+          }
+          return next;
+        });
+        for (const slice of toStart) {
+          if (inflightRef.current.get(slice) === done) {
+            inflightRef.current.delete(slice);
+          }
+        }
+        finish();
       }
     },
     [setCategories, setDistributors, setItems, setProducts, setSources, setSubcategoryRecords, showError],
@@ -702,14 +701,14 @@ export function useAppCatalog() {
   return context;
 }
 
-/** Fetch the catalog slices this screen renders. Other resources stay unloaded. */
+/** Fetch the catalog slices this screen renders. Each visit asks the server again. */
 export function useCatalogSlice(slices: readonly CatalogSlice[]) {
   const { ensureCatalog, loadedSlices } = useAppCatalog();
   const key = slices.join("|");
 
   useEffect(() => {
     if (!isApiConfigured() || slices.length === 0) return;
-    void ensureCatalog(key.split("|") as CatalogSlice[]);
+    void ensureCatalog(key.split("|") as CatalogSlice[], { fresh: true });
   }, [ensureCatalog, key, slices.length]);
 
   const ready =

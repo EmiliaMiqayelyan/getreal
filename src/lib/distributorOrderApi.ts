@@ -9,6 +9,7 @@ import type {
 import { collectPaginated, ordersApi } from "@/lib/api";
 import { formatApiError } from "@/lib/api/errors";
 import { centsToDollars, orderModelId, orderRecordId } from "@/lib/api/mappers";
+import type { OrdersListParams } from "@/lib/api/orders";
 import type { ApiOrder, ApiOrderItem } from "@/lib/api/types";
 import { isUuid } from "@/utils/entityIds";
 import {
@@ -25,6 +26,14 @@ import {
 
 const HIDDEN_STATUSES = new Set(["cancelled", "canceled", "archived"]);
 const DELIVERED_STATUSES = new Set(["delivered", "partial", "received"]);
+/** Statuses that belong in In Progress when `active=true` is rejected. */
+const OPEN_ORDER_STATUSES = [
+  "requested",
+  "packing",
+  "on_route",
+  "cooler_pickup",
+  "return",
+] as const;
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -36,18 +45,30 @@ function parseOrderDate(value: string) {
 }
 
 function isDistributorOrder(order: ApiOrder) {
-  const type = (order.type ?? "").trim().toLowerCase();
+  const type = readString(order.type).toLowerCase();
   if (!type) return true;
-  return type === "distributor" || type === "distributor_order";
+  if (type === "standard" || type === "customer") return false;
+  return (
+    type === "distributor" ||
+    type === "distributor_order" ||
+    type.includes("distributor")
+  );
+}
+
+function hasTimestamp(value: unknown) {
+  const text = readString(value);
+  if (!text || text === "null") return false;
+  return !Number.isNaN(parseOrderDate(text).getTime());
 }
 
 function orderBucket(order: ApiOrder): "hidden" | "delivered" | "progress" {
-  const status = (order.status ?? "").trim().toLowerCase();
+  const status = readString(order.status).toLowerCase();
   if (HIDDEN_STATUSES.has(status)) return "hidden";
+  if (DELIVERED_STATUSES.has(status)) return "delivered";
+  // A requested order stays In Progress. Timestamps only count when status is absent.
   if (
-    DELIVERED_STATUSES.has(status) ||
-    Boolean(order.receivedAt) ||
-    Boolean(order.validatedAt)
+    !status &&
+    (hasTimestamp(order.receivedAt) || hasTimestamp(order.validatedAt))
   ) {
     return "delivered";
   }
@@ -129,20 +150,24 @@ export function mapApiDistributorOrder(
   distributors: Distributor[],
   index: number,
 ): PlacedOrder {
-  const items = (order.items ?? []).map((line) => ({
+  const rawLines =
+    order.items ??
+    (order as ApiOrder & { orderItems?: unknown }).orderItems;
+  const lines = Array.isArray(rawLines) ? rawLines : [];
+  const items = lines.map((line) => ({
     sku: lineSku(line),
-    itemName: line.itemName?.trim() || line.name?.trim() || "Item",
+    itemName: readString(line.itemName) || readString(line.name) || "Item",
     source: lineSource(line),
     quantity: Number(line.quantity) || 0,
     price: linePrice(line),
-    unit: line.unit?.trim() || "",
+    unit: readString(line.unit),
   }));
   const computed = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  const when = order.deliveryDate?.trim() || "";
-  const created = order.createdAt?.trim() || "";
+  const when = readString(order.deliveryDate);
+  const created = readString(order.createdAt);
   const deliveryDate = when ? parseOrderDate(when) : null;
   const createdDate = created ? parseOrderDate(created) : null;
 
@@ -161,7 +186,7 @@ export function mapApiDistributorOrder(
       deliveryDate && !Number.isNaN(deliveryDate.getTime())
         ? formatExpectedDelivery(deliveryDate)
         : "",
-    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
+    deliveryDateId: deliveryDateIdFromValue(when),
     totalPrice:
       order.totalPrice == null ? computed : centsToDollars(order.totalPrice),
     items,
@@ -216,18 +241,88 @@ export function mapApiDistributorDelivered(
   };
 }
 
-export async function loadDistributorOrderScreen(input: {
-  distributors: Distributor[];
-  products: ProductForSale[];
-  items: Item[];
-}): Promise<{
+function listDistributorOrders(
+  params: Omit<OrdersListParams, "page" | "limit" | "type"> = {},
+) {
+  return collectPaginated((page, limit) =>
+    ordersApi.list({ page, limit, type: "distributor", ...params }),
+  );
+}
+
+/**
+ * In Progress is GET /orders?type=distributor&active=true.
+ * If that query is rejected, ask for each open status instead.
+ */
+async function loadOpenDistributorOrders(fresh: boolean) {
+  try {
+    return await listDistributorOrders({ active: true, fresh });
+  } catch {
+    const pages = await Promise.all(
+      OPEN_ORDER_STATUSES.map((status) =>
+        listDistributorOrders({ status, fresh }).catch(() => [] as ApiOrder[]),
+      ),
+    );
+    return pages.flat();
+  }
+}
+
+function dedupeApiOrders(orders: ApiOrder[]) {
+  const seen = new Set<string>();
+  const unique: ApiOrder[] = [];
+  orders.forEach((order, index) => {
+    const key =
+      orderRecordId(order) ||
+      order.orderCode?.trim() ||
+      order.id?.trim() ||
+      `idx-${index}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(order);
+  });
+  return unique;
+}
+
+/** Keep a just-created distributor order in In Progress even if the list lags. */
+export function mergeCreatedDistributorOrder(
+  orders: PlacedOrder[],
+  created: ApiOrder,
+  distributors: Distributor[],
+  deliveryDate?: string,
+): { orders: PlacedOrder[]; placed: PlacedOrder } {
+  const mapped = mapApiDistributorOrder(
+    {
+      ...created,
+      type: created.type?.trim() || "distributor",
+      deliveryDate: created.deliveryDate?.trim() || deliveryDate,
+    },
+    distributors,
+    0,
+  );
+  const existing = orders.find(
+    (order) =>
+      (mapped.recordId && order.recordId === mapped.recordId) ||
+      order.id === mapped.id,
+  );
+  if (existing) return { orders, placed: existing };
+  return { orders: [mapped, ...orders], placed: mapped };
+}
+
+export async function loadDistributorOrderScreen(
+  input: {
+    distributors: Distributor[];
+    products: ProductForSale[];
+    items: Item[];
+  },
+  options?: { fresh?: boolean },
+): Promise<{
   demand: DemandOrder[];
   demandDateIds: string[];
   demandError: string | null;
   inProgress: PlacedOrder[];
   delivered: DeliveredOrder[];
 }> {
-  const [demandResult, remote] = await Promise.all([
+  const fresh = options?.fresh ?? false;
+  const [demandResult, openOrders, listedOrders] = await Promise.all([
     ordersApi.aggregateDemand().then(
       (demand) => ({ demand, error: null as string | null }),
       (error: unknown) => ({
@@ -235,10 +330,10 @@ export async function loadDistributorOrderScreen(input: {
         error: formatApiError(error, "Failed to load order demand."),
       }),
     ),
-    collectPaginated((page, limit) =>
-      ordersApi.list({ page, limit, type: "distributor" }),
-    ),
+    loadOpenDistributorOrders(fresh).catch(() => [] as ApiOrder[]),
+    listDistributorOrders({ fresh }).catch(() => [] as ApiOrder[]),
   ]);
+  const remote = dedupeApiOrders([...openOrders, ...listedOrders]);
 
   const summary = mapAggregateDemand({
     demand: demandResult.demand,
@@ -283,6 +378,7 @@ export async function loadDistributorOrderScreen(input: {
   const delivered: DeliveredOrder[] = [];
 
   remote.forEach((order, index) => {
+    if (!order || typeof order !== "object") return;
     if (!isDistributorOrder(order)) return;
     const bucket = orderBucket(order);
     if (bucket === "hidden") return;

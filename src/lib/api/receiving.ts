@@ -24,8 +24,18 @@ export type ApiDeliveryLine = {
     id?: string;
     name?: string;
     itemId?: string;
+    unit?: string;
+    singleItemUnit?: string;
     item?: { id?: string } | null;
   } | null;
+  /**
+   * Saved by POST /receiving/:orderId/validate.
+   * GET /receiving/deliveries returns these on each line.
+   */
+  status?: string | null;
+  reason?: string | null;
+  evidenceUrl?: string | null;
+  expirationDate?: string | null;
 };
 
 export type ApiDelivery = {

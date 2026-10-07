@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiSource } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -22,10 +22,11 @@ export type UpdateSourcePayload = Partial<
 };
 
 export const sourcesApi = {
-  list() {
-    return apiRequest<unknown>("/sources", {
-      cacheTtlMs: CATALOG_LIST_CACHE_MS,
-    }).then((payload) =>
+  list(options?: { fresh?: boolean }) {
+    return apiRequest<unknown>(
+      "/sources",
+      catalogListCacheOptions(options?.fresh),
+    ).then((payload) =>
       normalizeNamedList<ApiSource>(payload, ["sources", "data", "results"]),
     );
   },

@@ -91,7 +91,7 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
     const role = getRole();
     if (role === "warehouse") {
       const warehouse =
-        users.find((user) => user.type === "Warehouse Worker") ??
+        users.find((user) => user.type.toLowerCase().includes("warehouse")) ??
         users.find((user) => user.id === "U003");
       const permissions = warehouse?.permissions ?? DEFAULT_ROLE_PERMISSIONS;
       return hasPageAccess(permissions)
@@ -99,8 +99,10 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
         : DEFAULT_ROLE_PERMISSIONS;
     }
     const superadmin =
-      users.find((user) => user.type === "Superadmin") ??
-      users.find((user) => user.id === "U001");
+      users.find((user) => {
+        const type = user.type.toLowerCase();
+        return type.includes("super") || type === "admin";
+      }) ?? users.find((user) => user.id === "U001");
     const permissions = superadmin?.permissions ?? ADMIN_ROLE_PERMISSIONS;
     return hasPageAccess(permissions) ? permissions : ADMIN_ROLE_PERMISSIONS;
   }, [users]);

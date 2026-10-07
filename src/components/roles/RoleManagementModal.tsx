@@ -8,6 +8,7 @@ import type { ManagedRole, RolePermissions } from "@/types/admin";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLE_PERMISSION_GROUPS,
+  togglePermission,
 } from "@/utils/rolePermissions";
 import { cn } from "@/utils/cn";
 
@@ -109,13 +110,14 @@ export function RoleManagementModal({
     );
   }
 
-  function togglePermission(key: keyof RolePermissions) {
+  function toggleSelectedPermission(key: keyof RolePermissions) {
     if (!selected) return;
     patchSelected({
-      permissions: {
-        ...selected.permissions,
-        [key]: !selected.permissions[key],
-      },
+      permissions: togglePermission(
+        selected.permissions,
+        key,
+        !selected.permissions[key],
+      ),
     });
   }
 
@@ -264,7 +266,9 @@ export function RoleManagementModal({
                             <PermissionRow
                               checked={accessChecked}
                               label={group.accessLabel}
-                              onToggle={() => togglePermission(group.accessKey)}
+                              onToggle={() =>
+                                toggleSelectedPermission(group.accessKey)
+                              }
                             />
                             <div className="space-y-2 border-l border-[#00000014] pl-4">
                               {group.actions.map((action) => (
@@ -274,7 +278,9 @@ export function RoleManagementModal({
                                     selected.permissions[action.key],
                                   )}
                                   label={action.label}
-                                  onToggle={() => togglePermission(action.key)}
+                                  onToggle={() =>
+                                    toggleSelectedPermission(action.key)
+                                  }
                                 />
                               ))}
                             </div>

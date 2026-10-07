@@ -8,6 +8,16 @@
 /** Short TTL for catalog/reference list GETs. Mutations invalidate related entries. */
 export const CATALOG_LIST_CACHE_MS = 5_000;
 
+/** Page mounts pass `fresh` so a visit always hits the server. */
+export function catalogListCacheOptions(fresh?: boolean): {
+  cacheTtlMs: number;
+  dedupe?: false;
+  cache?: "no-store";
+} {
+  if (fresh) return { cacheTtlMs: 0, dedupe: false, cache: "no-store" };
+  return { cacheTtlMs: CATALOG_LIST_CACHE_MS };
+}
+
 export type RequestIdentity = {
   method: string;
   url: string;

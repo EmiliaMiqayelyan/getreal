@@ -38,8 +38,15 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
-import { collectPaginated, isApiConfigured, ordersApi, receivingApi } from "@/lib/api";
+import {
+  collectPaginated,
+  inventoryApi,
+  isApiConfigured,
+  ordersApi,
+  receivingApi,
+} from "@/lib/api";
 import { expirationTimestamp } from "@/lib/api/inventory";
+import type { ApiInventory } from "@/lib/api/types";
 import { centsToDollars } from "@/lib/api/mappers";
 import type {
   ApiDelivery,
@@ -70,6 +77,8 @@ import {
 const ORANGE = "#F57850";
 const LINK_BLUE = "#3B82F6";
 
+type RejectReason = "Wrong Item" | "Damaged" | "Not Fresh" | "Missing Exp Date";
+
 type LineItem = {
   id: string;
   /** Sellable product UUID sent to POST /receiving/:orderId/validate. */
@@ -87,6 +96,11 @@ type LineItem = {
   source: string;
   unitPrice: number;
   priceLabel: string;
+  /** Calendar day `YYYY-MM-DD` from the line's `expirationDate`. */
+  expiration: string;
+  receivingStatus: "pending" | "accepted" | "rejected";
+  rejectReason?: RejectReason;
+  evidenceUrl?: string;
 };
 
 type DeliveryOrder = {
@@ -101,8 +115,6 @@ type DeliveryOrder = {
   checked: boolean;
   items: LineItem[];
 };
-
-type RejectReason = "Wrong Item" | "Damaged" | "Not Fresh" | "Missing Exp Date";
 
 type ItemCheckState = {
   status: "pending" | "accepted" | "rejected";
@@ -133,6 +145,17 @@ function toIsoDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** Keep the calendar day from `YYYY-MM-DD` or an ISO timestamp. */
+function calendarDay(value: string | null | undefined) {
+  const text = value?.trim() ?? "";
+  if (!text) return "";
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/);
+  if (match) return match[1];
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return toIsoDate(parsed);
 }
 
 function parseIsoDate(value: string) {
@@ -568,6 +591,50 @@ function lineUnitPrice(line: ApiDeliveryLine) {
   return 0;
 }
 
+function lineRaw(line: ApiDeliveryLine) {
+  return line as ApiDeliveryLine & Record<string, unknown>;
+}
+
+function lineUnit(line: ApiDeliveryLine) {
+  const raw = lineRaw(line);
+  const product = line.product;
+  return (
+    line.unit?.trim() ||
+    readLineText(raw.singleItemUnit) ||
+    readLineText(raw.buyingUnit) ||
+    product?.singleItemUnit?.trim() ||
+    product?.unit?.trim() ||
+    ""
+  );
+}
+
+function lineExpiration(line: ApiDeliveryLine) {
+  const raw = lineRaw(line);
+  return calendarDay(
+    readLineText(line.expirationDate) ||
+      readLineText(raw.expiration) ||
+      readLineText(raw.expDate),
+  );
+}
+
+function lineReceivingStatus(
+  line: ApiDeliveryLine,
+): LineItem["receivingStatus"] {
+  const status = (
+    readLineText(line.status) || readLineText(lineRaw(line).receivingStatus)
+  ).toLowerCase();
+  if (status === "accepted" || status === "accept") return "accepted";
+  if (status === "rejected" || status === "reject") return "rejected";
+  return "pending";
+}
+
+function lineRejectReason(line: ApiDeliveryLine): RejectReason | undefined {
+  const reason = readLineText(line.reason);
+  return (REJECT_REASONS as string[]).includes(reason)
+    ? (reason as RejectReason)
+    : undefined;
+}
+
 function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
   const recordId = isUuid(delivery.id) ? delivery.id : undefined;
   const code =
@@ -601,10 +668,14 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
       name: lineDisplayName(line),
       category: line.categoryName?.trim() || line.category?.trim() || "Items",
       quantity,
-      unit: line.unit?.trim() || "",
+      unit: lineUnit(line),
       source: readLineText(line.sourceName) || readLineText(line.source),
       unitPrice,
       priceLabel: unitPrice ? `$${unitPrice.toFixed(2)}` : "—",
+      expiration: lineExpiration(line),
+      receivingStatus: lineReceivingStatus(line),
+      rejectReason: lineRejectReason(line),
+      evidenceUrl: readLineText(line.evidenceUrl) || undefined,
     };
   });
   const totalPrice =
@@ -627,6 +698,102 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
   };
 }
 
+function preferText(next: string, prior: string, empty = "") {
+  if (next && next !== empty) return next;
+  return prior;
+}
+
+/** Keep a field already filled when a later payload omits it. */
+function mergeLineItems(prior: LineItem[], next: LineItem[]): LineItem[] {
+  if (!next.length) return prior;
+  if (!prior.length) return next;
+  const used = new Set<string>();
+  return next.map((item) => {
+    const match =
+      prior.find((row) => row.id === item.id && !used.has(row.id)) ||
+      prior.find(
+        (row) =>
+          Boolean(row.productId) &&
+          row.productId === item.productId &&
+          !used.has(row.id),
+      );
+    if (!match) return item;
+    used.add(match.id);
+    return {
+      ...match,
+      ...item,
+      id: match.id,
+      name: preferText(item.name, match.name, "Item"),
+      category: preferText(item.category, match.category, "Items"),
+      unit: item.unit || match.unit,
+      source: item.source || match.source,
+      itemCode: item.itemCode || match.itemCode,
+      expiration: item.expiration || match.expiration,
+      receivingStatus:
+        item.receivingStatus !== "pending"
+          ? item.receivingStatus
+          : match.receivingStatus,
+      rejectReason: item.rejectReason ?? match.rejectReason,
+      evidenceUrl: item.evidenceUrl || match.evidenceUrl,
+      quantity: item.quantity || match.quantity,
+      unitPrice: item.unitPrice || match.unitPrice,
+      priceLabel: preferText(item.priceLabel, match.priceLabel, "—"),
+      catalogItemId: item.catalogItemId || match.catalogItemId,
+      productId: item.productId || match.productId,
+    };
+  });
+}
+
+function lotForLine(item: LineItem, lots: ApiInventory[]) {
+  const byId = lots.find((row) => {
+    const id = row.itemId?.trim();
+    return Boolean(id) && (id === item.catalogItemId || id === item.productId);
+  });
+  if (byId) return byId;
+  const name = item.name.trim().toLowerCase();
+  const named = lots.filter(
+    (row) =>
+      row.itemName?.trim().toLowerCase() === name &&
+      Boolean(row.expirationDate?.trim() || row.unit?.trim()),
+  );
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/**
+ * Validate copies expiration onto the warehouse lot. Delivered orders are
+ * loaded from GET /orders, which may omit that date, so fill it from inventory.
+ */
+function applyInventoryLots(
+  items: LineItem[],
+  lots: ApiInventory[],
+  orderId: string,
+): LineItem[] {
+  const relevant = lots.filter(
+    (lot) => !lot.distributorOrderId || lot.distributorOrderId === orderId,
+  );
+  if (!relevant.length) return items;
+  return items.map((item) => {
+    if (item.expiration && item.unit) return item;
+    const lot = lotForLine(item, relevant);
+    if (!lot) return item;
+    return {
+      ...item,
+      expiration: item.expiration || calendarDay(lot.expirationDate),
+      unit: item.unit || lot.unit?.trim() || "",
+    };
+  });
+}
+
+function orderNeedsLineDetails(order: DeliveryOrder) {
+  if (!order.items.length) return true;
+  return order.items.some((item) => {
+    if (!item.unit || !item.source) return true;
+    return (
+      order.checked && !item.expiration && item.receivingStatus === "pending"
+    );
+  });
+}
+
 /**
  * Incoming rows come from GET /receiving/deliveries.
  * Validated rows leave that list, so Delivered is GET /orders?status=delivered.
@@ -640,6 +807,7 @@ async function loadReceivingScreen(): Promise<DeliveryOrder[]> {
         limit,
         type: "distributor",
         status: "delivered",
+        fresh: true,
       }),
     ),
   ]);
@@ -655,7 +823,9 @@ async function loadReceivingScreen(): Promise<DeliveryOrder[]> {
     merged.set(key, {
       ...prior,
       ...order,
-      items: order.items.length ? order.items : prior.items,
+      items: order.items.length
+        ? mergeLineItems(prior.items, order.items)
+        : prior.items,
       checked: prior.checked || order.checked,
       distributor:
         order.distributor && order.distributor !== "Distributor"
@@ -709,6 +879,24 @@ function emptyChecks(items: LineItem[]): Record<string, ItemCheckState> {
         status: "pending" as const,
         expiration: "",
         itemId: item.itemCode,
+      },
+    ]),
+  );
+}
+
+/** Saved receiving fields from the order line, for the read-only view. */
+function checksFromLines(items: LineItem[]): Record<string, ItemCheckState> {
+  return Object.fromEntries(
+    items.map((item) => [
+      item.id,
+      {
+        status: item.receivingStatus,
+        expiration: item.expiration,
+        itemId: item.itemCode,
+        ...(item.rejectReason ? { reason: item.rejectReason } : {}),
+        ...(item.evidenceUrl
+          ? { photoUrl: item.evidenceUrl, photoName: "Evidence" }
+          : {}),
       },
     ]),
   );
@@ -796,22 +984,41 @@ function CheckOrderView({
       for (const item of order.items) {
         const existing = next[item.id];
         if (!existing) {
-          next[item.id] = {
-            status: "pending",
-            expiration: "",
-            itemId: item.itemCode,
-          };
+          next[item.id] = readOnly
+            ? checksFromLines([item])[item.id]
+            : {
+                status: "pending",
+                expiration: "",
+                itemId: item.itemCode,
+              };
           changed = true;
           continue;
         }
-        if (!existing.itemId && item.itemCode) {
-          next[item.id] = { ...existing, itemId: item.itemCode };
+        const patch: Partial<ItemCheckState> = {};
+        if (!existing.itemId && item.itemCode) patch.itemId = item.itemCode;
+        if (readOnly && !existing.expiration && item.expiration) {
+          patch.expiration = item.expiration;
+        }
+        if (
+          readOnly &&
+          existing.status === "pending" &&
+          item.receivingStatus !== "pending"
+        ) {
+          patch.status = item.receivingStatus;
+          if (item.rejectReason) patch.reason = item.rejectReason;
+          if (item.evidenceUrl) {
+            patch.photoUrl = item.evidenceUrl;
+            patch.photoName = existing.photoName || "Evidence";
+          }
+        }
+        if (Object.keys(patch).length) {
+          next[item.id] = { ...existing, ...patch };
           changed = true;
         }
       }
       return changed ? next : current;
     });
-  }, [order.items]);
+  }, [order.items, readOnly]);
 
   const categories = useMemo(() => {
     const map = new Map<string, LineItem[]>();
@@ -934,9 +1141,11 @@ function CheckOrderView({
 
                 {items.map((item) => {
                   const state = checks[item.id] ?? {
-                    status: "pending" as const,
-                    expiration: "",
+                    status: readOnly ? item.receivingStatus : "pending",
+                    expiration: readOnly ? item.expiration : "",
                     itemId: item.itemCode,
+                    reason: readOnly ? item.rejectReason : undefined,
+                    photoUrl: readOnly ? item.evidenceUrl : undefined,
                   };
                   return (
                     <div
@@ -957,7 +1166,7 @@ function CheckOrderView({
                         {item.quantity}
                       </span>
                       <span className="text-[13px] font-bold text-[#111118]">
-                        {item.unit}
+                        {item.unit || "—"}
                       </span>
                       <div className="min-w-0">
                         <ExpirationDatePicker
@@ -1247,7 +1456,7 @@ export default function DistributorDeliveriesPage() {
         openIds.has(order.id) &&
         order.recordId &&
         !loadedDeliveryIds.current.has(order.recordId) &&
-        order.items.some((item) => !item.unit && !item.source && !item.itemCode),
+        orderNeedsLineDetails(order),
     );
     if (!pending.length) return;
 
@@ -1272,10 +1481,22 @@ export default function DistributorDeliveriesPage() {
         if (!recordId) return null;
         try {
           const remote = await ordersApi.getById(recordId);
+          const mapped = mapDelivery(remote as ApiDelivery, 0);
+          let items = mergeLineItems(order.items, mapped.items);
+          if (order.checked && items.some((item) => !item.expiration)) {
+            try {
+              const lots = await inventoryApi.list({
+                distributorOrderId: recordId,
+              });
+              items = applyInventoryLots(items, lots, recordId);
+            } catch {
+              // The order line stays as returned when inventory cannot be read.
+            }
+          }
           return {
             id: order.id,
             recordId,
-            mapped: mapDelivery(remote as ApiDelivery, 0),
+            mapped: { ...mapped, items },
           };
         } catch (error) {
           if (!cancelled) notifyApiError(error, "Failed to load order details.");
@@ -1293,7 +1514,7 @@ export default function DistributorDeliveriesPage() {
           if (!hit?.mapped.items.length) return row;
           return {
             ...row,
-            items: hit.mapped.items,
+            items: mergeLineItems(row.items, hit.mapped.items),
             distributor:
               hit.mapped.distributor && hit.mapped.distributor !== "Distributor"
                 ? hit.mapped.distributor
@@ -1557,7 +1778,7 @@ export default function DistributorDeliveriesPage() {
       <CheckOrderView
         order={viewingOrder}
         initialChecks={
-          itemResults[viewingOrder.id] ?? emptyChecks(viewingOrder.items)
+          itemResults[viewingOrder.id] ?? checksFromLines(viewingOrder.items)
         }
         detailsLoading={detailLoadingIds.has(viewingOrder.id)}
         readOnly

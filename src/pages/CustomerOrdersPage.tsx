@@ -391,7 +391,7 @@ async function loadCompletedStandardOrders() {
   const pages = await Promise.all(
     COMPLETED_ORDER_QUERY_STATUSES.map((status) =>
       collectPaginated((page, limit) =>
-        ordersApi.list({ page, limit, type: "standard", status }),
+        ordersApi.list({ page, limit, type: "standard", status, fresh: true }),
       ),
     ),
   );
@@ -1628,6 +1628,7 @@ export default function CustomerOrdersPage() {
         page,
         limit,
         type: "standard",
+        fresh: true,
       }),
     )
       .then((remote) => {

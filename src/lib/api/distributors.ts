@@ -2,7 +2,7 @@ import { isUuid } from "@/utils/entityIds";
 
 import { ApiError, apiRequest } from "./client";
 import { itemsApi } from "./items";
-import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { catalogListCacheOptions } from "./requestDedupe";
 import { sourcesApi } from "./sources";
 import type { ApiDistributor } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
@@ -95,10 +95,11 @@ async function clearDistributorLinks(distributorRef: string) {
 }
 
 export const distributorsApi = {
-  list() {
-    return apiRequest<unknown>("/distributors", {
-      cacheTtlMs: CATALOG_LIST_CACHE_MS,
-    }).then((payload) =>
+  list(options?: { fresh?: boolean }) {
+    return apiRequest<unknown>(
+      "/distributors",
+      catalogListCacheOptions(options?.fresh),
+    ).then((payload) =>
       normalizeNamedList<ApiDistributor>(payload, [
         "distributors",
         "data",

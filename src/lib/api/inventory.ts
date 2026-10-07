@@ -415,8 +415,13 @@ async function writeInventory(
 }
 
 export const inventoryApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>("/inventory", {
+  list(options?: { fresh?: boolean; distributorOrderId?: string }) {
+    const search = new URLSearchParams();
+    if (options?.distributorOrderId) {
+      search.set("distributorOrderId", options.distributorOrderId);
+    }
+    const qs = search.toString();
+    return apiRequest<unknown>(`/inventory${qs ? `?${qs}` : ""}`, {
       // Inventory changes as soon as stock is stored. A cached GET would keep
       // the page on the pre-store list until a full browser refresh.
       cache: "no-store",

@@ -62,6 +62,13 @@ export type OrdersListParams = {
   pendingStorage?: boolean;
   /** Calendar day `YYYY-MM-DD`. Backend `getOrdersQuerySchema.deliveryDate`. */
   deliveryDate?: string;
+  /**
+   * Open orders still in the workflow (In Progress).
+   * Backend `getOrdersQuerySchema.active`.
+   */
+  active?: boolean;
+  /** Skip in-flight dedupe so a refresh is not the response from before a create. */
+  fresh?: boolean;
 };
 
 /** One line inside GET /orders/distributor/aggregate-demand. Prices are integer cents. */
@@ -176,11 +183,17 @@ export const ordersApi = {
     if (params.status) search.set("status", params.status);
     if (params.type) search.set("type", params.type);
     if (params.pendingStorage) search.set("pendingStorage", "true");
+    if (typeof params.active === "boolean") {
+      search.set("active", params.active ? "true" : "false");
+    }
     // Exact match on the stored timestamp. A calendar day (YYYY-MM-DD) does not
     // match values like 2026-09-30T02:00:00.000Z, so day chips filter locally.
     if (params.deliveryDate) search.set("deliveryDate", params.deliveryDate);
     const qs = search.toString();
-    return apiRequest<unknown>(`/orders?${qs}`).then((payload) =>
+    return apiRequest<unknown>(`/orders?${qs}`, {
+      preserveEnvelope: true,
+      dedupe: params.fresh ? false : undefined,
+    }).then((payload) =>
       normalizePaginatedList<ApiOrder>(
         payload,
         ["orders", "items", "data", "results"],

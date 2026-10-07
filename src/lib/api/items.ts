@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiItem } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -32,10 +32,7 @@ const inflightCreates = new Map<string, Promise<ApiItem>>();
 
 export const itemsApi = {
   list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>("/items", {
-      cacheTtlMs: options?.fresh ? 0 : CATALOG_LIST_CACHE_MS,
-      ...(options?.fresh ? { dedupe: false, cache: "no-store" as const } : {}),
-    }).then((payload) =>
+    return apiRequest<unknown>("/items", catalogListCacheOptions(options?.fresh)).then((payload) =>
       normalizeNamedList<ApiItem>(payload, ["items", "data", "results"]),
     );
   },

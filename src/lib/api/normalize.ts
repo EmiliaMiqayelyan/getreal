@@ -68,6 +68,33 @@ function readPaginationMeta(
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+/**
+ * List routes often return `{ data: T[], total }` or `{ data: { orders, total } }`.
+ * An array `data` stays put so sibling `total` is still readable.
+ * An object `data` is lifted so the row list and its pagination sit together.
+ */
+function flattenListEnvelope(payload: unknown): unknown {
+  const record = asRecord(payload);
+  if (!record) return payload;
+  const nested = asRecord(record.data);
+  if (!nested) return payload;
+  return {
+    ...nested,
+    page: nested.page ?? record.page,
+    limit: nested.limit ?? record.limit,
+    total: nested.total ?? record.total,
+    meta: nested.meta ?? record.meta,
+    pagination: nested.pagination ?? record.pagination,
+  };
+}
+
 /**
  * Normalize a paginated list response.
  * Uses backend `page` / `limit` / `total` when present; otherwise falls back
@@ -78,11 +105,9 @@ export function normalizePaginatedList<T>(
   keys: string[],
   fallback: { page?: number; limit?: number } = {},
 ): PaginatedResult<T> {
-  const items = normalizeNamedList<T>(payload, keys);
-  const record =
-    payload && typeof payload === "object" && !Array.isArray(payload)
-      ? (payload as Record<string, unknown>)
-      : null;
+  const source = flattenListEnvelope(payload);
+  const items = normalizeNamedList<T>(source, keys);
+  const record = asRecord(source);
   const meta = readPaginationMeta(record);
 
   const page = meta.page ?? fallback.page ?? 1;

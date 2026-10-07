@@ -292,6 +292,7 @@ async function loadStandardOrders() {
       type: "standard",
       page,
       limit: 100,
+      fresh: true,
     });
     orders.push(...result.items);
     if (result.items.length < 100) break;
@@ -801,7 +802,7 @@ export default function PackingCoolersPage() {
       loadStandardOrders(),
       coolersApi.list(),
       inventoryApi.list({ fresh: true }),
-      productsApi.list(),
+      productsApi.list({ fresh: true }),
     ])
       .then(([orderItems, coolers, inventoryRows, products]) => {
         if (cancelled) return;

@@ -189,5 +189,7 @@ export type ManagedRole = {
   name: string;
   /** Original API `name`, sent back when the display label was not edited. */
   apiName?: string;
+  /** Backend permission strings as last loaded or saved. */
+  apiPermissions?: string[];
   permissions: RolePermissions;
 };

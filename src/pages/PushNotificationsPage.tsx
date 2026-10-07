@@ -118,7 +118,7 @@ export default function PushNotificationsPage() {
     let cancelled = false;
     setLoading(true);
     void notificationRulesApi
-      .list()
+      .list({ fresh: true })
       .then((rules) => {
         if (cancelled) return;
         setItems(rules.map(mapApiNotificationRule));

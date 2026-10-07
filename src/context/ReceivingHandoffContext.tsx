@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type Context,
   type ReactNode,
 } from "react";
 
@@ -21,8 +22,28 @@ type ReceivingHandoffContextValue = {
   removeHandoff: (deliveryId: string) => void;
 };
 
-const ReceivingHandoffContext =
-  createContext<ReceivingHandoffContextValue | null>(null);
+const receivingHandoffContextKey = Symbol.for(
+  "getreal.ReceivingHandoffContext",
+);
+
+type ReceivingHandoffContextGlobal = typeof globalThis & {
+  [receivingHandoffContextKey]?: Context<ReceivingHandoffContextValue | null>;
+};
+
+/**
+ * Keep one context object across Vite reloads. A hot update re-executes this
+ * module, and a new createContext() would miss the provider that is already mounted.
+ */
+function getReceivingHandoffContext() {
+  const store = globalThis as ReceivingHandoffContextGlobal;
+  const existing = store[receivingHandoffContextKey];
+  if (existing) return existing;
+  const created = createContext<ReceivingHandoffContextValue | null>(null);
+  store[receivingHandoffContextKey] = created;
+  return created;
+}
+
+const ReceivingHandoffContext = getReceivingHandoffContext();
 
 const HANDOFF_STORAGE_KEY = "getreal.pendingInventoryHandoffs";
 

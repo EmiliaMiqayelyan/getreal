@@ -258,18 +258,205 @@ export function permissionsFromKeys(keys: string[]): RolePermissions {
 }
 
 /**
- * Use API permission keys only when they match this admin UI.
- * An empty list or foreign keys (for example `read:content`) keep the
+ * Backend permission string that grants each checkbox. Checkboxes that share
+ * a string are granted or revoked together, because the API cannot store
+ * them separately.
+ */
+export const API_PERMISSION_FOR: Record<keyof RolePermissions, string> = {
+  sidebarDashboard: "view:dashboard",
+
+  accessDistributors: "read:distributors",
+  distributorsCreate: "manage:distributors",
+  distributorsEdit: "manage:distributors",
+  distributorsDelete: "manage:distributors",
+
+  accessSource: "manage:sources",
+  sourceCreate: "manage:sources",
+  sourceEdit: "manage:sources",
+  sourceRemove: "manage:sources",
+
+  accessItemSetup: "read:products",
+  itemsCreate: "manage:products",
+  itemsEdit: "manage:products",
+  itemsRemove: "manage:products",
+  itemsEditPricing: "manage:products",
+
+  accessProductsForSale: "read:products",
+  productsAddItem: "manage:products",
+  productsRemove: "manage:products",
+  productsToggleLive: "manage:products",
+  productsChangePlacement: "manage:products",
+  productsView: "read:products",
+
+  accessDistributorOrders: "read:orders",
+  distributorOrdersFromCustomerList: "create:orders",
+  distributorOrdersCreateCustom: "create:orders",
+  distributorOrdersAccessDelivered: "read:orders",
+
+  accessInventory: "read:inventory",
+  inventoryStockItems: "manage:inventory",
+  inventoryChangeLocation: "manage:inventory",
+
+  accessCustomers: "read:users",
+  customersViewDetails: "read:users",
+
+  accessCustomerOrders: "read:orders",
+  customerOrdersViewDetails: "read:orders",
+  customerOrdersChangeStatuses: "update:order_status",
+  customerOrdersStatusHover: "read:orders",
+  customerOrdersAccessCompleted: "read:orders",
+
+  accessReceiving: "read:receiving",
+  receivingValidate: "manage:receiving",
+  receivingEdit: "manage:receiving",
+
+  accessCoolerPacking: "read:coolers",
+  coolerPackingMakeActions: "manage:coolers",
+
+  accessPackerManager: "read:orders",
+  packerManagerViewCustomerDetails: "read:orders",
+  packerManagerAssignPacker: "update:orders",
+
+  accessRoles: "read:roles",
+  rolesAddUser: "manage:users",
+  rolesAccessManagement: "manage:roles",
+
+  accessNotifications: "read:notifications",
+  notificationsCreate: "manage:notifications",
+  notificationsEdit: "manage:notifications",
+  notificationsDelete: "manage:notifications",
+};
+
+/** Backend strings that also grant other strings (`manage:x` includes `read:x`). */
+const API_PERMISSION_IMPLIES: Record<string, string[]> = {
+  "manage:distributors": ["read:distributors"],
+  "manage:products": ["read:products"],
+  "manage:inventory": ["read:inventory"],
+  "manage:users": ["read:users"],
+  "manage:roles": ["read:roles"],
+  "manage:receiving": ["read:receiving"],
+  "manage:coolers": ["read:coolers"],
+  "manage:notifications": ["read:notifications"],
+  "manage:orders": [
+    "read:orders",
+    "create:orders",
+    "update:orders",
+    "update:order_status",
+  ],
+  "create:orders": ["read:orders"],
+  "update:orders": ["read:orders"],
+  "update:order_status": ["read:orders"],
+};
+
+const UI_OWNED_API_PERMISSIONS = new Set(Object.values(API_PERMISSION_FOR));
+
+function expandApiPermissions(keys: Iterable<string>): Set<string> {
+  const granted = new Set<string>();
+  const queue = [...keys];
+  while (queue.length) {
+    const key = queue.pop()!;
+    if (granted.has(key)) continue;
+    granted.add(key);
+    queue.push(...(API_PERMISSION_IMPLIES[key] ?? []));
+  }
+  return granted;
+}
+
+/** Permission names from an API role, whether sent as strings or `{ name }` objects. */
+export function apiPermissionNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const names: string[] = [];
+  for (const entry of raw) {
+    if (typeof entry === "string") {
+      if (entry.trim()) names.push(entry.trim());
+      continue;
+    }
+    if (entry && typeof entry === "object") {
+      const record = entry as Record<string, unknown>;
+      const name = [
+        record.name,
+        record.key,
+        record.permission,
+        record.code,
+      ].find((value) => typeof value === "string" && value.trim());
+      if (typeof name === "string") names.push(name.trim());
+    }
+  }
+  return names;
+}
+
+/** Checkbox state from backend strings. Legacy UI keys are accepted as-is. */
+export function permissionsFromApiNames(names: string[]): RolePermissions {
+  const granted = expandApiPermissions(names);
+  const next = { ...DEFAULT_ROLE_PERMISSIONS };
+  for (const key of Object.keys(next) as Array<keyof RolePermissions>) {
+    next[key] = granted.has(API_PERMISSION_FOR[key]) || names.includes(key);
+  }
+  return next;
+}
+
+/**
+ * Checkbox state for an API role. An empty or unrecognised list keeps the
  * role-type defaults so the signed-in admin is not locked out of the app.
  */
 export function permissionsFromApiKeys(
-  keys: string[] | null | undefined,
+  raw: unknown,
   fallback: RolePermissions,
 ): RolePermissions {
-  if (!keys?.length) return fallback;
-  const known = keys.filter((key) => key in DEFAULT_ROLE_PERMISSIONS);
+  const names = apiPermissionNames(raw);
+  const known = names.filter(
+    (name) =>
+      name in DEFAULT_ROLE_PERMISSIONS ||
+      UI_OWNED_API_PERMISSIONS.has(name) ||
+      name in API_PERMISSION_IMPLIES,
+  );
   if (!known.length) return fallback;
-  return permissionsFromKeys(known);
+  return permissionsFromApiNames(known);
+}
+
+/**
+ * Backend strings to save for these checkboxes. Strings with no checkbox
+ * (for example `manage:payments`) are kept from the role's current list, and
+ * `manage:orders` is kept while every order checkbox it covers stays on.
+ */
+export function apiPermissionsFor(
+  permissions: RolePermissions,
+  current: string[] = [],
+): string[] {
+  const result = new Set<string>();
+  for (const key of Object.keys(permissions) as Array<keyof RolePermissions>) {
+    if (permissions[key]) result.add(API_PERMISSION_FOR[key]);
+  }
+  for (const name of current) {
+    if (UI_OWNED_API_PERMISSIONS.has(name)) continue;
+    if (name in DEFAULT_ROLE_PERMISSIONS) continue;
+    const implied = API_PERMISSION_IMPLIES[name];
+    if (implied && !implied.every((key) => result.has(key))) continue;
+    result.add(name);
+  }
+  return [...result];
+}
+
+/** Toggle one checkbox and every checkbox stored under the same backend string. */
+export function togglePermission(
+  permissions: RolePermissions,
+  key: keyof RolePermissions,
+  value: boolean,
+): RolePermissions {
+  const owned = new Set(
+    (Object.keys(permissions) as Array<keyof RolePermissions>)
+      .filter((entry) => permissions[entry])
+      .map((entry) => API_PERMISSION_FOR[entry]),
+  );
+  const target = API_PERMISSION_FOR[key];
+  if (value) {
+    for (const name of expandApiPermissions([target])) owned.add(name);
+  } else {
+    for (const name of [...owned]) {
+      if (expandApiPermissions([name]).has(target)) owned.delete(name);
+    }
+  }
+  return permissionsFromApiNames([...owned]);
 }
 
 /** True when at least one page-access flag is on. */
@@ -293,7 +480,9 @@ export function checkedPermissionKeys(permissions: RolePermissions): string[] {
 
 export function permissionsForRoleType(type: string): RolePermissions {
   const normalized = type.trim().toLowerCase();
-  if (normalized.includes("super")) return { ...ADMIN_ROLE_PERMISSIONS };
+  if (normalized.includes("super") || normalized.includes("admin")) {
+    return { ...ADMIN_ROLE_PERMISSIONS };
+  }
   if (normalized.includes("manager")) return { ...MANAGER_ROLE_PERMISSIONS };
   if (normalized.includes("warehouse"))
     return { ...WAREHOUSE_ROLE_PERMISSIONS };

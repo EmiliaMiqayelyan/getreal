@@ -9,6 +9,7 @@ import {
   mapApiSourceToSource,
   mapApiSubcategoryToCatalog,
   productsApi,
+  readApiLabel,
   sourcesApi,
   subcategoriesApi,
 } from "@/lib/api";
@@ -68,12 +69,15 @@ function nameMap(rows: Array<{ id: string; name: string; recordId?: string }>) {
 /**
  * Fetches only the catalog slices a screen asked for.
  * Lookup maps fall back to data already in memory when a dependency was loaded earlier.
+ * `fresh` skips the short list cache so a page visit always reaches the server.
  */
 export async function loadCatalogSlices(
   slices: CatalogSlice[],
   current: CatalogLookup,
+  options?: { fresh?: boolean },
 ): Promise<CatalogLoadResult> {
   const want = new Set(slices);
+  const fresh = options?.fresh ?? false;
   const [
     distributorsResult,
     sourcesResult,
@@ -82,12 +86,12 @@ export async function loadCatalogSlices(
     categoriesResult,
     subcategoriesResult,
   ] = await Promise.all([
-    want.has("distributors") ? loadOne(distributorsApi.list()) : null,
-    want.has("sources") ? loadOne(sourcesApi.list()) : null,
-    want.has("items") ? loadOne(itemsApi.list()) : null,
-    want.has("products") ? loadOne(productsApi.list()) : null,
-    want.has("categories") ? loadOne(categoriesApi.list()) : null,
-    want.has("subcategories") ? loadOne(subcategoriesApi.list()) : null,
+    want.has("distributors") ? loadOne(distributorsApi.list({ fresh })) : null,
+    want.has("sources") ? loadOne(sourcesApi.list({ fresh })) : null,
+    want.has("items") ? loadOne(itemsApi.list({ fresh })) : null,
+    want.has("products") ? loadOne(productsApi.list({ fresh })) : null,
+    want.has("categories") ? loadOne(categoriesApi.list({ fresh })) : null,
+    want.has("subcategories") ? loadOne(subcategoriesApi.list({ fresh })) : null,
   ]);
 
   const failures: string[] = [];
@@ -117,22 +121,25 @@ export async function loadCatalogSlices(
   const categories = categoriesResult?.ok
     ? categoriesResult.data
     : current.categories;
-  const categoriesById = new Map(
-    categories
-      .filter((category) => category.id && category.name)
-      .map((category) => [category.id as string, category.name as string]),
-  );
+  const categoriesById = new Map<string, string>();
+  for (const category of categories) {
+    const name = readApiLabel(category.name);
+    if (category.id == null || category.id === "" || !name) continue;
+    categoriesById.set(String(category.id), name);
+  }
 
   const subcategories = subcategoriesResult?.ok
     ? subcategoriesResult.data
         .map((entry) => mapApiSubcategoryToCatalog(entry, categoriesById))
         .filter((entry): entry is CatalogSubcategory => Boolean(entry))
     : current.subcategoryRecords;
-  const subcategoriesById = new Map(
-    subcategories
-      .filter((entry) => entry.id)
-      .map((entry) => [entry.id as string, entry.name] as const),
-  );
+  const subcategoriesById = new Map<string, string>();
+  for (const entry of subcategories) {
+    const name = readApiLabel(entry.name);
+    if (!name) continue;
+    if (entry.recordId) subcategoriesById.set(String(entry.recordId), name);
+    if (entry.id) subcategoriesById.set(String(entry.id), name);
+  }
 
   const apiSources = sourcesResult?.ok
     ? sourcesResult.data.map((source, index) =>

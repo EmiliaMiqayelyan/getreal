@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiProduct } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -26,7 +26,7 @@ export type ProductsListParams = {
 };
 
 export const productsApi = {
-  list(params: ProductsListParams = {}) {
+  list(params: ProductsListParams & { fresh?: boolean } = {}) {
     const search = new URLSearchParams();
     if (params.category) search.set("category", params.category);
     if (params.type) search.set("type", params.type);
@@ -35,9 +35,10 @@ export const productsApi = {
     if (params.distributorId) search.set("distributorId", params.distributorId);
     if (params.sourceId) search.set("sourceId", params.sourceId);
     const qs = search.toString();
-    return apiRequest<unknown>(`/products${qs ? `?${qs}` : ""}`, {
-      cacheTtlMs: CATALOG_LIST_CACHE_MS,
-    }).then((payload) =>
+    return apiRequest<unknown>(
+      `/products${qs ? `?${qs}` : ""}`,
+      catalogListCacheOptions(params.fresh),
+    ).then((payload) =>
       normalizeNamedList<ApiProduct>(payload, [
         "products",
         "items",

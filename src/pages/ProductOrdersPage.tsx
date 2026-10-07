@@ -43,10 +43,12 @@ import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { inventoryApi, isApiConfigured, ordersApi } from "@/lib/api";
 import { orderRecordId } from "@/lib/api/mappers";
+import type { ApiOrder } from "@/lib/api/types";
 import {
   loadDistributorOrderScreen,
   mapApiDistributorDelivered,
   mapApiDistributorOrder,
+  mergeCreatedDistributorOrder,
 } from "@/lib/distributorOrderApi";
 import {
   syncManualDistributorOrder,
@@ -385,6 +387,8 @@ export default function ProductOrdersPage() {
   );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const pickedInitialDate = useRef(false);
+  const userPickedDate = useRef(false);
+  const loadGeneration = useRef(0);
 
   const [rows, setRows] = useState<WorkingOrderRow[]>([]);
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
@@ -485,6 +489,7 @@ export default function ProductOrdersPage() {
 
   function selectDeliveryDate(dateId: string) {
     if (!parseDeliveryDateId(dateId)) return;
+    userPickedDate.current = true;
     setActiveDeliveryDateId(dateId);
   }
 
@@ -502,6 +507,22 @@ export default function ProductOrdersPage() {
     if (next) selectDeliveryDate(next.id);
   }
 
+  function showPlacedOrder(order: PlacedOrder) {
+    if (order.deliveryDateId && parseDeliveryDateId(order.deliveryDateId)) {
+      setActiveDeliveryDateId(order.deliveryDateId);
+    }
+    setExpandedId(order.id);
+  }
+
+  async function fetchDistributorOrders(fresh = false) {
+    const generation = ++loadGeneration.current;
+    const snapshot = await loadDistributorOrderScreen(catalogRef.current, {
+      fresh,
+    });
+    if (generation !== loadGeneration.current) return null;
+    return snapshot;
+  }
+
   useEffect(() => {
     if (!orderCatalogReady) return;
     let cancelled = false;
@@ -514,17 +535,18 @@ export default function ProductOrdersPage() {
       return;
     }
 
+    const generation = ++loadGeneration.current;
     setDemandReady(false);
-    void loadDistributorOrderScreen(catalogRef.current)
+    void loadDistributorOrderScreen(catalogRef.current, { fresh: true })
       .then((snapshot) => {
-        if (cancelled) return;
+        if (cancelled || generation !== loadGeneration.current) return;
         setDemandOrders(snapshot.demand);
         setInProgress(snapshot.inProgress);
         setDeliveredOrders(snapshot.delivered);
         if (snapshot.demandError) showError(snapshot.demandError);
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (cancelled || generation !== loadGeneration.current) return;
         notifyApiError(error, "Failed to load distributor orders.");
         setDemandOrders([]);
         setInProgress([]);
@@ -541,6 +563,37 @@ export default function ProductOrdersPage() {
 
   useEffect(() => {
     if (!demandReady || pickedInitialDate.current) return;
+
+    const progressDateIds = [
+      ...new Set(
+        inProgress.map((order) => placedOrderDateId(order)).filter(Boolean),
+      ),
+    ].sort();
+    const progressOnActiveDate = inProgress.some((order) => {
+      const dateId = placedOrderDateId(order);
+      return !dateId || dateId === activeDeliveryDateId;
+    });
+
+    // The chip starts on the next Wednesday. Open orders on another day
+    // were loaded and then hidden, so the section looked empty.
+    if (
+      inProgress.length > 0 &&
+      !progressOnActiveDate &&
+      progressDateIds.length > 0
+    ) {
+      pickedInitialDate.current = true;
+      const dateId = pickDefaultDeliveryChipId(
+        progressDateIds.map((id) => ({ id })),
+      );
+      if (dateId) setActiveDeliveryDateId(dateId);
+      return;
+    }
+
+    if (inProgress.length > 0 && progressOnActiveDate) {
+      pickedInitialDate.current = true;
+      return;
+    }
+
     const datesWithLines = visibleDeliveryChips.filter((chip) =>
       demandOrders.some(
         (order) =>
@@ -568,25 +621,30 @@ export default function ProductOrdersPage() {
     activeDeliveryDateId,
     demandOrders,
     demandReady,
+    inProgress,
     visibleDeliveryChips,
   ]);
 
-  const filteredInProgress = useMemo(
-    () =>
-      filterPlacedOrders(inProgress, {
-        search,
-        productFilter,
-        distributorFilter,
-        deliveryDateId: activeDeliveryDateId,
-      }),
-    [
-      activeDeliveryDateId,
-      distributorFilter,
-      inProgress,
-      productFilter,
+  const filteredInProgress = useMemo(() => {
+    const matched = filterPlacedOrders(inProgress, {
       search,
-    ],
-  );
+      productFilter,
+      distributorFilter,
+      deliveryDateId: activeDeliveryDateId,
+    });
+    if (matched.length > 0 || userPickedDate.current) return matched;
+    return filterPlacedOrders(inProgress, {
+      search,
+      productFilter,
+      distributorFilter,
+    });
+  }, [
+    activeDeliveryDateId,
+    distributorFilter,
+    inProgress,
+    productFilter,
+    search,
+  ]);
 
   const inProgressWindow = useLazyWindow(
     filteredInProgress,
@@ -772,11 +830,13 @@ export default function ProductOrdersPage() {
       for (const id of orderIds) {
         await ordersApi.updateStatus(id, "cancelled");
       }
-      const snapshot = await loadDistributorOrderScreen(catalogRef.current);
-      setDemandOrders(snapshot.demand);
-      setInProgress(snapshot.inProgress);
-      setDeliveredOrders(snapshot.delivered);
-      if (snapshot.demandError) showError(snapshot.demandError);
+      const snapshot = await fetchDistributorOrders(true);
+      if (snapshot) {
+        setDemandOrders(snapshot.demand);
+        setInProgress(snapshot.inProgress);
+        setDeliveredOrders(snapshot.delivered);
+        if (snapshot.demandError) showError(snapshot.demandError);
+      }
       showToast("Order cancelled");
       resetToList();
     } catch (error) {
@@ -796,23 +856,30 @@ export default function ProductOrdersPage() {
       );
       if (!created) return;
       try {
-        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
-        const mapped = mapApiDistributorOrder(created, distributors, 0);
-        const alreadyListed = snapshot.inProgress.some(
-          (order) => order.recordId && order.recordId === mapped.recordId,
+        const snapshot = await fetchDistributorOrders(true);
+        const merged = mergeCreatedDistributorOrder(
+          snapshot?.inProgress ?? [],
+          created,
+          distributors,
+          draft.deliveryDateIso,
         );
-        setDemandOrders(snapshot.demand);
-        setDeliveredOrders(snapshot.delivered);
-        if (snapshot.demandError) showError(snapshot.demandError);
-        setInProgress(
-          alreadyListed
-            ? snapshot.inProgress
-            : [mapped, ...snapshot.inProgress],
-        );
-        if (mapped.deliveryDateId && parseDeliveryDateId(mapped.deliveryDateId)) {
-          setActiveDeliveryDateId(mapped.deliveryDateId);
+        if (snapshot) {
+          setDemandOrders(snapshot.demand);
+          setDeliveredOrders(snapshot.delivered);
+          if (snapshot.demandError) showError(snapshot.demandError);
+          setInProgress(merged.orders);
+        } else {
+          setInProgress(
+            (current) =>
+              mergeCreatedDistributorOrder(
+                current,
+                created,
+                distributors,
+                draft.deliveryDateIso,
+              ).orders,
+          );
         }
-        setExpandedId(mapped.id);
+        showPlacedOrder(merged.placed);
       } catch (error) {
         notifyApiError(
           error,
@@ -882,21 +949,40 @@ export default function ProductOrdersPage() {
         );
         if (!created) return;
         sentGroup.orderId = orderRecordId(created);
-        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
-        setInProgress(snapshot.inProgress);
-        setDeliveredOrders(snapshot.delivered);
-        if (snapshot.demandError) {
-          showError(snapshot.demandError);
-        } else {
-          setDemandOrders((current) =>
-            applyAggregateDemandSnapshot(
-              current,
-              snapshot.demand,
-              activeDemandId,
-              { key, group: sentGroup },
-            ),
+        const snapshot = await fetchDistributorOrders(true);
+        const deliveryDate = toOrderDeliveryDateIso(activeDeliveryDateId);
+        if (snapshot) {
+          const merged = mergeCreatedDistributorOrder(
+            snapshot.inProgress,
+            created,
+            distributors,
+            deliveryDate,
           );
-          listRefreshed = true;
+          setInProgress(merged.orders);
+          setDeliveredOrders(snapshot.delivered);
+          if (snapshot.demandError) {
+            showError(snapshot.demandError);
+          } else {
+            setDemandOrders((current) =>
+              applyAggregateDemandSnapshot(
+                current,
+                snapshot.demand,
+                activeDemandId,
+                { key, group: sentGroup },
+              ),
+            );
+            listRefreshed = true;
+          }
+        } else {
+          setInProgress(
+            (current) =>
+              mergeCreatedDistributorOrder(
+                current,
+                created,
+                distributors,
+                deliveryDate,
+              ).orders,
+          );
         }
       } catch (error) {
         notifyApiError(
@@ -944,6 +1030,8 @@ export default function ProductOrdersPage() {
 
     if (isApiConfigured()) {
       setPlacing("all");
+      const deliveryDate = toOrderDeliveryDateIso(activeDeliveryDateId);
+      const createdOrders: ApiOrder[] = [];
       try {
         for (const group of remaining) {
           const created = await syncReviewGroupOrder(
@@ -951,24 +1039,52 @@ export default function ProductOrdersPage() {
             distributors,
             products,
             items,
-            toOrderDeliveryDateIso(activeDeliveryDateId),
+            deliveryDate,
           );
           if (!created) return;
+          createdOrders.push(created);
           const key = reviewGroupKey(group);
           setOrderedDistributors((prev) => new Set(prev).add(key));
         }
-        const snapshot = await loadDistributorOrderScreen(catalogRef.current);
-        setInProgress(snapshot.inProgress);
-        setDeliveredOrders(snapshot.delivered);
-        if (snapshot.demandError) {
-          showError(snapshot.demandError);
-          setDemandOrders((current) =>
-            current.filter((order) => order.id !== parent.id),
+        const snapshot = await fetchDistributorOrders(true);
+        let progress = snapshot?.inProgress ?? [];
+        let placed: PlacedOrder | null = null;
+        for (const created of createdOrders) {
+          const merged = mergeCreatedDistributorOrder(
+            progress,
+            created,
+            distributors,
+            deliveryDate,
           );
-        } else {
-          setDemandOrders(snapshot.demand);
+          progress = merged.orders;
+          placed = merged.placed;
         }
-        setExpandedId(snapshot.inProgress[0]?.id ?? null);
+        if (snapshot) {
+          setDeliveredOrders(snapshot.delivered);
+          if (snapshot.demandError) {
+            showError(snapshot.demandError);
+            setDemandOrders((current) =>
+              current.filter((order) => order.id !== parent.id),
+            );
+          } else {
+            setDemandOrders(snapshot.demand);
+          }
+          setInProgress(progress);
+        } else {
+          setInProgress((current) => {
+            let next = current;
+            for (const created of createdOrders) {
+              next = mergeCreatedDistributorOrder(
+                next,
+                created,
+                distributors,
+                deliveryDate,
+              ).orders;
+            }
+            return next;
+          });
+        }
+        if (placed) showPlacedOrder(placed);
         showToast("Orders created successfully");
         resetToList();
       } catch (error) {

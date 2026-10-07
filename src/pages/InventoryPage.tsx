@@ -1242,8 +1242,8 @@ export default function InventoryPage() {
     let cancelled = false;
     const loadId = ++inventoryLoadId.current;
     void Promise.all([
-      inventoryApi.list(),
-      itemsApi.list().catch((error) => {
+      inventoryApi.list({ fresh: true }),
+      itemsApi.list({ fresh: true }).catch((error) => {
         if (!cancelled) {
           notifyApiError(
             error,

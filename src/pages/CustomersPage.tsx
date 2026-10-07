@@ -52,12 +52,18 @@ function loadStandardOrders() {
   if (!standardOrdersPromise) {
     standardOrdersPromise = (async () => {
       const open = await collectPaginated((page, limit) =>
-        ordersApi.list({ page, limit, type: "standard" }),
+        ordersApi.list({ page, limit, type: "standard", fresh: true }),
       );
       const extras = await Promise.allSettled(
         COMPLETED_ORDER_STATUSES.map((status) =>
           collectPaginated((page, limit) =>
-            ordersApi.list({ page, limit, type: "standard", status }),
+            ordersApi.list({
+              page,
+              limit,
+              type: "standard",
+              status,
+              fresh: true,
+            }),
           ),
         ),
       );
@@ -1025,6 +1031,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     if (!apiConfigured) return;
+    standardOrdersPromise = null;
     let cancelled = false;
     const append = page > 1;
     loadLock.current = true;

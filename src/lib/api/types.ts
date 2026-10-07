@@ -296,7 +296,9 @@ export type ApiRole = {
   name?: string;
   roleName?: string;
   description?: string;
-  permissions?: string[];
+  permissions?: Array<
+    string | { name?: string; key?: string; permission?: string; code?: string }
+  > | null;
   user?: ApiRoleUser | null;
   users?: ApiRoleUser[] | null;
 };

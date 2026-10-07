@@ -35,11 +35,12 @@ import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
 import { isUuid, publicCode } from "@/utils/entityIds";
 import {
-  DEFAULT_ROLE_PERMISSIONS,
   ROLE_PERMISSION_GROUPS,
-  checkedPermissionKeys,
+  apiPermissionNames,
+  apiPermissionsFor,
   permissionsForRoleType,
-  permissionsFromKeys,
+  permissionsFromApiKeys,
+  togglePermission,
 } from "@/utils/rolePermissions";
 import { type UserFormErrors, validateUserForm } from "@/utils/rolesUsers";
 
@@ -155,7 +156,6 @@ export default function RolesPage() {
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState>(emptyDraft);
   const [formErrors, setFormErrors] = useState<UserFormErrors>({});
   const [modalOpen, setModalOpen] = useState(false);
@@ -223,44 +223,6 @@ export default function RolesPage() {
     };
   }, [notifyApiError, refreshDirectory]);
 
-  useEffect(() => {
-    if (!expandedId || !isApiConfigured()) return;
-    const user = users.find((entry) => entry.id === expandedId);
-    const roleId = isUuid(user?.roleId) ? user?.roleId : undefined;
-    if (!roleId) return;
-    let cancelled = false;
-    setDetailLoadingId(expandedId);
-    void rolesApi
-      .getById(roleId)
-      .then((role) => {
-        if (cancelled) return;
-        const keys = (role.permissions ?? []).filter(
-          (key) => key in DEFAULT_ROLE_PERMISSIONS,
-        );
-        if (!keys.length) return;
-        setDraftPermissions((current) => ({
-          ...current,
-          [expandedId]: permissionsFromKeys(keys),
-        }));
-      })
-      .catch((error) => {
-        if (!cancelled) notifyApiError(error, "Failed to load role details.");
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDetailLoadingId((current) =>
-            current === expandedId ? null : current,
-          );
-        }
-      });
-    return () => {
-      cancelled = true;
-      setDetailLoadingId((current) =>
-        current === expandedId ? null : current,
-      );
-    };
-  }, [expandedId, notifyApiError, users]);
-
   function patchPermission(
     user: RoleUser,
     key: keyof RolePermissions,
@@ -268,10 +230,11 @@ export default function RolesPage() {
   ) {
     setDraftPermissions((current) => ({
       ...current,
-      [user.id]: {
-        ...(current[user.id] ?? user.permissions),
-        [key]: value,
-      },
+      [user.id]: togglePermission(
+        current[user.id] ?? user.permissions,
+        key,
+        value,
+      ),
     }));
   }
 
@@ -309,17 +272,25 @@ export default function RolesPage() {
 
     setPending(`apply:${user.id}`);
     try {
+      const apiPermissions = apiPermissionsFor(next, role.apiPermissions);
       const updated = await rolesApi.update(pathId, {
         name: roleWriteName(role),
-        permissions: checkedPermissionKeys(next),
+        permissions: apiPermissions,
       });
       const saved = mapApiRoleToManagedRole(updated, 0);
-      const permissions = Array.isArray(updated.permissions)
-        ? saved.permissions
-        : next;
+      const fromResponse = Array.isArray(updated.permissions);
+      const permissions = fromResponse ? saved.permissions : next;
       setManagedRoles((current) =>
         current.map((entry) =>
-          serverRoleId(entry) === pathId ? { ...entry, permissions } : entry,
+          serverRoleId(entry) === pathId
+            ? {
+                ...entry,
+                permissions,
+                apiPermissions: fromResponse
+                  ? saved.apiPermissions
+                  : apiPermissions,
+              }
+            : entry,
         ),
       );
       setUsers((current) =>
@@ -390,17 +361,14 @@ export default function RolesPage() {
       if (!pathId) return null;
       try {
         const remote = await rolesApi.getById(pathId);
-        const keys = (remote.permissions ?? []).filter(
-          (key) => key in DEFAULT_ROLE_PERMISSIONS,
-        );
+        const names = apiPermissionNames(remote.permissions);
         return {
           name: remote.roleName?.trim() || remote.name?.trim() || role.name,
           apiName:
             (remote.roleName ?? remote.name ?? "").trim() || role.apiName,
           recordId: isUuid(remote.id) ? remote.id : role.recordId,
-          permissions: keys.length
-            ? permissionsFromKeys(keys)
-            : role.permissions,
+          apiPermissions: names.length ? names : role.apiPermissions,
+          permissions: permissionsFromApiKeys(names, role.permissions),
         };
       } catch (error) {
         notifyApiError(error, "Failed to load role details.");
@@ -606,7 +574,10 @@ export default function RolesPage() {
   }
 
   async function saveManagedRole(role: ManagedRole): Promise<ManagedRole> {
-    const permissions = checkedPermissionKeys(role.permissions);
+    const permissions = apiPermissionsFor(
+      role.permissions,
+      role.apiPermissions,
+    );
     const name = role.name.trim() || "New Role Name";
 
     if (!isApiConfigured()) {
@@ -633,6 +604,9 @@ export default function RolesPage() {
           ...mapped,
           name: mapped.name || name,
           apiName: mapped.apiName || name,
+          apiPermissions: Array.isArray(created.permissions)
+            ? mapped.apiPermissions
+            : permissions,
           permissions: Array.isArray(created.permissions)
             ? mapped.permissions
             : role.permissions,
@@ -665,6 +639,9 @@ export default function RolesPage() {
         name: mapped.name || name,
         apiName: mapped.apiName || role.apiName || name,
         recordId: mapped.recordId || role.recordId,
+        apiPermissions: Array.isArray(updated.permissions)
+          ? mapped.apiPermissions
+          : permissions,
         permissions: Array.isArray(updated.permissions)
           ? mapped.permissions
           : role.permissions,
@@ -874,84 +851,69 @@ export default function RolesPage() {
                       </div>
 
                       {open ? (
-                        detailLoadingId === user.id ? (
-                          <div
-                            className={cn(
-                              "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
-                              SUB_ROW_PAD,
-                            )}
-                          >
-                            <AppLoader
-                              variant="section"
-                              label="Loading permissions"
-                              className="min-h-[96px] bg-transparent py-6"
-                            />
-                          </div>
-                        ) : (
-                          <div
-                            className={cn(
-                              "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
-                              SUB_ROW_PAD,
-                            )}
-                          >
-                            <p className="mb-4 text-[12px] text-[#6B6B6B]">
-                              These permissions belong to the {user.type} role.
-                              Saving updates every user with this role.
-                            </p>
-                            <div className="overflow-x-auto">
-                              <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
-                                {ROLE_PERMISSION_GROUPS.map((group) => (
-                                  <div key={group.label}>
-                                    <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
-                                      {group.label}
-                                    </h3>
-                                    <div className="space-y-2.5">
-                                      <PermissionCheckbox
-                                        checked={permissions[group.accessKey]}
-                                        label={group.accessLabel}
-                                        onChange={() =>
-                                          patchPermission(
-                                            user,
-                                            group.accessKey,
-                                            !permissions[group.accessKey],
-                                          )
-                                        }
-                                      />
-                                      <div className="space-y-2.5 border-l border-[#00000014] pl-3">
-                                        {group.actions.map((action) => (
-                                          <PermissionCheckbox
-                                            key={action.key}
-                                            checked={permissions[action.key]}
-                                            label={action.label}
-                                            onChange={() =>
-                                              patchPermission(
-                                                user,
-                                                action.key,
-                                                !permissions[action.key],
-                                              )
-                                            }
-                                          />
-                                        ))}
-                                      </div>
+                        <div
+                          className={cn(
+                            "col-span-full border-t border-[#00000014] bg-[#FBF9F9]",
+                            SUB_ROW_PAD,
+                          )}
+                        >
+                          <p className="mb-4 text-[12px] text-[#6B6B6B]">
+                            These permissions belong to the {user.type} role.
+                            Saving updates every user with this role.
+                          </p>
+                          <div className="overflow-x-auto">
+                            <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
+                              {ROLE_PERMISSION_GROUPS.map((group) => (
+                                <div key={group.label}>
+                                  <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#2E2E2E] uppercase">
+                                    {group.label}
+                                  </h3>
+                                  <div className="space-y-2.5">
+                                    <PermissionCheckbox
+                                      checked={permissions[group.accessKey]}
+                                      label={group.accessLabel}
+                                      onChange={() =>
+                                        patchPermission(
+                                          user,
+                                          group.accessKey,
+                                          !permissions[group.accessKey],
+                                        )
+                                      }
+                                    />
+                                    <div className="space-y-2.5 border-l border-[#00000014] pl-3">
+                                      {group.actions.map((action) => (
+                                        <PermissionCheckbox
+                                          key={action.key}
+                                          checked={permissions[action.key]}
+                                          label={action.label}
+                                          onChange={() =>
+                                            patchPermission(
+                                              user,
+                                              action.key,
+                                              !permissions[action.key],
+                                            )
+                                          }
+                                        />
+                                      ))}
                                     </div>
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            <div className="mt-5 flex justify-end">
-                              <Button
-                                variant="dark"
-                                onClick={() => applyChanges(user)}
-                                disabled={pending !== null}
-                              >
-                                {pending === `apply:${user.id}`
-                                  ? "Saving..."
-                                  : "Apply Changes"}
-                              </Button>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        )
+
+                          <div className="mt-5 flex justify-end">
+                            <Button
+                              variant="dark"
+                              onClick={() => applyChanges(user)}
+                              disabled={pending !== null}
+                            >
+                              {pending === `apply:${user.id}`
+                                ? "Saving..."
+                                : "Apply Changes"}
+                            </Button>
+                          </div>
+                        </div>
                       ) : null}
                     </div>
                   );

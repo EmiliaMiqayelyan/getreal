@@ -1,4 +1,5 @@
 import {
+  apiPermissionNames,
   permissionsForRoleType,
   permissionsFromApiKeys,
 } from "@/utils/rolePermissions";
@@ -49,15 +50,9 @@ import { normalizeNamedList } from "./normalize";
 
 export type { CatalogSubcategory };
 
-/** Title-case an API role name and match the labels used on the Roles page. */
+/** Role name exactly as the API sends it. */
 export function formatApiRoleName(roleName: string | null | undefined): string {
-  const raw = roleName?.trim() || "Manager";
-  const display = raw.charAt(0).toUpperCase() + raw.slice(1).replace(/_/g, " ");
-  const lower = display.toLowerCase();
-  if (lower.includes("admin")) return "Superadmin";
-  if (lower.includes("warehouse")) return "Warehouse Worker";
-  if (lower.includes("driver")) return "Driver";
-  return display;
+  return roleName?.trim() || "Manager";
 }
 
 /** Name written to the API. Keeps the stored name when the label was not edited. */
@@ -135,6 +130,7 @@ export function mapApiRoleToManagedRole(
     recordId,
     name,
     apiName: apiName || name,
+    apiPermissions: apiPermissionNames(role.permissions),
     permissions: permissionsFromApiRole(role, name),
   };
 }
@@ -171,7 +167,7 @@ export function mapApiRoleAssignmentToRoleUser(
     phone: member.phoneNumber?.trim() || member.phone?.trim() || "",
     type,
     password: "",
-    permissions: permissionsForRoleType(type),
+    permissions: permissionsFromApiRole(role, type),
   };
 }
 
@@ -307,6 +303,27 @@ function caseByFromBuyingUnit(buyingUnit: string | null | undefined): CaseBy {
   return "Units / case";
 }
 
+/** Category and subcategory fields may be a name, an id, or `{ name }`. */
+export function readApiLabel(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const record = value as Record<string, unknown>;
+  const nested = record.name ?? record.label ?? record.title;
+  if (typeof nested === "string") return nested.trim();
+  if (typeof nested === "number" && Number.isFinite(nested))
+    return String(nested);
+  return "";
+}
+
+function lookupLabel(
+  map: Map<string, string> | undefined,
+  id: string | number | null | undefined,
+): string {
+  if (id == null || id === "" || !map) return "";
+  return readApiLabel(map.get(String(id)));
+}
+
 export function mapApiItemToItem(
   item: ApiItem,
   index: number,
@@ -320,14 +337,11 @@ export function mapApiItemToItem(
   } = {},
 ): Item {
   const categoryName =
-    (item.categoryId && options.categoriesById?.get(item.categoryId)) ||
-    item.category ||
-    "";
+    lookupLabel(options.categoriesById, item.categoryId) ||
+    readApiLabel(item.category);
   const subcategoryName =
-    (item.subcategoryId &&
-      options.subcategoriesById?.get(item.subcategoryId)) ||
-    item.subcategory ||
-    "";
+    lookupLabel(options.subcategoriesById, item.subcategoryId) ||
+    readApiLabel(item.subcategory);
   const distributorName =
     (item.distributorId && options.distributorsById?.get(item.distributorId)) ||
     "";
@@ -388,8 +402,8 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
     merchandisingName: name,
     description: product.description ?? "",
     preorderInfo: "",
-    category: product.categoryNames?.[0] ?? "",
-    subcategory: product.categoryNames?.[1] ?? "",
+    category: readApiLabel(product.categoryNames?.[0]),
+    subcategory: readApiLabel(product.categoryNames?.[1]),
     distributor: "",
     source: "",
     sourcePer: "Case",
@@ -431,8 +445,9 @@ export function mapApiProductToProductForSale(
     sortOrder: product.position ?? index,
     live: Boolean(product.isLive),
     merchandisingName: name,
-    category: linked?.category ?? product.categoryNames?.[0] ?? "",
-    subcategory: linked?.subcategory ?? product.categoryNames?.[1] ?? "",
+    category: linked?.category || readApiLabel(product.categoryNames?.[0]),
+    subcategory:
+      linked?.subcategory || readApiLabel(product.categoryNames?.[1]),
     source: linked?.source ?? "",
     sourceId: linked?.sourceId,
     distributor: linked?.distributor ?? "",
@@ -679,7 +694,7 @@ export function mapApiSubcategoryToCatalog(
   subcategory: ApiSubcategory,
   categoriesById: Map<string, string> = new Map(),
 ): CatalogSubcategory | null {
-  const name = subcategory.name?.trim();
+  const name = readApiLabel(subcategory.name);
   if (!name) return null;
 
   const nestedCategory =
@@ -689,9 +704,9 @@ export function mapApiSubcategoryToCatalog(
   const categoryId = subcategory.categoryId ?? nestedCategory?.id ?? undefined;
   const categoryName =
     (typeof subcategory.category === "string"
-      ? subcategory.category
-      : nestedCategory?.name) ||
-    (categoryId ? categoriesById.get(categoryId) : undefined) ||
+      ? subcategory.category.trim()
+      : readApiLabel(nestedCategory?.name)) ||
+    (categoryId ? readApiLabel(categoriesById.get(String(categoryId))) : "") ||
     "";
 
   if (!categoryName) return null;

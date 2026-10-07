@@ -876,7 +876,7 @@ export default function ProductsForSalePage() {
       new Set(
         Object.values(subcategoriesByCategory).flatMap((names) => names),
       ),
-    ).sort((a, b) => a.localeCompare(b));
+    ).sort((a, b) => String(a ?? "").localeCompare(String(b ?? "")));
   }, [activeCategory, subcategoriesByCategory]);
 
   useEffect(() => {

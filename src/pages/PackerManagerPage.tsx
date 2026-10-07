@@ -303,7 +303,12 @@ export default function PackerManagerPage() {
     let cancelled = false;
     void Promise.all([
       listAllPages((page) =>
-        ordersApi.list({ type: "standard", page, limit: PAGE_LIMIT }),
+        ordersApi.list({
+          type: "standard",
+          page,
+          limit: PAGE_LIMIT,
+          fresh: true,
+        }),
       ),
       listAllPages((page) =>
         usersApi.list({ role: "packer", page, limit: PAGE_LIMIT }),

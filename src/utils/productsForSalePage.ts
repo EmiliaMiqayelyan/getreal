@@ -104,6 +104,21 @@ export type ProductInheritedFields = {
   itemName: string;
 };
 
+/** Names used as sort keys. API rows sometimes send a number or `{ name }` instead of a string. */
+function asLabel(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value.trim() || fallback;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const name = (value as { name?: unknown }).name;
+    if (typeof name === "string" && name.trim()) return name.trim();
+  }
+  return fallback;
+}
+
+function compareLabels(left: unknown, right: unknown) {
+  return asLabel(left).localeCompare(asLabel(right));
+}
+
 export function resolveProductInheritedFields(
   product: ProductForSale,
   items: Item[],
@@ -111,8 +126,8 @@ export function resolveProductInheritedFields(
   const item = findByEntityRef(items, product.itemId);
   if (!item) {
     return {
-      category: product.category || "Other",
-      subcategory: product.subcategory || "",
+      category: asLabel(product.category, "Other"),
+      subcategory: asLabel(product.subcategory),
       distributor: product.distributor,
       source: product.source,
       merchandisingName: product.merchandisingName,
@@ -121,8 +136,8 @@ export function resolveProductInheritedFields(
   }
 
   return {
-    category: item.category || "Other",
-    subcategory: item.subcategory || "",
+    category: asLabel(item.category, "Other"),
+    subcategory: asLabel(item.subcategory),
     distributor: item.distributor,
     source: item.source,
     merchandisingName: getItemDisplayName(item),
@@ -205,7 +220,7 @@ function sortSubcategories(
     const left = order.indexOf(a);
     const right = order.indexOf(b);
 
-    if (left === -1 && right === -1) return a.localeCompare(b);
+    if (left === -1 && right === -1) return compareLabels(a, b);
     if (left === -1) return 1;
     if (right === -1) return -1;
     return left - right;
@@ -235,7 +250,8 @@ export function groupProductsForSale(
   const categories = Array.from(byCategory.keys()).sort((left, right) => {
     const leftIndex = ordered.indexOf(left);
     const rightIndex = ordered.indexOf(right);
-    if (leftIndex === -1 && rightIndex === -1) return left.localeCompare(right);
+    if (leftIndex === -1 && rightIndex === -1)
+      return compareLabels(left, right);
     if (leftIndex === -1) return 1;
     if (rightIndex === -1) return -1;
     return leftIndex - rightIndex;
