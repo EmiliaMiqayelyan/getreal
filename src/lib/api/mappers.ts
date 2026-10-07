@@ -182,14 +182,22 @@ export function mapApiRolesToRoleUsers(roles: ApiRole[]): RoleUser[] {
   });
 }
 
+function managedRoleDedupeKey(role: ApiRole, mapped: ManagedRole): string {
+  if (mapped.recordId) return mapped.recordId;
+  if (isUuid(role.id)) return role.id!;
+  if (isUuid(role.roleId)) return role.roleId!;
+  return mapped.id;
+}
+
 /** One template per role. The list repeats a role once for every assigned user. */
 export function uniqueManagedRoles(roles: ApiRole[]): ManagedRole[] {
   const seen = new Set<string>();
   const result: ManagedRole[] = [];
   roles.forEach((role, index) => {
     const mapped = mapApiRoleToManagedRole(role, index);
-    if (seen.has(mapped.id)) return;
-    seen.add(mapped.id);
+    const key = managedRoleDedupeKey(role, mapped);
+    if (seen.has(key)) return;
+    seen.add(key);
     result.push(mapped);
   });
   return result;

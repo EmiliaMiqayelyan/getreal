@@ -8,7 +8,7 @@ import type { ManagedRole, RolePermissions } from "@/types/admin";
 import {
   DEFAULT_ROLE_PERMISSIONS,
   ROLE_PERMISSION_GROUPS,
-  togglePermission,
+  toggleUiPermission,
 } from "@/utils/rolePermissions";
 import { cn } from "@/utils/cn";
 
@@ -113,7 +113,7 @@ export function RoleManagementModal({
   function toggleSelectedPermission(key: keyof RolePermissions) {
     if (!selected) return;
     patchSelected({
-      permissions: togglePermission(
+      permissions: toggleUiPermission(
         selected.permissions,
         key,
         !selected.permissions[key],

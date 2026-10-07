@@ -437,6 +437,15 @@ export function apiPermissionsFor(
   return [...result];
 }
 
+/** Toggle a single UI checkbox without syncing siblings that share an API string. */
+export function toggleUiPermission(
+  permissions: RolePermissions,
+  key: keyof RolePermissions,
+  value: boolean,
+): RolePermissions {
+  return { ...permissions, [key]: value };
+}
+
 /** Toggle one checkbox and every checkbox stored under the same backend string. */
 export function togglePermission(
   permissions: RolePermissions,

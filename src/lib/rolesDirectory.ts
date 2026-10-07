@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 import type { ManagedRole, RoleUser } from "@/types/admin";
 import { isUuid } from "@/utils/entityIds";
+import { loadManagedRoles } from "@/utils/rolesUsers";
 
 const ROLE_PAGE_LIMIT = 100;
 const MAX_ROLE_PAGES = 5;
@@ -77,11 +78,26 @@ function matchManagedRole(
   roles: ManagedRole[],
 ): ManagedRole | undefined {
   return roles.find((role) => {
-    if (
-      user.roleId &&
-      (role.recordId === user.roleId || role.id === user.roleId)
-    ) {
-      return true;
+    const pathId = serverRoleId(role);
+    if (user.roleId) {
+      if (
+        role.recordId === user.roleId ||
+        role.id === user.roleId ||
+        pathId === user.roleId
+      ) {
+        return true;
+      }
+    }
+    if (isUnassignedRoleRow(user) && user.id.startsWith("unassigned-role-")) {
+      const rowRoleId = user.id.slice("unassigned-role-".length);
+      if (
+        rowRoleId &&
+        (pathId === rowRoleId ||
+          role.id === rowRoleId ||
+          role.recordId === rowRoleId)
+      ) {
+        return true;
+      }
     }
     return role.name.trim().toLowerCase() === user.type.trim().toLowerCase();
   });
@@ -97,6 +113,41 @@ function withRolePermissions(user: RoleUser, roles: ManagedRole[]): RoleUser {
     roleCode: user.roleCode || match.roleCode,
     permissions: match.permissions,
   };
+}
+
+export function isUnassignedRoleRow(user: RoleUser): boolean {
+  return user.id.startsWith("unassigned-role-");
+}
+
+function placeholderUserForRole(role: ManagedRole): RoleUser {
+  const pathId = serverRoleId(role);
+  return {
+    id: pathId ? `unassigned-role-${pathId}` : `unassigned-role-${role.id}`,
+    roleId: role.recordId,
+    roleCode: role.roleCode,
+    name: "—",
+    email: "",
+    phone: "",
+    type: role.name,
+    password: "",
+    permissions: role.permissions,
+  };
+}
+
+function withPlaceholdersForUnassignedRoles(
+  users: RoleUser[],
+  roles: ManagedRole[],
+): RoleUser[] {
+  const next = [...users];
+  for (const role of roles) {
+    const hasUser = next.some(
+      (user) => !isUnassignedRoleRow(user) && matchManagedRole(user, [role]),
+    );
+    if (!hasUser) {
+      next.push(placeholderUserForRole(role));
+    }
+  }
+  return next;
 }
 
 async function loadRoleRows(): Promise<ApiRole[]> {
@@ -123,13 +174,35 @@ async function loadRoleRows(): Promise<ApiRole[]> {
   return collected;
 }
 
+/** Prefer stored checkbox state; API permission strings are coarser than the UI. */
+function mergeManagedRolesWithStored(fromApi: ManagedRole[]): ManagedRole[] {
+  const stored = loadManagedRoles();
+  if (!stored.length) return fromApi;
+
+  return fromApi.map((role) => {
+    const pathId = serverRoleId(role);
+    const cached = stored.find(
+      (entry) =>
+        (pathId && serverRoleId(entry) === pathId) ||
+        entry.id === role.id ||
+        (role.recordId && entry.recordId === role.recordId),
+    );
+    if (!cached) return role;
+    return {
+      ...role,
+      permissions: cached.permissions,
+      apiPermissions: cached.apiPermissions ?? role.apiPermissions,
+    };
+  });
+}
+
 /** Roles plus assigned staff. One roles list, and a single users list only if roles include no people. */
 export async function loadRolesDirectory(): Promise<{
   users: RoleUser[];
   roles: ManagedRole[];
 }> {
   const roleRows = await loadRoleRows();
-  const roles = uniqueManagedRoles(roleRows);
+  const roles = mergeManagedRolesWithStored(uniqueManagedRoles(roleRows));
 
   const assignmentUsers = mapApiRolesToRoleUsers(
     assignmentRoles(roleRows),
@@ -143,11 +216,13 @@ export async function loadRolesDirectory(): Promise<{
       .map((user, index) => mapApiUserToRoleUser(user, index));
   }
 
+  const merged = mergeRoleUsers([...assignmentUsers, ...listed]).map((user) =>
+    withRolePermissions(user, roles),
+  );
+
   return {
     roles,
-    users: mergeRoleUsers([...assignmentUsers, ...listed]).map((user) =>
-      withRolePermissions(user, roles),
-    ),
+    users: withPlaceholdersForUnassignedRoles(merged, roles),
   };
 }
 
