@@ -126,8 +126,16 @@ function money(value: number) {
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
 }
 
+/**
+ * Chip for a distributor order. Chips are customer delivery Wednesdays, but a
+ * distributor delivers on its own schedule (e.g. Saturday) ahead of that
+ * Wednesday, so the order is filed under the Wednesday on or after it.
+ */
 function placedOrderDateId(order: PlacedOrder) {
-  return order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate);
+  const dayId =
+    order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate);
+  const day = dayId ? parseDeliveryDateId(dayId) : null;
+  return day ? toDeliveryDateId(upcomingWednesday(day)) : dayId;
 }
 
 function filterPlacedOrders(
@@ -488,9 +496,10 @@ export default function ProductOrdersPage() {
       activeChipIndex < visibleDeliveryChips.length - 1);
 
   function selectDeliveryDate(dateId: string) {
-    if (!parseDeliveryDateId(dateId)) return;
+    const day = parseDeliveryDateId(dateId);
+    if (!day) return;
     userPickedDate.current = true;
-    setActiveDeliveryDateId(dateId);
+    setActiveDeliveryDateId(toDeliveryDateId(upcomingWednesday(day)));
   }
 
   function shiftDeliveryDate(delta: number) {
@@ -508,8 +517,9 @@ export default function ProductOrdersPage() {
   }
 
   function showPlacedOrder(order: PlacedOrder) {
-    if (order.deliveryDateId && parseDeliveryDateId(order.deliveryDateId)) {
-      setActiveDeliveryDateId(order.deliveryDateId);
+    const dateId = placedOrderDateId(order);
+    if (dateId && parseDeliveryDateId(dateId)) {
+      setActiveDeliveryDateId(dateId);
     }
     setExpandedId(order.id);
   }
@@ -896,8 +906,9 @@ export default function ProductOrdersPage() {
       nextDeliveryId(inProgress),
     );
     setInProgress((prev) => appendInProgressOrders(prev, [order]));
-    if (order.deliveryDateId && parseDeliveryDateId(order.deliveryDateId)) {
-      setActiveDeliveryDateId(order.deliveryDateId);
+    const manualDateId = placedOrderDateId(order);
+    if (manualDateId && parseDeliveryDateId(manualDateId)) {
+      setActiveDeliveryDateId(manualDateId);
     }
     setExpandedId(order.id);
     showToast("Order created successfully");
