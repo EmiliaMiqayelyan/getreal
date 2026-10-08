@@ -12,7 +12,7 @@ import type { PackingHandoffUpdate } from "@/types/packing";
  * Live mode (`VITE_API_URL` set):
  * - GET /orders?type=standard
  * - GET /users?role=packer
- * - POST /orders/:id/assign-packer `{ packerId }`
+ * - PATCH /orders/:id/packer `{ packerId }`
  * Timestamps are read from the order. This page does not send them.
  * Without an API URL, the shared local catalog is used instead.
  */

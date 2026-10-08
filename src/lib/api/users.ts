@@ -45,6 +45,9 @@ export type AdminAddUserPayload = {
 };
 
 export type UpdateUserPayload = {
+  email?: string;
+  /** Min 8 characters. The server hashes it. */
+  password?: string;
   name?: string;
   firstName?: string;
   lastName?: string;
@@ -128,16 +131,30 @@ export const usersApi = {
     );
   },
 
-  block(id: string, reason = "Removed by an administrator") {
-    return apiRequest<unknown>(`/users/${id}/block`, {
-      method: "POST",
-      body: JSON.stringify({ reason }),
-    });
+  /**
+   * PATCH /users/:id/permissions. Sets permissions for this user only; the
+   * role is unchanged. `null` drops the override so the user follows the role.
+   */
+  updatePermissions(id: string, permissions: string[] | null) {
+    return apiRequest<unknown>(`/users/${id}/permissions`, {
+      method: "PATCH",
+      body: JSON.stringify({ permissions }),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiUser>(payload, "user") ?? (payload as ApiUser),
+    );
   },
 
-  unblock(id: string) {
-    return apiRequest<unknown>(`/users/${id}/unblock`, {
-      method: "POST",
-    });
+  /** DELETE /users/:id. The server only sets `status: inactive`. */
+  deactivate(id: string) {
+    return apiRequest<void>(`/users/${id}`, { method: "DELETE" });
+  },
+
+  /**
+   * PATCH /users/:id `{ isBlocked }`. Blocked users cannot sign in and are
+   * left out of GET /users; GET /roles flags them with `isBlocked`.
+   */
+  setBlocked(id: string, isBlocked: boolean) {
+    return usersApi.update(id, { isBlocked });
   },
 };

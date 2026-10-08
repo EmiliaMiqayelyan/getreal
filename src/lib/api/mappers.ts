@@ -2,6 +2,7 @@ import {
   apiPermissionNames,
   permissionsForRoleType,
   permissionsFromApiKeys,
+  permissionsFromApiNames,
 } from "@/utils/rolePermissions";
 import type {
   AdminCustomer,
@@ -77,6 +78,22 @@ function permissionsFromApiRole(
   );
 }
 
+/** Per-user permission fields, set only when the user overrides their role. */
+export function customUserPermissions(source: {
+  permissions?: ApiRole["permissions"];
+  hasCustomPermissions?: boolean;
+}): Pick<RoleUser, "hasCustomPermissions" | "apiPermissions"> & {
+  permissions?: RolePermissions;
+} {
+  if (!source.hasCustomPermissions) return { hasCustomPermissions: false };
+  const names = apiPermissionNames(source.permissions);
+  return {
+    hasCustomPermissions: true,
+    apiPermissions: names,
+    permissions: permissionsFromApiNames(names),
+  };
+}
+
 export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
   const type = formatApiRoleName(user.role);
 
@@ -97,6 +114,7 @@ export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
     type,
     password: "",
     permissions: permissionsForRoleType(type),
+    ...customUserPermissions(user),
   };
 }
 
@@ -168,6 +186,7 @@ export function mapApiRoleAssignmentToRoleUser(
     type,
     password: "",
     permissions: permissionsFromApiRole(role, type),
+    ...customUserPermissions(member),
   };
 }
 
@@ -740,6 +759,31 @@ export function orderModelId(
 export function orderRecordId(order: { id?: string }): string | undefined {
   const id = order.id?.trim();
   return id && isUuid(id) ? id : undefined;
+}
+
+/**
+ * Customer display name for a standard order. `users` also lists the packer
+ * and other linked staff, so prefer `customer`, then the user with that role.
+ */
+export function orderCustomerName(order: ApiOrder): string {
+  const customer = order.customer;
+  const fromCustomer =
+    customer?.name?.trim() ||
+    [customer?.firstName, customer?.lastName].filter(Boolean).join(" ").trim();
+  if (fromCustomer) return fromCustomer;
+  const users = Array.isArray(order.users)
+    ? order.users
+    : order.users
+      ? [order.users]
+      : [];
+  const linked =
+    users.find((user) => user.role?.trim().toLowerCase() === "customer") ??
+    (users.length === 1 ? users[0] : undefined);
+  return (
+    linked?.name?.trim() ||
+    [linked?.firstName, linked?.lastName].filter(Boolean).join(" ").trim() ||
+    "N/A"
+  );
 }
 
 export function normalizeUsersList(payload: unknown): ApiUser[] {

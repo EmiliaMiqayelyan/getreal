@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
+import { OrderDetailPanel } from "@/components/orders/OrderDetailPanel";
 import { Header } from "@/components/layout/AdminHeader";
 import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
 import {
@@ -36,12 +37,21 @@ import {
 } from "@/data/packerManager";
 import { ELIGIBLE_PACKERS, type EligiblePacker } from "@/data/packers";
 import { isApiConfigured, ordersApi, usersApi } from "@/lib/api";
-import { orderModelId, orderRecordId } from "@/lib/api/mappers";
+import {
+  orderCustomerName,
+  orderModelId,
+  orderRecordId,
+} from "@/lib/api/mappers";
 import type { ApiOrder, ApiUser, PaginatedResult } from "@/lib/api/types";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
+import {
+  formatDeliveryBadge,
+  orderDetailFromApi,
+  type OrderDetail,
+} from "@/utils/orderDetail";
 import {
   deliveryDateIdFromValue,
   formatTodayLabel,
@@ -201,23 +211,6 @@ function packerCodeFromUser(user: ApiUser) {
   );
 }
 
-function orderCustomerName(order: ApiOrder) {
-  const raw = order as ApiOrder & {
-    customerName?: string;
-    customer?: { name?: string; firstName?: string; lastName?: string };
-  };
-  const users = Array.isArray(order.users) ? order.users[0] : order.users;
-  const joined = [users?.firstName, users?.lastName].filter(Boolean).join(" ");
-  return (
-    joined ||
-    users?.name?.trim() ||
-    raw.customerName?.trim() ||
-    [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
-    raw.customer?.name ||
-    "N/A"
-  );
-}
-
 /** Adapter for GET /orders. Timestamps are displayed, never edited here. */
 function mapManagerOrder(order: ApiOrder, index: number): PackerManagerOrder {
   const code = orderModelId(order, `ORD-${index + 1}`);
@@ -237,6 +230,25 @@ function mapManagerOrder(order: ApiOrder, index: number): PackerManagerOrder {
     packingStartedAt: displayOperationalTimestamp(order.packingStartedAt),
     coolerReadyAt: displayOperationalTimestamp(order.coolerReadyAt),
     loadedAt: displayOperationalTimestamp(order.loadedAt),
+  };
+}
+
+/** Panel fields known from the list row, before GET /orders/:id returns. */
+function detailFromRow(order: PackerManagerOrder): OrderDetail {
+  return {
+    id: order.code,
+    customerName: order.customer,
+    orderDate: "",
+    deliveryDate: order.deliveryDateId
+      ? formatDeliveryBadge(order.deliveryDateId)
+      : "",
+    items: [],
+    total: 0,
+    address: "",
+    apt: "",
+    city: "",
+    state: "",
+    zip: "",
   };
 }
 
@@ -263,7 +275,7 @@ export default function PackerManagerPage() {
     usePackingHandoff();
   const { sessionPermissions } = useRolesUsers();
   const canAssign = sessionPermissions.packerManagerAssignPacker;
-  const { notifyApiError } = useApiFeedback();
+  const { notifyApiError, showError } = useApiFeedback();
 
   const apiLive = packerManagerApiLive();
   const [orders, setOrders] = useState(() =>
@@ -285,6 +297,12 @@ export default function PackerManagerPage() {
     code: string;
     anchor: HTMLElement;
   } | null>(null);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [fetchedDetail, setFetchedDetail] = useState<{
+    recordId: string;
+    detail: OrderDetail;
+  } | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const deliveryChips = useMemo(() => {
     const counts = new Map<string, number>();
@@ -370,6 +388,62 @@ export default function PackerManagerPage() {
       }));
   }, [packers, liveCatalog]);
 
+  const selectedOrder =
+    liveCatalog.find((order) => order.id === selectedOrderId) ?? null;
+  const selectedRecordId = selectedOrder?.recordId;
+
+  useEffect(() => {
+    if (!apiLive || !selectedRecordId) {
+      setDetailLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    void ordersApi
+      .getById(selectedRecordId)
+      .then((order) => {
+        if (cancelled) return;
+        setFetchedDetail({
+          recordId: selectedRecordId,
+          detail: orderDetailFromApi(order, selectedRecordId),
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) notifyApiError(error, "Failed to load order details.");
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [apiLive, notifyApiError, selectedRecordId]);
+
+  const selectedDetail = useMemo((): OrderDetail | null => {
+    if (!selectedOrder) return null;
+    const base = detailFromRow(selectedOrder);
+    const fetched =
+      fetchedDetail && fetchedDetail.recordId === selectedOrder.recordId
+        ? fetchedDetail.detail
+        : null;
+    const packerName =
+      packersWithWorkload.find((packer) => packer.id === selectedOrder.packerId)
+        ?.name ?? selectedOrder.packerName;
+    const handoffCoolers = packingByCode[selectedOrder.code]?.coolerIds ?? [];
+    return {
+      ...base,
+      ...fetched,
+      id: base.id,
+      customerName:
+        base.customerName && base.customerName !== "N/A"
+          ? base.customerName
+          : (fetched?.customerName ?? base.customerName),
+      deliveryDate: fetched?.deliveryDate || base.deliveryDate,
+      packerAssigned: packerName,
+      coolerIds: handoffCoolers.length ? handoffCoolers : fetched?.coolerIds,
+    };
+  }, [fetchedDetail, packersWithWorkload, packingByCode, selectedOrder]);
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
 
@@ -408,6 +482,12 @@ export default function PackerManagerPage() {
     if (!canAssign || savingCode) return;
     const order = orders.find((entry) => entry.code === orderCode);
     setAssignMenu(null);
+    if (order?.packerId === packer.id) return;
+    const live = liveCatalog.find((entry) => entry.code === orderCode);
+    if (live?.packingStartedAt) {
+      showError("The packer can't be changed after packing has started.");
+      return;
+    }
 
     if (apiLive) {
       if (!order?.recordId || !isUuid(packer.id)) {
@@ -462,7 +542,7 @@ export default function PackerManagerPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
+    <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Packer Manager"
         toolbar={
@@ -566,6 +646,8 @@ export default function PackerManagerPage() {
             );
             const packerLabel =
               assigned?.name ?? order.packerName ?? "Assign Packer";
+            const assignLocked = Boolean(order.packingStartedAt);
+            const canOpenAssign = canAssign && !assignLocked;
 
             return (
               <div
@@ -575,7 +657,11 @@ export default function PackerManagerPage() {
                   "min-h-[88px] border-b border-[#00000014] py-4 last:border-b-0",
                 )}
               >
-                <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setSelectedOrderId(order.id)}
+                  className="min-w-0 text-left"
+                >
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
                     <ChevronRight size={14} className="text-[#A9A9A9]" />
@@ -586,23 +672,27 @@ export default function PackerManagerPage() {
                       {itemLabel(order.itemCount)}
                     </span>
                   </div>
-                </div>
+                </button>
 
                 <div>
                   <button
                     type="button"
-                    disabled={!canAssign || savingCode === order.code}
-                    aria-haspopup={canAssign ? "listbox" : undefined}
+                    disabled={!canOpenAssign || savingCode === order.code}
+                    aria-haspopup={canOpenAssign ? "listbox" : undefined}
                     aria-expanded={
-                      canAssign ? assignMenu?.orderId === order.id : undefined
+                      canOpenAssign
+                        ? assignMenu?.orderId === order.id
+                        : undefined
                     }
                     title={
-                      canAssign
-                        ? "Assign packer"
-                        : "Only a Packer Manager can assign a packer"
+                      !canAssign
+                        ? "Only a Packer Manager can assign a packer"
+                        : assignLocked
+                          ? "Packing has started. The packer can't be changed."
+                          : "Assign packer"
                     }
                     onClick={(event) => {
-                      if (!canAssign) return;
+                      if (!canOpenAssign) return;
                       const anchor = event.currentTarget;
                       setAssignMenu((current) =>
                         current?.orderId === order.id
@@ -620,7 +710,7 @@ export default function PackerManagerPage() {
                     <span className="truncate">{packerLabel}</span>
                     <ChevronDown size={13} className="shrink-0 text-[#8A8A8A]" />
                   </button>
-                  {canAssign && assignMenu?.orderId === order.id ? (
+                  {canOpenAssign && assignMenu?.orderId === order.id ? (
                     <AssignPackerMenu
                       anchor={assignMenu.anchor}
                       packers={packersWithWorkload}
@@ -657,6 +747,14 @@ export default function PackerManagerPage() {
         </>
         )}
       </div>
+
+      {selectedDetail ? (
+        <OrderDetailPanel
+          order={selectedDetail}
+          itemsLoading={detailLoading && selectedDetail.items.length === 0}
+          onClose={() => setSelectedOrderId(null)}
+        />
+      ) : null}
     </div>
   );
 }

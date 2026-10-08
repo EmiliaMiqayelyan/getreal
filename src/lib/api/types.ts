@@ -180,6 +180,15 @@ export type ApiOrderItem = {
   subcategoryName?: string | null;
   sourceName?: string | null;
   expirationDate?: string | null;
+  /** Packing: cooler UUID this line was packed into. */
+  coolerId?: string | null;
+  /** Packing: inventory lot this line was picked from. */
+  inventoryRecordId?: string | null;
+  packed?: boolean;
+  /** Receiving: saved by POST /receiving/:orderId/validate. */
+  status?: "accepted" | "rejected" | null;
+  reasons?: string[] | null;
+  evidenceUrls?: string[] | null;
 };
 
 export type ApiOrderCooler = {
@@ -197,6 +206,15 @@ export type ApiOrder = {
   customerId?: string;
   /** Customer record included on the order. The API names this relation `users`. */
   users?: ApiUser | ApiUser[] | null;
+  /** The order's customer, picked from `users` by the server. */
+  customer?: {
+    id?: string;
+    customerCode?: string | null;
+    name?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    email?: string | null;
+  } | null;
   communicationChannel?: string;
   deliveryDate?: string;
   items?: ApiOrderItem[];
@@ -275,6 +293,9 @@ export type ApiUser = {
   lastOrderDate?: string | null;
   /** Next or latest delivery timestamp. The table shows its weekday. */
   deliveryDate?: string | null;
+  /** Effective permissions: the user's own list when customized, else the role's. */
+  permissions?: ApiRole["permissions"];
+  hasCustomPermissions?: boolean;
 };
 
 export type ApiRoleUser = {
@@ -286,6 +307,9 @@ export type ApiRoleUser = {
   phone?: string | null;
   phoneNumber?: string | null;
   isBlocked?: boolean;
+  /** Effective permissions: the user's own list when customized, else the role's. */
+  permissions?: ApiRole["permissions"];
+  hasCustomPermissions?: boolean;
 };
 
 /** One roles-list row: a role, optionally with assigned users. */

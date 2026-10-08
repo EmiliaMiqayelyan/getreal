@@ -150,7 +150,6 @@ export default function RolesPage() {
   const {
     users,
     setUsers,
-    applyPermissions,
     removeUser,
     managedRoles,
     setManagedRoles,
@@ -244,92 +243,80 @@ export default function RolesPage() {
     };
   }, [notifyApiError, refreshDirectory]);
 
-  const persistRolePermissions = useCallback(
-    async (user: RoleUser, next: RolePermissions) => {
-      const roles = managedRolesRef.current;
-      const role = findManagedRoleForUser(user, roles);
-
-      if (!isApiConfigured()) {
-        applyPermissions(user.id, next);
-        if (role) {
-          setManagedRoles((current) =>
-            current.map((entry) =>
-              entry.id === role.id ? { ...entry, permissions: next } : entry,
-            ),
-          );
-        }
+  /** Saves `next` for this user only. `null` drops the override so the user follows the role. */
+  const persistUserPermissions = useCallback(
+    async (user: RoleUser, next: RolePermissions | null) => {
+      const role = findManagedRoleForUser(user, managedRolesRef.current);
+      const clearDraft = () =>
         setDraftPermissions((current) => {
           const draft = { ...current };
           delete draft[user.id];
           return draft;
         });
+      const applyToUser = (apiPermissions?: string[]) =>
+        setUsers((current) =>
+          current.map((entry) => {
+            if (entry.id !== user.id) return entry;
+            if (next) {
+              return {
+                ...entry,
+                permissions: next,
+                hasCustomPermissions: true,
+                apiPermissions,
+              };
+            }
+            return {
+              ...entry,
+              permissions: role?.permissions ?? entry.permissions,
+              hasCustomPermissions: false,
+              apiPermissions: undefined,
+            };
+          }),
+        );
+
+      if (!isApiConfigured()) {
+        applyToUser(next ? apiPermissionsFor(next) : undefined);
+        clearDraft();
         return;
       }
 
-      const pathId = role ? serverRoleId(role) : undefined;
-      if (!role || !pathId) {
+      const pathId = serverUserId(user);
+      if (!pathId) {
         notifyApiError(
-          new Error("This role is not linked to a server record."),
+          new Error("This user is not linked to a server record."),
           "Failed to update permissions.",
         );
-        setDraftPermissions((current) => {
-          const draft = { ...current };
-          delete draft[user.id];
-          return draft;
-        });
+        clearDraft();
         return;
       }
 
       setPending(`apply:${user.id}`);
       try {
-        const apiPermissions = apiPermissionsFor(next, role.apiPermissions);
-        const updated = await rolesApi.update(pathId, {
-          name: roleWriteName(role),
-          permissions: apiPermissions,
-        });
-        const saved = mapApiRoleToManagedRole(updated, 0);
-        const fromResponse = Array.isArray(updated.permissions);
+        const apiPermissions = next
+          ? apiPermissionsFor(next, user.apiPermissions ?? role?.apiPermissions)
+          : null;
+        const updated = await usersApi.updatePermissions(
+          pathId,
+          apiPermissions,
+        );
         // Keep the checkbox state the user chose. The API stores coarse strings
         // (e.g. manage:distributors) and mapping the response would re-check
         // every sibling in the section.
-        const permissions = next;
-        setManagedRoles((current) =>
-          current.map((entry) =>
-            serverRoleId(entry) === pathId
-              ? {
-                  ...entry,
-                  permissions,
-                  apiPermissions: fromResponse
-                    ? saved.apiPermissions
-                    : apiPermissions,
-                }
-              : entry,
-          ),
+        applyToUser(
+          Array.isArray(updated.permissions)
+            ? apiPermissionNames(updated.permissions)
+            : (apiPermissions ?? undefined),
         );
-        setUsers((current) =>
-          current.map((entry) =>
-            findManagedRoleForUser(entry, [role])
-              ? { ...entry, permissions }
-              : entry,
-          ),
-        );
-        setDraftPermissions((current) => {
-          const draft = { ...current };
-          delete draft[user.id];
-          return draft;
-        });
+        if (!next)
+          showSuccess(`${user.name} now follows the ${user.type} role.`);
       } catch (error) {
         notifyApiError(error, "Failed to update permissions.");
       } finally {
+        clearDraft();
         setPending(null);
       }
     },
-    [
-      applyPermissions,
-      notifyApiError,
-      setManagedRoles,
-      setUsers,
-    ],
+    [notifyApiError, setUsers, showSuccess],
   );
 
   function queuePermissionSave(user: RoleUser, next: RolePermissions) {
@@ -340,9 +327,19 @@ export default function RolesPage() {
       user.id,
       setTimeout(() => {
         timers.delete(user.id);
-        void persistRolePermissions(user, next);
+        void persistUserPermissions(user, next);
       }, 350),
     );
+  }
+
+  function resetToRolePermissions(user: RoleUser) {
+    const timers = permissionSaveTimers.current;
+    const existing = timers.get(user.id);
+    if (existing) {
+      clearTimeout(existing);
+      timers.delete(user.id);
+    }
+    void persistUserPermissions(user, null);
   }
 
   function patchPermission(
@@ -467,20 +464,11 @@ export default function RolesPage() {
     });
     if (
       isApiConfigured() &&
-      !draft.id &&
+      !errors.password &&
       draft.password &&
       draft.password.length < 8
     ) {
       errors.password = "Password must be at least 8 characters.";
-    }
-    if (isApiConfigured() && draft.id && draft.password) {
-      errors.password = "Password changes are not available from the API yet.";
-    }
-    if (isApiConfigured() && draft.id) {
-      const current = users.find((user) => user.id === draft.id);
-      if (current && current.email.trim() !== draft.email.trim()) {
-        errors.email = "Email changes are not available from the API yet.";
-      }
     }
     setFormErrors(errors);
     if (Object.keys(errors).length) return;
@@ -545,9 +533,13 @@ export default function RolesPage() {
         if (!pathId) {
           throw new Error("This user is not linked to a server record.");
         }
+        const previousEmail =
+          users.find((user) => user.id === draft.id)?.email.trim() ?? "";
         await usersApi.update(pathId, {
           name,
           ...names,
+          ...(email && email !== previousEmail ? { email } : {}),
+          ...(draft.password ? { password: draft.password } : {}),
           role: assignment.role,
           ...(assignment.roleId ? { roleId: assignment.roleId } : {}),
           ...(phone ? { phoneNumber: phone } : {}),
@@ -607,7 +599,7 @@ export default function RolesPage() {
 
     setPending("delete");
     try {
-      await usersApi.block(pathId, "Removed from Roles");
+      await usersApi.setBlocked(pathId, true);
       if (expandedId === draft.id) setExpandedId(null);
       setModalOpen(false);
       setCopied(false);
@@ -708,7 +700,9 @@ export default function RolesPage() {
                 ...user,
                 type: saved.name,
                 roleId: saved.recordId ?? user.roleId,
-                permissions: saved.permissions,
+                permissions: user.hasCustomPermissions
+                  ? user.permissions
+                  : saved.permissions,
               }
             : user,
         ),
@@ -839,6 +833,9 @@ export default function RolesPage() {
                   const open = expandedId === user.id;
                   const permissions = permissionsFor(user);
                   const isLast = index === userWindow.visible.length - 1;
+                  const placeholder = isUnassignedRoleRow(user);
+                  const saving = pending === `apply:${user.id}`;
+                  const locked = placeholder || saving;
 
                   return (
                     <div key={user.id} className="contents">
@@ -905,16 +902,30 @@ export default function RolesPage() {
                             SUB_ROW_PAD,
                           )}
                         >
-                          <p className="mb-4 text-[12px] text-[#6B6B6B]">
-                            These permissions belong to the {user.type} role.
-                            Changes save to the role automatically and apply to
-                            every user with this role.
-                            {pending === `apply:${user.id}` ? (
-                              <span className="ml-2 text-[#111118]">
-                                Saving…
-                              </span>
+                          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B6B6B]">
+                            <p>
+                              {placeholder
+                                ? `No user has the ${user.type} role yet. Edit the role's permissions in Role Management.`
+                                : user.hasCustomPermissions
+                                  ? `${user.name} has custom permissions. Changes save automatically and apply only to this user; the ${user.type} role is not changed.`
+                                  : `${user.name} uses the ${user.type} role's permissions. Changes save automatically and apply only to this user; the role is not changed.`}
+                              {saving ? (
+                                <span className="ml-2 text-[#111118]">
+                                  Saving…
+                                </span>
+                              ) : null}
+                            </p>
+                            {user.hasCustomPermissions && !placeholder ? (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => resetToRolePermissions(user)}
+                                className="font-medium text-[#2165D4] disabled:opacity-60"
+                              >
+                                Reset to role permissions
+                              </button>
                             ) : null}
-                          </p>
+                          </div>
                           <div className="overflow-x-auto">
                             <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                               {ROLE_PERMISSION_GROUPS.map((group) => (
@@ -926,7 +937,7 @@ export default function RolesPage() {
                                     <PermissionCheckbox
                                       checked={permissions[group.accessKey]}
                                       label={group.accessLabel}
-                                      disabled={pending === `apply:${user.id}`}
+                                      disabled={locked}
                                       onChange={() =>
                                         patchPermission(
                                           user,
@@ -941,9 +952,7 @@ export default function RolesPage() {
                                           key={action.key}
                                           checked={permissions[action.key]}
                                           label={action.label}
-                                          disabled={
-                                            pending === `apply:${user.id}`
-                                          }
+                                          disabled={locked}
                                           onChange={() =>
                                             patchPermission(
                                               user,

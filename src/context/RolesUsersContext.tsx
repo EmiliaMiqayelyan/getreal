@@ -89,9 +89,16 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
 
   const sessionPermissions = useMemo(() => {
     const role = getRole();
+    // Prefer a user that follows the role, so one user's override does not
+    // change the session for everyone with that role.
+    const byRole = (matches: (type: string) => boolean) =>
+      users.find(
+        (user) =>
+          !user.hasCustomPermissions && matches(user.type.toLowerCase()),
+      ) ?? users.find((user) => matches(user.type.toLowerCase()));
     if (role === "warehouse") {
       const warehouse =
-        users.find((user) => user.type.toLowerCase().includes("warehouse")) ??
+        byRole((type) => type.includes("warehouse")) ??
         users.find((user) => user.id === "U003");
       const permissions = warehouse?.permissions ?? DEFAULT_ROLE_PERMISSIONS;
       return hasPageAccess(permissions)
@@ -99,10 +106,8 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
         : DEFAULT_ROLE_PERMISSIONS;
     }
     const superadmin =
-      users.find((user) => {
-        const type = user.type.toLowerCase();
-        return type.includes("super") || type === "admin";
-      }) ?? users.find((user) => user.id === "U001");
+      byRole((type) => type.includes("super") || type === "admin") ??
+      users.find((user) => user.id === "U001");
     const permissions = superadmin?.permissions ?? ADMIN_ROLE_PERMISSIONS;
     return hasPageAccess(permissions) ? permissions : ADMIN_ROLE_PERMISSIONS;
   }, [users]);

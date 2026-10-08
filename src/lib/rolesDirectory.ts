@@ -9,7 +9,8 @@ import {
 } from "@/lib/api";
 import type { ManagedRole, RoleUser } from "@/types/admin";
 import { isUuid } from "@/utils/entityIds";
-import { loadManagedRoles } from "@/utils/rolesUsers";
+import { apiPermissionsFor } from "@/utils/rolePermissions";
+import { loadManagedRoles, loadRoleUsers } from "@/utils/rolesUsers";
 
 const ROLE_PAGE_LIMIT = 100;
 const MAX_ROLE_PAGES = 5;
@@ -111,8 +112,39 @@ function withRolePermissions(user: RoleUser, roles: ManagedRole[]): RoleUser {
     type: match.name,
     roleId: match.recordId ?? user.roleId,
     roleCode: user.roleCode || match.roleCode,
-    permissions: match.permissions,
+    permissions: user.hasCustomPermissions
+      ? user.permissions
+      : match.permissions,
   };
+}
+
+function sameApiPermissions(a: string[], b: string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === right.size && [...left].every((name) => right.has(name));
+}
+
+/**
+ * Reuse stored checkbox state for customized users while it still encodes the
+ * same backend strings; otherwise trust the server.
+ */
+function mergeCustomUsersWithStored(users: RoleUser[]): RoleUser[] {
+  const stored = loadRoleUsers();
+  if (!stored.length) return users;
+
+  return users.map((user) => {
+    if (!user.hasCustomPermissions || !user.apiPermissions) return user;
+    const cached = stored.find(
+      (entry) =>
+        entry.hasCustomPermissions &&
+        ((user.recordId && entry.recordId === user.recordId) ||
+          entry.id === user.id),
+    );
+    if (!cached) return user;
+    const encoded = apiPermissionsFor(cached.permissions, user.apiPermissions);
+    if (!sameApiPermissions(encoded, user.apiPermissions)) return user;
+    return { ...user, permissions: cached.permissions };
+  });
 }
 
 export function isUnassignedRoleRow(user: RoleUser): boolean {
@@ -216,9 +248,9 @@ export async function loadRolesDirectory(): Promise<{
       .map((user, index) => mapApiUserToRoleUser(user, index));
   }
 
-  const merged = mergeRoleUsers([...assignmentUsers, ...listed]).map((user) =>
-    withRolePermissions(user, roles),
-  );
+  const merged = mergeCustomUsersWithStored(
+    mergeRoleUsers([...assignmentUsers, ...listed]),
+  ).map((user) => withRolePermissions(user, roles));
 
   return {
     roles,

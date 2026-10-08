@@ -33,8 +33,8 @@ export type ApiDeliveryLine = {
    * GET /receiving/deliveries returns these on each line.
    */
   status?: string | null;
-  reason?: string | null;
-  evidenceUrl?: string | null;
+  reasons?: string[] | null;
+  evidenceUrls?: string[] | null;
   expirationDate?: string | null;
 };
 
@@ -64,13 +64,21 @@ export type ApiDeliveryGroup = {
   orders?: ApiDelivery[];
 };
 
+export type ReceivingRejectReason =
+  | "Wrong Item"
+  | "Damaged"
+  | "Not Fresh"
+  | "Missing Exp Date";
+
 export type ValidateDeliveryItem = {
   productId: string;
   status: "accepted" | "rejected";
   /** ISO-8601. Saved on the line and copied onto the warehouse inventory row. */
   expirationDate?: string;
-  reason?: string;
-  evidenceUrl?: string;
+  /** Required (at least one) when rejected. */
+  reasons?: ReceivingRejectReason[];
+  /** Required (1–3 http(s) URLs) when rejected. */
+  evidenceUrls?: string[];
 };
 
 function isDeliveryGroup(value: unknown): value is ApiDeliveryGroup {
@@ -115,9 +123,8 @@ export const receivingApi = {
 
   /**
    * POST /receiving/:orderId/validate
-   * Saves each line (status, reason, evidenceUrl, expirationDate) and creates
-   * inventory at the default Warehouse location for accepted lines.
-   * `evidenceUrl` must be an http(s) URL when sent.
+   * Every order line must be included. Saves status, reasons, evidenceUrls,
+   * and expirationDate, marks the order delivered, and stocks accepted lines.
    */
   validate(orderId: string, items: ValidateDeliveryItem[]) {
     return apiRequest<unknown>(`/receiving/${orderId}/validate`, {
@@ -127,8 +134,10 @@ export const receivingApi = {
           productId: item.productId,
           status: item.status,
           ...(item.expirationDate ? { expirationDate: item.expirationDate } : {}),
-          ...(item.reason ? { reason: item.reason } : {}),
-          ...(item.evidenceUrl ? { evidenceUrl: item.evidenceUrl } : {}),
+          ...(item.reasons?.length ? { reasons: item.reasons } : {}),
+          ...(item.evidenceUrls?.length
+            ? { evidenceUrls: item.evidenceUrls.slice(0, 3) }
+            : {}),
         })),
       }),
     });

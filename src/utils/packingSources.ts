@@ -14,6 +14,8 @@ type SourceGroup = {
 
 export type PackingCatalog = {
   optionsFor(line: PackingLineLookup): SourceGroup;
+  /** Any lot by id, including ones already picked for this order. */
+  optionForRecord?(inventoryRecordId: string): PackingSourceOption | undefined;
 };
 
 function formatExpDate(value?: string | null) {
@@ -28,11 +30,15 @@ function formatExpDate(value?: string | null) {
 }
 
 function optionFromRecord(row: ApiInventory): PackingSourceOption | null {
-  const inventoryRecordId = row.id?.trim();
-  if (!inventoryRecordId) return null;
   if ((row.quantity ?? 0) <= 0) return null;
   const status = row.status?.trim().toLowerCase();
   if (status && status !== "in_stock" && status !== "reserved") return null;
+  return describeRecord(row);
+}
+
+function describeRecord(row: ApiInventory): PackingSourceOption | null {
+  const inventoryRecordId = row.id?.trim();
+  if (!inventoryRecordId) return null;
   const location = row.location?.trim() || "";
   return {
     inventoryRecordId,
@@ -58,6 +64,11 @@ export function buildPackingCatalog(
   const byItemId = new Map<string, SourceGroup>();
   const byName = new Map<string, SourceGroup>();
   const byCode = new Map<string, SourceGroup>();
+  const byRecordId = new Map<string, ApiInventory>();
+  for (const row of rows) {
+    const id = row.id?.trim();
+    if (id) byRecordId.set(id, row);
+  }
 
   function add(map: Map<string, SourceGroup>, key: string, group: SourceGroup, option: PackingSourceOption) {
     const existing = map.get(key);
@@ -94,6 +105,10 @@ export function buildPackingCatalog(
       const byLineName = line.name?.trim().toLowerCase();
       const named = byLineName ? byName.get(byLineName) : undefined;
       return byId ?? byItemCode ?? named ?? { category: "Items", options: [] };
+    },
+    optionForRecord(inventoryRecordId) {
+      const row = byRecordId.get(inventoryRecordId.trim());
+      return row ? (describeRecord(row) ?? undefined) : undefined;
     },
   };
 }

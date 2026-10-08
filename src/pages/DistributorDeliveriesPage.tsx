@@ -629,10 +629,18 @@ function lineReceivingStatus(
 }
 
 function lineRejectReason(line: ApiDeliveryLine): RejectReason | undefined {
-  const reason = readLineText(line.reason);
+  const reason =
+    (line.reasons ?? []).find((entry) =>
+      (REJECT_REASONS as string[]).includes(entry),
+    ) ?? readLineText(lineRaw(line).reason);
   return (REJECT_REASONS as string[]).includes(reason)
     ? (reason as RejectReason)
     : undefined;
+}
+
+function lineEvidenceUrl(line: ApiDeliveryLine): string | undefined {
+  const saved = (line.evidenceUrls ?? []).find((url) => readLineText(url));
+  return saved?.trim() || readLineText(lineRaw(line).evidenceUrl) || undefined;
 }
 
 function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
@@ -675,7 +683,7 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
       expiration: lineExpiration(line),
       receivingStatus: lineReceivingStatus(line),
       rejectReason: lineRejectReason(line),
-      evidenceUrl: readLineText(line.evidenceUrl) || undefined,
+      evidenceUrl: lineEvidenceUrl(line),
     };
   });
   const totalPrice =
@@ -1387,7 +1395,7 @@ const ROW_GRID =
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
   const { pushHandoff, markDeliveryReceived } = useReceivingHandoff();
-  const { notifyApiError } = useApiFeedback();
+  const { notifyApiError, showError } = useApiFeedback();
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
   const [activeDateId, setActiveDateId] = useState("");
@@ -1656,8 +1664,18 @@ export default function DistributorDeliveriesPage() {
             return;
           }
           let evidenceUrl: string | undefined;
-          if (status === "rejected" && result?.photoFile) {
-            evidenceUrl = await uploadImage(result.photoFile);
+          if (status === "rejected") {
+            if (result?.photoFile) {
+              evidenceUrl = await uploadImage(result.photoFile);
+            } else if (/^https?:\/\//i.test(result?.photoUrl ?? "")) {
+              evidenceUrl = result?.photoUrl;
+            }
+            if (!result?.reason || !evidenceUrl) {
+              showError(
+                `${item.name} needs a rejection reason and a photo before it can be validated.`,
+              );
+              return;
+            }
           }
           const expirationDate =
             status === "accepted"
@@ -1675,9 +1693,9 @@ export default function DistributorDeliveriesPage() {
             status,
             ...(expirationDate ? { expirationDate } : {}),
             ...(status === "rejected" && result?.reason
-              ? { reason: result.reason }
+              ? { reasons: [result.reason] }
               : {}),
-            ...(evidenceUrl ? { evidenceUrl } : {}),
+            ...(evidenceUrl ? { evidenceUrls: [evidenceUrl] } : {}),
           });
         }
         await receivingApi.validate(validateId, payload);

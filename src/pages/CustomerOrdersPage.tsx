@@ -6,11 +6,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Truck,
-  X,
 } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
+import { OrderDetailPanel } from "@/components/orders/OrderDetailPanel";
 import {
   DateNavButton,
   CalendarIcon,
@@ -38,17 +38,14 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
-  centsToDollars,
   collectPaginated,
   isApiConfigured,
   orderModelId,
   orderRecordId,
   ordersApi,
   type ApiOrder,
-  type ApiOrderItem,
 } from "@/lib/api";
 import type { OrderStatus } from "@/lib/api/orders";
-import { publicCode } from "@/utils/entityIds";
 import type { ExportRequest } from "@/types/export";
 import type { PackingHandoffUpdate } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -63,6 +60,17 @@ import {
   WEDNESDAY_WEEKDAYS,
   weekWindowChips,
 } from "@/utils/deliveryCalendar";
+import {
+  currency,
+  display,
+  formatOrderStamp,
+  orderDetailFromApi,
+  orderLineItems,
+  orderTotalDollars,
+  readOrderCustomer,
+  readString,
+  type OrderDetailItem,
+} from "@/utils/orderDetail";
 
 const ORANGE = "#F57850";
 
@@ -76,13 +84,6 @@ type TimelineStep = {
   at?: string;
   done: boolean;
   final?: boolean;
-};
-
-type OrderItem = {
-  name: string;
-  qty: number;
-  unit: string;
-  unitPrice: number;
 };
 
 type CustomerOrderRow = {
@@ -104,7 +105,7 @@ type CustomerOrderRow = {
   paymentStatus: string;
   status?: string;
   total: number;
-  items: OrderItem[];
+  items: OrderDetailItem[];
   packerAssigned?: string;
   coolerIds?: string[];
   steps: TimelineStep[];
@@ -240,88 +241,12 @@ const ACTIVE_ORDER_COLUMNS =
 const COMPLETED_ORDER_COLUMNS =
   "grid grid-cols-[112px_minmax(0,1fr)_minmax(0,1.6fr)_90px_minmax(0,1fr)_minmax(0,1fr)_70px_90px] items-center gap-x-4 px-4";
 
-function currency(value: number) {
-  return `$${value.toFixed(2)}`;
-}
-
-function orderLineItems(order: ApiOrder): OrderItem[] {
-  return (order.items ?? []).map((line) => {
-    const record = line as ApiOrderItem & Record<string, unknown>;
-    const priceCents = readNumber(record.price);
-    return {
-      name:
-        readString(record.name) ||
-        readString(record.itemName) ||
-        publicCode(line.productId) ||
-        "N/A",
-      qty: readNumber(record.quantity) ?? 0,
-      unit: readString(record.unit) || "Each",
-      unitPrice:
-        priceCents != null
-          ? centsToDollars(priceCents)
-          : (readNumber(record.unitPrice) ?? 0),
-    };
-  });
-}
-
-function orderTotalDollars(order: ApiOrder, lines: OrderItem[]) {
-  const raw = order as ApiOrder & Record<string, unknown>;
-  const totalPriceCents = readNumber(raw.totalPrice);
-  if (totalPriceCents != null) return centsToDollars(totalPriceCents);
-  const dollarTotal =
-    readNumber(raw.total) ??
-    readNumber(raw.totalAmount) ??
-    readNumber(raw.amount);
-  if (dollarTotal != null) return dollarTotal;
-  return lines.reduce((sum, line) => sum + line.qty * line.unitPrice, 0);
-}
-
-function orderCustomerRecord(order: ApiOrder) {
-  const raw = order as ApiOrder & { customer?: unknown; user?: unknown };
-  const users = order.users;
-  if (Array.isArray(users)) {
-    const match = users.find((entry) => entry?.id && entry.id === order.customerId);
-    return asRecord(match ?? users[0]);
-  }
-  return asRecord(users) ?? asRecord(raw.customer) ?? asRecord(raw.user);
-}
-
-function readOrderCustomer(order: ApiOrder) {
-  const raw = order as ApiOrder & Record<string, unknown>;
-  const customer = orderCustomerRecord(order);
-  const name =
-    readString(raw.customerName) ||
-    [readString(customer?.firstName), readString(customer?.lastName)]
-      .filter(Boolean)
-      .join(" ") ||
-    readString(customer?.name) ||
-    readString(customer?.email) ||
-    "N/A";
-  return {
-    name,
-    address:
-      readString(customer?.address) ||
-      readString(raw.address) ||
-      readString(raw.deliveryAddress),
-    apt: readString(customer?.aptUnit) || readString(customer?.apt),
-    city: readString(customer?.city),
-    state: readString(customer?.state),
-    zip:
-      readString(customer?.zipCode) ||
-      readString(customer?.zip) ||
-      readString(raw.zipCode) ||
-      readString(raw.zip),
-  };
-}
-
 function mapApiOrderToActive(
   order: ApiOrder,
   fallbackId: string,
 ): CustomerOrderRow {
   const doneCount = ORDER_STATUS_DONE_COUNT[order.status ?? "requested"] ?? 1;
-  const lines = orderLineItems(order);
-  const customer = readOrderCustomer(order);
-  const orderCode = orderModelId(order, fallbackId);
+  const detail = orderDetailFromApi(order, fallbackId);
   const steps = STEPS_META.map((meta, index) => {
     const done = index < doneCount;
     return {
@@ -332,29 +257,14 @@ function mapApiOrderToActive(
     };
   });
   return {
-    id: orderCode,
+    ...detail,
     recordId: orderRecordId(order),
-    customerName: customer.name,
     itemCount: order.items?.length ?? 0,
-    address: customer.address,
-    apt: customer.apt,
-    city: customer.city,
-    state: customer.state,
-    zip: customer.zip,
-    orderDate: order.createdAt ? formatOrderStamp(order.createdAt) : "",
     deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
-    deliveryDate: order.deliveryDate
-      ? formatDeliveryBadge(order.deliveryDate)
-      : "",
-    deliveryLabel: order.deliveryDate
-      ? formatDeliveryBadge(order.deliveryDate)
-      : "",
+    deliveryLabel: detail.deliveryDate,
     paymentStatus: readPaymentLabel(order),
     status: order.status,
-    total: orderTotalDollars(order, lines),
-    items: lines,
     packerAssigned: order.packerId ?? undefined,
-    coolerIds: order.coolerId ? [order.coolerId] : undefined,
     steps,
   };
 }
@@ -396,10 +306,6 @@ async function loadCompletedStandardOrders() {
     ),
   );
   return pages.flat();
-}
-
-function readString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
 }
 
 function readPaymentLabel(order: ApiOrder) {
@@ -507,53 +413,6 @@ function applySavedOrder(
   };
 }
 
-function readNumber(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim() !== "") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
-}
-
-function asRecord(value: unknown) {
-  if (value && typeof value === "object" && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return null;
-}
-
-function parseFlexibleDate(value: string) {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return new Date(`${value}T12:00:00`);
-  }
-  return new Date(value);
-}
-
-function formatOrderStamp(value: string) {
-  const date = parseFlexibleDate(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatDeliveryBadge(value: string) {
-  const date = parseFlexibleDate(value);
-  if (Number.isNaN(date.getTime())) return value;
-  const datePart = date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  const weekday = date.toLocaleDateString("en-US", { weekday: "long" });
-  return `${datePart}, ${weekday}`;
-}
-
 function weekAndDay(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -605,11 +464,6 @@ function mapApiOrderToCompleted(
     week: grouped.week,
     finished: isCompletedOrderStatus(order.status),
   };
-}
-
-function display(value?: string) {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : "N/A";
 }
 
 function completedDataset(orders: CompletedOrder[], fromApi: boolean) {
@@ -1391,178 +1245,6 @@ function DayHeaderIcon() {
       className="size-[15px] shrink-0 object-contain"
       onError={() => setUseFallback(true)}
     />
-  );
-}
-
-const DETAIL_LABEL =
-  "text-[11px] font-medium tracking-[0.04em] text-[#9AA0A6] uppercase";
-const DETAIL_VALUE = "mt-1 text-[13px] text-[#111118]";
-const DETAIL_COLUMNS =
-  "grid grid-cols-[minmax(0,1.7fr)_44px_minmax(108px,1fr)_72px] items-center gap-3 px-4";
-
-function OrderDetailPanel({
-  order,
-  itemsLoading = false,
-  onClose,
-}: {
-  order: CustomerOrderRow;
-  itemsLoading?: boolean;
-  onClose: () => void;
-}) {
-  const panelRef = useRef<HTMLElement>(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    function onPointerDown(event: MouseEvent) {
-      const target = event.target;
-      if (target instanceof Node && panelRef.current?.contains(target)) return;
-      onCloseRef.current();
-    }
-
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, []);
-
-  return (
-    <aside
-      ref={panelRef}
-      className="absolute top-[52px] right-0 bottom-0 z-40 flex w-full max-w-[560px] flex-col border-l border-[#ECECEC] bg-white shadow-[-8px_0_24px_rgba(0,0,0,0.06)]"
-    >
-      <div className="flex items-start justify-between gap-4 border-b border-[#ECECEC] px-6 pt-4 pb-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex h-5 w-max shrink-0 items-center rounded-[6px] bg-[#F3F4F6] px-1.5 font-mono text-[11px] font-medium leading-none whitespace-nowrap text-[#99A1AF]">
-              {order.id}
-            </span>
-            <span className="text-[12px]">
-              <span className="text-[#6D6F7B]">Ordered:</span>{" "}
-              <span className="text-[#111118]">{display(order.orderDate)}</span>
-            </span>
-          </div>
-          <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-tight text-[#111118]">
-            {display(order.customerName)}
-          </h2>
-        </div>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="shrink-0 rounded-md p-1 text-[#A9A9A9] hover:bg-[#F5F5F3] hover:text-[#6B6B6B]"
-        >
-          <X size={18} />
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-auto px-6 pt-5 pb-6">
-        <h3 className="mb-3 text-[15px] font-semibold text-[#111118]">
-          Requested Items
-        </h3>
-        <div className="overflow-hidden rounded-[12px] border border-[#E6E6E8] bg-white">
-          <div
-            className={cn(
-              DETAIL_COLUMNS,
-              "border-b border-[#E6E6E8] bg-[#F7F7F8] py-2.5 text-[11px] font-medium tracking-[0.04em] text-[#9AA0A6] uppercase",
-            )}
-          >
-            <div>Item</div>
-            <div>Qty</div>
-            <div>Unit Price</div>
-            <div className="text-right">Total</div>
-          </div>
-          {itemsLoading ? (
-            <AppLoader
-              variant="section"
-              label="Loading items"
-              className="min-h-[96px] rounded-none border-0 bg-white py-6"
-            />
-          ) : (
-          order.items.map((item, itemIndex) => {
-            const label = item.name;
-            return (
-              <div
-                key={`${order.id}-${itemIndex}`}
-                className={cn(
-                  DETAIL_COLUMNS,
-                  "border-b border-[#E6E6E8] bg-white py-3 text-[13px] text-[#111118]",
-                )}
-              >
-                <div className="min-w-0 break-words">{label}</div>
-                <div>{item.qty}</div>
-                <div className="whitespace-nowrap">
-                  <span>{currency(item.unitPrice)}</span>
-                  {item.unit ? (
-                    <span className="text-[#9AA0A6]"> / {item.unit}</span>
-                  ) : null}
-                </div>
-                <div className="text-right font-bold">
-                  {currency(item.qty * item.unitPrice)}
-                </div>
-              </div>
-            );
-          })
-          )}
-          <div className="flex items-center justify-between bg-white px-4 py-3 text-[#111118]">
-            <span className="text-[13px] font-medium">Order Total</span>
-            <span className="text-[15px] font-bold tracking-tight">
-              {currency(order.total)}
-            </span>
-          </div>
-        </div>
-
-        <h3 className="mt-6 mb-3 text-[15px] font-semibold text-[#111118]">
-          Packing Information
-        </h3>
-        <div className="flex flex-wrap gap-x-10 gap-y-4">
-          <div>
-            <div className={DETAIL_LABEL}>Packer Assigned</div>
-            <div className={DETAIL_VALUE}>{display(order.packerAssigned)}</div>
-          </div>
-          <div>
-            <div className={DETAIL_LABEL}>Cooler ID</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {(order.coolerIds ?? []).map((coolerId) => (
-                <IdPill key={coolerId}>{coolerId}</IdPill>
-              ))}
-              {!order.coolerIds?.length ? (
-                <span className="text-[14px] text-[#111118]">N/A</span>
-              ) : null}
-            </div>
-          </div>
-        </div>
-
-        <h3 className="mt-6 mb-3 text-[15px] font-semibold text-[#111118]">
-          Delivery Information
-        </h3>
-        <div className="mb-4 inline-flex rounded-[8px] bg-[#FFF1EB] px-2.5 py-1 text-[12px] font-medium text-[#F57850]">
-          {display(order.deliveryDate)}
-        </div>
-        <div className="flex flex-col gap-4">
-          <div>
-            <div className={DETAIL_LABEL}>Street Address</div>
-            <div className={DETAIL_VALUE}>{display(order.address)}</div>
-          </div>
-          <div className="grid grid-cols-4 gap-4">
-            <div>
-              <div className={DETAIL_LABEL}>Apt / Unit</div>
-              <div className={DETAIL_VALUE}>{display(order.apt)}</div>
-            </div>
-            <div>
-              <div className={DETAIL_LABEL}>City</div>
-              <div className={DETAIL_VALUE}>{display(order.city)}</div>
-            </div>
-            <div>
-              <div className={DETAIL_LABEL}>State</div>
-              <div className={DETAIL_VALUE}>{display(order.state)}</div>
-            </div>
-            <div>
-              <div className={DETAIL_LABEL}>Zip</div>
-              <div className={DETAIL_VALUE}>{display(order.zip)}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </aside>
   );
 }
 

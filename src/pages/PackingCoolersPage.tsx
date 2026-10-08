@@ -47,7 +47,11 @@ import type {
   PackingSourceOption,
 } from "@/types/packing";
 import { cn } from "@/utils/cn";
-import { orderModelId, orderRecordId } from "@/lib/api/mappers";
+import {
+  orderCustomerName,
+  orderModelId,
+  orderRecordId,
+} from "@/lib/api/mappers";
 import { isUuid } from "@/utils/entityIds";
 import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
@@ -127,6 +131,50 @@ function coolerUuid(token: string, options: PackingCoolerOption[]) {
   return isUuid(token) ? token : "";
 }
 
+type LineWrite = {
+  productId: string;
+  coolerId: string;
+  inventoryRecordId: string;
+  /** Lot packed before this edit. Unpacked first so it returns to stock. */
+  releaseLot: boolean;
+};
+
+/**
+ * Lines whose cooler, lot, or packed state differ from what the server has.
+ * Returns an error message instead when a line can't be sent.
+ */
+function lineWrites(
+  original: PackingLine[],
+  next: PackingLine[],
+  coolerOptions: PackingCoolerOption[],
+): LineWrite[] | string {
+  const writes: LineWrite[] = [];
+  for (const item of next) {
+    const base = original.find((entry) => entry.id === item.id);
+    const lot = item.selected?.inventoryRecordId ?? "";
+    const unchanged =
+      base?.packed &&
+      base.coolerId === item.coolerId &&
+      base.selected?.inventoryRecordId === lot;
+    if (unchanged) continue;
+
+    const productId = item.catalogItemId.trim();
+    const coolerId = coolerUuid(item.coolerId, coolerOptions);
+    if (!isUuid(productId)) return `"${item.name}" has no server product id.`;
+    if (!coolerId) return `Cooler ${item.coolerId} has no server id.`;
+    if (!isUuid(lot)) return `"${item.name}" has no inventory lot selected.`;
+
+    const previousLot = base?.selected?.inventoryRecordId;
+    writes.push({
+      productId,
+      coolerId,
+      inventoryRecordId: lot,
+      releaseLot: Boolean(base?.packed && previousLot && previousLot !== lot),
+    });
+  }
+  return writes;
+}
+
 function coolerAssigned(coolerId: string) {
   return Boolean(coolerId) && coolerId !== COOLER_PLACEHOLDER;
 }
@@ -140,7 +188,16 @@ function applyHandoff(
   handoff: PackingHandoffUpdate | undefined,
 ): PackOrder {
   if (!handoff) return order;
-  const items = handoff.items?.length ? handoff.items : order.items;
+  // Server orders store each line's cooler, lot, and packed flag.
+  const serverBacked = Boolean(order.recordId);
+  const items =
+    !serverBacked && handoff.items?.length ? handoff.items : order.items;
+  const coolerIds =
+    serverBacked && order.coolerIds.length
+      ? order.coolerIds
+      : handoff.coolerIds?.length
+        ? handoff.coolerIds
+        : order.coolerIds;
   return {
     ...order,
     items,
@@ -148,7 +205,7 @@ function applyHandoff(
     packingStartedAt: handoff.packingStartedAt ?? order.packingStartedAt,
     packedAt: handoff.coolerReadyAt ?? handoff.packedAt ?? order.packedAt,
     loadedAt: handoff.loadedAt ?? order.loadedAt,
-    coolerIds: handoff.coolerIds?.length ? handoff.coolerIds : order.coolerIds,
+    coolerIds,
     packerId: handoff.packerId ?? order.packerId,
     packerName: handoff.packerName || order.packerName,
   };
@@ -268,23 +325,6 @@ function SourcePicker({
   );
 }
 
-function packCustomerName(order: ApiOrder) {
-  const raw = order as ApiOrder & {
-    customerName?: string;
-    customer?: { name?: string; firstName?: string; lastName?: string };
-  };
-  const users = Array.isArray(order.users) ? order.users[0] : order.users;
-  const joined = [users?.firstName, users?.lastName].filter(Boolean).join(" ");
-  return (
-    joined ||
-    users?.name?.trim() ||
-    raw.customerName?.trim() ||
-    [raw.customer?.firstName, raw.customer?.lastName].filter(Boolean).join(" ") ||
-    raw.customer?.name ||
-    "N/A"
-  );
-}
-
 async function loadStandardOrders() {
   const orders: ApiOrder[] = [];
   for (let page = 1; page < 50; page += 1) {
@@ -307,7 +347,7 @@ function mapStandardOrder(
   coolerLabels: ReadonlyMap<string, string>,
 ): PackOrder {
   const code = orderModelId(order, `ORD-${index + 1}`);
-  const customer = packCustomerName(order);
+  const customer = orderCustomerName(order);
   const deliveryDateId = deliveryDateIdFromValue(order.deliveryDate);
   const deliveryDate = parseDeliveryDateId(deliveryDateId);
   const coolerIds = orderCoolerTokens(order).map((token) =>
@@ -327,15 +367,31 @@ function mapStandardOrder(
         : line.subcategoryName?.trim() ||
           line.categoryName?.trim() ||
           categoryForItem(name);
+    const recordId = line.inventoryRecordId?.trim() || "";
+    const selected = recordId
+      ? (match.options.find((option) => option.inventoryRecordId === recordId) ??
+        catalog.optionForRecord?.(recordId))
+      : undefined;
+    const options =
+      selected &&
+      !match.options.some(
+        (option) => option.inventoryRecordId === selected.inventoryRecordId,
+      )
+        ? [selected, ...match.options]
+        : match.options;
+    const savedCooler = line.coolerId?.trim();
     return {
       id: `${code}-${lineIndex + 1}`,
       catalogItemId: line.productId || `cat-${lineIndex + 1}`,
       name,
       category: category === "Items" ? categoryForItem(name) : category,
       qty: line.quantity ?? 0,
-      coolerId: lineCooler,
-      packed: false,
-      options: match.options,
+      coolerId: savedCooler
+        ? displayCooler(savedCooler, coolerLabels)
+        : lineCooler,
+      packed: Boolean(line.packed),
+      selected,
+      options,
     };
   });
   const packerName = [order.packer?.firstName, order.packer?.lastName]
@@ -718,7 +774,7 @@ export default function PackingCoolersPage() {
 
   const { upsertPacking, markLoaded, markPackingStarted, packingByCode } =
     usePackingHandoff();
-  const { notifyApiError } = useApiFeedback();
+  const { notifyApiError, showError } = useApiFeedback();
 
   const apiLive = isApiConfigured();
   const catalogRef = useRef<PackingCatalog>(OFFLINE_CATALOG);
@@ -875,38 +931,31 @@ export default function PackingCoolersPage() {
         markPackingStarted(order.code, formatPackTimestamp());
       }
     }
+    // GET /orders/:id is cached server-side and can predate packing writes.
+    // The list rows already carry each line's cooler, lot, and packed flag.
     setActiveOrderId(order.id);
-    if (apiLive && order.recordId) {
-      void ordersApi
-        .getById(order.recordId)
-        .then((remote) => {
-          const mapped = mapStandardOrder(
-            remote,
-            0,
-            catalogRef.current,
-            coolerLabelsRef.current,
-          );
-          setOrders((current) =>
-            current.map((row) =>
-              row.id === order.id
-                ? {
-                    ...row,
-                    ...mapped,
-                    id: row.id,
-                    recordId: row.recordId ?? mapped.recordId,
-                    code: row.code,
-                    customer:
-                      mapped.customer !== "N/A" ? mapped.customer : row.customer,
-                    items: mapped.items.length ? mapped.items : row.items,
-                  }
-                : row,
-            ),
-          );
-        })
-        .catch((error) => {
-          notifyApiError(error, "Failed to load order details.");
-        });
-    }
+  }
+
+  /** Replace a row with the server's copy, keeping the list's public code. */
+  function applyRemoteOrder(row: PackOrder, remote: ApiOrder): PackOrder {
+    const mapped = mapStandardOrder(
+      remote,
+      0,
+      catalogRef.current,
+      coolerLabelsRef.current,
+    );
+    return {
+      ...row,
+      ...mapped,
+      id: row.id,
+      code: row.code,
+      recordId: row.recordId ?? mapped.recordId,
+      customer: mapped.customer !== "N/A" ? mapped.customer : row.customer,
+      items: mapped.items.length ? mapped.items : row.items,
+      packingStartedAt: mapped.packingStartedAt ?? row.packingStartedAt,
+      packedAt: mapped.packedAt ?? row.packedAt,
+      loadedAt: mapped.loadedAt ?? row.loadedAt,
+    };
   }
 
   function cycleChip(delta: number) {
@@ -925,41 +974,47 @@ export default function PackingCoolersPage() {
           void (async () => {
             let saved = updated;
             if (apiLive && updated.recordId) {
-              const uuids = [
-                ...new Set(
-                  updated.coolerIds
-                    .map((coolerId) => coolerUuid(coolerId, coolerOptions))
-                    .filter(Boolean),
-                ),
-              ];
-              if (updated.coolerIds.length && uuids.length !== new Set(updated.coolerIds).size) {
-                notifyApiError(
-                  new Error("A selected cooler has no server id."),
-                  "A selected cooler has no server id.",
-                );
+              const orderId = updated.recordId;
+              const writes = lineWrites(
+                activeOrder.items,
+                updated.items,
+                coolerOptions,
+              );
+              if (typeof writes === "string") {
+                showError(writes);
                 return;
               }
               try {
-                for (const coolerId of uuids) {
-                  await ordersApi.assignCooler(updated.recordId, coolerId);
+                let remote: ApiOrder | null = null;
+                for (const write of writes) {
+                  if (write.releaseLot) {
+                    await ordersApi.unpackItem(orderId, write.productId);
+                  }
+                  remote = await ordersApi.packItem(orderId, write.productId, {
+                    coolerId: write.coolerId,
+                    inventoryRecordId: write.inventoryRecordId,
+                    packed: true,
+                  });
                 }
-                const ready = await ordersApi.coolerReady(updated.recordId);
-                const packedAt =
-                  displayOperationalTimestamp(ready.coolerReadyAt) ??
-                  updated.packedAt ??
-                  formatPackTimestamp();
-                const remoteCoolers = orderCoolerTokens(ready).map((token) =>
-                  displayCooler(token, coolerLabelsRef.current),
-                );
+                if (!activeOrder.packedAt) {
+                  remote = await ordersApi.coolerReady(orderId);
+                }
+                const fromServer = remote
+                  ? applyRemoteOrder(activeOrder, remote)
+                  : null;
                 saved = {
                   ...updated,
-                  packedAt,
-                  loadedAt:
-                    displayOperationalTimestamp(ready.loadedAt) ?? updated.loadedAt,
-                  coolerIds: remoteCoolers.length ? remoteCoolers : updated.coolerIds,
+                  packedAt:
+                    fromServer?.packedAt ??
+                    updated.packedAt ??
+                    formatPackTimestamp(),
+                  loadedAt: fromServer?.loadedAt ?? updated.loadedAt,
+                  coolerIds: fromServer?.coolerIds.length
+                    ? fromServer.coolerIds
+                    : updated.coolerIds,
                 };
               } catch (error) {
-                notifyApiError(error, "Failed to mark the cooler ready.");
+                notifyApiError(error, "Failed to save packing.");
                 return;
               }
             }

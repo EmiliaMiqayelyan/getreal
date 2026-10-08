@@ -39,6 +39,7 @@ const UNIT_OPTIONS = [
   { value: "minutes", label: "Minutes" },
   { value: "hours", label: "Hours" },
   { value: "days", label: "Days" },
+  { value: "weeks", label: "Weeks" },
 ];
 
 type Draft = {
@@ -82,11 +83,18 @@ function withCurrent(
   return [{ value: current, label: current }, ...options];
 }
 
+/** The server matches rules on `${baseUrl}${route.path}` with no trailing slash. */
+function normalizeAction(action: string): string {
+  const trimmed = action.trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
 function toPayload(draft: Draft): NotificationRulePayload | null {
   const scheduleDelay = Number(draft.scheduleDelay);
-  if (!Number.isFinite(scheduleDelay) || scheduleDelay < 0) return null;
+  if (!Number.isInteger(scheduleDelay) || scheduleDelay < 0) return null;
   return {
-    action: draft.action.trim(),
+    action: normalizeAction(draft.action),
     httpMethod: draft.httpMethod,
     title: draft.subject.trim(),
     subtext: draft.body.trim(),
@@ -482,7 +490,7 @@ export default function PushNotificationsPage() {
                     action: event.target.value,
                   }))
                 }
-                placeholder="/api/v1/orders"
+                placeholder="/api/v1/orders/:id/ready"
                 aria-label="Data Trigger"
                 className="w-full"
               />

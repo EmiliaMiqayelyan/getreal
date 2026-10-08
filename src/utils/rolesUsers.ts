@@ -18,7 +18,7 @@ function hasNewPermissionShape(
 
 function normalizeUser(user: RoleUser): RoleUser {
   const type = user.type?.toLowerCase() ?? "";
-  if (type.includes("super")) {
+  if (type.includes("super") && !user.hasCustomPermissions) {
     return { ...user, permissions: { ...ADMIN_ROLE_PERMISSIONS } };
   }
   if (!hasNewPermissionShape(user.permissions)) {

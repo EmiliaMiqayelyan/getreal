@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
-import { apiRequest } from "./client";
+import { ApiError, apiRequest } from "./client";
 import { collectPaginated } from "./collectPages";
 import type { ApiOrder } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
@@ -14,6 +14,8 @@ export type CreateOrderItemPayload = {
 export type OrderStatus =
   | "requested"
   | "packing"
+  | "cooler_ready"
+  | "loaded"
   | "on_route"
   | "delivered"
   | "cooler_pickup"
@@ -186,8 +188,8 @@ export const ordersApi = {
     if (typeof params.active === "boolean") {
       search.set("active", params.active ? "true" : "false");
     }
-    // Exact match on the stored timestamp. A calendar day (YYYY-MM-DD) does not
-    // match values like 2026-09-30T02:00:00.000Z, so day chips filter locally.
+    // The server matches the whole UTC day. Day chips use the local calendar
+    // day, so pages still filter locally.
     if (params.deliveryDate) search.set("deliveryDate", params.deliveryDate);
     const qs = search.toString();
     return apiRequest<unknown>(`/orders?${qs}`, {
@@ -230,8 +232,8 @@ export const ordersApi = {
   },
 
   assignPacker(id: string, packerId: string) {
-    return apiRequest<unknown>(`/orders/${id}/assign-packer`, {
-      method: "POST",
+    return apiRequest<unknown>(`/orders/${id}/packer`, {
+      method: "PATCH",
       body: JSON.stringify({ packerId }),
     }).then(
       (payload) =>
@@ -239,10 +241,44 @@ export const ordersApi = {
     );
   },
 
-  assignCooler(id: string, coolerId: string) {
-    return apiRequest<unknown>(`/orders/${id}/assign-cooler`, {
-      method: "POST",
-      body: JSON.stringify({ coolerId }),
+  assignOrderCoolers(
+    id: string,
+    coolers: { coolerId: string; productIds: string[] }[],
+  ) {
+    return apiRequest<unknown>(`/orders/${id}/cooler`, {
+      method: "PATCH",
+      body: JSON.stringify({ coolers }),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  /**
+   * PATCH /orders/:id/items/:productId/pack. Saves the line's cooler and
+   * inventory lot; the server marks that lot `picked`.
+   */
+  packItem(
+    id: string,
+    productId: string,
+    body: { coolerId?: string; inventoryRecordId?: string; packed?: boolean },
+  ) {
+    return apiRequest<unknown>(`/orders/${id}/items/${productId}/pack`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }).then(
+      (payload) =>
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
+    );
+  },
+
+  /**
+   * PATCH /orders/:id/items/:productId/unpack. Clears the line's cooler, lot,
+   * and packed flag, and returns the lot to `in_stock`.
+   */
+  unpackItem(id: string, productId: string) {
+    return apiRequest<unknown>(`/orders/${id}/items/${productId}/unpack`, {
+      method: "PATCH",
     }).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
@@ -251,7 +287,7 @@ export const ordersApi = {
 
   startPacking(id: string) {
     return apiRequest<unknown>(`/orders/${id}/start-packing`, {
-      method: "POST",
+      method: "PATCH",
     }).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
@@ -259,21 +295,32 @@ export const ordersApi = {
   },
 
   coolerReady(id: string) {
-    return apiRequest<unknown>(`/orders/${id}/cooler-ready`, {
-      method: "POST",
+    return apiRequest<unknown>(`/orders/${id}/ready`, {
+      method: "PATCH",
     }).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
     );
   },
 
-  loaded(id: string) {
-    return apiRequest<unknown>(`/orders/${id}/loaded`, {
-      method: "POST",
-    }).then(
-      (payload) =>
-        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
-    );
+  /**
+   * PATCH /orders/:id/load rejects `cooler_ready` orders (it checks for an
+   * `on_route` transition). On a 400, fall back to PATCH /orders/:id/status,
+   * which allows `cooler_ready → loaded` and sets `loadedAt`, but only for
+   * users with `manage:orders`.
+   */
+  async loaded(id: string) {
+    try {
+      const payload = await apiRequest<unknown>(`/orders/${id}/load`, {
+        method: "PATCH",
+      });
+      return (
+        pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder)
+      );
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 400) throw error;
+      return ordersApi.updateStatus(id, "loaded");
+    }
   },
 
   edit(id: string, body: UpdateOrderPayload) {
