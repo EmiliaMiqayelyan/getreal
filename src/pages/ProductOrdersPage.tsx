@@ -45,6 +45,7 @@ import { inventoryApi, isApiConfigured, ordersApi } from "@/lib/api";
 import { orderRecordId } from "@/lib/api/mappers";
 import type { ApiOrder } from "@/lib/api/types";
 import {
+  loadDemandForWeek,
   loadDistributorOrderScreen,
   mapApiDistributorDelivered,
   mapApiDistributorOrder,
@@ -62,6 +63,7 @@ import {
   demandOrdersForDate,
   demandVisibleOnDate,
   previewRowsForOrder,
+  replaceDemandForDate,
   reviewGroupKey,
   type DemandOrder,
 } from "@/lib/distributorOrderWorkflow";
@@ -98,6 +100,7 @@ import {
 import {
   formatDeliveryChipLabel,
   deliveryDateIdFromValue,
+  deliveryWeekId,
   formatExpectedDelivery,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
@@ -132,10 +135,9 @@ function money(value: number) {
  * Wednesday, so the order is filed under the Wednesday on or after it.
  */
 function placedOrderDateId(order: PlacedOrder) {
-  const dayId =
-    order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate);
-  const day = dayId ? parseDeliveryDateId(dayId) : null;
-  return day ? toDeliveryDateId(upcomingWednesday(day)) : dayId;
+  return deliveryWeekId(
+    order.deliveryDateId || deliveryDateIdFromValue(order.deliveryDate),
+  );
 }
 
 function filterPlacedOrders(
@@ -496,10 +498,9 @@ export default function ProductOrdersPage() {
       activeChipIndex < visibleDeliveryChips.length - 1);
 
   function selectDeliveryDate(dateId: string) {
-    const day = parseDeliveryDateId(dateId);
-    if (!day) return;
+    if (!parseDeliveryDateId(dateId)) return;
     userPickedDate.current = true;
-    setActiveDeliveryDateId(toDeliveryDateId(upcomingWednesday(day)));
+    setActiveDeliveryDateId(deliveryWeekId(dateId));
   }
 
   function shiftDeliveryDate(delta: number) {
@@ -570,6 +571,37 @@ export default function ProductOrdersPage() {
       cancelled = true;
     };
   }, [notifyApiError, orderCatalogReady, showError]);
+
+  const demandLoadedDateId = useRef(activeDeliveryDateId);
+  const [demandDateLoading, setDemandDateLoading] = useState(false);
+  useEffect(() => {
+    if (!demandReady || !isApiConfigured()) return;
+    if (demandLoadedDateId.current === activeDeliveryDateId) return;
+    demandLoadedDateId.current = activeDeliveryDateId;
+
+    const dateId = activeDeliveryDateId;
+    const generation = loadGeneration.current;
+    let cancelled = false;
+    setDemandDateLoading(true);
+    void loadDemandForWeek(catalogRef.current, dateId)
+      .then((fresh) => {
+        if (cancelled || generation !== loadGeneration.current) return;
+        setDemandOrders((current) =>
+          replaceDemandForDate(current, dateId, fresh),
+        );
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        notifyApiError(error, "Failed to load order demand.");
+      })
+      .finally(() => {
+        if (!cancelled) setDemandDateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeDeliveryDateId, demandReady, notifyApiError]);
 
   useEffect(() => {
     if (!demandReady || pickedInitialDate.current) return;
@@ -1479,7 +1511,13 @@ export default function ProductOrdersPage() {
                         <span>Quantity Receiving</span>
                         <span>Date Receiving By</span>
                       </div>
-                      {filteredPreview.length === 0 ? (
+                      {demandDateLoading && filteredPreview.length === 0 ? (
+                        <AppLoader
+                          variant="section"
+                          label="Loading order list"
+                          className="min-h-[96px] bg-transparent py-6"
+                        />
+                      ) : filteredPreview.length === 0 ? (
                         <div className="px-4 py-12 text-center text-[14px] text-[#8A8A8A]">
                           {getOrderDemandEmptyMessage(orderDemandCriteria)}
                         </div>

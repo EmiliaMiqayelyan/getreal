@@ -126,6 +126,20 @@ function dateIdFromAggregateEntry(
   return calendarDayId(value) || parseAggregateDateLabel(value, today);
 }
 
+/**
+ * Calendar days that have customer orders, exactly as the server groups them,
+ * so each one can be sent back as `?deliveryDate=`.
+ */
+export function aggregateDemandDayIds(demand: AggregateDemand, today = new Date()) {
+  return [
+    ...new Set(
+      (demand.dates ?? [])
+        .map((entry) => dateIdFromAggregateEntry(entry, today))
+        .filter(Boolean),
+    ),
+  ].sort();
+}
+
 function uniqueWednesdayIds(ids: string[]) {
   return [...new Set(ids.filter((id) => id && isWednesdayDateId(id)))];
 }
@@ -329,6 +343,63 @@ export function mapAggregateDemand(input: {
       ...orders.map((order) => order.deliveryDateId),
     ]),
   };
+}
+
+/** One Order List per chip date; lines from days in the same week are summed. */
+export function mergeDemandByDate(orders: DemandOrder[]): DemandOrder[] {
+  const byDate = new Map<string, DemandOrder>();
+  for (const order of orders) {
+    const existing = byDate.get(order.deliveryDateId);
+    if (!existing) {
+      byDate.set(order.deliveryDateId, { ...order, lines: [...order.lines] });
+      continue;
+    }
+    for (const line of order.lines) {
+      const index = existing.lines.findIndex((entry) => entry.id === line.id);
+      if (index === -1) {
+        existing.lines.push(line);
+        continue;
+      }
+      const current = existing.lines[index];
+      existing.lines[index] = {
+        ...current,
+        custOrderTotal: current.custOrderTotal + line.custOrderTotal,
+        suggestedQty: current.suggestedQty + line.suggestedQty,
+      };
+    }
+  }
+  return [...byDate.values()];
+}
+
+/**
+ * Swap in freshly loaded lines for one chip date. A batch already sent to some
+ * distributors keeps that progress so Review and Cancel still work.
+ */
+export function replaceDemandForDate(
+  current: DemandOrder[],
+  dateId: string,
+  fresh: DemandOrder[],
+): DemandOrder[] {
+  const previous = current.find((order) => order.deliveryDateId === dateId);
+  const others = current.filter((order) => order.deliveryDateId !== dateId);
+  const next = fresh.map((order) =>
+    previous && order.id === previous.id
+      ? {
+          ...order,
+          phase: previous.phase,
+          sentDistributors: previous.sentDistributors,
+          sentGroups: previous.sentGroups,
+        }
+      : order,
+  );
+  if (
+    previous &&
+    previous.sentGroups.length > 0 &&
+    !next.some((order) => order.id === previous.id)
+  ) {
+    next.push({ ...previous, lines: [] });
+  }
+  return [...others, ...next];
 }
 
 export function demandDateIds(order: DemandOrder) {

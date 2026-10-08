@@ -136,6 +136,12 @@ export function upcomingWednesday(from = new Date()) {
   return date;
 }
 
+/** Wednesday chip for a delivery day: that day if Wednesday, otherwise the next one. */
+export function deliveryWeekId(dayId: string) {
+  const day = dayId ? parseDeliveryDateId(dayId) : null;
+  return day ? toDeliveryDateId(upcomingWednesday(day)) : dayId;
+}
+
 export type WednesdayOrderChip = {
   id: string;
   label: string;

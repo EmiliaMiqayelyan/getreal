@@ -14,13 +14,18 @@ import type { ApiOrder, ApiOrderItem } from "@/lib/api/types";
 import { isUuid } from "@/utils/entityIds";
 import {
   deliveryDateIdFromValue,
+  deliveryWeekId,
   formatExpectedDelivery,
+  shiftDateId,
+  toDeliveryDateId,
+  upcomingWednesday,
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
+  aggregateDemandDayIds,
   aggregateDemandHasItems,
-  aggregateDemandItemKeys,
   mapAggregateDemand,
+  mergeDemandByDate,
   type DemandOrder,
 } from "@/lib/distributorOrderWorkflow";
 
@@ -307,6 +312,45 @@ export function mergeCreatedDistributorOrder(
   return { orders: [mapped, ...orders], placed: mapped };
 }
 
+type DemandCatalog = { products: ProductForSale[]; items: Item[] };
+
+/**
+ * Without `deliveryDate` the endpoint sums every customer order ever placed,
+ * so each day is requested on its own and filed under its Wednesday chip.
+ */
+async function loadDemandForDays(
+  input: DemandCatalog,
+  dayIds: string[],
+): Promise<DemandOrder[]> {
+  const payloads = await Promise.all(
+    dayIds.map((dayId) => ordersApi.aggregateDemand(dayId)),
+  );
+  return mergeDemandByDate(
+    payloads.flatMap((payload, index) =>
+      aggregateDemandHasItems(payload)
+        ? mapAggregateDemand({
+            demand: payload,
+            products: input.products,
+            items: input.items,
+            assignDateId: deliveryWeekId(dayIds[index]),
+          }).orders
+        : [],
+    ),
+  );
+}
+
+/** Fresh Order List lines for one Wednesday chip. */
+export async function loadDemandForWeek(
+  input: DemandCatalog,
+  weekId: string,
+): Promise<DemandOrder[]> {
+  const index = await ordersApi.aggregateDemand();
+  const days = aggregateDemandDayIds(index).filter(
+    (dayId) => deliveryWeekId(dayId) === weekId,
+  );
+  return loadDemandForDays(input, days);
+}
+
 export async function loadDistributorOrderScreen(
   input: {
     distributors: Distributor[];
@@ -335,45 +379,23 @@ export async function loadDistributorOrderScreen(
   ]);
   const remote = dedupeApiOrders([...openOrders, ...listedOrders]);
 
-  const summary = mapAggregateDemand({
-    demand: demandResult.demand,
-    products: input.products,
-    items: input.items,
-  });
-  const summaryDates = summary.dateIds;
-  let demand = summary.orders;
-  // A calendar day does not match a stored timestamp, so a per-date call can
-  // come back with no lines and used to replace the list that had the order.
-  if (!demandResult.error && summaryDates.length > 1) {
-    const filtered = await Promise.all(
-      summaryDates.map((dateId) =>
-        ordersApi.aggregateDemand(dateId).catch(() => null),
-      ),
-    );
-    const summaryKeys = new Set(aggregateDemandItemKeys(demandResult.demand));
-    const splitKeys = new Set<string>();
-    const split = summaryDates.flatMap((dateId, index) => {
-      const payload = filtered[index];
-      if (!payload || !aggregateDemandHasItems(payload)) return [];
-      const keys = aggregateDemandItemKeys(payload);
-      const sameAsSummary =
-        keys.length === summaryKeys.size &&
-        keys.every((key) => summaryKeys.has(key));
-      if (sameAsSummary) return [];
-      for (const key of keys) splitKeys.add(key);
-      return mapAggregateDemand({
-        demand: payload,
-        products: input.products,
-        items: input.items,
-        assignDateId: dateId,
-      }).orders;
-    });
-    const coversSummary = [...summaryKeys].every((key) => splitKeys.has(key));
-    if (split.length > 0 && coversSummary) demand = split;
+  // Older weeks load when their chip is opened.
+  const firstWeekId = shiftDateId(toDeliveryDateId(upcomingWednesday()), -7);
+  const days = aggregateDemandDayIds(demandResult.demand).filter(
+    (dayId) => deliveryWeekId(dayId) >= firstWeekId,
+  );
+  let demand: DemandOrder[] = [];
+  let demandError = demandResult.error;
+  if (!demandError && days.length > 0) {
+    try {
+      demand = await loadDemandForDays(input, days);
+    } catch (error) {
+      demandError = formatApiError(error, "Failed to load order demand.");
+    }
   }
-  const demandDateIds = summaryDates.length
-    ? summaryDates
-    : demand.map((order) => order.deliveryDateId);
+  const demandDateIds = [
+    ...new Set(days.map((dayId) => deliveryWeekId(dayId))),
+  ];
   const inProgress: PlacedOrder[] = [];
   const delivered: DeliveredOrder[] = [];
 
@@ -392,7 +414,7 @@ export async function loadDistributorOrderScreen(
   return {
     demand,
     demandDateIds,
-    demandError: demandResult.error,
+    demandError,
     inProgress,
     delivered,
   };
