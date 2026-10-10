@@ -7,9 +7,15 @@ import {
   type ApiRole,
   type ApiUser,
 } from "@/lib/api";
-import type { ManagedRole, RoleUser } from "@/types/admin";
+import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { isUuid } from "@/utils/entityIds";
-import { apiPermissionsFor } from "@/utils/rolePermissions";
+import {
+  encodesApiPermissions,
+  permissionsForRoleType,
+  permissionsFromApiKeys,
+  permissionsFromPersonal,
+  unionPermissions,
+} from "@/utils/rolePermissions";
 import { loadManagedRoles, loadRoleUsers } from "@/utils/rolesUsers";
 
 const ROLE_PAGE_LIMIT = 100;
@@ -107,43 +113,48 @@ function matchManagedRole(
 function withRolePermissions(user: RoleUser, roles: ManagedRole[]): RoleUser {
   const match = matchManagedRole(user, roles);
   if (!match) return user;
-  return {
+  const next = {
     ...user,
     type: match.name,
     roleId: match.recordId ?? user.roleId,
     roleCode: user.roleCode || match.roleCode,
-    permissions: user.hasCustomPermissions
-      ? user.permissions
-      : match.permissions,
+    permissions: match.permissions,
+  };
+  if (!user.personalPermissions) return next;
+  return withPersonalPermissions(next, user.personalPermissions, match);
+}
+
+/** Checkboxes for a user: the role's plus their `personalPermissions`. */
+export function withPersonalPermissions(
+  user: RoleUser,
+  personal: string[],
+  role: ManagedRole | undefined,
+): RoleUser {
+  return {
+    ...user,
+    personalPermissions: personal,
+    permissions: unionPermissions(
+      role?.permissions ?? user.permissions,
+      permissionsFromPersonal(personal),
+    ),
   };
 }
 
-function sameApiPermissions(a: string[], b: string[]): boolean {
-  const left = new Set(a);
-  const right = new Set(b);
-  return left.size === right.size && [...left].every((name) => right.has(name));
-}
-
-/**
- * Reuse stored checkbox state for customized users while it still encodes the
- * same backend strings; otherwise trust the server.
- */
-function mergeCustomUsersWithStored(users: RoleUser[]): RoleUser[] {
+/** Carry stored personal permissions over until the server copy is loaded. */
+function mergeStoredPersonalPermissions(users: RoleUser[]): RoleUser[] {
   const stored = loadRoleUsers();
   if (!stored.length) return users;
 
   return users.map((user) => {
-    if (!user.hasCustomPermissions || !user.apiPermissions) return user;
+    if (user.personalPermissions) return user;
     const cached = stored.find(
       (entry) =>
-        entry.hasCustomPermissions &&
+        entry.personalPermissions &&
         ((user.recordId && entry.recordId === user.recordId) ||
           entry.id === user.id),
     );
     if (!cached) return user;
-    const encoded = apiPermissionsFor(cached.permissions, user.apiPermissions);
-    if (!sameApiPermissions(encoded, user.apiPermissions)) return user;
-    return { ...user, permissions: cached.permissions };
+    return { ...user, personalPermissions: cached.personalPermissions };
   });
 }
 
@@ -206,7 +217,25 @@ async function loadRoleRows(): Promise<ApiRole[]> {
   return collected;
 }
 
-/** Prefer stored checkbox state; API permission strings are coarser than the UI. */
+/**
+ * Role checkboxes from the server's permission list. `stored` checkbox state
+ * is kept only while it still saves to that exact list, since API strings are
+ * coarser than the UI; otherwise the server wins.
+ */
+export function withServerRolePermissions(
+  role: ManagedRole,
+  apiNames: string[],
+  stored: RolePermissions = role.permissions,
+): ManagedRole {
+  return {
+    ...role,
+    apiPermissions: apiNames,
+    permissions: encodesApiPermissions(stored, apiNames)
+      ? stored
+      : permissionsFromApiKeys(apiNames, permissionsForRoleType(role.name)),
+  };
+}
+
 function mergeManagedRolesWithStored(fromApi: ManagedRole[]): ManagedRole[] {
   const stored = loadManagedRoles();
   if (!stored.length) return fromApi;
@@ -220,11 +249,11 @@ function mergeManagedRolesWithStored(fromApi: ManagedRole[]): ManagedRole[] {
         (role.recordId && entry.recordId === role.recordId),
     );
     if (!cached) return role;
-    return {
-      ...role,
-      permissions: cached.permissions,
-      apiPermissions: cached.apiPermissions ?? role.apiPermissions,
-    };
+    return withServerRolePermissions(
+      role,
+      role.apiPermissions ?? [],
+      cached.permissions,
+    );
   });
 }
 
@@ -248,7 +277,7 @@ export async function loadRolesDirectory(): Promise<{
       .map((user, index) => mapApiUserToRoleUser(user, index));
   }
 
-  const merged = mergeCustomUsersWithStored(
+  const merged = mergeStoredPersonalPermissions(
     mergeRoleUsers([...assignmentUsers, ...listed]),
   ).map((user) => withRolePermissions(user, roles));
 

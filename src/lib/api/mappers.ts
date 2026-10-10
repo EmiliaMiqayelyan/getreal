@@ -2,7 +2,6 @@ import {
   apiPermissionNames,
   permissionsForRoleType,
   permissionsFromApiKeys,
-  permissionsFromApiNames,
 } from "@/utils/rolePermissions";
 import type {
   AdminCustomer,
@@ -78,22 +77,6 @@ function permissionsFromApiRole(
   );
 }
 
-/** Per-user permission fields, set only when the user overrides their role. */
-export function customUserPermissions(source: {
-  permissions?: ApiRole["permissions"];
-  hasCustomPermissions?: boolean;
-}): Pick<RoleUser, "hasCustomPermissions" | "apiPermissions"> & {
-  permissions?: RolePermissions;
-} {
-  if (!source.hasCustomPermissions) return { hasCustomPermissions: false };
-  const names = apiPermissionNames(source.permissions);
-  return {
-    hasCustomPermissions: true,
-    apiPermissions: names,
-    permissions: permissionsFromApiNames(names),
-  };
-}
-
 export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
   const type = formatApiRoleName(user.role);
 
@@ -114,7 +97,9 @@ export function mapApiUserToRoleUser(user: ApiUser, index: number): RoleUser {
     type,
     password: "",
     permissions: permissionsForRoleType(type),
-    ...customUserPermissions(user),
+    personalPermissions: Array.isArray(user.personalPermissions)
+      ? apiPermissionNames(user.personalPermissions)
+      : undefined,
   };
 }
 
@@ -186,7 +171,6 @@ export function mapApiRoleAssignmentToRoleUser(
     type,
     password: "",
     permissions: permissionsFromApiRole(role, type),
-    ...customUserPermissions(member),
   };
 }
 

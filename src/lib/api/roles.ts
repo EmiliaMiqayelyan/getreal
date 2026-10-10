@@ -45,8 +45,12 @@ export const rolesApi = {
     );
   },
 
-  getById(id: string) {
-    return apiRequest<unknown>(`/roles/${id}`).then(
+  /** `fresh` skips request sharing and the browser cache. */
+  getById(id: string, options: { fresh?: boolean } = {}) {
+    return apiRequest<unknown>(
+      `/roles/${id}`,
+      options.fresh ? { dedupe: false, cache: "no-store" } : {},
+    ).then(
       (payload) =>
         pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
     );

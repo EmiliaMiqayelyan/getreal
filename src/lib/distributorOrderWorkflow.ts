@@ -36,7 +36,8 @@ const MONTH_INDEX: Record<string, number> = {
 
 /**
  * Order List demand comes from GET /orders/distributor/aggregate-demand.
- * Placed orders come from GET /orders?type=distributor.
+ * In Progress comes from GET /orders?type=distributor&active=true and
+ * Delivered from GET /orders?type=distributor&status=delivered.
  * Order Now / Order All / Create Order call POST /orders.
  */
 
@@ -254,6 +255,9 @@ export function mapAggregateDemand(input: {
           const custOrderTotal = readNumber(item.customerOrderTotal);
           const inStock = readOptionalNumber(item.inStock);
           const qtyNeeded = readOptionalNumber(item.qtyNeeded);
+          // qtyNeeded already subtracts stock and open distributor orders, so
+          // 0 means this demand was ordered and must not be listed again.
+          if (qtyNeeded != null && qtyNeeded <= 0) continue;
           const suggestedQty =
             qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
           // dateReceivingBy is the column only. Customer delivery dates come

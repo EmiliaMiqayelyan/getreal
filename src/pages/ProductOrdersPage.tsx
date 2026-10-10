@@ -45,6 +45,8 @@ import { inventoryApi, isApiConfigured, ordersApi } from "@/lib/api";
 import { orderRecordId } from "@/lib/api/mappers";
 import type { ApiOrder } from "@/lib/api/types";
 import {
+  loadAllDeliveredDistributorOrders,
+  loadDeliveredDistributorOrders,
   loadDemandForWeek,
   loadDistributorOrderScreen,
   mapApiDistributorDelivered,
@@ -387,6 +389,10 @@ export default function ProductOrdersPage() {
 
   const [inProgress, setInProgress] = useState<PlacedOrder[]>([]);
   const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([]);
+  const [deliveredPage, setDeliveredPage] = useState(0);
+  const [deliveredHasMore, setDeliveredHasMore] = useState(false);
+  const [deliveredLoading, setDeliveredLoading] = useState(false);
+  const deliveredGeneration = useRef(0);
   const [demandOrders, setDemandOrders] = useState<DemandOrder[]>([]);
   const [demandReady, setDemandReady] = useState(false);
   const [placing, setPlacing] = useState<string | null>(null);
@@ -399,6 +405,7 @@ export default function ProductOrdersPage() {
   const pickedInitialDate = useRef(false);
   const userPickedDate = useRef(false);
   const loadGeneration = useRef(0);
+  const demandDayIdsRef = useRef<string[]>([]);
 
   const [rows, setRows] = useState<WorkingOrderRow[]>([]);
   const [orderedDistributors, setOrderedDistributors] = useState<Set<string>>(
@@ -531,7 +538,36 @@ export default function ProductOrdersPage() {
       fresh,
     });
     if (generation !== loadGeneration.current) return null;
+    demandDayIdsRef.current = snapshot.demandDayIds;
     return snapshot;
+  }
+
+  function loadMoreDelivered() {
+    if (deliveredLoading || !deliveredHasMore || !isApiConfigured()) return;
+    const run = deliveredGeneration.current;
+    const page = deliveredPage + 1;
+    setDeliveredLoading(true);
+    void loadDeliveredDistributorOrders(distributors, page)
+      .then((result) => {
+        if (run !== deliveredGeneration.current) return;
+        setDeliveredOrders((current) => {
+          const seen = new Set(current.map((order) => order.id));
+          return [
+            ...current,
+            ...result.orders.filter((order) => !seen.has(order.id)),
+          ];
+        });
+        setDeliveredPage(page);
+        setDeliveredHasMore(result.hasMore);
+      })
+      .catch((error) => {
+        if (run !== deliveredGeneration.current) return;
+        notifyApiError(error, "Failed to load older delivered orders.");
+        setDeliveredHasMore(false);
+      })
+      .finally(() => {
+        if (run === deliveredGeneration.current) setDeliveredLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -542,6 +578,8 @@ export default function ProductOrdersPage() {
       setDemandOrders([]);
       setInProgress([]);
       setDeliveredOrders([]);
+      setDeliveredPage(0);
+      setDeliveredHasMore(false);
       setDemandReady(true);
       return;
     }
@@ -551,9 +589,9 @@ export default function ProductOrdersPage() {
     void loadDistributorOrderScreen(catalogRef.current, { fresh: true })
       .then((snapshot) => {
         if (cancelled || generation !== loadGeneration.current) return;
+        demandDayIdsRef.current = snapshot.demandDayIds;
         setDemandOrders(snapshot.demand);
         setInProgress(snapshot.inProgress);
-        setDeliveredOrders(snapshot.delivered);
         if (snapshot.demandError) showError(snapshot.demandError);
       })
       .catch((error) => {
@@ -561,10 +599,33 @@ export default function ProductOrdersPage() {
         notifyApiError(error, "Failed to load distributor orders.");
         setDemandOrders([]);
         setInProgress([]);
-        setDeliveredOrders([]);
       })
       .finally(() => {
         if (!cancelled) setDemandReady(true);
+      });
+
+    const deliveredRun = ++deliveredGeneration.current;
+    setDeliveredLoading(true);
+    void loadDeliveredDistributorOrders(catalogRef.current.distributors, 1, {
+      fresh: true,
+    })
+      .then((result) => {
+        if (cancelled || deliveredRun !== deliveredGeneration.current) return;
+        setDeliveredOrders(result.orders);
+        setDeliveredPage(1);
+        setDeliveredHasMore(result.hasMore);
+      })
+      .catch((error) => {
+        if (cancelled || deliveredRun !== deliveredGeneration.current) return;
+        notifyApiError(error, "Failed to load delivered orders.");
+        setDeliveredOrders([]);
+        setDeliveredPage(0);
+        setDeliveredHasMore(false);
+      })
+      .finally(() => {
+        if (deliveredRun === deliveredGeneration.current) {
+          setDeliveredLoading(false);
+        }
       });
 
     return () => {
@@ -583,7 +644,7 @@ export default function ProductOrdersPage() {
     const generation = loadGeneration.current;
     let cancelled = false;
     setDemandDateLoading(true);
-    void loadDemandForWeek(catalogRef.current, dateId)
+    void loadDemandForWeek(catalogRef.current, dateId, demandDayIdsRef.current)
       .then((fresh) => {
         if (cancelled || generation !== loadGeneration.current) return;
         setDemandOrders((current) =>
@@ -876,7 +937,6 @@ export default function ProductOrdersPage() {
       if (snapshot) {
         setDemandOrders(snapshot.demand);
         setInProgress(snapshot.inProgress);
-        setDeliveredOrders(snapshot.delivered);
         if (snapshot.demandError) showError(snapshot.demandError);
       }
       showToast("Order cancelled");
@@ -907,7 +967,6 @@ export default function ProductOrdersPage() {
         );
         if (snapshot) {
           setDemandOrders(snapshot.demand);
-          setDeliveredOrders(snapshot.delivered);
           if (snapshot.demandError) showError(snapshot.demandError);
           setInProgress(merged.orders);
         } else {
@@ -1002,7 +1061,6 @@ export default function ProductOrdersPage() {
             deliveryDate,
           );
           setInProgress(merged.orders);
-          setDeliveredOrders(snapshot.delivered);
           if (snapshot.demandError) {
             showError(snapshot.demandError);
           } else {
@@ -1103,7 +1161,6 @@ export default function ProductOrdersPage() {
           placed = merged.placed;
         }
         if (snapshot) {
-          setDeliveredOrders(snapshot.delivered);
           if (snapshot.demandError) {
             showError(snapshot.demandError);
             setDemandOrders((current) =>
@@ -1378,10 +1435,29 @@ export default function ProductOrdersPage() {
                     recordCount={exportCount}
                     filtersActive={exportFiltersActive}
                     onExport={async (request: ExportRequest) => {
+                      let all = deliveredSource;
+                      if (
+                        request.scope === "all" &&
+                        deliveredHasMore &&
+                        isApiConfigured()
+                      ) {
+                        try {
+                          all =
+                            await loadAllDeliveredDistributorOrders(
+                              distributors,
+                            );
+                        } catch (error) {
+                          notifyApiError(
+                            error,
+                            "Failed to load delivered orders for export.",
+                          );
+                          return;
+                        }
+                      }
                       const groups =
                         request.scope === "all"
                           ? groupDeliveredOrders(
-                              sortDeliveredOrders(deliveredSource, "newest"),
+                              sortDeliveredOrders(all, "newest"),
                             )
                           : groupDeliveredOrders(deliveredFlat);
                       downloadDeliveredOrdersCsv(
@@ -1580,17 +1656,18 @@ export default function ProductOrdersPage() {
             hasMore={
               tab === "Orders"
                 ? inProgressWindow.hasMore
-                : deliveredWindow.hasMore
+                : deliveredWindow.hasMore || deliveredHasMore
             }
-            loading={false}
+            loading={tab !== "Orders" && deliveredLoading}
             loadedCount={
               tab === "Orders"
                 ? inProgressWindow.loadedCount
-                : deliveredWindow.loadedCount
+                : deliveredWindow.loadedCount + deliveredOrders.length
             }
             onLoadMore={() => {
-              if (tab !== "Orders") deliveredWindow.loadMore();
-              else inProgressWindow.loadMore();
+              if (tab === "Orders") inProgressWindow.loadMore();
+              else if (deliveredWindow.hasMore) deliveredWindow.loadMore();
+              else loadMoreDelivered();
             }}
           />
         </div>

@@ -31,6 +31,8 @@ import {
   isUnsavedRole,
   loadRolesDirectory,
   serverRoleId,
+  withPersonalPermissions,
+  withServerRolePermissions,
 } from "@/lib/rolesDirectory";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { cn } from "@/utils/cn";
@@ -40,6 +42,7 @@ import {
   apiPermissionNames,
   apiPermissionsFor,
   permissionsForRoleType,
+  personalPermissionsFor,
   toggleUiPermission,
 } from "@/utils/rolePermissions";
 import { type UserFormErrors, validateUserForm } from "@/utils/rolesUsers";
@@ -107,15 +110,18 @@ function PermissionCheckbox({
   checked,
   label,
   disabled,
+  title,
   onChange,
 }: {
   checked: boolean;
   label: string;
   disabled?: boolean;
+  title?: string;
   onChange: () => void;
 }) {
   return (
     <label
+      title={title}
       className={cn(
         "flex items-start gap-2.5 text-[13px] text-[#111118]",
         disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
@@ -169,18 +175,31 @@ export default function RolesPage() {
   const [roleMgmtOpen, setRoleMgmtOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  const [personalStatus, setPersonalStatus] = useState<
+    Record<string, "loading" | "ready" | "error">
+  >({});
   const managedRolesRef = useRef(managedRoles);
-  const permissionSaveTimers = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
+  /** Debounced checkbox saves that have not been sent yet, by user id. */
+  const queuedSaves = useRef(
+    new Map<
+      string,
+      {
+        timer: ReturnType<typeof setTimeout>;
+        user: RoleUser;
+        next: RolePermissions;
+      }
+    >(),
   );
+  /** Latest save request per user id; later saves and reloads wait for it. */
+  const activeSaves = useRef(new Map<string, Promise<void>>());
   managedRolesRef.current = managedRoles;
   useScrollLock(modalOpen);
 
   useEffect(() => {
-    const timers = permissionSaveTimers.current;
+    const queued = queuedSaves.current;
     return () => {
-      for (const timer of timers.values()) clearTimeout(timer);
-      timers.clear();
+      for (const entry of queued.values()) clearTimeout(entry.timer);
+      queued.clear();
     };
   }, []);
 
@@ -218,10 +237,6 @@ export default function RolesPage() {
     return draftPermissions[user.id] ?? user.permissions;
   }
 
-  function toggleExpand(id: string) {
-    setExpandedId((current) => (current === id ? null : id));
-  }
-
   const refreshDirectory = useCallback(async () => {
     const next = await loadRolesDirectory();
     setUsers(next.users);
@@ -243,39 +258,32 @@ export default function RolesPage() {
     };
   }, [notifyApiError, refreshDirectory]);
 
-  /** Saves `next` for this user only. `null` drops the override so the user follows the role. */
+  /** Saves the checkboxes beyond the role as this user's personal permissions. */
   const persistUserPermissions = useCallback(
-    async (user: RoleUser, next: RolePermissions | null) => {
+    async (user: RoleUser, permissions: RolePermissions) => {
       const role = findManagedRoleForUser(user, managedRolesRef.current);
+      const personal = personalPermissionsFor(
+        permissions,
+        role,
+        user.personalPermissions,
+      );
       const clearDraft = () =>
         setDraftPermissions((current) => {
           const draft = { ...current };
           delete draft[user.id];
           return draft;
         });
-      const applyToUser = (apiPermissions?: string[]) =>
+      const applyToUser = (saved: string[]) =>
         setUsers((current) =>
-          current.map((entry) => {
-            if (entry.id !== user.id) return entry;
-            if (next) {
-              return {
-                ...entry,
-                permissions: next,
-                hasCustomPermissions: true,
-                apiPermissions,
-              };
-            }
-            return {
-              ...entry,
-              permissions: role?.permissions ?? entry.permissions,
-              hasCustomPermissions: false,
-              apiPermissions: undefined,
-            };
-          }),
+          current.map((entry) =>
+            entry.id === user.id
+              ? { ...entry, permissions, personalPermissions: saved }
+              : entry,
+          ),
         );
 
       if (!isApiConfigured()) {
-        applyToUser(next ? apiPermissionsFor(next) : undefined);
+        applyToUser(personal);
         clearDraft();
         return;
       }
@@ -292,23 +300,15 @@ export default function RolesPage() {
 
       setPending(`apply:${user.id}`);
       try {
-        const apiPermissions = next
-          ? apiPermissionsFor(next, user.apiPermissions ?? role?.apiPermissions)
-          : null;
-        const updated = await usersApi.updatePermissions(
-          pathId,
-          apiPermissions,
-        );
+        const updated = await usersApi.updatePermissions(pathId, personal);
         // Keep the checkbox state the user chose. The API stores coarse strings
         // (e.g. manage:distributors) and mapping the response would re-check
         // every sibling in the section.
         applyToUser(
-          Array.isArray(updated.permissions)
-            ? apiPermissionNames(updated.permissions)
-            : (apiPermissions ?? undefined),
+          Array.isArray(updated.personalPermissions)
+            ? apiPermissionNames(updated.personalPermissions)
+            : personal,
         );
-        if (!next)
-          showSuccess(`${user.name} now follows the ${user.type} role.`);
       } catch (error) {
         notifyApiError(error, "Failed to update permissions.");
       } finally {
@@ -316,30 +316,107 @@ export default function RolesPage() {
         setPending(null);
       }
     },
-    [notifyApiError, setUsers, showSuccess],
+    [notifyApiError, setUsers],
   );
 
-  function queuePermissionSave(user: RoleUser, next: RolePermissions) {
-    const timers = permissionSaveTimers.current;
-    const existing = timers.get(user.id);
-    if (existing) clearTimeout(existing);
-    timers.set(
-      user.id,
-      setTimeout(() => {
-        timers.delete(user.id);
-        void persistUserPermissions(user, next);
-      }, 350),
-    );
+  /** Runs saves for the same user one after another, in click order. */
+  const savePersonalPermissions = useCallback(
+    (user: RoleUser, next: RolePermissions) => {
+      const saves = activeSaves.current;
+      const run = (saves.get(user.id) ?? Promise.resolve()).then(() =>
+        persistUserPermissions(user, next),
+      );
+      saves.set(user.id, run);
+      void run.finally(() => {
+        if (saves.get(user.id) === run) saves.delete(user.id);
+      });
+      return run;
+    },
+    [persistUserPermissions],
+  );
+
+  /** Sends a debounced save now instead of waiting for its timer. */
+  const flushQueuedSave = useCallback(
+    (userId: string) => {
+      const queued = queuedSaves.current.get(userId);
+      if (!queued) return;
+      clearTimeout(queued.timer);
+      queuedSaves.current.delete(userId);
+      void savePersonalPermissions(queued.user, queued.next);
+    },
+    [savePersonalPermissions],
+  );
+
+  const loadPersonalPermissions = useCallback(
+    async (user: RoleUser) => {
+      if (!isApiConfigured() || isUnassignedRoleRow(user)) return;
+      const pathId = serverUserId(user);
+      if (!pathId) {
+        notifyApiError(
+          new Error("This user is not linked to a server record."),
+          "Failed to load this user's permissions.",
+        );
+        setPersonalStatus((current) => ({ ...current, [user.id]: "error" }));
+        return;
+      }
+      setPersonalStatus((current) => ({ ...current, [user.id]: "loading" }));
+      // Reading before an unsent or in-flight save lands would show the old list.
+      flushQueuedSave(user.id);
+      await activeSaves.current.get(user.id);
+      try {
+        const role = findManagedRoleForUser(user, managedRolesRef.current);
+        const roleId = role ? serverRoleId(role) : undefined;
+        const [remote, remoteRole] = await Promise.all([
+          usersApi.getById(pathId, { fresh: true }),
+          roleId ? rolesApi.getById(roleId, { fresh: true }) : null,
+        ]);
+        const personal = apiPermissionNames(remote.personalPermissions);
+        const freshRole =
+          role && remoteRole
+            ? withServerRolePermissions(
+                role,
+                apiPermissionNames(remoteRole.permissions),
+              )
+            : role;
+        if (freshRole && freshRole !== role) {
+          setManagedRoles((current) =>
+            current.map((entry) =>
+              entry.id === freshRole.id ? freshRole : entry,
+            ),
+          );
+        }
+        setUsers((current) =>
+          current.map((entry) =>
+            entry.id === user.id
+              ? withPersonalPermissions(entry, personal, freshRole)
+              : entry,
+          ),
+        );
+        setPersonalStatus((current) => ({ ...current, [user.id]: "ready" }));
+      } catch (error) {
+        notifyApiError(error, "Failed to load this user's permissions.");
+        setPersonalStatus((current) => ({ ...current, [user.id]: "error" }));
+      }
+    },
+    [flushQueuedSave, notifyApiError, setManagedRoles, setUsers],
+  );
+
+  function toggleExpand(user: RoleUser) {
+    const opening = expandedId !== user.id;
+    setExpandedId(opening ? user.id : null);
+    if (opening) void loadPersonalPermissions(user);
+    else flushQueuedSave(user.id);
   }
 
-  function resetToRolePermissions(user: RoleUser) {
-    const timers = permissionSaveTimers.current;
-    const existing = timers.get(user.id);
-    if (existing) {
-      clearTimeout(existing);
-      timers.delete(user.id);
-    }
-    void persistUserPermissions(user, null);
+  function queuePermissionSave(user: RoleUser, next: RolePermissions) {
+    const queued = queuedSaves.current;
+    const existing = queued.get(user.id);
+    if (existing) clearTimeout(existing.timer);
+    queued.set(user.id, {
+      user,
+      next,
+      timer: setTimeout(() => flushQueuedSave(user.id), 350),
+    });
   }
 
   function patchPermission(
@@ -694,18 +771,18 @@ export default function RolesPage() {
         ),
       );
       setUsers((current) =>
-        current.map((user) =>
-          findManagedRoleForUser(user, [previous])
-            ? {
-                ...user,
-                type: saved.name,
-                roleId: saved.recordId ?? user.roleId,
-                permissions: user.hasCustomPermissions
-                  ? user.permissions
-                  : saved.permissions,
-              }
-            : user,
-        ),
+        current.map((user) => {
+          if (!findManagedRoleForUser(user, [previous])) return user;
+          const next = {
+            ...user,
+            type: saved.name,
+            roleId: saved.recordId ?? user.roleId,
+            permissions: saved.permissions,
+          };
+          return user.personalPermissions?.length
+            ? withPersonalPermissions(next, user.personalPermissions, saved)
+            : next;
+        }),
       );
       showSuccess("Role updated.");
       return saved;
@@ -835,7 +912,26 @@ export default function RolesPage() {
                   const isLast = index === userWindow.visible.length - 1;
                   const placeholder = isUnassignedRoleRow(user);
                   const saving = pending === `apply:${user.id}`;
-                  const locked = placeholder || saving;
+                  const status = isApiConfigured()
+                    ? personalStatus[user.id]
+                    : "ready";
+                  const locked = placeholder || saving || status !== "ready";
+                  const rolePermissions = findManagedRoleForUser(
+                    user,
+                    managedRoles,
+                  )?.permissions;
+                  const checkboxProps = (key: keyof RolePermissions) => {
+                    const fromRole = Boolean(rolePermissions?.[key]);
+                    return {
+                      checked: fromRole || permissions[key],
+                      disabled: locked || fromRole,
+                      title: fromRole
+                        ? `Granted by the ${user.type} role`
+                        : undefined,
+                      onChange: () =>
+                        patchPermission(user, key, !permissions[key]),
+                    };
+                  };
 
                   return (
                     <div key={user.id} className="contents">
@@ -849,7 +945,7 @@ export default function RolesPage() {
                         <button
                           type="button"
                           aria-label={open ? "Collapse row" : "Expand row"}
-                          onClick={() => toggleExpand(user.id)}
+                          onClick={() => toggleExpand(user)}
                           className="flex justify-center"
                         >
                           <ChevronRight
@@ -863,7 +959,7 @@ export default function RolesPage() {
 
                         <button
                           type="button"
-                          onClick={() => toggleExpand(user.id)}
+                          onClick={() => toggleExpand(user)}
                           className="min-w-0 justify-self-start overflow-hidden text-left"
                         >
                           <IdPill>{rolePreviewId(user, managedRoles)}</IdPill>
@@ -902,30 +998,6 @@ export default function RolesPage() {
                             SUB_ROW_PAD,
                           )}
                         >
-                          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-[#6B6B6B]">
-                            <p>
-                              {placeholder
-                                ? `No user has the ${user.type} role yet. Edit the role's permissions in Role Management.`
-                                : user.hasCustomPermissions
-                                  ? `${user.name} has custom permissions. Changes save automatically and apply only to this user; the ${user.type} role is not changed.`
-                                  : `${user.name} uses the ${user.type} role's permissions. Changes save automatically and apply only to this user; the role is not changed.`}
-                              {saving ? (
-                                <span className="ml-2 text-[#111118]">
-                                  Saving…
-                                </span>
-                              ) : null}
-                            </p>
-                            {user.hasCustomPermissions && !placeholder ? (
-                              <button
-                                type="button"
-                                disabled={saving}
-                                onClick={() => resetToRolePermissions(user)}
-                                className="font-medium text-[#2165D4] disabled:opacity-60"
-                              >
-                                Reset to role permissions
-                              </button>
-                            ) : null}
-                          </div>
                           <div className="overflow-x-auto">
                             <div className="grid min-w-[640px] gap-8 md:grid-cols-2 xl:grid-cols-3">
                               {ROLE_PERMISSION_GROUPS.map((group) => (
@@ -935,31 +1007,15 @@ export default function RolesPage() {
                                   </h3>
                                   <div className="space-y-2.5">
                                     <PermissionCheckbox
-                                      checked={permissions[group.accessKey]}
                                       label={group.accessLabel}
-                                      disabled={locked}
-                                      onChange={() =>
-                                        patchPermission(
-                                          user,
-                                          group.accessKey,
-                                          !permissions[group.accessKey],
-                                        )
-                                      }
+                                      {...checkboxProps(group.accessKey)}
                                     />
                                     <div className="space-y-2.5 border-l border-[#00000014] pl-3">
                                       {group.actions.map((action) => (
                                         <PermissionCheckbox
                                           key={action.key}
-                                          checked={permissions[action.key]}
                                           label={action.label}
-                                          disabled={locked}
-                                          onChange={() =>
-                                            patchPermission(
-                                              user,
-                                              action.key,
-                                              !permissions[action.key],
-                                            )
-                                          }
+                                          {...checkboxProps(action.key)}
                                         />
                                       ))}
                                     </div>

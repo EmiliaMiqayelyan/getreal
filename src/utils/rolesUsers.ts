@@ -18,7 +18,7 @@ function hasNewPermissionShape(
 
 function normalizeUser(user: RoleUser): RoleUser {
   const type = user.type?.toLowerCase() ?? "";
-  if (type.includes("super") && !user.hasCustomPermissions) {
+  if (type.includes("super") && !user.personalPermissions?.length) {
     return { ...user, permissions: { ...ADMIN_ROLE_PERMISSIONS } };
   }
   if (!hasNewPermissionShape(user.permissions)) {
@@ -79,7 +79,8 @@ export const DEFAULT_MANAGED_ROLES: ManagedRole[] = [];
 export function loadManagedRoles(): ManagedRole[] {
   try {
     const raw = localStorage.getItem(ROLES_STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);
+    if (!raw)
+      return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);
     const parsed = JSON.parse(raw) as ManagedRole[];
     if (!Array.isArray(parsed)) {
       return structuredClone(DEFAULT_MANAGED_ROLES).map(normalizeManagedRole);

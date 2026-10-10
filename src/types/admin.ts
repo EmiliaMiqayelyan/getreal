@@ -177,10 +177,11 @@ export type RoleUser = {
   phone: string;
   type: "Superadmin" | "Manager" | "Warehouse Worker" | "Driver" | string;
   permissions: RolePermissions;
-  /** True when this user has their own permissions instead of the role's. */
-  hasCustomPermissions?: boolean;
-  /** Backend permission strings saved on a customized user. */
-  apiPermissions?: string[];
+  /**
+   * Backend strings granted to this user on top of the role (`personalPermissions`).
+   * Undefined until loaded from the server.
+   */
+  personalPermissions?: string[];
   /** Demo-only stored password; empty/omit means unchanged on edit (§11). */
   password?: string;
 };

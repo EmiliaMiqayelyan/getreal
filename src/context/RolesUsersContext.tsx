@@ -89,12 +89,12 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
 
   const sessionPermissions = useMemo(() => {
     const role = getRole();
-    // Prefer a user that follows the role, so one user's override does not
-    // change the session for everyone with that role.
+    // Prefer a user without personal permissions, so one user's extras do
+    // not change the session for everyone with that role.
     const byRole = (matches: (type: string) => boolean) =>
       users.find(
         (user) =>
-          !user.hasCustomPermissions && matches(user.type.toLowerCase()),
+          !user.personalPermissions?.length && matches(user.type.toLowerCase()),
       ) ?? users.find((user) => matches(user.type.toLowerCase()));
     if (role === "warehouse") {
       const warehouse =

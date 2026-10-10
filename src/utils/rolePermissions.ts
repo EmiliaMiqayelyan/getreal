@@ -437,6 +437,79 @@ export function apiPermissionsFor(
   return [...result];
 }
 
+/** True when these checkboxes save to exactly this list of backend strings. */
+export function encodesApiPermissions(
+  permissions: RolePermissions,
+  apiNames: string[],
+): boolean {
+  const expected = new Set(apiNames);
+  const encoded = new Set(apiPermissionsFor(permissions, apiNames));
+  return (
+    expected.size === encoded.size &&
+    [...expected].every((name) => encoded.has(name))
+  );
+}
+
+/** Checkboxes on in either set. */
+export function unionPermissions(
+  a: RolePermissions,
+  b: RolePermissions,
+): RolePermissions {
+  const next = { ...a };
+  for (const key of Object.keys(b) as Array<keyof RolePermissions>) {
+    if (b[key]) next[key] = true;
+  }
+  return next;
+}
+
+/**
+ * `personalPermissions` to save for a user: the checkbox keys they have on top
+ * of the role, so exactly those boxes come back on reload, plus the backend
+ * strings those boxes need that the role does not already grant. Strings with
+ * no checkbox are kept from the user's current list.
+ */
+export function personalPermissionsFor(
+  permissions: RolePermissions,
+  role: { permissions: RolePermissions; apiPermissions?: string[] } | undefined,
+  current: string[] = [],
+): string[] {
+  const fromRole = expandApiPermissions(role?.apiPermissions ?? []);
+  const result = new Set<string>();
+  for (const key of Object.keys(permissions) as Array<keyof RolePermissions>) {
+    if (!permissions[key] || role?.permissions[key]) continue;
+    result.add(key);
+    const name = API_PERMISSION_FOR[key];
+    if (!fromRole.has(name)) result.add(name);
+  }
+  for (const name of current) {
+    if (fromRole.has(name) || UI_OWNED_API_PERMISSIONS.has(name)) continue;
+    if (name in DEFAULT_ROLE_PERMISSIONS) continue;
+    const implied = API_PERMISSION_IMPLIES[name];
+    if (
+      implied &&
+      !implied.every((key) => result.has(key) || fromRole.has(key))
+    ) {
+      continue;
+    }
+    result.add(name);
+  }
+  return [...result];
+}
+
+/**
+ * Checkboxes for a user's `personalPermissions`. Exact when the list holds
+ * checkbox keys; a list of backend strings only ticks every box they cover.
+ */
+export function permissionsFromPersonal(names: string[]): RolePermissions {
+  const keys = names.filter((name) => name in DEFAULT_ROLE_PERMISSIONS);
+  if (!keys.length) return permissionsFromApiNames(names);
+  const next = { ...DEFAULT_ROLE_PERMISSIONS };
+  for (const key of Object.keys(next) as Array<keyof RolePermissions>) {
+    next[key] = keys.includes(key);
+  }
+  return next;
+}
+
 /** Toggle a single UI checkbox without syncing siblings that share an API string. */
 export function toggleUiPermission(
   permissions: RolePermissions,

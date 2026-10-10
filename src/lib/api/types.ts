@@ -293,9 +293,10 @@ export type ApiUser = {
   lastOrderDate?: string | null;
   /** Next or latest delivery timestamp. The table shows its weekday. */
   deliveryDate?: string | null;
-  /** Effective permissions: the user's own list when customized, else the role's. */
+  /** Role permissions plus `personalPermissions`. */
   permissions?: ApiRole["permissions"];
-  hasCustomPermissions?: boolean;
+  /** Extra permissions granted to this user only, on top of the role. */
+  personalPermissions?: string[] | null;
 };
 
 export type ApiRoleUser = {
@@ -307,9 +308,6 @@ export type ApiRoleUser = {
   phone?: string | null;
   phoneNumber?: string | null;
   isBlocked?: boolean;
-  /** Effective permissions: the user's own list when customized, else the role's. */
-  permissions?: ApiRole["permissions"];
-  hasCustomPermissions?: boolean;
 };
 
 /** One roles-list row: a role, optionally with assigned users. */

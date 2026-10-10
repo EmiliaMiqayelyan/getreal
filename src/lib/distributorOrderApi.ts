@@ -9,7 +9,6 @@ import type {
 import { collectPaginated, ordersApi } from "@/lib/api";
 import { formatApiError } from "@/lib/api/errors";
 import { centsToDollars, orderModelId, orderRecordId } from "@/lib/api/mappers";
-import type { OrdersListParams } from "@/lib/api/orders";
 import type { ApiOrder, ApiOrderItem } from "@/lib/api/types";
 import { isUuid } from "@/utils/entityIds";
 import {
@@ -29,16 +28,8 @@ import {
   type DemandOrder,
 } from "@/lib/distributorOrderWorkflow";
 
-const HIDDEN_STATUSES = new Set(["cancelled", "canceled", "archived"]);
-const DELIVERED_STATUSES = new Set(["delivered", "partial", "received"]);
-/** Statuses that belong in In Progress when `active=true` is rejected. */
-const OPEN_ORDER_STATUSES = [
-  "requested",
-  "packing",
-  "on_route",
-  "cooler_pickup",
-  "return",
-] as const;
+/** Delivered orders are fetched newest first, one server page at a time. */
+export const DELIVERED_PAGE_SIZE = 100;
 
 function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -47,37 +38,6 @@ function readString(value: unknown) {
 function parseOrderDate(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T12:00:00`);
   return new Date(value);
-}
-
-function isDistributorOrder(order: ApiOrder) {
-  const type = readString(order.type).toLowerCase();
-  if (!type) return true;
-  if (type === "standard" || type === "customer") return false;
-  return (
-    type === "distributor" ||
-    type === "distributor_order" ||
-    type.includes("distributor")
-  );
-}
-
-function hasTimestamp(value: unknown) {
-  const text = readString(value);
-  if (!text || text === "null") return false;
-  return !Number.isNaN(parseOrderDate(text).getTime());
-}
-
-function orderBucket(order: ApiOrder): "hidden" | "delivered" | "progress" {
-  const status = readString(order.status).toLowerCase();
-  if (HIDDEN_STATUSES.has(status)) return "hidden";
-  if (DELIVERED_STATUSES.has(status)) return "delivered";
-  // A requested order stays In Progress. Timestamps only count when status is absent.
-  if (
-    !status &&
-    (hasTimestamp(order.receivedAt) || hasTimestamp(order.validatedAt))
-  ) {
-    return "delivered";
-  }
-  return "progress";
 }
 
 function findDistributor(order: ApiOrder, distributors: Distributor[]) {
@@ -246,45 +206,55 @@ export function mapApiDistributorDelivered(
   };
 }
 
-function listDistributorOrders(
-  params: Omit<OrdersListParams, "page" | "limit" | "type"> = {},
-) {
+/**
+ * In Progress is GET /orders?type=distributor&active=true. Distributor orders
+ * only move requested → on_route → delivered, and `active` covers the first two.
+ */
+function loadOpenDistributorOrders(fresh: boolean) {
   return collectPaginated((page, limit) =>
-    ordersApi.list({ page, limit, type: "distributor", ...params }),
+    ordersApi.list({ page, limit, type: "distributor", active: true, fresh }),
   );
 }
 
-/**
- * In Progress is GET /orders?type=distributor&active=true.
- * If that query is rejected, ask for each open status instead.
- */
-async function loadOpenDistributorOrders(fresh: boolean) {
-  try {
-    return await listDistributorOrders({ active: true, fresh });
-  } catch {
-    const pages = await Promise.all(
-      OPEN_ORDER_STATUSES.map((status) =>
-        listDistributorOrders({ status, fresh }).catch(() => [] as ApiOrder[]),
-      ),
-    );
-    return pages.flat();
-  }
+/** One page of GET /orders?type=distributor&status=delivered, newest first. */
+export async function loadDeliveredDistributorOrders(
+  distributors: Distributor[],
+  page: number,
+  options?: { fresh?: boolean },
+): Promise<{ orders: DeliveredOrder[]; hasMore: boolean }> {
+  const result = await ordersApi.list({
+    page,
+    limit: DELIVERED_PAGE_SIZE,
+    type: "distributor",
+    status: "delivered",
+    fresh: options?.fresh,
+  });
+  const offset = (page - 1) * DELIVERED_PAGE_SIZE;
+  return {
+    orders: result.items.map((order, index) =>
+      mapApiDistributorDelivered(order, distributors, offset + index),
+    ),
+    hasMore:
+      result.items.length > 0 && offset + result.items.length < result.total,
+  };
 }
 
-function dedupeApiOrders(orders: ApiOrder[]) {
-  const seen = new Set<string>();
-  const unique: ApiOrder[] = [];
-  orders.forEach((order, index) => {
-    const key =
-      orderRecordId(order) ||
-      order.orderCode?.trim() ||
-      order.id?.trim() ||
-      `idx-${index}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    unique.push(order);
-  });
-  return unique;
+/** Every delivered distributor order, for "Export all". */
+export async function loadAllDeliveredDistributorOrders(
+  distributors: Distributor[],
+): Promise<DeliveredOrder[]> {
+  const listed = await collectPaginated((page, limit) =>
+    ordersApi.list({
+      page,
+      limit,
+      type: "distributor",
+      status: "delivered",
+      fresh: true,
+    }),
+  );
+  return listed.map((order, index) =>
+    mapApiDistributorDelivered(order, distributors, index),
+  );
 }
 
 /** Keep a just-created distributor order in In Progress even if the list lags. */
@@ -339,15 +309,22 @@ async function loadDemandForDays(
   );
 }
 
-/** Fresh Order List lines for one Wednesday chip. */
+/**
+ * Fresh Order List lines for one Wednesday chip: the chip's own day plus any
+ * other day in that week listed in `knownDayIds` (from the screen load).
+ * The dateless aggregate-demand sums every order ever, so it is not re-sent here.
+ */
 export async function loadDemandForWeek(
   input: DemandCatalog,
   weekId: string,
+  knownDayIds: string[] = [],
 ): Promise<DemandOrder[]> {
-  const index = await ordersApi.aggregateDemand();
-  const days = aggregateDemandDayIds(index).filter(
-    (dayId) => deliveryWeekId(dayId) === weekId,
-  );
+  const days = [
+    ...new Set([
+      weekId,
+      ...knownDayIds.filter((dayId) => deliveryWeekId(dayId) === weekId),
+    ]),
+  ].sort();
   return loadDemandForDays(input, days);
 }
 
@@ -361,12 +338,13 @@ export async function loadDistributorOrderScreen(
 ): Promise<{
   demand: DemandOrder[];
   demandDateIds: string[];
+  /** Every day with customer orders, as listed by aggregate-demand. */
+  demandDayIds: string[];
   demandError: string | null;
   inProgress: PlacedOrder[];
-  delivered: DeliveredOrder[];
 }> {
   const fresh = options?.fresh ?? false;
-  const [demandResult, openOrders, listedOrders] = await Promise.all([
+  const [demandResult, openOrders] = await Promise.all([
     ordersApi.aggregateDemand().then(
       (demand) => ({ demand, error: null as string | null }),
       (error: unknown) => ({
@@ -375,13 +353,12 @@ export async function loadDistributorOrderScreen(
       }),
     ),
     loadOpenDistributorOrders(fresh).catch(() => [] as ApiOrder[]),
-    listDistributorOrders({ fresh }).catch(() => [] as ApiOrder[]),
   ]);
-  const remote = dedupeApiOrders([...openOrders, ...listedOrders]);
 
   // Older weeks load when their chip is opened.
   const firstWeekId = shiftDateId(toDeliveryDateId(upcomingWednesday()), -7);
-  const days = aggregateDemandDayIds(demandResult.demand).filter(
+  const demandDayIds = aggregateDemandDayIds(demandResult.demand);
+  const days = demandDayIds.filter(
     (dayId) => deliveryWeekId(dayId) >= firstWeekId,
   );
   let demand: DemandOrder[] = [];
@@ -396,26 +373,15 @@ export async function loadDistributorOrderScreen(
   const demandDateIds = [
     ...new Set(days.map((dayId) => deliveryWeekId(dayId))),
   ];
-  const inProgress: PlacedOrder[] = [];
-  const delivered: DeliveredOrder[] = [];
-
-  remote.forEach((order, index) => {
-    if (!order || typeof order !== "object") return;
-    if (!isDistributorOrder(order)) return;
-    const bucket = orderBucket(order);
-    if (bucket === "hidden") return;
-    if (bucket === "delivered") {
-      delivered.push(mapApiDistributorDelivered(order, input.distributors, index));
-      return;
-    }
-    inProgress.push(mapApiDistributorOrder(order, input.distributors, index));
-  });
+  const inProgress = openOrders.map((order, index) =>
+    mapApiDistributorOrder(order, input.distributors, index),
+  );
 
   return {
     demand,
     demandDateIds,
+    demandDayIds,
     demandError,
     inProgress,
-    delivered,
   };
 }

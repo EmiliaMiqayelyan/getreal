@@ -94,8 +94,12 @@ export const usersApi = {
     );
   },
 
-  getById(id: string) {
-    return apiRequest<unknown>(`/users/${id}`).then(
+  /** `fresh` skips request sharing and the browser cache. */
+  getById(id: string, options: { fresh?: boolean } = {}) {
+    return apiRequest<unknown>(
+      `/users/${id}`,
+      options.fresh ? { dedupe: false, cache: "no-store" } : {},
+    ).then(
       (payload) =>
         pickNamedEntity<ApiUser>(payload, "user") ?? (payload as ApiUser),
     );
@@ -132,10 +136,10 @@ export const usersApi = {
   },
 
   /**
-   * PATCH /users/:id/permissions. Sets permissions for this user only; the
-   * role is unchanged. `null` drops the override so the user follows the role.
+   * PATCH /users/:id/permissions. Replaces the user's `personalPermissions`,
+   * which are granted on top of the role; the role is unchanged. `[]` clears them.
    */
-  updatePermissions(id: string, permissions: string[] | null) {
+  updatePermissions(id: string, permissions: string[]) {
     return apiRequest<unknown>(`/users/${id}/permissions`, {
       method: "PATCH",
       body: JSON.stringify({ permissions }),
