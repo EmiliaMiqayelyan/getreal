@@ -536,6 +536,7 @@ export default function ProductOrdersPage() {
     const generation = ++loadGeneration.current;
     const snapshot = await loadDistributorOrderScreen(catalogRef.current, {
       fresh,
+      activeWeekId: activeDeliveryDateId,
     });
     if (generation !== loadGeneration.current) return null;
     demandDayIdsRef.current = snapshot.demandDayIds;

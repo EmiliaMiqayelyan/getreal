@@ -291,9 +291,10 @@ type DemandCatalog = { products: ProductForSale[]; items: Item[] };
 async function loadDemandForDays(
   input: DemandCatalog,
   dayIds: string[],
+  fresh = false,
 ): Promise<DemandOrder[]> {
   const payloads = await Promise.all(
-    dayIds.map((dayId) => ordersApi.aggregateDemand(dayId)),
+    dayIds.map((dayId) => ordersApi.aggregateDemand(dayId, { fresh })),
   );
   return mergeDemandByDate(
     payloads.flatMap((payload, index) =>
@@ -319,22 +320,30 @@ export async function loadDemandForWeek(
   weekId: string,
   knownDayIds: string[] = [],
 ): Promise<DemandOrder[]> {
-  const days = [
+  return loadDemandForDays(input, weekDayIds(weekId, knownDayIds), true);
+}
+
+function weekDayIds(weekId: string, knownDayIds: string[]) {
+  return [
     ...new Set([
       weekId,
       ...knownDayIds.filter((dayId) => deliveryWeekId(dayId) === weekId),
     ]),
   ].sort();
-  return loadDemandForDays(input, days);
 }
 
+/**
+ * `activeWeekId` is the chip on screen. Its week is always reloaded, even when
+ * it is older than the default window, so a refresh after ordering from that
+ * chip does not leave its old lines in place.
+ */
 export async function loadDistributorOrderScreen(
   input: {
     distributors: Distributor[];
     products: ProductForSale[];
     items: Item[];
   },
-  options?: { fresh?: boolean },
+  options?: { fresh?: boolean; activeWeekId?: string },
 ): Promise<{
   demand: DemandOrder[];
   demandDateIds: string[];
@@ -345,7 +354,7 @@ export async function loadDistributorOrderScreen(
 }> {
   const fresh = options?.fresh ?? false;
   const [demandResult, openOrders] = await Promise.all([
-    ordersApi.aggregateDemand().then(
+    ordersApi.aggregateDemand(undefined, { fresh }).then(
       (demand) => ({ demand, error: null as string | null }),
       (error: unknown) => ({
         demand: { dates: [], distributors: [] },
@@ -361,11 +370,19 @@ export async function loadDistributorOrderScreen(
   const days = demandDayIds.filter(
     (dayId) => deliveryWeekId(dayId) >= firstWeekId,
   );
+  const requestDays = [
+    ...new Set([
+      ...days,
+      ...(options?.activeWeekId
+        ? weekDayIds(options.activeWeekId, demandDayIds)
+        : []),
+    ]),
+  ].sort();
   let demand: DemandOrder[] = [];
   let demandError = demandResult.error;
-  if (!demandError && days.length > 0) {
+  if (!demandError && requestDays.length > 0) {
     try {
-      demand = await loadDemandForDays(input, days);
+      demand = await loadDemandForDays(input, requestDays, fresh);
     } catch (error) {
       demandError = formatApiError(error, "Failed to load order demand.");
     }

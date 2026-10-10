@@ -194,7 +194,7 @@ export const ordersApi = {
     const qs = search.toString();
     return apiRequest<unknown>(`/orders?${qs}`, {
       preserveEnvelope: true,
-      dedupe: params.fresh ? false : undefined,
+      ...(params.fresh ? { dedupe: false, cache: "no-store" as const } : {}),
     }).then((payload) =>
       normalizePaginatedList<ApiOrder>(
         payload,
@@ -349,13 +349,18 @@ export const ordersApi = {
     );
   },
 
-  /** Open distributor demand, grouped distributor → source → category → item. */
-  aggregateDemand(deliveryDate?: string) {
+  /**
+   * Open distributor demand, grouped distributor → source → category → item.
+   * `fresh` skips in-flight sharing so a reload after POST /orders is not an
+   * earlier response.
+   */
+  aggregateDemand(deliveryDate?: string, options?: { fresh?: boolean }) {
     const search = new URLSearchParams();
     if (deliveryDate) search.set("deliveryDate", deliveryDate);
     const qs = search.toString();
     return apiRequest<unknown>(
       `/orders/distributor/aggregate-demand${qs ? `?${qs}` : ""}`,
+      options?.fresh ? { dedupe: false, cache: "no-store" } : {},
     ).then(normalizeAggregateDemand);
   },
 };
