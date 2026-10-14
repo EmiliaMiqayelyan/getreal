@@ -13,4 +13,5 @@ export {
   DeliveryDateChip,
   DATE_CHIP_ROW,
   DATE_CHIP_SCROLL,
+  DATE_CHIP_WIDTH,
 } from "./DeliveryDateChip";

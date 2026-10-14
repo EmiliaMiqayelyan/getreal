@@ -3,6 +3,7 @@ import { CloudUpload, Image as ImageIcon, X } from "lucide-react";
 
 import { ManageSubcategoriesModal } from "@/components/items/ManageSubcategoriesModal";
 import { Button } from "@/components/ui/Button";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INVALID_FIELD_BORDER } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -56,6 +57,8 @@ type AddItemModalProps = {
   open: boolean;
   onClose: () => void;
   onSave: (item: Item) => void | Promise<void>;
+  /** Delete the item being edited. Edit mode only. */
+  onDelete?: () => void | Promise<void>;
   item?: Item | null;
 };
 
@@ -72,6 +75,7 @@ export function AddItemModal({
   open,
   onClose,
   onSave,
+  onDelete,
   item = null,
 }: AddItemModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -110,6 +114,8 @@ export function AddItemModal({
   const [errors, setErrors] = useState<ItemFormErrors>({});
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [manageSubcategoriesOpen, setManageSubcategoriesOpen] = useState(false);
 
   const distributorOptions = useMemo(
@@ -174,6 +180,8 @@ export function AddItemModal({
     setErrors({});
     setSaving(false);
     savingRef.current = false;
+    setConfirmDelete(false);
+    setDeleting(false);
 
     if (item) {
       setDistributor(item.distributor);
@@ -230,6 +238,16 @@ export function AddItemModal({
     setErrors({});
     setManageSubcategoriesOpen(false);
     onClose();
+  }
+
+  async function handleDelete() {
+    if (!onDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function handleSave() {
@@ -1119,15 +1137,43 @@ export function AddItemModal({
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-4 border-t border-[#00000014] px-6 py-4">
-          <Button variant="ghost" onClick={handleClose}>
-            Cancel
-          </Button>
-          <Button variant="dark" onClick={handleSave} disabled={saving}>
-            {isEdit ? "Save Item" : "Create Item"}
-          </Button>
+        <div className="flex items-center justify-between gap-4 border-t border-[#00000014] px-6 py-4">
+          {isEdit && onDelete ? (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              disabled={saving || deleting}
+              className="cursor-pointer text-[13px] font-medium text-[#111118] underline disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {deleting ? "Deleting..." : "Delete Item"}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              variant="dark"
+              onClick={handleSave}
+              disabled={saving || deleting}
+            >
+              {isEdit ? "Save Item" : "Create Item"}
+            </Button>
+          </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete item"
+        message={`Delete ${merchandisingName.trim() || name.trim() || "this item"}? It will also be removed from Products For Sale.`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => void handleDelete()}
+      />
 
       <ManageSubcategoriesModal
         open={manageSubcategoriesOpen}

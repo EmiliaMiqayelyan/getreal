@@ -6,6 +6,8 @@ export const DATE_CHIP_ROW = "mb-5 flex items-center gap-2 sm:gap-3";
 export const DATE_CHIP_SCROLL =
   "flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
 
+export const DATE_CHIP_WIDTH = 160;
+
 type DeliveryDateChipProps = {
   label: string;
   /** Omit when this date has not been loaded. */
@@ -24,8 +26,9 @@ export function DeliveryDateChip({
     <button
       type="button"
       onClick={onClick}
+      style={{ width: DATE_CHIP_WIDTH }}
       className={cn(
-        "inline-flex h-[50px] w-[160px] shrink-0 items-center justify-between rounded-[12px] border px-3.5 text-left",
+        "inline-flex h-[50px] shrink-0 items-center justify-between rounded-[12px] border px-3.5 text-left",
         active
           ? "border-transparent bg-[#2B5B31]"
           : "border-[#00000014] bg-white",

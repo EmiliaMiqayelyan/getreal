@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { ToastLayer } from "@/components/ui/ToastLayer";
 import { registerToastHandler } from "@/lib/toastBridge";
 import { cn } from "@/utils/cn";
 
@@ -75,20 +76,20 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed right-4 bottom-4 z-[100] flex w-[min(360px,calc(100vw-2rem))] flex-col gap-2">
+      <ToastLayer>
         {toasts.map((toast) => (
           <div
             key={toast.id}
             role={toast.tone === "error" ? "alert" : "status"}
             className={cn(
-              "pointer-events-auto rounded-[10px] px-4 py-2.5 text-[13px] font-medium shadow-lg",
+              "pointer-events-auto w-full rounded-[10px] px-4 py-2.5 text-[13px] font-medium shadow-lg",
               TONE_CLASS[toast.tone],
             )}
           >
             {toast.message}
           </div>
         ))}
-      </div>
+      </ToastLayer>
     </ToastContext.Provider>
   );
 }

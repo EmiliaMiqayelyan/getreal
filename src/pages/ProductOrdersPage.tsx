@@ -31,6 +31,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
+import { ToastLayer } from "@/components/ui/ToastLayer";
 import {
   DELIVERED_SORT_OPTIONS,
   DELIVERED_ORDER_STATUSES,
@@ -40,6 +41,7 @@ import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { inventoryApi, isApiConfigured, ordersApi } from "@/lib/api";
 import { orderRecordId } from "@/lib/api/mappers";
@@ -106,9 +108,9 @@ import {
   formatExpectedDelivery,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
+  shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
-  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import { toOrderDeliveryDateIso } from "@/utils/manualOrder";
 
@@ -417,7 +419,7 @@ export default function ProductOrdersPage() {
     "Orders created successfully",
   );
 
-  const visibleDeliveryChips = useMemo(() => {
+  const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const dateIds = [
       ...demandOrders
@@ -429,8 +431,12 @@ export default function ProductOrdersPage() {
       if (!id) continue;
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
-    return weekWindowChips(activeDeliveryDateId, counts);
-  }, [activeDeliveryDateId, demandOrders, inProgress]);
+    return counts;
+  }, [demandOrders, inProgress]);
+  const { chipRowRef, chips: visibleDeliveryChips } = useWeekChipWindow(
+    activeDeliveryDateId,
+    deliveryCounts,
+  );
 
   const activeDeliveryDate =
     parseDeliveryDateId(activeDeliveryDateId) ?? upcomingWednesday();
@@ -493,17 +499,6 @@ export default function ProductOrdersPage() {
 
   const showDistributorFilter = inProgress.length > 0;
 
-  const activeChipIndex = visibleDeliveryChips.findIndex(
-    (chip) => chip.id === activeDeliveryDateId,
-  );
-  const canShiftChipsBack =
-    visibleDeliveryChips.length > 0 &&
-    (activeChipIndex === -1 || activeChipIndex > 0);
-  const canShiftChipsForward =
-    visibleDeliveryChips.length > 0 &&
-    (activeChipIndex === -1 ||
-      activeChipIndex < visibleDeliveryChips.length - 1);
-
   function selectDeliveryDate(dateId: string) {
     if (!parseDeliveryDateId(dateId)) return;
     userPickedDate.current = true;
@@ -511,17 +506,7 @@ export default function ProductOrdersPage() {
   }
 
   function shiftDeliveryDate(delta: number) {
-    if (visibleDeliveryChips.length === 0) return;
-    if (activeChipIndex === -1) {
-      const edge =
-        delta > 0
-          ? visibleDeliveryChips[0]
-          : visibleDeliveryChips[visibleDeliveryChips.length - 1];
-      if (edge) selectDeliveryDate(edge.id);
-      return;
-    }
-    const next = visibleDeliveryChips[activeChipIndex + delta];
-    if (next) selectDeliveryDate(next.id);
+    selectDeliveryDate(shiftDateId(activeDeliveryDateId, delta * 7));
   }
 
   function showPlacedOrder(order: PlacedOrder) {
@@ -1494,7 +1479,7 @@ export default function ProductOrdersPage() {
           {tab === "Orders" ? (
             <>
               <div className={DATE_CHIP_ROW}>
-                <div className={DATE_CHIP_SCROLL}>
+                <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
                   {visibleDeliveryChips.map((chip) => {
                     const active = chip.id === activeDeliveryDateId;
                     return (
@@ -1511,14 +1496,12 @@ export default function ProductOrdersPage() {
                 <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
                   <DateNavButton
                     aria-label="Previous dates"
-                    disabled={!canShiftChipsBack}
                     onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
                   </DateNavButton>
                   <DateNavButton
                     aria-label="Next dates"
-                    disabled={!canShiftChipsForward}
                     onClick={() => shiftDeliveryDate(1)}
                   >
                     <ChevronRight size={14} />
@@ -1532,6 +1515,7 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      dateCounts={deliveryCounts}
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}
@@ -1674,12 +1658,14 @@ export default function ProductOrdersPage() {
         </div>
 
         {toast ? (
-          <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">
-            <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
-              <Check className="size-3.5" />
-            </span>
-            {toastMessage}
-          </div>
+          <ToastLayer>
+            <div className="flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">
+              <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
+                <Check className="size-3.5" />
+              </span>
+              {toastMessage}
+            </div>
+          </ToastLayer>
         ) : null}
       </div>
     );
@@ -2050,12 +2036,14 @@ export default function ProductOrdersPage() {
       />
 
       {toast ? (
-        <div className="fixed right-6 bottom-6 z-50 flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">
-          <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
-            <Check className="size-3.5" />
-          </span>
-          {toastMessage}
-        </div>
+        <ToastLayer>
+          <div className="flex items-center gap-2.5 rounded-[10px] bg-[#1F7A3A] px-4 py-3 text-[14px] font-medium text-white shadow-lg">
+            <span className="flex size-5 items-center justify-center rounded-full bg-white/20">
+              <Check className="size-3.5" />
+            </span>
+            {toastMessage}
+          </div>
+        </ToastLayer>
       ) : null}
     </div>
   );

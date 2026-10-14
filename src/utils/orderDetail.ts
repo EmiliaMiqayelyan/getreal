@@ -160,6 +160,32 @@ export function readOrderCustomer(order: ApiOrder) {
   };
 }
 
+/** Public cooler codes for every cooler on the order; items can be split across coolers. */
+export function readOrderCoolerIds(order: ApiOrder) {
+  const raw = order as ApiOrder & Record<string, unknown>;
+  const ids: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value === "string") {
+      const code = publicCode(value);
+      if (code) ids.push(code);
+      return;
+    }
+    const record = asRecord(value);
+    if (!record) return;
+    const code = publicCode(
+      readString(record.coolerCode),
+      readString(record.code),
+      readString(record.id),
+    );
+    if (code) ids.push(code);
+  };
+  push(raw.cooler);
+  if (Array.isArray(raw.coolers)) raw.coolers.forEach(push);
+  if (Array.isArray(raw.coolerIds)) raw.coolerIds.forEach(push);
+  push(order.coolerId);
+  return [...new Set(ids)];
+}
+
 /** Panel fields from GET /orders/:id. Callers fill in `packerAssigned`. */
 export function orderDetailFromApi(
   order: ApiOrder,
@@ -167,6 +193,7 @@ export function orderDetailFromApi(
 ): OrderDetail {
   const lines = orderLineItems(order);
   const customer = readOrderCustomer(order);
+  const coolerIds = readOrderCoolerIds(order);
   return {
     id: orderModelId(order, fallbackId),
     customerName: customer.name,
@@ -176,7 +203,7 @@ export function orderDetailFromApi(
       : "",
     items: lines,
     total: orderTotalDollars(order, lines),
-    coolerIds: order.coolerId ? [order.coolerId] : undefined,
+    coolerIds: coolerIds.length ? coolerIds : undefined,
     address: customer.address,
     apt: customer.apt,
     city: customer.city,

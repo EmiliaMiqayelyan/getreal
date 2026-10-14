@@ -19,6 +19,7 @@ export { Switch } from "./Switch";
 export { Tabs } from "./Tabs";
 export type { TabItem } from "./Tabs";
 export { Textarea } from "./Textarea";
+export { ToastLayer } from "./ToastLayer";
 export { Button } from "./Button";
 export type { ButtonVariant, ButtonSize } from "./Button";
 export { Checkbox, Radio } from "./Checkbox";

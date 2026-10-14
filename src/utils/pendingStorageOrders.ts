@@ -245,6 +245,7 @@ export function mapPendingStorageOrder(
 
   orderLines(order).forEach((line, index) => {
     const raw = line as ApiOrderItem & Record<string, unknown>;
+    if (readText(raw, ["status"])?.toLowerCase() === "rejected") return;
     const category =
       readText(raw, ["category", "categoryName"]) ??
       nestedName(raw.category) ??
@@ -292,6 +293,7 @@ export function mapPendingStorageOrder(
     (total, section) => total + section.items.length,
     0,
   );
+  if (count === 0) return null;
 
   return {
     id,

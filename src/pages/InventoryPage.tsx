@@ -403,7 +403,7 @@ function FlatLocationSelect({
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex h-full w-full shrink-0 items-center overflow-hidden px-3 text-left text-[13px] leading-none whitespace-nowrap transition-colors",
+                        "flex h-full w-full shrink-0 items-center overflow-hidden px-3 text-left text-[13px] leading-5 whitespace-nowrap transition-colors",
                         selected
                           ? "bg-[#28402B] font-medium text-white"
                           : "bg-white text-[#111118] hover:bg-[#F5F5F3]",

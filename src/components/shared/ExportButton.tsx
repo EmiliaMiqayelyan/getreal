@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Download, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
+import { ToastLayer } from "@/components/ui/ToastLayer";
 import type { ExportHandler, ExportScope } from "@/types/export";
 import { cn } from "@/utils/cn";
 
@@ -182,14 +183,16 @@ export function ExportButton({
       </div>
 
       {toast ? (
-        <div className="pointer-events-none fixed right-6 bottom-6 z-[60] flex max-w-[320px] items-start gap-2 rounded-[10px] bg-[#242424] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
-          {toast.startsWith("Download started") ? (
-            <Check size={14} className="mt-0.5 shrink-0 text-[#7DDF8A]" />
-          ) : busy ? (
-            <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
-          ) : null}
-          <span>{toast}</span>
-        </div>
+        <ToastLayer>
+          <div className="flex max-w-[320px] items-start gap-2 rounded-[10px] bg-[#242424] px-4 py-2.5 text-[13px] font-medium text-white shadow-lg">
+            {toast.startsWith("Download started") ? (
+              <Check size={14} className="mt-0.5 shrink-0 text-[#7DDF8A]" />
+            ) : busy ? (
+              <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
+            ) : null}
+            <span>{toast}</span>
+          </div>
+        </ToastLayer>
       ) : null}
     </>
   );

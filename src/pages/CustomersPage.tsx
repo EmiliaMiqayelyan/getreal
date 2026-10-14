@@ -35,9 +35,10 @@ import type {
   AdminCustomerOrderStatus,
 } from "@/types/admin";
 import { cn } from "@/utils/cn";
-import { isUuid, publicCode } from "@/utils/entityIds";
+import { isUuid } from "@/utils/entityIds";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
 import { resolveFullAddress } from "@/utils/format";
+import { readOrderCoolerIds } from "@/utils/orderDetail";
 
 const COMPLETED_ORDER_STATUSES = [
   "delivered",
@@ -203,31 +204,6 @@ function readPackerName(order: ApiOrder) {
   return id && !isUuid(id) ? id : undefined;
 }
 
-function readCoolerIds(order: ApiOrder) {
-  const raw = order as ApiOrder & Record<string, unknown>;
-  const ids: string[] = [];
-  const push = (value: unknown) => {
-    if (typeof value === "string") {
-      const code = publicCode(value);
-      if (code) ids.push(code);
-      return;
-    }
-    if (!value || typeof value !== "object") return;
-    const record = value as Record<string, unknown>;
-    const code = publicCode(
-      readString(record.coolerCode),
-      readString(record.code),
-      readString(record.id),
-    );
-    if (code) ids.push(code);
-  };
-  push(raw.cooler);
-  if (Array.isArray(raw.coolers)) raw.coolers.forEach(push);
-  if (Array.isArray(raw.coolerIds)) raw.coolerIds.forEach(push);
-  push(order.coolerId);
-  return [...new Set(ids)];
-}
-
 function mapOrderItems(order: ApiOrder) {
   return (order.items ?? []).map((line) => {
     const price = centsToDollars(line.price);
@@ -259,7 +235,7 @@ function mapApiOrderToCustomerOrder(
     status: mapOrderStatus(order.status),
     items: mapOrderItems(order),
     packerAssigned: readPackerName(order),
-    coolerIds: readCoolerIds(order),
+    coolerIds: readOrderCoolerIds(order),
     orderedAt: created ? formatOrderedAt(created) : undefined,
   };
 }

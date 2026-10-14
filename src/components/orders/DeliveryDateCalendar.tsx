@@ -16,6 +16,8 @@ type DeliveryDateCalendarProps = {
   deliveryWeekdays?: Set<number>;
   /** Block days before today. */
   disablePast?: boolean;
+  /** When provided, only days with a positive count (plus the selected day) are shown. */
+  dateCounts?: ReadonlyMap<string, number>;
   selectedDateId: string;
   onSelectDate: (dateId: string) => void;
   onClose: () => void;
@@ -26,6 +28,7 @@ type DeliveryDateCalendarProps = {
 export function DeliveryDateCalendar({
   deliveryWeekdays,
   disablePast = false,
+  dateCounts,
   selectedDateId,
   onSelectDate,
   onClose,
@@ -109,6 +112,10 @@ export function DeliveryDateCalendar({
             (!deliveryWeekdays || isDeliveryWeekday(date, deliveryWeekdays));
           const dateId = toDeliveryDateId(date);
           const selected = dateId === selectedDateId;
+
+          if (dateCounts && !selected && !((dateCounts.get(dateId) ?? 0) > 0)) {
+            return <div key={dateId} className="py-1.5" aria-hidden />;
+          }
 
           if (!available) {
             return (

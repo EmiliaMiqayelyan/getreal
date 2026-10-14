@@ -37,6 +37,7 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import {
   collectPaginated,
@@ -65,7 +66,6 @@ import {
   formatExpectedDelivery,
   parseDeliveryDateId,
   shiftDateId,
-  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
@@ -145,6 +145,11 @@ function toIsoDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+/** Expiration must be a calendar day strictly after today (local time). */
+function isAfterToday(iso: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && iso > toIsoDate(new Date());
 }
 
 /** Keep the calendar day from `YYYY-MM-DD` or an ISO timestamp. */
@@ -511,11 +516,14 @@ function ExpirationDatePicker({
                   const iso = toIsoDate(new Date(viewYear, viewMonth, day));
                   const isSelected = iso === selectedIso;
                   const isToday = iso === todayIso;
+                  const isDisabled = iso <= todayIso;
                   return (
                     <button
                       key={iso}
                       type="button"
+                      disabled={isDisabled}
                       onClick={() => {
+                        if (isDisabled) return;
                         onChange(iso);
                         setOpen(false);
                       }}
@@ -525,7 +533,8 @@ function ExpirationDatePicker({
                           ? "bg-[#28402B] font-semibold text-white"
                           : isToday
                             ? "bg-[#E8E5E0] font-semibold"
-                            : "hover:bg-[#F5F5F3]",
+                            : !isDisabled && "hover:bg-[#F5F5F3]",
+                        isDisabled && "cursor-not-allowed opacity-35",
                       )}
                     >
                       {day}
@@ -944,6 +953,8 @@ function validateChecks(
     }
     if (state.status === "accepted" && !state.expiration) {
       errors.push(`${item.name}: expiration date required`);
+    } else if (state.status === "accepted" && !isAfterToday(state.expiration)) {
+      errors.push(`${item.name}: expiration date must be after today`);
     }
     if (state.status === "rejected" && !state.reason) {
       errors.push(`${item.name}: rejection reason required`);
@@ -1573,9 +1584,9 @@ export default function DistributorDeliveriesPage() {
     return counts;
   }, [activeTab, orders]);
 
-  const visibleChips = useMemo(
-    () => weekWindowChips(activeDateId, dateCounts),
-    [activeDateId, dateCounts],
+  const { chipRowRef, chips: visibleChips } = useWeekChipWindow(
+    activeDateId,
+    dateCounts,
   );
 
   const filtered = useMemo(() => {
@@ -1886,7 +1897,7 @@ export default function DistributorDeliveriesPage() {
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         {activeTab === "Orders" ? (
         <div className={DATE_CHIP_ROW}>
-          <div className={DATE_CHIP_SCROLL}>
+          <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
             {visibleChips.map((chip) => {
               const active = activeDateId === chip.id;
               return (
@@ -1923,6 +1934,7 @@ export default function DistributorDeliveriesPage() {
             </DateNavButton>
             {calendarOpen ? (
               <DeliveryDateCalendar
+                dateCounts={dateCounts}
                 selectedDateId={activeDateId}
                 initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
                 onSelectDate={(dateId) => {

@@ -36,17 +36,6 @@ export function productFromItem(
   return fromItem(item, id, sortOrder, true);
 }
 
-/** Re-link a product to another item while preserving identity and live status. */
-export function relinkProductToItem(
-  product: ProductForSale,
-  item: Item,
-): ProductForSale {
-  return {
-    ...productFromItem(item, product.id, product.sortOrder),
-    live: product.live,
-  };
-}
-
 export function nextProductId(rows: ProductForSale[]) {
   const numbers = rows
     .map((row) => Number(row.id.replace(/\D/g, "")))

@@ -9,3 +9,4 @@ export { useDocumentTitle } from "./useDocumentTitle";
 export { useLazyWindow } from "./useLazyWindow";
 export { useIdleLogout } from "./useIdleLogout";
 export { useScrollLock } from "./useScrollLock";
+export { useWeekChipWindow } from "./useWeekChipWindow";

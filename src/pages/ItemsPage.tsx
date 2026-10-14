@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 
 import { AddItemModal } from "@/components/items/AddItemModal";
 import { Header } from "@/components/layout/AdminHeader";
+import { DescriptionHover as PreorderHover } from "@/components/shared/DescriptionHover";
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
@@ -14,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -29,6 +31,7 @@ import {
   toCreateItemPayload,
 } from "@/lib/api";
 import { dollarsToCents } from "@/lib/api/mappers";
+import type { CatalogSubcategory } from "@/lib/api/types";
 import type { ExportRequest } from "@/types/export";
 import { exportFilename } from "@/utils/csvExport";
 import { type Item } from "@/types/item";
@@ -36,6 +39,7 @@ import { categoryNamesFromCatalog } from "@/utils/categories";
 import type { ProductForSale } from "@/types/productForSale";
 import { cn } from "@/utils/cn";
 import { findByEntityRef, recordRef } from "@/utils/entityIds";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 import {
   calcFinalMarginPercent,
   calcPricingBreakdown,
@@ -55,7 +59,18 @@ const VIEW_DESCRIPTION_LINK =
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 
 const GRID =
-  "grid grid-cols-[112px_64px_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(48px,1fr)] items-center gap-3";
+  "grid grid-cols-[112px_64px_minmax(0,1.5fr)_minmax(0,0.9fr)_minmax(0,0.95fr)_minmax(0,0.85fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_96px_minmax(48px,1fr)] items-center gap-3";
+
+/** Item responses reference subcategories by UUID, while catalog ids may be codes. */
+function subcategoryNamesById(records: CatalogSubcategory[]) {
+  const map = new Map<string, string>();
+  for (const entry of records) {
+    if (!entry.name) continue;
+    if (entry.recordId) map.set(entry.recordId, entry.name);
+    if (entry.id) map.set(entry.id, entry.name);
+  }
+  return map;
+}
 
 function upsertCreatedItem(current: Item[], savedItem: Item): Item[] {
   const recordId = savedItem.recordId;
@@ -158,21 +173,19 @@ function SourceCell({ children }: { children: ReactNode }) {
 
 function DescriptionHover({ description }: { description: string }) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef(0);
+  const box = useFloatingMenu(open, btnRef, panelRef, {
+    width: 300,
+    gap: 8,
+    maxHeight: 280,
+  });
 
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
 
   function show() {
     window.clearTimeout(hideTimer.current);
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (rect) {
-      setPos({
-        top: rect.bottom + 8,
-        left: Math.min(rect.left, window.innerWidth - 320),
-      });
-    }
     setOpen(true);
   }
 
@@ -201,9 +214,10 @@ function DescriptionHover({ description }: { description: string }) {
       </button>
       {open ? (
         <div
+          ref={panelRef}
           role="tooltip"
-          className="fixed z-50 max-h-[min(280px,calc(100dvh-24px))] w-[300px] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-          style={{ top: pos.top, left: pos.left }}
+          className="fixed z-50 overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+          style={floatingMenuStyle(box)}
           onMouseEnter={show}
           onMouseLeave={hide}
         >
@@ -392,11 +406,7 @@ export default function ItemsPage() {
               .filter((entry) => entry.id && entry.name)
               .map((entry) => [entry.id as string, entry.name as string]),
           ),
-          subcategoriesById: new Map(
-            subcategoryRecords
-              .filter((entry) => entry.id)
-              .map((entry) => [entry.id as string, entry.name]),
-          ),
+          subcategoriesById: subcategoryNamesById(subcategoryRecords),
           distributorsById: new Map(
             distributors.flatMap((entry) =>
               entry.recordId ? [[entry.recordId, entry.name] as const] : [],
@@ -428,6 +438,55 @@ export default function ItemsPage() {
   function closeModal() {
     setModalOpen(false);
     setEditing(null);
+  }
+
+  async function handleDeleteItem() {
+    if (!editing) return;
+    const target = editing;
+    const linkedProducts = products.filter(
+      (product) =>
+        product.itemId === target.id ||
+        (target.recordId != null && product.itemId === target.recordId),
+    );
+    const linkedIds = new Set(linkedProducts.map((product) => product.id));
+
+    if (isApiConfigured()) {
+      const itemPathId = recordRef(target);
+      if (!itemPathId) {
+        notifyApiError(
+          new Error("This item is not linked to a server record."),
+          "Failed to delete item.",
+        );
+        return;
+      }
+      const removedProductIds = new Set<string>();
+      try {
+        // Products reference the item without cascade, so they go first.
+        for (const product of linkedProducts) {
+          const productPathId = recordRef(product);
+          if (productPathId) await productsApi.remove(productPathId);
+          removedProductIds.add(product.id);
+        }
+        await itemsApi.remove(itemPathId);
+      } catch (error) {
+        if (removedProductIds.size > 0) {
+          setProducts((current) =>
+            current.filter((product) => !removedProductIds.has(product.id)),
+          );
+        }
+        notifyApiError(error, "Failed to delete item.");
+        return;
+      }
+    }
+
+    setItems((current) => current.filter((row) => row.id !== target.id));
+    if (linkedIds.size > 0) {
+      setProducts((current) =>
+        current.filter((product) => !linkedIds.has(product.id)),
+      );
+    }
+    showSuccess("Item deleted.");
+    closeModal();
   }
 
   return (
@@ -592,7 +651,7 @@ export default function ItemsPage() {
               />
             </div>
 
-            <ScrollTable fill minWidth={1100} className="hidden md:block">
+            <ScrollTable fill minWidth={1200} className="hidden md:block">
               <div
                 className={cn(
                   GRID,
@@ -613,6 +672,7 @@ export default function ItemsPage() {
                 <div className="min-w-0 truncate text-[#111118]">
                   Distributor
                 </div>
+                <div>Pre-order</div>
                 <div aria-hidden />
               </div>
 
@@ -666,6 +726,10 @@ export default function ItemsPage() {
                     <div className={cn(BODY, "min-w-0 truncate")}>
                       {row.distributor || "—"}
                     </div>
+                    <PreorderHover
+                      description={row.preorderInfo}
+                      label="Pre-order"
+                    />
                     <button
                       type="button"
                       onClick={() => openEdit(row)}
@@ -693,6 +757,7 @@ export default function ItemsPage() {
         open={modalOpen}
         item={editing}
         onClose={closeModal}
+        onDelete={handleDeleteItem}
         onSave={async (item) => {
           if (itemSaveLock.current) return;
           itemSaveLock.current = true;
@@ -715,11 +780,8 @@ export default function ItemsPage() {
                     .filter((c) => c.id && c.name)
                     .map((c) => [c.id as string, c.name as string]),
                 );
-                const subcategoriesById = new Map(
-                  subcategoryRecords
-                    .filter((entry) => entry.id)
-                    .map((entry) => [entry.id as string, entry.name] as const),
-                );
+                const subcategoriesById =
+                  subcategoryNamesById(subcategoryRecords);
                 const distributorsById = new Map<string, string>();
                 if (item.distributor) {
                   if (item.distributorId) {
@@ -758,6 +820,8 @@ export default function ItemsPage() {
                     ...mapped,
                     id: editing.id,
                     recordId: mapped.recordId ?? editing.recordId,
+                    category: mapped.category || item.category,
+                    subcategory: mapped.subcategory || item.subcategory,
                     merchandisingName:
                       item.merchandisingName || mapped.merchandisingName,
                     preorderInfo: item.preorderInfo,
@@ -779,6 +843,8 @@ export default function ItemsPage() {
                   savedItem = {
                     ...item,
                     ...mapped,
+                    category: mapped.category || item.category,
+                    subcategory: mapped.subcategory || item.subcategory,
                     merchandisingName:
                       item.merchandisingName || mapped.merchandisingName,
                     preorderInfo: item.preorderInfo,

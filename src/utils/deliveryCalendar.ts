@@ -155,21 +155,14 @@ export function shiftDateId(dateId: string, days: number, fallback = new Date())
   return toDeliveryDateId(date);
 }
 
-/**
- * Three chips centered on `centerDateId`: one week before, that day, and one week after.
- * A new calendar selection replaces this window instead of appending another chip.
- */
-export function weekWindowChips(
-  centerDateId: string,
+/** `length` consecutive weekly chips starting at `startDateId`. */
+export function weekChips(
+  startDateId: string,
+  length: number,
   counts: ReadonlyMap<string, number> = new Map(),
-  fallback = new Date(),
 ): WednesdayOrderChip[] {
-  const center = parseDeliveryDateId(centerDateId)
-    ? centerDateId
-    : toDeliveryDateId(startOfLocalDay(fallback));
-
-  return [-7, 0, 7].map((offset) => {
-    const id = offset === 0 ? center : shiftDateId(center, offset);
+  return Array.from({ length }, (_, index) => {
+    const id = shiftDateId(startDateId, index * 7);
     const date = parseDeliveryDateId(id);
     return {
       id,
@@ -177,6 +170,15 @@ export function weekWindowChips(
       count: counts.get(id) ?? 0,
     };
   });
+}
+
+/** Whole weeks from `fromId` to `toId`; null when either id is invalid or they fall on different weekdays. */
+export function weeksBetween(fromId: string, toId: string) {
+  const from = parseDeliveryDateId(fromId);
+  const to = parseDeliveryDateId(toId);
+  if (!from || !to) return null;
+  const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+  return days % 7 === 0 ? days / 7 : null;
 }
 
 /** Today, otherwise the next chip, otherwise the most recent one. */

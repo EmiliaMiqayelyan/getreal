@@ -396,7 +396,10 @@ export default function DistributorsPage() {
     const snapshot = editing;
     const recordId = recordRef(snapshot);
     removeDistributor(snapshot.id);
-    if (!isApiConfigured()) return;
+    if (!isApiConfigured()) {
+      showSuccess("Distributor deleted.");
+      return;
+    }
     if (!recordId) {
       saveDistributor(snapshot, "create");
       notifyApiError(
@@ -427,6 +430,7 @@ export default function DistributorsPage() {
               : source,
           ),
         );
+        showSuccess("Distributor deleted.");
       })
       .catch((error) => {
         saveDistributor(snapshot, "create");

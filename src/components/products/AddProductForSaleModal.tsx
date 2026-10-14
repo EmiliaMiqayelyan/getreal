@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/Button";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { INPUT_LEADING_ICON_SIZE } from "@/components/ui/SearchField";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useScrollLock } from "@/hooks/useScrollLock";
@@ -17,34 +16,23 @@ type AddProductForSaleModalProps = {
   open: boolean;
   onClose: () => void;
   onAdd: (item: Item) => void;
-  /** Remove the product being edited from the sale list. Edit mode only. */
-  onRemove?: () => void;
   catalog: Item[];
   existingProducts: ProductForSale[];
   /** Item IDs already on the Products For Sale list (excluded from picker). */
   excludedItemIds: Set<string>;
-  /** Prefill when editing which catalog item is linked. */
-  initialItemId?: string | null;
-  editingProductId?: string | null;
-  mode?: "add" | "edit";
 };
 export function AddProductForSaleModal({
   open,
   onClose,
   onAdd,
-  onRemove,
   catalog,
   existingProducts,
   excludedItemIds,
-  initialItemId = null,
-  editingProductId = null,
-  mode = "add",
 }: AddProductForSaleModalProps) {
   const [selectedId, setSelectedId] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [itemError, setItemError] = useState("");
-  const [confirmRemove, setConfirmRemove] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -56,24 +44,23 @@ export function AddProductForSaleModal({
 
   useEffect(() => {
     if (!open) return;
-    setSelectedId(initialItemId ?? "");
+    setSelectedId("");
     setMenuOpen(false);
     setQuery("");
     setItemError("");
-    setConfirmRemove(false);
-  }, [open, initialItemId]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         if (menuOpen) setMenuOpen(false);
-        else if (!confirmRemove) handleClose();
+        else handleClose();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, menuOpen, onClose, confirmRemove]);
+  }, [open, menuOpen, onClose]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -118,21 +105,13 @@ export function AddProductForSaleModal({
   }, [options, query]);
 
   const selected = catalog.find((item) => item.id === selectedId) ?? null;
-  const editingProduct =
-    existingProducts.find((product) => product.id === editingProductId) ??
-    null;
-  const productName = selected
-    ? getItemDisplayName(selected)
-    : editingProduct?.merchandisingName.trim() || "";
   const canSubmit = Boolean(selected);
-  const isEdit = mode === "edit" || Boolean(editingProductId);
 
   function handleSubmit() {
     const errors = validateAddProductForSale({
       selectedItemId: selectedId,
       catalog,
       existingProducts,
-      editingProductId,
     });
     if (errors.item) {
       setItemError(errors.item);
@@ -141,16 +120,6 @@ export function AddProductForSaleModal({
     if (!selected) return;
     onAdd(selected);
     onClose();
-  }
-
-  function handleRemove() {
-    setConfirmRemove(true);
-  }
-
-  function confirmRemoveProduct() {
-    onRemove?.();
-    setConfirmRemove(false);
-    handleClose();
   }
 
   function handleClose() {
@@ -164,7 +133,7 @@ export function AddProductForSaleModal({
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overscroll-none bg-black/45 p-4"
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !confirmRemove) {
+        if (event.target === event.currentTarget) {
           handleClose();
         }
       }}
@@ -183,13 +152,8 @@ export function AddProductForSaleModal({
               id="add-pfs-title"
               className="text-[18px] font-semibold text-[#111118]"
             >
-              {isEdit ? "Remove Product For Sale" : "Add Product For Sale"}
+              Add Product For Sale
             </h2>
-            {isEdit && editingProductId ? (
-              <p className="mt-1 text-[13px] text-[#8A8A8A]">
-                Product ID {editingProductId}
-              </p>
-            ) : null}
           </div>
           <button
             type="button"
@@ -208,11 +172,6 @@ export function AddProductForSaleModal({
           </label>
 
           <div className="relative">
-            {isEdit ? (
-              <div className="flex h-11 w-full items-center rounded-[8px] border border-[#00000014] bg-[#FAFAF8] px-3 text-[14px] text-[#111118]">
-                <span className="truncate">{productName || "This product"}</span>
-              </div>
-            ) : (
             <button
               ref={triggerRef}
               type="button"
@@ -271,7 +230,6 @@ export function AddProductForSaleModal({
                 />
               </svg>
             </button>
-            )}
           </div>
           {itemError ? (
             <p className="mt-2 text-[12px] text-[#D64545]">{itemError}</p>
@@ -282,15 +240,9 @@ export function AddProductForSaleModal({
           <Button variant="ghost" onClick={handleClose}>
             Cancel
           </Button>
-          {isEdit ? (
-            <Button variant="danger" onClick={handleRemove}>
-              Remove
-            </Button>
-          ) : (
-            <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
-              Add to List
-            </Button>
-          )}
+          <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
+            Add to List
+          </Button>
         </div>
       </div>
 
@@ -348,15 +300,6 @@ export function AddProductForSaleModal({
           </ul>
         </div>
       ) : null}
-      <ConfirmDialog
-        open={confirmRemove}
-        title="Remove Product For Sale"
-        message={`Remove ${productName || "this product"}?`}
-        confirmLabel="Remove"
-        confirmVariant="danger"
-        onClose={() => setConfirmRemove(false)}
-        onConfirm={confirmRemoveProduct}
-      />
     </div>
   );
 }

@@ -168,7 +168,7 @@ export function Select({
                         setOpen(false);
                       }}
                       className={cn(
-                        "flex h-full w-full cursor-pointer items-center overflow-hidden px-3 text-left text-[13px] leading-none whitespace-nowrap transition-colors",
+                        "flex h-full w-full cursor-pointer items-center overflow-hidden px-3 text-left text-[13px] leading-5 whitespace-nowrap transition-colors",
                         "disabled:cursor-not-allowed disabled:opacity-40",
                         isSelected
                           ? "bg-[#28402B] font-medium text-white hover:bg-[#28402B]"

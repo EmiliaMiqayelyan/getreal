@@ -37,6 +37,7 @@ import { usePackingHandoff } from "@/context/PackingHandoffContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import {
   collectPaginated,
   isApiConfigured,
@@ -55,10 +56,10 @@ import {
   isWednesdayDateId,
   parseDeliveryDateId,
   pickDefaultDeliveryChipId,
+  shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
-  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import {
   currency,
@@ -633,12 +634,8 @@ function HoverCard({
           Cooler Pickup
         </div>
         <div className="mt-1 text-[12px] text-[#18A34A]">{display(step.at)}</div>
-        <div className="mt-2">
-          {order.coolerIds?.[0] ? (
-            <IdPill>{order.coolerIds[0]}</IdPill>
-          ) : (
-            "N/A"
-          )}
+        <div className="mt-2 text-[12px]">
+          <CoolerIds order={order} />
         </div>
       </div>
     );
@@ -1283,7 +1280,6 @@ export default function CustomerOrdersPage() {
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const calendarAnchorRef = useRef<HTMLDivElement>(null);
-  const dateChipRowRef = useRef<HTMLDivElement>(null);
   const [statusMenu, setStatusMenu] = useState<{
     orderId: string;
     stepKey: TimelineStepKey;
@@ -1406,7 +1402,7 @@ export default function CustomerOrdersPage() {
     [apiConfigured, orders, packingByCode],
   );
 
-  const deliveryChips = useMemo(() => {
+  const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const order of filterActiveOrders(
       ordersWithPacking,
@@ -1419,12 +1415,16 @@ export default function CustomerOrdersPage() {
         (counts.get(order.deliveryDateId) ?? 0) + 1,
       );
     }
-    const center =
-      appliedDateId && isWednesdayDateId(appliedDateId)
-        ? appliedDateId
-        : toDeliveryDateId(upcomingWednesday());
-    return weekWindowChips(center, counts);
-  }, [appliedDateId, ordersWithPacking, search, statusFilter]);
+    return counts;
+  }, [ordersWithPacking, search, statusFilter]);
+  const chipAnchorDateId =
+    appliedDateId && isWednesdayDateId(appliedDateId)
+      ? appliedDateId
+      : toDeliveryDateId(upcomingWednesday());
+  const { chipRowRef, chips: deliveryChips } = useWeekChipWindow(
+    chipAnchorDateId,
+    deliveryCounts,
+  );
 
   const filteredActive = useMemo(
     () =>
@@ -1571,17 +1571,6 @@ export default function CustomerOrdersPage() {
     apiConfigured && !listExhausted && orders.length < total;
   const activeHasMore = apiConfigured ? ordersHasMore : activeWindow.hasMore;
 
-  const appliedChipIndex = deliveryChips.findIndex(
-    (chip) => chip.id === appliedDateId,
-  );
-  const canShiftDatesBack =
-    deliveryChips.length > 0 &&
-    (appliedChipIndex === -1 || appliedChipIndex > 0);
-  const canShiftDatesForward =
-    deliveryChips.length > 0 &&
-    (appliedChipIndex === -1 ||
-      appliedChipIndex < deliveryChips.length - 1);
-
   useEffect(() => {
     if (!calendarOpen) return;
 
@@ -1604,14 +1593,6 @@ export default function CustomerOrdersPage() {
   }, [calendarOpen]);
 
   useEffect(() => {
-    if (!appliedDateId) return;
-    const chip = dateChipRowRef.current?.querySelector<HTMLElement>(
-      `[data-delivery-date="${appliedDateId}"]`,
-    );
-    chip?.scrollIntoView({ inline: "nearest", block: "nearest" });
-  }, [appliedDateId, deliveryChips]);
-
-  useEffect(() => {
     if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
       setAppliedDateId(toDeliveryDateId(upcomingWednesday()));
       defaultDeliveryApplied.current = true;
@@ -1632,14 +1613,7 @@ export default function CustomerOrdersPage() {
   }
 
   function shiftDeliveryDate(delta: number) {
-    if (deliveryChips.length === 0) return;
-    if (appliedChipIndex === -1) {
-      const edge = delta > 0 ? deliveryChips[0] : deliveryChips.at(-1);
-      if (edge) commitDeliveryDate(edge.id);
-      return;
-    }
-    const next = deliveryChips[appliedChipIndex + delta];
-    if (next) commitDeliveryDate(next.id);
+    commitDeliveryDate(shiftDateId(chipAnchorDateId, delta * 7));
   }
 
   function loadMoreActive() {
@@ -1896,7 +1870,7 @@ export default function CustomerOrdersPage() {
           {activeTab === "Orders" ? (
             <div>
               <div className={DATE_CHIP_ROW}>
-                <div ref={dateChipRowRef} className={DATE_CHIP_SCROLL}>
+                <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
                   {deliveryChips.map((chip) => {
                     const active = chip.id === appliedDateId;
                     return (
@@ -1926,14 +1900,12 @@ export default function CustomerOrdersPage() {
                 >
                   <DateNavButton
                     aria-label="Previous dates"
-                    disabled={!canShiftDatesBack}
                     onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
                   </DateNavButton>
                   <DateNavButton
                     aria-label="Next dates"
-                    disabled={!canShiftDatesForward}
                     onClick={() => shiftDeliveryDate(1)}
                   >
                     <ChevronRight size={14} />
@@ -1949,6 +1921,7 @@ export default function CustomerOrdersPage() {
                   {calendarOpen ? (
                     <DeliveryDateCalendar
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
+                      dateCounts={deliveryCounts}
                       selectedDateId={appliedDateId}
                       onSelectDate={commitDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

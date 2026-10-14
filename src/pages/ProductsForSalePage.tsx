@@ -26,7 +26,6 @@ import {
   nextProductId,
   nextProductSortOrder,
   productFromItem,
-  relinkProductToItem,
 } from "@/constants/productsForSale";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -220,7 +219,6 @@ function ProductCells({
   catalog,
   onToggleLive,
   onView,
-  onRemove,
   interactive,
   onHandlePointerDown,
 }: {
@@ -229,7 +227,6 @@ function ProductCells({
   catalog: Item[];
   onToggleLive: (id: string, live: boolean) => void;
   onView: (row: ProductForSale) => void;
-  onRemove: (row: ProductForSale) => void;
   interactive: boolean;
   onHandlePointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
@@ -282,14 +279,6 @@ function ProductCells({
             >
               View
             </button>
-            <button
-              type="button"
-              className={EDIT_LINK}
-              onClick={() => onRemove(row)}
-              aria-label={`Remove ${display.merchandisingName}`}
-            >
-              Remove
-            </button>
           </div>
         </div>
       </>
@@ -334,14 +323,6 @@ function ProductCells({
       <div className="flex items-center justify-end gap-3">
         <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
           View
-        </button>
-        <button
-          type="button"
-          className={EDIT_LINK}
-          onClick={() => onRemove(row)}
-          aria-label={`Remove ${display.merchandisingName}`}
-        >
-          Remove
         </button>
       </div>
     </>
@@ -463,7 +444,6 @@ function SubcategoryTable({
   catalog,
   onToggleLive,
   onView,
-  onRemove,
   onReorder,
 }: {
   title: string;
@@ -471,7 +451,6 @@ function SubcategoryTable({
   catalog: Item[];
   onToggleLive: (id: string, live: boolean) => void;
   onView: (row: ProductForSale) => void;
-  onRemove: (row: ProductForSale) => void;
   onReorder: (
     draggedId: string,
     targetId: string,
@@ -715,7 +694,6 @@ function SubcategoryTable({
             catalog={catalog}
             onToggleLive={onToggleLive}
             onView={onView}
-            onRemove={onRemove}
             interactive
             onHandlePointerDown={(event) => startDrag(event, row.id, layout)}
           />
@@ -812,7 +790,6 @@ function SubcategoryTable({
                 catalog={catalog}
                 onToggleLive={onToggleLive}
                 onView={onView}
-                onRemove={onRemove}
                 interactive={false}
               />
             </div>,
@@ -854,7 +831,6 @@ export default function ProductsForSalePage() {
   const tabs = useMemo(() => ["All", ...categoryNames], [categoryNames]);
   const [tab, setTab] = useState("All");
   const [addOpen, setAddOpen] = useState(false);
-  const [editTarget, setEditTarget] = useState<ProductForSale | null>(null);
   const [viewing, setViewing] = useState<ProductForSale | null>(null);
 
   const distributorOptions = useMemo(
@@ -935,16 +911,8 @@ export default function ProductsForSalePage() {
         if (linked.recordId) set.add(linked.recordId);
       }
     }
-    if (editTarget) {
-      set.delete(editTarget.itemId);
-      const linked = findByEntityRef(catalog, editTarget.itemId);
-      if (linked) {
-        set.delete(linked.id);
-        if (linked.recordId) set.delete(linked.recordId);
-      }
-    }
     return set;
-  }, [products, editTarget, catalog]);
+  }, [products, catalog]);
 
   function selectTab(nextTab: string) {
     setTab(nextTab);
@@ -1025,52 +993,10 @@ export default function ProductsForSalePage() {
       selectedItemId: item.id,
       catalog,
       existingProducts: products,
-      editingProductId: editTarget?.id ?? null,
     });
     if (errors.item) return;
 
     void (async () => {
-      if (editTarget) {
-        const updated = relinkProductToItem(editTarget, item);
-        if (isApiConfigured()) {
-          try {
-            const pathId = recordRef(editTarget);
-            if (!pathId) {
-              throw new Error(
-                "This product is not linked to a server record. Reload the page and try again.",
-              );
-            }
-            const saved = await productsApi.update(
-              pathId,
-              toCreateProductPayload(updated, catalog),
-            );
-            const mapped = mapApiProductToProductForSale(saved, 0, catalog);
-            const merged = {
-              ...updated,
-              ...mapped,
-              id: editTarget.id,
-              recordId: mapped.recordId ?? editTarget.recordId,
-            };
-            setProducts((current) =>
-              current.map((row) => (row.id === editTarget.id ? merged : row)),
-            );
-            setEditTarget(null);
-            if (viewing?.id === editTarget.id) setViewing(merged);
-            showSuccess("Product updated.");
-            return;
-          } catch (error) {
-            notifyApiError(error, "Failed to update product.");
-            return;
-          }
-        }
-        setProducts((current) =>
-          current.map((row) => (row.id === editTarget.id ? updated : row)),
-        );
-        setEditTarget(null);
-        if (viewing?.id === editTarget.id) setViewing(updated);
-        return;
-      }
-
       const draft = productFromItem(
         item,
         nextProductId(products),
@@ -1094,33 +1020,6 @@ export default function ProductsForSalePage() {
 
       setProducts((current) => [...current, draft]);
     })();
-  }
-
-  function handleRemoveProduct(target: ProductForSale | null = editTarget) {
-    if (!target) return;
-    const id = target.id;
-    const snapshot = target;
-    setProducts((current) => current.filter((row) => row.id !== id));
-    setViewing((current) => (current?.id === id ? null : current));
-    setEditTarget(null);
-    if (isApiConfigured()) {
-      const pathId = recordRef(snapshot);
-      if (!pathId) {
-        setProducts((current) => [snapshot, ...current]);
-        notifyApiError(
-          new Error("This product is not linked to a server record."),
-          "Failed to remove product.",
-        );
-        return;
-      }
-      void productsApi
-        .remove(pathId)
-        .then(() => showSuccess("Product removed."))
-        .catch((error) => {
-          setProducts((current) => [snapshot, ...current]);
-          notifyApiError(error, "Failed to remove product.");
-        });
-    }
   }
 
   return (
@@ -1183,10 +1082,7 @@ export default function ProductsForSalePage() {
 
             <Button
               variant="primary"
-              onClick={() => {
-                setEditTarget(null);
-                setAddOpen(true);
-              }}
+              onClick={() => setAddOpen(true)}
               className="w-full sm:ml-auto sm:w-auto"
             >
               <Plus size={14} />
@@ -1228,10 +1124,6 @@ export default function ProductsForSalePage() {
                       catalog={catalog}
                       onToggleLive={toggleLive}
                       onView={setViewing}
-                      onRemove={(row) => {
-                        setEditTarget(row);
-                        setAddOpen(true);
-                      }}
                       onReorder={(draggedId, targetId, visibleIds) =>
                         handleReorder(
                           category,
@@ -1257,23 +1149,11 @@ export default function ProductsForSalePage() {
 
         <AddProductForSaleModal
           open={addOpen}
-          mode={editTarget ? "edit" : "add"}
-          onClose={() => {
-            setAddOpen(false);
-            setEditTarget(null);
-          }}
+          onClose={() => setAddOpen(false)}
           onAdd={handleAdd}
-          onRemove={() => handleRemoveProduct(editTarget)}
           catalog={catalog}
           existingProducts={products}
           excludedItemIds={excludedItemIds}
-          initialItemId={
-            editTarget
-              ? findByEntityRef(catalog, editTarget.itemId)?.id ??
-                editTarget.itemId
-              : undefined
-          }
-          editingProductId={editTarget?.id ?? null}
         />
 
         {viewingProduct ? (

@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState } from "react";
 
 import { Header } from "@/components/layout/AdminHeader";
+import { DescriptionHover } from "@/components/shared/DescriptionHover";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AddSourceModal } from "@/components/sources/AddSourceModal";
 import { SourceFilters } from "@/components/sources/SourceFilters";
@@ -34,8 +34,6 @@ import {
 
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
-const NOTES_LINK =
-  "cursor-pointer border-0 bg-transparent p-0 text-left text-[13px] font-medium italic underline leading-[18px] text-[#111118] hover:opacity-80";
 const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 
 const GRID =
@@ -88,87 +86,6 @@ function SourcePhoto({
           />
         </svg>
       ) : null}
-    </div>
-  );
-}
-
-const DESCRIPTION_PANEL_WIDTH = 360;
-
-function DescriptionHover({ description }: { description: string }) {
-  const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, maxHeight: 520 });
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const hideTimer = useRef<number>(0);
-
-  useEffect(() => () => window.clearTimeout(hideTimer.current), []);
-
-  function show() {
-    window.clearTimeout(hideTimer.current);
-    const rect = btnRef.current?.getBoundingClientRect();
-    if (rect) {
-      const margin = 16;
-      const left = Math.min(
-        Math.max(margin, rect.left - DESCRIPTION_PANEL_WIDTH + rect.width),
-        window.innerWidth - DESCRIPTION_PANEL_WIDTH - margin,
-      );
-      const belowTop = rect.bottom + 8;
-      const spaceBelow = window.innerHeight - belowTop - margin;
-      const spaceAbove = rect.top - margin - 8;
-      const openBelow = spaceBelow >= 240 || spaceBelow >= spaceAbove;
-      const maxHeight = Math.min(
-        520,
-        Math.max(220, openBelow ? spaceBelow : spaceAbove),
-      );
-      const top = openBelow
-        ? belowTop
-        : Math.max(margin, rect.top - 8 - maxHeight);
-      setPos({ top, left, maxHeight });
-    }
-    setOpen(true);
-  }
-
-  function hide() {
-    hideTimer.current = window.setTimeout(() => setOpen(false), 140);
-  }
-
-  if (!description.trim()) {
-    return <span className="text-[13px] text-[#8A8A8A]">—</span>;
-  }
-
-  return (
-    <div
-      className="relative justify-self-start"
-      onMouseEnter={show}
-      onMouseLeave={hide}
-    >
-      <button
-        ref={btnRef}
-        type="button"
-        className={NOTES_LINK}
-        aria-haspopup="true"
-        aria-expanded={open}
-      >
-        View
-      </button>
-      {open
-        ? createPortal(
-            <div
-              role="tooltip"
-              className="fixed z-50 flex w-[360px] flex-col rounded-[10px] border border-[#00000014] bg-white px-4 py-3.5 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-              style={{ top: pos.top, left: pos.left, maxHeight: pos.maxHeight }}
-              onMouseEnter={show}
-              onMouseLeave={hide}
-            >
-              <div className="mb-2 shrink-0 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
-                Description
-              </div>
-              <p className="min-h-0 overflow-y-auto pr-1 text-[13px] leading-relaxed whitespace-pre-wrap text-[#111118]">
-                {description}
-              </p>
-            </div>,
-            document.body,
-          )
-        : null}
     </div>
   );
 }

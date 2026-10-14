@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
+import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { cn } from "@/utils/cn";
+import { floatingMenuStyle } from "@/utils/floatingMenu";
 
 type LocationHoverProps = {
   /** Short / truncated text shown in the cell. */
@@ -25,10 +27,14 @@ export function LocationHover({
   label = "Address",
 }: LocationHoverProps) {
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
   const cellRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number>(0);
+  const box = useFloatingMenu(open, cellRef, panelRef, {
+    width: 260,
+    gap: 8,
+    maxHeight: 320,
+  });
 
   const display = children;
   const trimmed = display.trim();
@@ -58,23 +64,9 @@ export function LocationHover({
     };
   }, [open]);
 
-  function place() {
-    const rect = cellRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const width = 260;
-    setPos({
-      top: rect.bottom + 8,
-      left: Math.max(
-        12,
-        Math.min(rect.left, window.innerWidth - width - 12),
-      ),
-    });
-  }
-
   function show() {
     if (!canHover) return;
     window.clearTimeout(hideTimer.current);
-    place();
     setOpen(true);
   }
 
@@ -89,7 +81,6 @@ export function LocationHover({
       setOpen(false);
       return;
     }
-    place();
     setOpen(true);
   }
 
@@ -123,8 +114,8 @@ export function LocationHover({
             <div
               ref={panelRef}
               role="tooltip"
-              className="fixed z-[80] w-[260px] rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
-              style={{ top: pos.top, left: pos.left }}
+              className="fixed z-[80] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              style={floatingMenuStyle(box)}
               onMouseEnter={show}
               onMouseLeave={hide}
               onClick={(event) => event.stopPropagation()}

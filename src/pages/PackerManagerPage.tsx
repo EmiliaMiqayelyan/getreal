@@ -27,6 +27,7 @@ import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { PINNED_HEADER } from "@/constants/table";
 import {
@@ -59,7 +60,6 @@ import {
   shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
-  weekWindowChips,
 } from "@/utils/deliveryCalendar";
 import { displayOperationalTimestamp } from "@/utils/packingTime";
 
@@ -304,7 +304,7 @@ export default function PackerManagerPage() {
   } | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const deliveryChips = useMemo(() => {
+  const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const order of orders) {
       if (!order.deliveryDateId) continue;
@@ -313,8 +313,12 @@ export default function PackerManagerPage() {
         (counts.get(order.deliveryDateId) ?? 0) + 1,
       );
     }
-    return weekWindowChips(activeDateId, counts);
-  }, [activeDateId, orders]);
+    return counts;
+  }, [orders]);
+  const { chipRowRef, chips: deliveryChips } = useWeekChipWindow(
+    activeDateId,
+    deliveryCounts,
+  );
 
   useEffect(() => {
     if (!apiLive) return;
@@ -573,7 +577,7 @@ export default function PackerManagerPage() {
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         <div className={DATE_CHIP_ROW}>
-          <div className={DATE_CHIP_SCROLL}>
+          <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
             {deliveryChips.map((chip) => (
                 <DeliveryDateChip
                   key={chip.id}
@@ -608,6 +612,7 @@ export default function PackerManagerPage() {
 
             {calendarOpen ? (
               <DeliveryDateCalendar
+                dateCounts={deliveryCounts}
                 selectedDateId={activeDateId}
                 initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
                 onSelectDate={(dateId) => {
