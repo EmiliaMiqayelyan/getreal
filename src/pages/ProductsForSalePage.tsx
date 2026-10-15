@@ -36,13 +36,12 @@ import {
   isApiConfigured,
   mapApiProductToProductForSale,
   productsApi,
+  subcategoriesApi,
 } from "@/lib/api";
 import { toCreateProductPayload } from "@/lib/api/payloads";
 import { type Item } from "@/types/item";
 import type { Source } from "@/types/source";
-import {
-  type ProductForSale,
-} from "@/types/productForSale";
+import { type ProductForSale } from "@/types/productForSale";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
 import { findByEntityRef, recordRef } from "@/utils/entityIds";
@@ -58,7 +57,11 @@ import {
   resolveProductTableDisplay,
   uniqueProductFieldValues,
 } from "@/utils/productsForSalePage";
-import { subcategoriesForCategory } from "@/utils/subcategories";
+import {
+  applyVisibleSubcategoryOrder,
+  subcategoryReorderPayload,
+  subcategoriesForCategory,
+} from "@/utils/subcategories";
 
 const EDIT_LINK =
   "cursor-pointer text-[13px] font-semibold text-[#2165D4] hover:underline";
@@ -429,7 +432,7 @@ function ProductDetailDrawer({
         ) : null}
 
         {details.description.trim() ? (
-          <p className="mt-5 text-[13px] leading-relaxed whitespace-pre-line break-words text-[#000000]">
+          <p className="mt-5 text-[13px] leading-relaxed break-words whitespace-pre-line text-[#000000]">
             {details.description}
           </p>
         ) : null}
@@ -445,6 +448,7 @@ function SubcategoryTable({
   onToggleLive,
   onView,
   onReorder,
+  onHeadingPointerDown,
 }: {
   title: string;
   rows: ProductForSale[];
@@ -456,6 +460,7 @@ function SubcategoryTable({
     targetId: string,
     visibleIds: string[],
   ) => void;
+  onHeadingPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const [session, setSession] = useState<DragSession | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
@@ -706,14 +711,28 @@ function SubcategoryTable({
 
   const draggedRow = session ? rowById.get(session.id) : undefined;
 
+  function renderHeading() {
+    return (
+      <div className="flex h-10 items-center gap-3 border-b border-[#00000014] bg-[#FBF9F9] px-4">
+        {onHeadingPointerDown ? (
+          <DragHandleControl
+            label={`Reorder ${title}`}
+            interactive
+            onPointerDown={onHeadingPointerDown}
+            className="inline-flex h-5 shrink-0 items-center justify-center p-0 leading-none"
+          />
+        ) : null}
+        <h3 className="min-w-0 truncate text-[14px] font-semibold tracking-normal text-[#111118]">
+          {title}
+        </h3>
+      </div>
+    );
+  }
+
   return (
     <>
       <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white md:hidden">
-        <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
-          <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
-            {title}
-          </h3>
-        </div>
+        {renderHeading()}
         <div
           className={cn(
             TABLE_HEADER,
@@ -735,11 +754,7 @@ function SubcategoryTable({
         {rows.map((row, index) => renderRow(row, index, "mobile"))}
       </div>
       <ScrollTable minWidth={1140} className="hidden md:block">
-        <div className="flex h-10 items-center border-b border-[#00000014] bg-[#FBF9F9] px-4">
-          <h3 className="text-[14px] font-semibold tracking-normal text-[#111118]">
-            {title}
-          </h3>
-        </div>
+        {renderHeading()}
         <div>
           <div
             className={cn(
@@ -800,6 +815,314 @@ function SubcategoryTable({
   );
 }
 
+function slotHeights(ids: string[], nodes: Map<string, HTMLElement>) {
+  const heights: Record<string, number> = {};
+  for (const id of ids) {
+    heights[id] = nodes.get(id)?.offsetHeight ?? 0;
+  }
+  return heights;
+}
+
+function SubcategoryStack({
+  sections,
+  catalog,
+  onToggleLive,
+  onView,
+  onReorderProducts,
+  onReorder,
+}: {
+  sections: Array<{ subcategory: string; rows: ProductForSale[] }>;
+  catalog: Item[];
+  onToggleLive: (id: string, live: boolean) => void;
+  onView: (row: ProductForSale) => void;
+  onReorderProducts: (
+    subcategory: string,
+    draggedId: string,
+    targetId: string,
+    visibleIds: string[],
+  ) => void;
+  onReorder: (orderedNames: string[]) => void;
+}) {
+  const [session, setSession] = useState<DragSession | null>(null);
+  const [previewIds, setPreviewIds] = useState<string[] | null>(null);
+  const sectionRefs = useRef(new Map<string, HTMLDivElement>());
+  const listRef = useRef<HTMLDivElement>(null);
+  const markerRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const sessionRef = useRef<DragSession | null>(null);
+  const previewRef = useRef<string[] | null>(null);
+  const sourceIdsRef = useRef<string[]>([]);
+  const scrollerRef = useRef<HTMLElement | null>(null);
+  const pointerRef = useRef<{ x: number; y: number } | null>(null);
+  const onReorderRef = useRef(onReorder);
+  const finishDragRef = useRef<(commit: boolean) => void>(() => {});
+  const placeGhostRef = useRef<() => void>(() => {});
+  const syncDropTargetRef = useRef<(clientY: number) => void>(() => {});
+  const stopDragListenersRef = useRef<(() => void) | null>(null);
+
+  const sourceIds = useMemo(
+    () => sections.map((section) => section.subcategory),
+    [sections],
+  );
+  const titleById = useMemo(
+    () =>
+      new Map(
+        sections.map((section) => [
+          section.subcategory,
+          formatSubcategoryTitle(section.subcategory),
+        ]),
+      ),
+    [sections],
+  );
+  const shifts = useMemo(
+    () =>
+      session
+        ? shiftsFor(sourceIds, previewIds ?? sourceIds, session.heights)
+        : {},
+    [previewIds, session, sourceIds],
+  );
+  const canReorder = sections.length > 1;
+
+  sourceIdsRef.current = sourceIds;
+  previewRef.current = previewIds ?? sourceIds;
+  onReorderRef.current = onReorder;
+  sessionRef.current = session;
+
+  placeGhostRef.current = () => {
+    const current = sessionRef.current;
+    const node = ghostRef.current;
+    const pointer = pointerRef.current;
+    if (!current || !node || !pointer) return;
+    const section = sectionRefs.current.get(current.id);
+    const left = section?.getBoundingClientRect().left ?? 0;
+    const top = pointer.y - current.offsetY - 6;
+    node.style.width = `${section?.offsetWidth ?? current.width}px`;
+    node.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+  };
+
+  syncDropTargetRef.current = (clientY: number) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    const scroller = scrollerRef.current;
+    if (scroller) {
+      const bounds = scroller.getBoundingClientRect();
+      const edge = 72;
+      const maxStep = 16;
+      if (clientY < bounds.top + edge) {
+        const intensity = (bounds.top + edge - clientY) / edge;
+        scroller.scrollTop -= Math.ceil(maxStep * intensity);
+      } else if (clientY > bounds.bottom - edge) {
+        const intensity = (clientY - (bounds.bottom - edge)) / edge;
+        scroller.scrollTop += Math.ceil(maxStep * intensity);
+      }
+    }
+
+    const visualIds = previewRef.current ?? sourceIdsRef.current;
+    const listTop = markerRef.current?.getBoundingClientRect().top ?? 0;
+    const index = dropIndexForPointer(
+      clientY,
+      visualIds,
+      current.id,
+      current.heights,
+      listTop,
+      current.offsetY,
+    );
+    const next = moveItem(visualIds, current.id, index);
+    if (next === visualIds) return;
+    previewRef.current = next;
+    setPreviewIds(next);
+  };
+
+  finishDragRef.current = (commit: boolean) => {
+    const current = sessionRef.current;
+    if (!current) return;
+    const order = previewRef.current ?? sourceIdsRef.current;
+    const source = sourceIdsRef.current;
+    stopDragListenersRef.current?.();
+    stopDragListenersRef.current = null;
+    sessionRef.current = null;
+    pointerRef.current = null;
+    setSession(null);
+    setPreviewIds(null);
+    if (!commit) return;
+    if (order.join("\0") === source.join("\0")) return;
+    onReorderRef.current(order);
+  };
+
+  useLayoutEffect(() => {
+    if (!session) return;
+    placeGhostRef.current();
+  }, [previewIds, session]);
+
+  useEffect(() => {
+    return () => {
+      stopDragListenersRef.current?.();
+      stopDragListenersRef.current = null;
+    };
+  }, []);
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
+    if (event.button !== 0 || !canReorder) return;
+    event.preventDefault();
+    const sectionEl = sectionRefs.current.get(id);
+    const listEl = listRef.current;
+    if (!sectionEl || !listEl) return;
+
+    const rect = sectionEl.getBoundingClientRect();
+    const nextSession: DragSession = {
+      id,
+      pointerId: event.pointerId,
+      layout: "desktop",
+      width: sectionEl.offsetWidth,
+      offsetY: event.clientY - rect.top,
+      heights: slotHeights(sourceIds, sectionRefs.current),
+    };
+    sessionRef.current = nextSession;
+    previewRef.current = sourceIds;
+    pointerRef.current = { x: event.clientX, y: event.clientY };
+    scrollerRef.current = findScrollParent(listEl);
+    event.currentTarget.setPointerCapture(event.pointerId);
+
+    stopDragListenersRef.current?.();
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "grabbing";
+    document.body.style.userSelect = "none";
+
+    function onMove(pointerEvent: PointerEvent) {
+      const current = sessionRef.current;
+      if (!current || pointerEvent.pointerId !== current.pointerId) return;
+      pointerRef.current = { x: pointerEvent.clientX, y: pointerEvent.clientY };
+      placeGhostRef.current();
+      syncDropTargetRef.current(pointerEvent.clientY);
+    }
+
+    function onUp(pointerEvent: PointerEvent) {
+      const current = sessionRef.current;
+      if (!current || pointerEvent.pointerId !== current.pointerId) return;
+      finishDragRef.current(pointerEvent.type !== "pointercancel");
+    }
+
+    function onKey(keyEvent: KeyboardEvent) {
+      if (keyEvent.key === "Escape") finishDragRef.current(false);
+    }
+
+    let frame = 0;
+    const tick = () => {
+      if (!sessionRef.current || !pointerRef.current) return;
+      placeGhostRef.current();
+      syncDropTargetRef.current(pointerRef.current.y);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("keydown", onKey);
+    stopDragListenersRef.current = () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("keydown", onKey);
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+    };
+
+    setPreviewIds(sourceIds);
+    setSession(nextSession);
+  }
+
+  if (sections.length === 0) return null;
+
+  const draggedTitle = session ? titleById.get(session.id) : undefined;
+
+  return (
+    <>
+      <div>
+        <div ref={markerRef} className="h-0" />
+        <div ref={listRef} className="flex flex-col">
+          {sections.map((section) => {
+            const isDragging = session?.id === section.subcategory;
+            const active = Boolean(session);
+            return (
+              <div
+                key={section.subcategory || "other"}
+                ref={(node) => {
+                  if (node) sectionRefs.current.set(section.subcategory, node);
+                  else sectionRefs.current.delete(section.subcategory);
+                }}
+                className={cn(
+                  "relative pb-4 last:pb-0",
+                  active &&
+                    "z-[1] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none",
+                  isDragging && "z-[3]",
+                )}
+                style={
+                  active
+                    ? {
+                        transform: `translate3d(0, ${shifts[section.subcategory] ?? 0}px, 0)`,
+                      }
+                    : undefined
+                }
+              >
+                {isDragging ? (
+                  <div className="pointer-events-none absolute inset-x-2 inset-y-1 rounded-[12px] bg-[#DCDCD6] shadow-[inset_0_0_0_1.5px_#C4C4BE]" />
+                ) : null}
+                <div
+                  className={cn(isDragging && "pointer-events-none invisible")}
+                >
+                  <SubcategoryTable
+                    title={formatSubcategoryTitle(section.subcategory)}
+                    rows={section.rows}
+                    catalog={catalog}
+                    onToggleLive={onToggleLive}
+                    onView={onView}
+                    onReorder={(draggedId, targetId, visibleIds) =>
+                      onReorderProducts(
+                        section.subcategory,
+                        draggedId,
+                        targetId,
+                        visibleIds,
+                      )
+                    }
+                    onHeadingPointerDown={
+                      canReorder
+                        ? (event) => startDrag(event, section.subcategory)
+                        : undefined
+                    }
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {session && draggedTitle
+        ? createPortal(
+            <div
+              ref={(node) => {
+                ghostRef.current = node;
+                if (node) placeGhostRef.current();
+              }}
+              inert
+              aria-hidden
+              className="pointer-events-none fixed top-0 left-0 z-30 flex h-10 items-center gap-3 rounded-[12px] border border-[#00000014] bg-[#FBF9F9] px-4 shadow-[0_18px_42px_rgba(17,17,24,0.22)]"
+              style={{ width: session.width }}
+            >
+              <DragHandle />
+              <h3 className="min-w-0 truncate text-[14px] font-semibold tracking-normal text-[#111118]">
+                {draggedTitle}
+              </h3>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
+  );
+}
+
 export default function ProductsForSalePage() {
   useDocumentTitle("Products For Sale");
 
@@ -809,6 +1132,8 @@ export default function ProductsForSalePage() {
     items: catalog,
     sources,
     categories,
+    subcategoryRecords,
+    setSubcategoryRecords,
     subcategoriesByCategory,
   } = useAppCatalog();
   const { ready: catalogReady } = useCatalogSlice([
@@ -849,17 +1174,12 @@ export default function ProductsForSalePage() {
       return subcategoriesForCategory(subcategoriesByCategory, activeCategory);
     }
     return Array.from(
-      new Set(
-        Object.values(subcategoriesByCategory).flatMap((names) => names),
-      ),
+      new Set(Object.values(subcategoriesByCategory).flatMap((names) => names)),
     ).sort((a, b) => String(a ?? "").localeCompare(String(b ?? "")));
   }, [activeCategory, subcategoriesByCategory]);
 
   useEffect(() => {
-    if (
-      subcategoryFilter &&
-      !subcategoryOptions.includes(subcategoryFilter)
-    ) {
+    if (subcategoryFilter && !subcategoryOptions.includes(subcategoryFilter)) {
       setSubcategoryFilter("");
     }
   }, [subcategoryFilter, subcategoryOptions]);
@@ -920,7 +1240,11 @@ export default function ProductsForSalePage() {
   }
 
   useEffect(() => {
-    if (tab !== "All" && categoryNames.length > 0 && !categoryNames.includes(tab)) {
+    if (
+      tab !== "All" &&
+      categoryNames.length > 0 &&
+      !categoryNames.includes(tab)
+    ) {
       setTab("All");
     }
   }, [categoryNames, tab]);
@@ -985,6 +1309,20 @@ export default function ProductsForSalePage() {
         });
       }
       return next;
+    });
+  }
+
+  function handleSubcategoryReorder(category: string, orderedNames: string[]) {
+    const previous = subcategoryRecords;
+    const next = applyVisibleSubcategoryOrder(previous, category, orderedNames);
+    if (next === previous) return;
+    setSubcategoryRecords(next);
+    if (!isApiConfigured()) return;
+    const items = subcategoryReorderPayload(next, category);
+    if (!items.length) return;
+    void subcategoriesApi.reorder(items).catch((error) => {
+      setSubcategoryRecords(previous);
+      notifyApiError(error, "Failed to reorder subcategories.");
     });
   }
 
@@ -1102,29 +1440,47 @@ export default function ProductsForSalePage() {
 
       <div className="relative min-h-0 flex-1 bg-[#FAFAFA]">
         <div className="h-full overflow-auto px-4 py-5 md:px-7 md:py-5">
-        {!catalogReady ? (
-          <AppLoader variant="table" label="Loading products" />
-        ) : filtered.length === 0 || grouped.length === 0 ? (
-          <EmptyStateBox variant="dashed" className="rounded-[10px] bg-white px-6 py-16 text-[14px]">
-            {getProductsForSaleEmptyMessage(products.length, filterCriteria)}
-          </EmptyStateBox>
-        ) : (
-          <div className="space-y-8">
-            {grouped.map(({ category, subcategories }) => (
-              <section key={category}>
-                <h2 className="mb-3 text-[18px] font-semibold text-[#111118]">
-                  {category}
-                </h2>
-                <div className="space-y-4">
-                  {subcategories.map(({ subcategory, rows }) => (
-                    <SubcategoryTable
-                      key={`${category}-${subcategory || "other"}`}
-                      title={formatSubcategoryTitle(subcategory)}
-                      rows={rows}
+          {!catalogReady ? (
+            <AppLoader variant="table" label="Loading products" />
+          ) : filtered.length === 0 || grouped.length === 0 ? (
+            <EmptyStateBox
+              variant="dashed"
+              className="rounded-[10px] bg-white px-6 py-16 text-[14px]"
+            >
+              {getProductsForSaleEmptyMessage(products.length, filterCriteria)}
+            </EmptyStateBox>
+          ) : (
+            <div className="space-y-8">
+              {grouped.map(({ category, subcategories }) => {
+                const known = new Set(
+                  subcategoriesForCategory(
+                    subcategoriesByCategory,
+                    category,
+                  ).map((name) => name.trim().toLowerCase()),
+                );
+                const sortable = subcategories.filter((section) =>
+                  known.has(section.subcategory.trim().toLowerCase()),
+                );
+                const rest = subcategories.filter(
+                  (section) =>
+                    !known.has(section.subcategory.trim().toLowerCase()),
+                );
+                return (
+                  <section key={category}>
+                    <h2 className="mb-3 text-[18px] font-semibold text-[#111118]">
+                      {category}
+                    </h2>
+                    <SubcategoryStack
+                      sections={sortable}
                       catalog={catalog}
                       onToggleLive={toggleLive}
                       onView={setViewing}
-                      onReorder={(draggedId, targetId, visibleIds) =>
+                      onReorderProducts={(
+                        subcategory,
+                        draggedId,
+                        targetId,
+                        visibleIds,
+                      ) =>
                         handleReorder(
                           category,
                           subcategory,
@@ -1133,18 +1489,48 @@ export default function ProductsForSalePage() {
                           visibleIds,
                         )
                       }
+                      onReorder={(orderedNames) =>
+                        handleSubcategoryReorder(category, orderedNames)
+                      }
                     />
-                  ))}
-                </div>
-              </section>
-            ))}
-            <InfiniteScrollSentinel
-              hasMore={listWindow.hasMore}
-              loadedCount={listWindow.loadedCount}
-              onLoadMore={listWindow.loadMore}
-            />
-          </div>
-        )}
+                    {rest.length > 0 ? (
+                      <div
+                        className={cn(
+                          sortable.length > 0 && "mt-4",
+                          "space-y-4",
+                        )}
+                      >
+                        {rest.map(({ subcategory, rows }) => (
+                          <SubcategoryTable
+                            key={`${category}-${subcategory || "other"}`}
+                            title={formatSubcategoryTitle(subcategory)}
+                            rows={rows}
+                            catalog={catalog}
+                            onToggleLive={toggleLive}
+                            onView={setViewing}
+                            onReorder={(draggedId, targetId, visibleIds) =>
+                              handleReorder(
+                                category,
+                                subcategory,
+                                draggedId,
+                                targetId,
+                                visibleIds,
+                              )
+                            }
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                );
+              })}
+              <InfiniteScrollSentinel
+                hasMore={listWindow.hasMore}
+                loadedCount={listWindow.loadedCount}
+                onLoadMore={listWindow.loadMore}
+              />
+            </div>
+          )}
         </div>
 
         <AddProductForSaleModal

@@ -63,4 +63,16 @@ export const subcategoriesApi = {
   remove(id: string) {
     return apiRequest<void>(`/subcategories/${id}`, { method: "DELETE" });
   },
+
+  reorder(items: Array<{ id: string; position: number }>) {
+    return apiRequest<unknown>("/subcategories/reorder", {
+      method: "PATCH",
+      body: JSON.stringify({
+        items: items.map((item) => ({
+          id: item.id,
+          position: Math.round(item.position),
+        })),
+      }),
+    });
+  },
 };

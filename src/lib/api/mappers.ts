@@ -369,7 +369,14 @@ export function mapApiItemToItem(
     item.singleItemUnit?.trim() || (sourcePer === "Unit" ? "Each" : "");
   const pieceWeightOz =
     sourcePer === "Unit" ? pieceWeightOzFromLabel(singleItemUnit) : 0;
-  const merchandiseWeightRaw = item.merchandiseWeight?.trim() ?? "";
+  const merchandiseWeightRecord = item as ApiItem & {
+    merchandise_weight?: string | null;
+  };
+  const merchandiseWeightRaw = (
+    merchandiseWeightRecord.merchandiseWeight ??
+    merchandiseWeightRecord.merchandise_weight ??
+    ""
+  ).trim();
   const merchandiseWeight = isMerchandiseWeightLabel(merchandiseWeightRaw)
     ? merchandiseWeightRaw
     : "";
@@ -383,7 +390,7 @@ export function mapApiItemToItem(
     merchandisingName:
       item.merchandisingName?.trim() || item.name?.trim() || "N/A",
     description: item.description ?? "",
-    preorderInfo: item.preorderInfo ?? "",
+    preorderInfo: (item.preOrderInformation ?? item.preorderInfo ?? "").trim(),
     category: categoryName,
     subcategory: subcategoryName,
     subcategoryId: item.subcategoryId ?? undefined,
@@ -734,7 +741,17 @@ export function mapApiSubcategoryToCatalog(
     name,
     category: categoryName,
     categoryId: categoryId && isUuid(categoryId) ? categoryId : undefined,
+    position: readPosition(subcategory.position),
   };
+}
+
+function readPosition(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return undefined;
 }
 
 /** Public order code shown in lists. Prefers orderCode over the UUID. */

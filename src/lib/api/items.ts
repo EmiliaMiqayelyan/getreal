@@ -17,11 +17,12 @@ export type CreateItemPayload = {
   singleItemUnit?: string;
   /**
    * Customer-facing weight when sourced by unit.
-   * Label from the merchandise weight dropdown.
+   * Label from the merchandise weight dropdown. Null clears a stored value.
    */
-  merchandiseWeight?: string;
+  merchandiseWeight?: string | null;
   description?: string;
-  preorderInfo?: string;
+  /** Stored as items.pre_order_information. */
+  preOrderInformation?: string | null;
   /** Uploaded image URLs. */
   photos?: string[];
 };

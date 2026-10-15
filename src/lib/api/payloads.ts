@@ -272,11 +272,12 @@ export function toCreateItemPayload(
       item.sourcePer === "Case" && item.caseBy === "Units / case"
         ? ""
         : item.singleItemUnit || undefined,
-    ...(item.merchandiseWeight
-      ? { merchandiseWeight: item.merchandiseWeight }
-      : {}),
+    merchandiseWeight:
+      item.sourcePer === "Unit" && item.merchandiseWeight
+        ? item.merchandiseWeight
+        : null,
     description: item.description.trim() || undefined,
-    preorderInfo: item.preorderInfo.trim() || undefined,
+    preOrderInformation: item.preorderInfo.trim() || null,
     photos: photoUrls.filter((url) => typeof url === "string"),
   };
 }

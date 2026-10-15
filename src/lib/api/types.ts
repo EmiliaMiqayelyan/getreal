@@ -31,6 +31,7 @@ export type ApiCategory = {
   id?: string;
   categoryCode?: string;
   name?: string;
+  position?: number;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -41,6 +42,7 @@ export type ApiSubcategory = {
   name?: string;
   categoryId?: string;
   category?: string | { id?: string; name?: string };
+  position?: number;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -53,6 +55,8 @@ export type CatalogSubcategory = {
   name: string;
   category: string;
   categoryId?: string;
+  /** 1-based order within the parent category. */
+  position?: number;
 };
 
 export type ApiItem = {
@@ -77,10 +81,14 @@ export type ApiItem = {
    * 12 oz (3/4 lb), 16 oz = lb.
    */
   merchandiseWeight?: string | null;
+  /** Snake-case alias some item payloads use for merchandiseWeight. */
+  merchandise_weight?: string | null;
   /** Array of uploaded image URLs (strings, not objects). */
   photos?: string[] | null;
   merchandisingName?: string;
   description?: string | null;
+  preOrderInformation?: string | null;
+  /** Older responses used this name. */
   preorderInfo?: string | null;
   category?: string;
   subcategory?: string;
