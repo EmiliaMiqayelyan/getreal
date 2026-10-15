@@ -16,7 +16,7 @@ import type {
   DistributorDocument,
 } from "@/types/distributor";
 import type { CaseBy, Item, ItemPhoto, SourcePer } from "@/types/item";
-import { pieceWeightOzFromLabel } from "@/types/item";
+import { isMerchandiseWeightLabel, pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { PushNotification } from "@/types/notification";
 import type { Source } from "@/types/source";
@@ -369,6 +369,10 @@ export function mapApiItemToItem(
     item.singleItemUnit?.trim() || (sourcePer === "Unit" ? "Each" : "");
   const pieceWeightOz =
     sourcePer === "Unit" ? pieceWeightOzFromLabel(singleItemUnit) : 0;
+  const merchandiseWeightRaw = item.merchandiseWeight?.trim() ?? "";
+  const merchandiseWeight = isMerchandiseWeightLabel(merchandiseWeightRaw)
+    ? merchandiseWeightRaw
+    : "";
   const contents = Math.max(1, item.contents ?? 1);
   const buyingPrice = centsToDollars(item.buyingPrice);
 
@@ -390,6 +394,7 @@ export function mapApiItemToItem(
     sourcePer,
     caseBy,
     pieceWeightOz,
+    merchandiseWeight,
     caseWeightLbs: 0,
     buyingPrice,
     contents: sourcePer === "Unit" ? 1 : contents,
@@ -420,6 +425,7 @@ export function mapApiProductToItem(product: ApiProduct, index: number): Item {
     sourcePer: "Case",
     caseBy: "Units / case",
     pieceWeightOz: 0,
+    merchandiseWeight: "",
     caseWeightLbs: 0,
     buyingPrice: sellingPrice,
     contents: 1,

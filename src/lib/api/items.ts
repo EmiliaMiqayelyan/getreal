@@ -15,6 +15,11 @@ export type CreateItemPayload = {
   contents: number;
   buyingUnit?: string;
   singleItemUnit?: string;
+  /**
+   * Customer-facing weight when sourced by unit.
+   * Label from the merchandise weight dropdown.
+   */
+  merchandiseWeight?: string;
   description?: string;
   preorderInfo?: string;
   /** Uploaded image URLs. */
@@ -32,7 +37,10 @@ const inflightCreates = new Map<string, Promise<ApiItem>>();
 
 export const itemsApi = {
   list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>("/items", catalogListCacheOptions(options?.fresh)).then((payload) =>
+    return apiRequest<unknown>(
+      "/items",
+      catalogListCacheOptions(options?.fresh),
+    ).then((payload) =>
       normalizeNamedList<ApiItem>(payload, ["items", "data", "results"]),
     );
   },

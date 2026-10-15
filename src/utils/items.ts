@@ -11,6 +11,11 @@ export function getItemDisplayName(item: Item) {
   return item.merchandisingName.trim() || item.name;
 }
 
+/** Unit shown under sale price. Merchandise weight wins when the item has one. */
+export function getItemSaleUnit(item: Item) {
+  return item.merchandiseWeight.trim() || item.singleItemUnit.trim() || "—";
+}
+
 export function getItemPrimaryPhoto(item: Item) {
   return item.photos[0]?.url ?? ITEM_PHOTO_PLACEHOLDER;
 }
@@ -54,7 +59,7 @@ export function downloadItemsCsv(
       `${getItemDisplayName(item)}\n${item.description.trim() || "—"}`,
       item.category || "—",
       item.subcategory?.trim() || "—",
-      `${salePrice(item)}\n${item.singleItemUnit?.trim() || "—"}`,
+      `${salePrice(item)}\n${getItemSaleUnit(item)}`,
       item.source?.trim() || "—",
       item.distributor?.trim() || "—",
     ]),

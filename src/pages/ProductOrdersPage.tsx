@@ -111,6 +111,7 @@ import {
   shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
+  WEDNESDAY_WEEKDAYS,
 } from "@/utils/deliveryCalendar";
 import { toOrderDeliveryDateIso } from "@/utils/manualOrder";
 
@@ -500,9 +501,10 @@ export default function ProductOrdersPage() {
   const showDistributorFilter = inProgress.length > 0;
 
   function selectDeliveryDate(dateId: string) {
-    if (!parseDeliveryDateId(dateId)) return;
+    const wednesday = deliveryWeekId(dateId);
+    if (!parseDeliveryDateId(wednesday)) return;
     userPickedDate.current = true;
-    setActiveDeliveryDateId(deliveryWeekId(dateId));
+    setActiveDeliveryDateId(wednesday);
   }
 
   function shiftDeliveryDate(delta: number) {
@@ -1478,6 +1480,9 @@ export default function ProductOrdersPage() {
         <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
           {tab === "Orders" ? (
             <>
+              <p className="mb-2 text-[14px] font-semibold text-[#111118]">
+                Delivery date
+              </p>
               <div className={DATE_CHIP_ROW}>
                 <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
                   {visibleDeliveryChips.map((chip) => {
@@ -1516,6 +1521,7 @@ export default function ProductOrdersPage() {
                   {calendarOpen ? (
                     <DeliveryDateCalendar
                       dateCounts={deliveryCounts}
+                      deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       selectedDateId={activeDeliveryDateId}
                       onSelectDate={selectDeliveryDate}
                       onClose={() => setCalendarOpen(false)}

@@ -12,6 +12,7 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { findSubcategoryIdByName } from "@/lib/api/mappers";
 import {
   CASE_BY_OPTIONS,
+  MERCHANDISE_WEIGHT_OPTIONS,
   PIECE_WEIGHT_OPTIONS,
   SOURCE_PER_OPTIONS,
   pieceWeightLabel,
@@ -106,6 +107,7 @@ export function AddItemModal({
   const [sourcePer, setSourcePer] = useState<SourcePer | "">("");
   const [caseBy, setCaseBy] = useState<CaseBy | "">("");
   const [pieceWeightOz, setPieceWeightOz] = useState("");
+  const [merchandiseWeight, setMerchandiseWeight] = useState("");
   const [caseWeightLbs, setCaseWeightLbs] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [contents, setContents] = useState("");
@@ -198,6 +200,9 @@ export function AddItemModal({
       setPieceWeightOz(
         item.pieceWeightOz > 0 ? String(item.pieceWeightOz) : "",
       );
+      setMerchandiseWeight(
+        item.merchandiseWeight || pieceWeightLabel(item.pieceWeightOz),
+      );
       setCaseWeightLbs(
         item.caseWeightLbs > 0
           ? item.caseWeightLbs % 1 === 0
@@ -224,6 +229,7 @@ export function AddItemModal({
     setSourcePer("");
     setCaseBy("");
     setPieceWeightOz("");
+    setMerchandiseWeight("");
     setCaseWeightLbs("");
     setBuyingPrice("");
     setContents("");
@@ -264,6 +270,7 @@ export function AddItemModal({
       sourcePer,
       caseBy,
       pieceWeightOz,
+      merchandiseWeight,
       caseWeightLbs,
       buyingPrice,
       contents,
@@ -328,6 +335,8 @@ export function AddItemModal({
         sourcePer: resolvedSourcePer,
         caseBy: resolvedCaseBy,
         pieceWeightOz: resolvedPieceOz,
+        merchandiseWeight:
+          resolvedSourcePer === "Unit" ? merchandiseWeight : "",
         caseWeightLbs: resolvedCaseLbs,
         buyingPrice: buying,
         contents: resolvedContents,
@@ -909,6 +918,36 @@ export function AddItemModal({
                         value={formatFinalMarginPercent(finalMargin)}
                       />
                     </Field>
+                    <div data-field="merchandiseWeight">
+                      <Field label="Merchandise weight" required>
+                        <Select
+                          value={merchandiseWeight}
+                          onChange={(value) => {
+                            setMerchandiseWeight(value);
+                            if (errors.merchandiseWeight) {
+                              setErrors((current) => ({
+                                ...current,
+                                merchandiseWeight: undefined,
+                              }));
+                            }
+                          }}
+                          className="w-full"
+                          aria-label="Merchandise weight"
+                          placeholder="Select"
+                          buttonClassName={cn(
+                            errors.merchandiseWeight && INVALID_BORDER,
+                          )}
+                          options={[
+                            { value: "", label: "Select" },
+                            ...MERCHANDISE_WEIGHT_OPTIONS.map((entry) => ({
+                              value: entry.label,
+                              label: entry.label,
+                            })),
+                          ]}
+                        />
+                      </Field>
+                      <FieldError message={errors.merchandiseWeight} />
+                    </div>
                   </div>
                 </>
               ) : null}
@@ -1190,7 +1229,6 @@ export function AddItemModal({
           }
         }}
       />
-
     </div>
   );
 }

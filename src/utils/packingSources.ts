@@ -47,6 +47,11 @@ function describeRecord(row: ApiInventory): PackingSourceOption | null {
     source: row.sourceName?.trim() || "N/A",
     expDate: formatExpDate(row.expirationDate),
     expirationIso: row.expirationDate?.trim() || "",
+    quantity:
+      typeof row.quantity === "number" && Number.isFinite(row.quantity)
+        ? row.quantity
+        : null,
+    available: null,
     location,
     address: row.address?.trim() || location,
   };

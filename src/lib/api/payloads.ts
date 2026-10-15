@@ -272,6 +272,9 @@ export function toCreateItemPayload(
       item.sourcePer === "Case" && item.caseBy === "Units / case"
         ? ""
         : item.singleItemUnit || undefined,
+    ...(item.merchandiseWeight
+      ? { merchandiseWeight: item.merchandiseWeight }
+      : {}),
     description: item.description.trim() || undefined,
     preorderInfo: item.preorderInfo.trim() || undefined,
     photos: photoUrls.filter((url) => typeof url === "string"),

@@ -11,8 +11,16 @@ type LocationHoverProps = {
   /** Full address for the hover popover. Falls back to `children` when omitted. */
   fullAddress?: string | null;
   className?: string;
-  /** Tooltip heading — matches Notes / Description hover labels. */
+  /** Tooltip heading. Matches Notes / Description hover labels. */
   label?: string;
+  /**
+   * Location place shown under the name. When set, the popover lists the
+   * name and this place on separate lines.
+   */
+  locationPlace?: string | null;
+  placeLabel?: string;
+  /** Hover only, so a parent row can stay the click target. */
+  hoverOnly?: boolean;
 };
 
 /**
@@ -25,6 +33,9 @@ export function LocationHover({
   fullAddress,
   className,
   label = "Address",
+  locationPlace,
+  placeLabel = "Location place",
+  hoverOnly = false,
 }: LocationHoverProps) {
   const [open, setOpen] = useState(false);
   const cellRef = useRef<HTMLDivElement>(null);
@@ -39,8 +50,10 @@ export function LocationHover({
   const display = children;
   const trimmed = display.trim();
   const full = fullAddress?.trim() || "";
+  const placeText = locationPlace?.trim() || "";
+  const structured = locationPlace !== undefined;
   // Show the full address when provided; otherwise fall back to the cell text.
-  const tooltip = full || trimmed;
+  const tooltip = structured ? trimmed || placeText : full || trimmed;
   const canHover = Boolean(tooltip && tooltip !== "—");
 
   useEffect(() => () => window.clearTimeout(hideTimer.current), []);
@@ -84,7 +97,7 @@ export function LocationHover({
     setOpen(true);
   }
 
-  if (!trimmed) {
+  if (!trimmed && !placeText) {
     return <span className={className} />;
   }
 
@@ -94,11 +107,11 @@ export function LocationHover({
       className={cn("relative min-w-0", className)}
       onMouseEnter={show}
       onMouseLeave={hide}
-      onClick={toggle}
-      role={canHover ? "button" : undefined}
-      tabIndex={canHover ? 0 : undefined}
+      onClick={hoverOnly ? undefined : toggle}
+      role={canHover && !hoverOnly ? "button" : undefined}
+      tabIndex={canHover && !hoverOnly ? 0 : undefined}
       onKeyDown={
-        canHover
+        canHover && !hoverOnly
           ? (event) => {
               if (event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
@@ -114,18 +127,51 @@ export function LocationHover({
             <div
               ref={panelRef}
               role="tooltip"
-              className="fixed z-[80] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
+              data-location-hover
+              className="fixed z-[90] overflow-y-auto rounded-[10px] border border-[#00000014] bg-white px-3.5 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)]"
               style={floatingMenuStyle(box)}
               onMouseEnter={show}
               onMouseLeave={hide}
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
-                {label}
-              </div>
-              <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
-                {tooltip}
-              </p>
+              {structured ? (
+                <>
+                  {trimmed ? (
+                    <>
+                      <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                        {label}
+                      </div>
+                      <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
+                        {trimmed}
+                      </p>
+                    </>
+                  ) : null}
+                  {placeText ? (
+                    <>
+                      <div
+                        className={cn(
+                          "mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase",
+                          trimmed && "mt-2.5",
+                        )}
+                      >
+                        {placeLabel}
+                      </div>
+                      <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
+                        {placeText}
+                      </p>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <div className="mb-1.5 text-[10px] font-semibold tracking-[0.06em] text-[#8A8A8A] uppercase">
+                    {label}
+                  </div>
+                  <p className="text-[12px] leading-relaxed whitespace-pre-wrap text-[#111118]">
+                    {tooltip}
+                  </p>
+                </>
+              )}
             </div>,
             document.body,
           )

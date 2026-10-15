@@ -145,6 +145,8 @@ export function sourcesForItem(
       source: lot.source,
       expDate: lot.expDate,
       expirationIso: lot.expirationIso,
+      quantity: [6, 4, 8][index] ?? null,
+      available: [6, 1, 3][index] ?? null,
       location,
       address: locationAddress(location),
     };

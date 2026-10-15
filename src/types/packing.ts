@@ -12,8 +12,19 @@ export type PackingSourceOption = {
   expDate: string;
   /** ISO date kept for the future packing payload. */
   expirationIso: string;
+  /**
+   * First count in the Distributor / Source menu.
+   * Inventory quantity until the packing count is defined.
+   */
+  quantity: number | null;
+  /**
+   * Second count in that menu, beside `quantity`.
+   * Null until that figure is defined.
+   */
+  available: number | null;
+  /** Location name, e.g. Freezer 2. */
   location: string;
-  /** Full address for the location hover. */
+  /** Location place shown under the name on hover. */
   address: string;
 };
 

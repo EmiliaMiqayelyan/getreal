@@ -30,6 +30,11 @@ export type Item = {
   caseBy: CaseBy | "";
   /** Piece weight in ounces when sourcePer is Unit. */
   pieceWeightOz: number;
+  /**
+   * Customer-facing weight label when sourced by Unit.
+   * Independent of piece weight, which is used for cost.
+   */
+  merchandiseWeight: string;
   /** Total case weight in lbs when caseBy is Lbs / case. */
   caseWeightLbs: number;
   /** Price per lb (Unit) or case price (Case). */
@@ -72,6 +77,9 @@ export const PIECE_WEIGHT_OPTIONS = [
   { label: "16 oz = lb", oz: 16 },
 ] as const;
 
+/** Same weight choices as piece weight. Sent to the API as the option label. */
+export const MERCHANDISE_WEIGHT_OPTIONS = PIECE_WEIGHT_OPTIONS;
+
 export const SINGLE_ITEM_UNITS = [
   "1 steak (12 oz)",
   "1 lb",
@@ -88,4 +96,8 @@ export function pieceWeightLabel(oz: number) {
 export function pieceWeightOzFromLabel(label: string) {
   const match = PIECE_WEIGHT_OPTIONS.find((entry) => entry.label === label);
   return match?.oz ?? 0;
+}
+
+export function isMerchandiseWeightLabel(label: string) {
+  return MERCHANDISE_WEIGHT_OPTIONS.some((entry) => entry.label === label);
 }

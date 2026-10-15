@@ -5,6 +5,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from "lucide-react";
 
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
@@ -87,7 +88,7 @@ type SourceOption = PackingSourceOption;
 
 const COOLER_PLACEHOLDER = "Cooler";
 
-const SOURCE_PANEL_WIDTH = 460;
+const SOURCE_PANEL_WIDTH = 700;
 
 /** Format like `7/29/26, 8:45am`. */
 function formatPackTimestamp(date = new Date()): string {
@@ -261,7 +262,10 @@ function SourcePicker({
       option.distributor.toLowerCase().includes(q) ||
       option.source.toLowerCase().includes(q) ||
       option.expDate.toLowerCase().includes(q) ||
-      option.itemId.toLowerCase().includes(q)
+      option.itemId.toLowerCase().includes(q) ||
+      option.location.toLowerCase().includes(q) ||
+      (option.quantity != null && String(option.quantity).includes(q)) ||
+      (option.available != null && String(option.available).includes(q))
     );
   });
 
@@ -269,6 +273,12 @@ function SourcePicker({
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
       if (panelRef.current?.contains(target) || anchor.contains(target)) return;
+      if (
+        target instanceof Element &&
+        target.closest("[data-location-hover]")
+      ) {
+        return;
+      }
       onClose();
     }
     function onKeyDown(event: KeyboardEvent) {
@@ -303,16 +313,38 @@ function SourcePicker({
       </div>
       <div className="px-1 pb-1.5">
         {filtered.map((option) => (
-          <button
+          <div
             key={option.inventoryRecordId}
-            type="button"
+            role="option"
+            tabIndex={0}
             onClick={() => onChoose(option)}
-            className="grid w-full grid-cols-[minmax(0,1.15fr)_minmax(0,1.25fr)_112px] items-center gap-x-4 rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onChoose(option);
+              }
+            }}
+            className="grid w-full cursor-pointer grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)_108px_28px_28px_minmax(88px,0.85fr)] items-center gap-x-3 rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]"
           >
             <span className="min-w-0 truncate">{option.distributor}</span>
             <span className="min-w-0 truncate">{option.source}</span>
             <span className="whitespace-nowrap">{option.expDate}</span>
-          </button>
+            <span className="text-right tabular-nums">
+              {option.quantity ?? ""}
+            </span>
+            <span className="text-right tabular-nums">
+              {option.available ?? ""}
+            </span>
+            <LocationHover
+              hoverOnly
+              className="text-[13px] text-[#111118]"
+              label="Location name"
+              placeLabel="Location place"
+              locationPlace={option.address || option.location}
+            >
+              {option.location}
+            </LocationHover>
+          </div>
         ))}
         {!filtered.length ? (
           <div className="px-3 py-4 text-center text-[12px] text-[#8A8A8A]">
@@ -659,8 +691,13 @@ function PackingDetail({
                           <div className={cell}>
                             <LocationHover
                               className="text-[13px] text-[#111118]"
-                              fullAddress={item.selected?.address ?? ""}
-                              label="Location"
+                              label="Location name"
+                              placeLabel="Location place"
+                              locationPlace={
+                                item.selected?.address ||
+                                item.selected?.location ||
+                                ""
+                              }
                             >
                               {item.selected?.location ?? ""}
                             </LocationHover>
@@ -796,6 +833,10 @@ export default function PackingCoolersPage() {
   );
   const [activeOrderId, setActiveOrderId] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [loadingOrderIds, setLoadingOrderIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const loadingOrderIdsRef = useRef(new Set<string>());
 
   const hydrated = useMemo(
     () =>
@@ -916,6 +957,43 @@ export default function PackingCoolersPage() {
       cancelled = true;
     };
   }, [apiLive, notifyApiError]);
+
+  async function markOrderLoaded(order: PackOrder) {
+    if (loadingOrderIdsRef.current.has(order.id)) return;
+    loadingOrderIdsRef.current.add(order.id);
+    setLoadingOrderIds(new Set(loadingOrderIdsRef.current));
+    try {
+      let loadedAt = formatPackTimestamp();
+      if (apiLive && order.recordId) {
+        const remote = await ordersApi.loaded(order.recordId);
+        loadedAt =
+          displayOperationalTimestamp(remote.loadedAt) ?? loadedAt;
+      }
+      setOrders((current) =>
+        current.map((entry) =>
+          entry.id === order.id ? { ...entry, loadedAt } : entry,
+        ),
+      );
+      markLoaded(order.code, loadedAt);
+      upsertPacking({
+        orderCode: order.code,
+        packedAt: order.packedAt,
+        coolerReadyAt: order.packedAt,
+        loadedAt,
+        coolerIds: order.coolerIds,
+        packerName:
+          packingByCode[order.code]?.packerName || order.packerName || "",
+        packerId: packingByCode[order.code]?.packerId || order.packerId,
+        packingStartedAt: packingByCode[order.code]?.packingStartedAt,
+        items: order.items,
+      });
+    } catch (error) {
+      notifyApiError(error, "Failed to mark the order loaded.");
+    } finally {
+      loadingOrderIdsRef.current.delete(order.id);
+      setLoadingOrderIds(new Set(loadingOrderIdsRef.current));
+    }
+  }
 
   function openPacking(order: PackOrder) {
     if (!order.packedAt && !order.loadedAt) {
@@ -1239,50 +1317,19 @@ export default function PackingCoolersPage() {
                     ) : (
                       <Button
                         variant="dark"
-                        onClick={() => {
-                          void (async () => {
-                            let loadedAt = formatPackTimestamp();
-                            if (apiLive && order.recordId) {
-                              try {
-                                const remote = await ordersApi.loaded(order.recordId);
-                                loadedAt =
-                                  displayOperationalTimestamp(remote.loadedAt) ??
-                                  loadedAt;
-                              } catch (error) {
-                                notifyApiError(error, "Failed to mark the order loaded.");
-                                return;
-                              }
-                            }
-                            setOrders((current) =>
-                              current.map((entry) =>
-                                entry.id === order.id
-                                  ? { ...entry, loadedAt }
-                                  : entry,
-                              ),
-                            );
-                            markLoaded(order.code, loadedAt);
-                            upsertPacking({
-                              orderCode: order.code,
-                              packedAt: order.packedAt,
-                              coolerReadyAt: order.packedAt,
-                              loadedAt,
-                              coolerIds: order.coolerIds,
-                              packerName:
-                                packingByCode[order.code]?.packerName ||
-                                order.packerName ||
-                                "",
-                              packerId:
-                                packingByCode[order.code]?.packerId ||
-                                order.packerId,
-                              packingStartedAt:
-                                packingByCode[order.code]?.packingStartedAt,
-                              items: order.items,
-                            });
-                          })();
-                        }}
+                        disabled={loadingOrderIds.has(order.id)}
+                        aria-busy={loadingOrderIds.has(order.id)}
+                        onClick={() => void markOrderLoaded(order)}
                         className="rounded-[10px] text-[12px]"
                       >
-                        Load Now
+                        {loadingOrderIds.has(order.id) ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Loading...
+                          </>
+                        ) : (
+                          "Load Now"
+                        )}
                       </Button>
                     )
                   ) : null}

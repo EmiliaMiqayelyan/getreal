@@ -48,6 +48,7 @@ import {
   downloadItemsCsv,
   getItemDisplayName,
   getItemPrimaryPhoto,
+  getItemSaleUnit,
   nextItemId,
 } from "@/utils/items";
 import { subcategoriesForCategory } from "@/utils/subcategories";
@@ -72,21 +73,49 @@ function subcategoryNamesById(records: CatalogSubcategory[]) {
   return map;
 }
 
-function upsertCreatedItem(current: Item[], savedItem: Item): Item[] {
+function sameSavedItem(row: Item, savedItem: Item) {
   const recordId = savedItem.recordId;
-  const index = current.findIndex(
-    (row) =>
-      row.id === savedItem.id ||
-      (recordId != null &&
-        (row.recordId === recordId || row.id === recordId)) ||
-      (row.recordId != null && row.recordId === savedItem.id),
+  return (
+    row.id === savedItem.id ||
+    (recordId != null && (row.recordId === recordId || row.id === recordId)) ||
+    (row.recordId != null && row.recordId === savedItem.id)
   );
+}
+
+function upsertCreatedItem(current: Item[], savedItem: Item): Item[] {
+  const index = current.findIndex((row) => sameSavedItem(row, savedItem));
   if (index >= 0) {
     return current.map((row, rowIndex) =>
       rowIndex === index ? savedItem : row,
     );
   }
   return [savedItem, ...current];
+}
+
+/** Keep a just-saved row on the first page of its new category tab. */
+function placeSavedItemFirst(current: Item[], savedItem: Item): Item[] {
+  return [savedItem, ...current.filter((row) => !sameSavedItem(row, savedItem))];
+}
+
+function promoteLinkedProducts(
+  current: ProductForSale[],
+  item: Item,
+): ProductForSale[] {
+  const linked: ProductForSale[] = [];
+  const rest: ProductForSale[] = [];
+  for (const product of current) {
+    if (!findByEntityRef([item], product.itemId)) {
+      rest.push(product);
+      continue;
+    }
+    linked.push({
+      ...product,
+      category: item.category,
+      subcategory: item.subcategory,
+    });
+  }
+  if (linked.length === 0) return current;
+  return [...linked, ...rest];
 }
 
 function formatSalePrice(value: number) {
@@ -380,7 +409,11 @@ export default function ItemsPage() {
   }
 
   useEffect(() => {
-    if (tab !== "All" && categoryNames.length > 0 && !categoryNames.includes(tab)) {
+    if (
+      tab !== "All" &&
+      categoryNames.length > 0 &&
+      !categoryNames.includes(tab)
+    ) {
       setTab("All");
     }
   }, [categoryNames, tab]);
@@ -426,6 +459,8 @@ export default function ItemsPage() {
                 id: current.id,
                 sellingPrice: mapped.sellingPrice || current.sellingPrice,
                 preorderInfo: mapped.preorderInfo || current.preorderInfo,
+                merchandiseWeight:
+                  mapped.merchandiseWeight || current.merchandiseWeight,
               }
             : current,
         );
@@ -488,6 +523,42 @@ export default function ItemsPage() {
     showSuccess("Item deleted.");
     closeModal();
   }
+
+  function publishSavedItem(saved: Item, previous: Item | null) {
+    const classificationChanged =
+      !previous ||
+      previous.category !== saved.category ||
+      previous.subcategory !== saved.subcategory;
+
+    setItems((current) => {
+      if (!previous) return upsertCreatedItem(current, saved);
+      if (!classificationChanged) {
+        return current.map((row) =>
+          row.id === previous.id ? saved : row,
+        );
+      }
+      return placeSavedItemFirst(current, saved);
+    });
+
+    if (!classificationChanged) return;
+
+    setProducts((current) => promoteLinkedProducts(current, saved));
+
+    const nextCategory = saved.category.trim();
+    if (
+      nextCategory &&
+      categoryNames.includes(nextCategory) &&
+      tab !== "All" &&
+      tab !== nextCategory
+    ) {
+      selectTab(nextCategory);
+      return;
+    }
+    if (subcategoryFilter && subcategoryFilter !== saved.subcategory) {
+      setSubcategoryFilter("");
+    }
+  }
+
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -630,7 +701,7 @@ export default function ItemsPage() {
                           {formatSalePrice(displaySalePrice(row))}
                         </div>
                         <div className={cn(SECONDARY, "mt-0.5")}>
-                          {row.singleItemUnit || "—"}
+                          {getItemSaleUnit(row)}
                         </div>
                       </div>
                     </div>
@@ -719,7 +790,7 @@ export default function ItemsPage() {
                         {formatSalePrice(displaySalePrice(row))}
                       </div>
                       <div className={cn(SECONDARY, "mt-0.5")}>
-                        {row.singleItemUnit || "—"}
+                        {getItemSaleUnit(row)}
                       </div>
                     </div>
                     <SourceCell>{row.source || "—"}</SourceCell>
@@ -791,7 +862,8 @@ export default function ItemsPage() {
                 }
                 const sourcesById = new Map<string, string>();
                 if (item.source) {
-                  if (item.sourceId) sourcesById.set(item.sourceId, item.source);
+                  if (item.sourceId)
+                    sourcesById.set(item.sourceId, item.source);
                   if (payload.sourceId) {
                     sourcesById.set(payload.sourceId, item.source);
                   }
@@ -820,43 +892,45 @@ export default function ItemsPage() {
                     ...mapped,
                     id: editing.id,
                     recordId: mapped.recordId ?? editing.recordId,
-                    category: mapped.category || item.category,
-                    subcategory: mapped.subcategory || item.subcategory,
                     merchandisingName:
                       item.merchandisingName || mapped.merchandisingName,
                     preorderInfo: item.preorderInfo,
                     caseBy: item.caseBy || mapped.caseBy,
                     caseWeightLbs: item.caseWeightLbs,
                     pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
+                    merchandiseWeight:
+                      mapped.merchandiseWeight || item.merchandiseWeight,
                     sourcePer: item.sourcePer || mapped.sourcePer,
                     source: item.source || mapped.source,
                     sellingPrice: item.sellingPrice,
+                    category: item.category.trim() || mapped.category,
+                    subcategory: item.subcategory.trim() || mapped.subcategory,
+                    subcategoryId: item.subcategoryId || mapped.subcategoryId,
                   };
-                  setItems((current) =>
-                    current.map((row) =>
-                      row.id === editing.id ? savedItem : row,
-                    ),
-                  );
                 } else {
                   const created = await itemsApi.create(payload);
                   const mapped = mapApiItemToItem(created, 0, mapOpts);
                   savedItem = {
                     ...item,
                     ...mapped,
-                    category: mapped.category || item.category,
-                    subcategory: mapped.subcategory || item.subcategory,
                     merchandisingName:
                       item.merchandisingName || mapped.merchandisingName,
                     preorderInfo: item.preorderInfo,
                     caseBy: item.caseBy || mapped.caseBy,
                     caseWeightLbs: item.caseWeightLbs,
                     pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
+                    merchandiseWeight:
+                      mapped.merchandiseWeight || item.merchandiseWeight,
                     sourcePer: item.sourcePer || mapped.sourcePer,
                     source: item.source || mapped.source,
                     sellingPrice: item.sellingPrice,
+                    category: item.category.trim() || mapped.category,
+                    subcategory: item.subcategory.trim() || mapped.subcategory,
+                    subcategoryId: item.subcategoryId || mapped.subcategoryId,
                   };
-                  setItems((current) => upsertCreatedItem(current, savedItem));
                 }
+
+                publishSavedItem(savedItem, editing);
 
                 const itemRecordId = recordRef(savedItem);
                 if (!itemRecordId) {
@@ -870,30 +944,46 @@ export default function ItemsPage() {
                   products,
                 );
                 if (product) {
+                  const classificationChanged =
+                    !editing ||
+                    editing.category !== savedItem.category ||
+                    editing.subcategory !== savedItem.subcategory;
                   setProducts((current) => {
                     const existing = findByEntityRef(current, product.id);
-                    if (existing) {
+                    const nextProduct: ProductForSale = existing
+                      ? {
+                          ...product,
+                          id: existing.id,
+                          recordId: product.recordId ?? existing.recordId,
+                          sortOrder: existing.sortOrder,
+                          category: savedItem.category,
+                          subcategory: savedItem.subcategory,
+                        }
+                      : {
+                          ...product,
+                          category: savedItem.category,
+                          subcategory: savedItem.subcategory,
+                          sortOrder:
+                            current.reduce(
+                              (max, row) => Math.max(max, row.sortOrder),
+                              0,
+                            ) + 1,
+                        };
+                    if (!classificationChanged && existing) {
                       return current.map((row) =>
-                        row.id === existing.id
-                          ? {
-                              ...product,
-                              id: existing.id,
-                              recordId: product.recordId ?? existing.recordId,
-                              sortOrder: existing.sortOrder,
-                            }
-                          : row,
+                        row.id === existing.id ? nextProduct : row,
                       );
                     }
                     return [
-                      {
-                        ...product,
-                        sortOrder:
-                          current.reduce(
-                            (max, row) => Math.max(max, row.sortOrder),
-                            0,
-                          ) + 1,
-                      },
-                      ...current,
+                      nextProduct,
+                      ...current.filter(
+                        (row) =>
+                          row.id !== nextProduct.id &&
+                          !(
+                            nextProduct.recordId &&
+                            row.recordId === nextProduct.recordId
+                          ),
+                      ),
                     ];
                   });
                 }
@@ -907,22 +997,15 @@ export default function ItemsPage() {
               }
             }
 
-            setItems((current) => {
-              if (editing) {
-                return current.map((row) =>
-                  row.id === editing.id
-                    ? {
-                        ...item,
-                        id: editing.id,
-                        sourceId: item.sourceId ?? editing.sourceId,
-                        distributorId:
-                          item.distributorId ?? editing.distributorId,
-                      }
-                    : row,
-                );
-              }
-              return [{ ...item, id: nextItemId(current) }, ...current];
-            });
+            const offlineItem: Item = editing
+              ? {
+                  ...item,
+                  id: editing.id,
+                  sourceId: item.sourceId ?? editing.sourceId,
+                  distributorId: item.distributorId ?? editing.distributorId,
+                }
+              : { ...item, id: nextItemId(rows) };
+            publishSavedItem(offlineItem, editing);
             closeModal();
           } finally {
             itemSaveLock.current = false;

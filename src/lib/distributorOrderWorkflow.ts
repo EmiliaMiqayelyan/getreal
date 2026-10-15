@@ -14,6 +14,7 @@ import {
   formatExpectedDelivery,
   isWednesdayDateId,
   parseDeliveryDateId,
+  deliveryWeekId,
   startOfLocalDay,
   toDeliveryDateId,
   upcomingWednesday,
@@ -142,7 +143,13 @@ export function aggregateDemandDayIds(demand: AggregateDemand, today = new Date(
 }
 
 function uniqueWednesdayIds(ids: string[]) {
-  return [...new Set(ids.filter((id) => id && isWednesdayDateId(id)))];
+  return [
+    ...new Set(
+      ids
+        .map((id) => deliveryWeekId(id))
+        .filter((id) => id && isWednesdayDateId(id)),
+    ),
+  ];
 }
 
 function eachAggregateItem(
@@ -263,10 +270,12 @@ export function mapAggregateDemand(input: {
           // dateReceivingBy is the column only. Customer delivery dates come
           // from `dates`. A later receiving day must not hide the line.
           const lineDateId =
-            input.assignDateId ||
-            announcedDateIds[0] ||
-            calendarDayId(item.dateReceivingBy?.trim() || "") ||
-            toDeliveryDateId(upcomingWednesday(today));
+            deliveryWeekId(
+              input.assignDateId ||
+                announcedDateIds[0] ||
+                calendarDayId(item.dateReceivingBy?.trim() || "") ||
+                toDeliveryDateId(upcomingWednesday(today)),
+            ) || toDeliveryDateId(upcomingWednesday(today));
           const lineDate =
             parseDeliveryDateId(lineDateId) ?? upcomingWednesday(today);
           const row: WorkingOrderRow = {

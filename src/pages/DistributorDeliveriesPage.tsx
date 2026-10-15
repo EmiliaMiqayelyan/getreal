@@ -65,7 +65,11 @@ import {
   deliveryDateIdFromValue,
   formatExpectedDelivery,
   parseDeliveryDateId,
+  deliveryWeekId,
   shiftDateId,
+  toDeliveryDateId,
+  upcomingWednesday,
+  WEDNESDAY_WEEKDAYS,
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
 import {
@@ -660,7 +664,8 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
     delivery.code?.trim() ||
     delivery.id?.trim() ||
     `DLV-${index + 1}`;
-  const deliveryDateId = deliveryDateIdFromValue(delivery.deliveryDate);
+  const parsedDateId = deliveryDateIdFromValue(delivery.deliveryDate);
+  const deliveryDateId = deliveryWeekId(parsedDateId);
   const deliveryDate = deliveryDateId
     ? parseDeliveryDateId(deliveryDateId)
     : null;
@@ -1441,7 +1446,7 @@ export default function DistributorDeliveriesPage() {
               .filter(Boolean),
           ),
         ].sort();
-        const preferred = dateIds[dateIds.length - 1] ?? "";
+        const preferred = deliveryWeekId(dateIds[dateIds.length - 1] ?? "");
         if (!preferred) return;
         setActiveDateId((current) => current || preferred);
       })
@@ -1576,16 +1581,18 @@ export default function DistributorDeliveriesPage() {
       const matchesTab =
         activeTab === "Orders" ? !order.checked : order.checked;
       if (!matchesTab) continue;
-      counts.set(
-        order.deliveryDateId,
-        (counts.get(order.deliveryDateId) ?? 0) + 1,
-      );
+      const dateId = deliveryWeekId(order.deliveryDateId);
+      if (!dateId) continue;
+      counts.set(dateId, (counts.get(dateId) ?? 0) + 1);
     }
     return counts;
   }, [activeTab, orders]);
 
+  const chipCenter =
+    deliveryWeekId(activeDateId) || toDeliveryDateId(upcomingWednesday());
+
   const { chipRowRef, chips: visibleChips } = useWeekChipWindow(
-    activeDateId,
+    chipCenter,
     dateCounts,
   );
 
@@ -1595,7 +1602,8 @@ export default function DistributorDeliveriesPage() {
       const matchesTab =
         activeTab === "Orders" ? !order.checked : order.checked;
       const matchesDate =
-        activeTab === "Received" || order.deliveryDateId === activeDateId;
+        activeTab === "Received" ||
+        deliveryWeekId(order.deliveryDateId) === chipCenter;
       const matchesSearch =
         !q ||
         order.id.toLowerCase().includes(q) ||
@@ -1615,8 +1623,8 @@ export default function DistributorDeliveriesPage() {
       );
     });
   }, [
-    activeDateId,
     activeTab,
+    chipCenter,
     distributorFilter,
     orders,
     productFilter,
@@ -1629,11 +1637,19 @@ export default function DistributorDeliveriesPage() {
   );
 
   function selectDeliveryDate(dateId: string) {
-    setActiveDateId(dateId);
+    setActiveDateId(
+      deliveryWeekId(dateId) || toDeliveryDateId(upcomingWednesday()),
+    );
   }
 
   function shiftChipWindow(delta: number) {
-    setActiveDateId((current) => shiftDateId(current, delta * 7));
+    setActiveDateId((current) =>
+      shiftDateId(
+        deliveryWeekId(current) ||
+          toDeliveryDateId(upcomingWednesday()),
+        delta * 7,
+      ),
+    );
   }
 
   function toggleExpanded(id: string) {
@@ -1896,10 +1912,14 @@ export default function DistributorDeliveriesPage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         {activeTab === "Orders" ? (
+        <div>
+        <p className="mb-2 text-[14px] font-semibold text-[#111118]">
+          Delivery date
+        </p>
         <div className={DATE_CHIP_ROW}>
           <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
             {visibleChips.map((chip) => {
-              const active = activeDateId === chip.id;
+              const active = chipCenter === chip.id;
               return (
                 <DeliveryDateChip
                   key={chip.id}
@@ -1935,8 +1955,9 @@ export default function DistributorDeliveriesPage() {
             {calendarOpen ? (
               <DeliveryDateCalendar
                 dateCounts={dateCounts}
-                selectedDateId={activeDateId}
-                initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
+                deliveryWeekdays={WEDNESDAY_WEEKDAYS}
+                selectedDateId={chipCenter}
+                initialMonth={parseDeliveryDateId(chipCenter) ?? new Date()}
                 onSelectDate={(dateId) => {
                   selectDeliveryDate(dateId);
                 }}
@@ -1944,6 +1965,7 @@ export default function DistributorDeliveriesPage() {
               />
             ) : null}
           </div>
+        </div>
         </div>
         ) : null}
 

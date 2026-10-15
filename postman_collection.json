@@ -2331,7 +2331,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Required) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"buyingPrice\": 1500, // (Required) Non-negative integer (cents)\n  \"contents\": 1 // (Required) Numeric value\n}"
+                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Required) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Required) Valid UUID\n  \"buyingPrice\": 1500, // (Required) Non-negative integer (cents)\n  \"contents\": 1, // (Required) Numeric value\n  \"merchandiseWeight\": \"8 oz (1/2 lb)\" // (Optional) Customer-facing weight for unit-sourced items. One of: 2 oz, 4 oz (1/4 lb), 6 oz, 8 oz (1/2 lb), 10 oz, 12 oz (3/4 lb), 16 oz = lb\n}"
                 }
               }
             },
@@ -2357,7 +2357,7 @@
                 },
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Optional) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"buyingPrice\": 1500, // (Optional) Non-negative integer (cents)\n  \"contents\": 1 // (Optional) Numeric value\n}"
+                  "raw": "{\n  \"name\": \"Premium Steak (Wholesale)\", // (Optional) String\n  \"categoryId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"distributorId\": \"00000000-0000-0000-0000-000000000000\", // (Optional) Valid UUID\n  \"buyingPrice\": 1500, // (Optional) Non-negative integer (cents)\n  \"contents\": 1, // (Optional) Numeric value\n  \"merchandiseWeight\": \"8 oz (1/2 lb)\" // (Optional) Customer-facing weight for unit-sourced items. One of: 2 oz, 4 oz (1/4 lb), 6 oz, 8 oz (1/2 lb), 10 oz, 12 oz (3/4 lb), 16 oz = lb. Omit to leave unchanged.\n}"
                 }
               }
             },

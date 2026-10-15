@@ -1,5 +1,6 @@
 import {
   CASE_BY_OPTIONS,
+  isMerchandiseWeightLabel,
   PIECE_WEIGHT_OPTIONS,
   SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
@@ -27,6 +28,7 @@ export type ItemFormInput = {
   sourcePer: string;
   caseBy: string;
   pieceWeightOz: string;
+  merchandiseWeight: string;
   caseWeightLbs: string;
   buyingPrice: string;
   contents: string;
@@ -50,6 +52,7 @@ export type ItemFormErrors = {
   sourcePer?: string;
   caseBy?: string;
   pieceWeightOz?: string;
+  merchandiseWeight?: string;
   caseWeightLbs?: string;
   buyingPrice?: string;
   contents?: string;
@@ -132,6 +135,12 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
       errors.pieceWeightOz = "Select a piece weight.";
     }
 
+    if (!input.merchandiseWeight) {
+      errors.merchandiseWeight = "Select a merchandise weight.";
+    } else if (!isMerchandiseWeightLabel(input.merchandiseWeight)) {
+      errors.merchandiseWeight = "Select a valid merchandise weight.";
+    }
+
     if (!isValidMoneyInput(input.sellingPrice)) {
       errors.sellingPrice = "Enter a valid monetary value.";
     }
@@ -206,6 +215,7 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "contents",
     "singleItemUnit",
     "sellingPrice",
+    "merchandiseWeight",
   ];
 
   for (const field of order) {

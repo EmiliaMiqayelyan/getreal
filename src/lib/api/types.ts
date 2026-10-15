@@ -71,6 +71,12 @@ export type ApiItem = {
   /** Free-form unit label, e.g. Unit / Case. */
   buyingUnit?: string | null;
   singleItemUnit?: string | null;
+  /**
+   * Customer-facing weight label for unit-sourced items.
+   * One of: 2 oz, 4 oz (1/4 lb), 6 oz, 8 oz (1/2 lb), 10 oz,
+   * 12 oz (3/4 lb), 16 oz = lb.
+   */
+  merchandiseWeight?: string | null;
   /** Array of uploaded image URLs (strings, not objects). */
   photos?: string[] | null;
   merchandisingName?: string;

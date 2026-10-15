@@ -41,7 +41,6 @@ import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import {
   collectPaginated,
   isApiConfigured,
-  orderModelId,
   orderRecordId,
   ordersApi,
   type ApiOrder,
@@ -55,6 +54,7 @@ import {
   deliveryDateIdFromValue,
   isWednesdayDateId,
   parseDeliveryDateId,
+  deliveryWeekId,
   pickDefaultDeliveryChipId,
   shiftDateId,
   toDeliveryDateId,
@@ -114,6 +114,8 @@ type CustomerOrderRow = {
 
 type CompletedOrder = {
   id: string;
+  /** UUID for GET /orders/:id when the row is opened. */
+  recordId?: string;
   customer: string;
   address: string;
   zip: string;
@@ -125,6 +127,8 @@ type CompletedOrder = {
   week: string;
   /** API status is a finished order (`completed`). */
   finished?: boolean;
+  /** Same shape as an active row so the detail panel can open from this tab. */
+  detail: CustomerOrderRow;
 };
 
 const STEPS_META: { key: TimelineStepKey; header: string }[] = [
@@ -261,7 +265,9 @@ function mapApiOrderToActive(
     ...detail,
     recordId: orderRecordId(order),
     itemCount: order.items?.length ?? 0,
-    deliveryDateId: deliveryDateIdFromValue(order.deliveryDate),
+    deliveryDateId: deliveryWeekId(
+      deliveryDateIdFromValue(order.deliveryDate),
+    ),
     deliveryLabel: detail.deliveryDate,
     paymentStatus: readPaymentLabel(order),
     status: order.status,
@@ -414,6 +420,7 @@ function applySavedOrder(
   };
 }
 
+
 function weekAndDay(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -451,9 +458,11 @@ function mapApiOrderToCompleted(
     readString(order.updatedAt) ||
     orderDateRaw;
   const grouped = weekAndDay(deliveredRaw);
+  const detail = mapApiOrderToActive(order, `API-CO-${index + 1}`);
 
   return {
-    id: orderModelId(order, `API-CO-${index + 1}`),
+    id: detail.id,
+    recordId: detail.recordId,
     customer: customer.name,
     address,
     zip,
@@ -464,6 +473,7 @@ function mapApiOrderToCompleted(
     day: grouped.day,
     week: grouped.week,
     finished: isCompletedOrderStatus(order.status),
+    detail,
   };
 }
 
@@ -1262,7 +1272,7 @@ export default function CustomerOrdersPage() {
   const [completedLoading, setCompletedLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
   const [appliedDateId, setAppliedDateId] = useState(() =>
-    apiConfigured ? toDeliveryDateId(new Date()) : "",
+    apiConfigured ? toDeliveryDateId(upcomingWednesday()) : "",
   );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -1482,11 +1492,15 @@ export default function CustomerOrdersPage() {
   );
 
   const selectedOrder =
-    ordersWithPacking.find((order) => order.id === selectedOrderId) ?? null;
+    ordersWithPacking.find((order) => order.id === selectedOrderId) ??
+    completedOrders.find((order) => order.id === selectedOrderId)?.detail ??
+    null;
 
   const selectedRecordId = selectedOrder?.recordId;
   const packingRowsRef = useRef(ordersWithPacking);
   packingRowsRef.current = ordersWithPacking;
+  const completedRowsRef = useRef(completedOrders);
+  completedRowsRef.current = completedOrders;
 
   useEffect(() => {
     if (!apiConfigured || !selectedOrderId || !selectedRecordId) {
@@ -1494,9 +1508,10 @@ export default function CustomerOrdersPage() {
       setOrderItemsLoading(false);
       return;
     }
-    const listRow = packingRowsRef.current.find(
-      (order) => order.id === selectedOrderId,
-    );
+    const listRow =
+      packingRowsRef.current.find((order) => order.id === selectedOrderId) ??
+      completedRowsRef.current.find((order) => order.id === selectedOrderId)
+        ?.detail;
     if (!listRow) return;
     let cancelled = false;
     const waitingForItems = listRow.items.length === 0;
@@ -1594,22 +1609,27 @@ export default function CustomerOrdersPage() {
 
   useEffect(() => {
     if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
-      setAppliedDateId(toDeliveryDateId(upcomingWednesday()));
+      setAppliedDateId(
+        deliveryWeekId(appliedDateId) || toDeliveryDateId(upcomingWednesday()),
+      );
+      return;
+    }
+    if (defaultDeliveryApplied.current) return;
+    const withOrders = deliveryChips.filter((chip) => chip.count > 0);
+    if (withOrders.length === 0) return;
+    if (withOrders.some((chip) => chip.id === appliedDateId)) {
       defaultDeliveryApplied.current = true;
       return;
     }
-    if (defaultDeliveryApplied.current || appliedDateId) {
-      if (appliedDateId) defaultDeliveryApplied.current = true;
-      return;
-    }
-    const dateId = pickDefaultDeliveryChipId(deliveryChips);
+    const dateId = pickDefaultDeliveryChipId(withOrders);
     if (!dateId) return;
     defaultDeliveryApplied.current = true;
     setAppliedDateId(dateId);
   }, [appliedDateId, deliveryChips]);
 
   function commitDeliveryDate(dateId: string) {
-    setAppliedDateId(dateId);
+    defaultDeliveryApplied.current = true;
+    setAppliedDateId(deliveryWeekId(dateId) || dateId);
   }
 
   function shiftDeliveryDate(delta: number) {
@@ -1869,6 +1889,9 @@ export default function CustomerOrdersPage() {
         <div className="min-h-0 flex-1 overflow-auto px-4 py-5 md:px-7 md:py-5">
           {activeTab === "Orders" ? (
             <div>
+              <p className="mb-2 text-[14px] font-semibold text-[#111118]">
+                Delivery date
+              </p>
               <div className={DATE_CHIP_ROW}>
                 <div ref={chipRowRef} className={DATE_CHIP_SCROLL}>
                   {deliveryChips.map((chip) => {
@@ -2092,14 +2115,28 @@ export default function CustomerOrdersPage() {
                           {dayOrders.map((order) => (
                             <div
                               key={order.id}
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => setSelectedOrderId(order.id)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setSelectedOrderId(order.id);
+                                }
+                              }}
                               className={cn(
                                 COMPLETED_ORDER_COLUMNS,
-                                "border-b border-[#00000014] py-3.5 text-[13px] text-[#111118] last:border-b-0",
+                                "cursor-pointer border-b border-[#00000014] py-3.5 text-[13px] text-[#111118] last:border-b-0 hover:bg-[#F7F5F4]",
+                                selectedOrderId === order.id && "bg-[#FFF8F5]",
                               )}
                             >
                               <IdPill>{order.id}</IdPill>
-                              <div className="font-semibold">
+                              <div className="flex items-center gap-1 font-semibold">
                                 {display(order.customer)}
+                                <ChevronRight
+                                  size={13}
+                                  className="shrink-0 text-[#A9A9A9]"
+                                />
                               </div>
                               <LocationHover
                                 className="text-[13px] text-[#111118]"
