@@ -2,6 +2,8 @@ export type ItemPhoto = {
   id: string;
   url: string;
   name: string;
+  /** Primary photo shown in lists. The item form keeps this photo first. */
+  isPrimary?: boolean;
   /** Pending local file from the upload picker; cleared once uploaded to the API. */
   file?: File;
 };

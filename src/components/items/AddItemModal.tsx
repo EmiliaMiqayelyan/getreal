@@ -25,6 +25,7 @@ import { resolveDistributorId } from "@/utils/distributorSync";
 import { resolveSourceId, sourceNamesForDistributor } from "@/utils/sources";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
+import { selectPrimaryPhoto } from "@/utils/items";
 import {
   firstItemFormErrorField,
   hasItemFormErrors,
@@ -623,15 +624,18 @@ export function AddItemModal({
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file || photos.length >= ITEM_PHOTO_MAX) return;
-                      setPhotos((current) => [
-                        ...current,
-                        {
-                          id: uid(),
-                          url: URL.createObjectURL(file),
-                          name: file.name,
-                          file,
-                        },
-                      ]);
+                      setPhotos((current) =>
+                        selectPrimaryPhoto([
+                          ...current,
+                          {
+                            id: uid(),
+                            url: URL.createObjectURL(file),
+                            name: file.name,
+                            file,
+                            isPrimary: current.length === 0,
+                          },
+                        ]),
+                      );
                       if (errors.photos) {
                         setErrors((current) => ({
                           ...current,
@@ -659,58 +663,57 @@ export function AddItemModal({
                   </button>
                 ) : (
                   <div className="flex flex-wrap gap-3">
-                    {photos.map((photo, index) => (
-                      <div key={photo.id} className="w-[160px]">
-                        <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#00000014]">
-                          <img
-                            src={photo.url}
-                            alt={photo.name}
-                            className="size-full object-cover"
-                          />
-                        </div>
-                        <div className="mt-1.5 flex items-center gap-3">
-                          {index === 0 ? (
-                            <span className="text-[12px] font-medium text-[#8A8A8A]">
-                              Selected
-                            </span>
-                          ) : (
+                    {photos.map((photo, index) => {
+                      const isSelected =
+                        Boolean(photo.isPrimary) ||
+                        (index === 0 &&
+                          photos.every((entry) => !entry.isPrimary));
+                      return (
+                        <div key={photo.id} className="w-[160px]">
+                          <div className="h-[100px] overflow-hidden rounded-[8px] border border-[#00000014]">
+                            <img
+                              src={photo.url}
+                              alt={photo.name}
+                              className="size-full object-cover"
+                            />
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-3">
+                            {isSelected ? (
+                              <span className="text-[12px] font-medium text-[#8A8A8A]">
+                                Selected
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPhotos((current) =>
+                                    selectPrimaryPhoto(current, photo.id),
+                                  )
+                                }
+                                className="cursor-pointer text-[12px] font-medium text-[#2165D4] hover:underline"
+                              >
+                                Make primary
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() =>
-                                setPhotos((current) => {
-                                  const selectedIndex = current.findIndex(
-                                    (entry) => entry.id === photo.id,
-                                  );
-                                  if (selectedIndex <= 0) return current;
-                                  const next = [...current];
-                                  const [selected] = next.splice(
-                                    selectedIndex,
-                                    1,
-                                  );
-                                  return [selected, ...next];
-                                })
+                                setPhotos((current) =>
+                                  selectPrimaryPhoto(
+                                    current.filter(
+                                      (entry) => entry.id !== photo.id,
+                                    ),
+                                  ),
+                                )
                               }
-                              className="cursor-pointer text-[12px] font-medium text-[#2165D4] hover:underline"
+                              className="cursor-pointer text-[12px] font-medium text-[#E25B5B] hover:underline"
                             >
-                              Make primary
+                              Delete
                             </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPhotos((current) =>
-                                current.filter(
-                                  (entry) => entry.id !== photo.id,
-                                ),
-                              )
-                            }
-                            className="cursor-pointer text-[12px] font-medium text-[#E25B5B] hover:underline"
-                          >
-                            Delete
-                          </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 <FieldError message={errors.photos} />

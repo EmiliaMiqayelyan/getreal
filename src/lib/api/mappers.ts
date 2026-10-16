@@ -281,20 +281,50 @@ function centsToDollars(cents: number | undefined): number {
 
 export { centsToDollars };
 
+function photoUrlFromApi(photo: unknown): string {
+  if (typeof photo === "string") return photo.trim();
+  if (!photo || typeof photo !== "object") return "";
+  const url = (photo as { url?: unknown }).url;
+  return typeof url === "string" ? url.trim() : "";
+}
+
+function photoIsPrimary(photo: unknown): boolean {
+  if (!photo || typeof photo !== "object") return false;
+  return Boolean((photo as { isPrimary?: unknown }).isPrimary);
+}
+
 function mapApiItemPhotos(
-  photos: string[] | null | undefined,
+  photos: ApiItem["photos"],
   itemKey: string,
 ): ItemPhoto[] {
   if (!Array.isArray(photos)) return [];
-  return photos
-    .filter(
-      (url): url is string => typeof url === "string" && Boolean(url.trim()),
-    )
-    .map((url, photoIndex) => ({
-      id: `api-photo-${itemKey}-${photoIndex}`,
-      url,
-      name: url.split("/").pop() || `Photo ${photoIndex + 1}`,
-    }));
+
+  const mapped: ItemPhoto[] = photos.flatMap((photo, photoIndex) => {
+    const url = photoUrlFromApi(photo);
+    if (!url) return [];
+    return [
+      {
+        id: `api-photo-${itemKey}-${photoIndex}`,
+        url,
+        name: url.split("/").pop() || `Photo ${photoIndex + 1}`,
+        isPrimary: photoIsPrimary(photo),
+      },
+    ];
+  });
+
+  if (mapped.length === 0) return [];
+
+  const primaryIndex = mapped.findIndex((photo) => photo.isPrimary);
+  const selected = primaryIndex === -1 ? 0 : primaryIndex;
+  if (selected > 0) {
+    const [primary] = mapped.splice(selected, 1);
+    mapped.unshift(primary);
+  }
+
+  return mapped.map((photo, index) => ({
+    ...photo,
+    isPrimary: index === 0,
+  }));
 }
 
 function sourcePerFromBuyingUnit(

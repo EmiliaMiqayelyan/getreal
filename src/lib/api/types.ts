@@ -59,6 +59,11 @@ export type CatalogSubcategory = {
   position?: number;
 };
 
+export type ApiItemPhoto = {
+  url: string;
+  isPrimary: boolean;
+};
+
 export type ApiItem = {
   id?: string;
   itemCode?: string;
@@ -83,8 +88,8 @@ export type ApiItem = {
   merchandiseWeight?: string | null;
   /** Snake-case alias some item payloads use for merchandiseWeight. */
   merchandise_weight?: string | null;
-  /** Array of uploaded image URLs (strings, not objects). */
-  photos?: string[] | null;
+  /** Up to 3 photos. The primary photo is the one with isPrimary. */
+  photos?: ApiItemPhoto[] | null;
   merchandisingName?: string;
   description?: string | null;
   preOrderInformation?: string | null;

@@ -4,7 +4,12 @@ export type UploadImageResult = {
   url: string;
 };
 
-const IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+const IMAGE_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
 
 export function isUploadableImage(file: File) {
   return IMAGE_TYPES.has(file.type.toLowerCase());
@@ -35,7 +40,8 @@ function readFileAsDataUrl(file: File): Promise<string> {
       if (typeof reader.result === "string") resolve(reader.result);
       else reject(new Error("Failed to read file"));
     };
-    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.onerror = () =>
+      reject(reader.error ?? new Error("Failed to read file"));
     reader.readAsDataURL(file);
   });
 }
@@ -62,26 +68,33 @@ function isPersistableHttpOrDataUrl(url: string | undefined): url is string {
 }
 
 /**
- * Resolve item photos to permanent URLs for POST/PATCH /items.
- * API expects `photos: string[]` (URLs), not objects.
+ * Resolve item photos for POST/PATCH /items.
+ * API expects `{ url, isPrimary }[]`. The photo flagged isPrimary is kept;
+ * otherwise the first photo is primary.
  */
 export async function resolveItemPhotoUrls(
-  photos: Array<{ url: string; file?: File }>,
-): Promise<string[]> {
-  const urls: string[] = [];
+  photos: Array<{ url: string; file?: File; isPrimary?: boolean }>,
+): Promise<Array<{ url: string; isPrimary: boolean }>> {
+  const resolved: Array<{ url: string; isPrimary: boolean }> = [];
   for (const photo of photos) {
+    let url: string | undefined;
     if (photo.file) {
       if (!isUploadableImage(photo.file)) {
-        throw new Error(
-          "Item photos must be JPEG, PNG, or WebP.",
-        );
+        throw new Error("Item photos must be JPEG, PNG, or WebP.");
       }
-      urls.push(await uploadImage(photo.file));
-      continue;
+      url = await uploadImage(photo.file);
+    } else if (isPersistableHttpOrDataUrl(photo.url)) {
+      url = photo.url;
     }
-    if (isPersistableHttpOrDataUrl(photo.url)) {
-      urls.push(photo.url);
+    if (url) {
+      resolved.push({ url, isPrimary: Boolean(photo.isPrimary) });
     }
   }
-  return urls;
+  if (resolved.length === 0) return [];
+  const primaryIndex = resolved.findIndex((photo) => photo.isPrimary);
+  const selected = primaryIndex === -1 ? 0 : primaryIndex;
+  return resolved.map((photo, index) => ({
+    url: photo.url,
+    isPrimary: index === selected,
+  }));
 }

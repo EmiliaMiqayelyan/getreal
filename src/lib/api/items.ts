@@ -1,6 +1,6 @@
 import { apiRequest } from "./client";
 import { catalogListCacheOptions } from "./requestDedupe";
-import type { ApiItem } from "./types";
+import type { ApiItem, ApiItemPhoto } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type CreateItemPayload = {
@@ -23,8 +23,8 @@ export type CreateItemPayload = {
   description?: string;
   /** Stored as items.pre_order_information. */
   preOrderInformation?: string | null;
-  /** Uploaded image URLs. */
-  photos?: string[];
+  /** Uploaded photos. Exactly one should have isPrimary when the list is non-empty. */
+  photos?: ApiItemPhoto[];
 };
 
 export type UpdateItemPayload = Partial<

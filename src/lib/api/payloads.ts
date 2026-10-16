@@ -13,6 +13,7 @@ import type { CreateSourcePayload } from "./sources";
 import type {
   ApiDeliverySchedule,
   ApiDistributorDocument,
+  ApiItemPhoto,
   CatalogSubcategory,
 } from "./types";
 import { persistDocumentFile } from "./upload";
@@ -211,10 +212,28 @@ function relationRecordId<
   return match ? recordRef(match) : undefined;
 }
 
+/** Keep one primary photo. The form treats the first photo as selected. */
+function itemPhotosPayload(photos: ApiItemPhoto[]): ApiItemPhoto[] {
+  const cleaned = photos
+    .filter((photo) => typeof photo?.url === "string" && photo.url.trim())
+    .slice(0, 3)
+    .map((photo) => ({
+      url: photo.url.trim(),
+      isPrimary: Boolean(photo.isPrimary),
+    }));
+  if (cleaned.length === 0) return [];
+  const primaryIndex = cleaned.findIndex((photo) => photo.isPrimary);
+  const selected = primaryIndex === -1 ? 0 : primaryIndex;
+  return cleaned.map((photo, index) => ({
+    url: photo.url,
+    isPrimary: index === selected,
+  }));
+}
+
 export function toCreateItemPayload(
   item: Item,
   subcategories: CatalogSubcategory[] = [],
-  photoUrls: string[] = [],
+  photoUrls: ApiItemPhoto[] = [],
   relations: {
     distributors?: Distributor[];
     sources?: Source[];
@@ -275,7 +294,7 @@ export function toCreateItemPayload(
     merchandiseWeight: item.merchandiseWeight || null,
     description: item.description.trim() || undefined,
     preOrderInformation: item.preorderInfo.trim() || null,
-    photos: photoUrls.filter((url) => typeof url === "string"),
+    photos: itemPhotosPayload(photoUrls),
   };
 }
 
