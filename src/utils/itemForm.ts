@@ -113,6 +113,12 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.photos = `No more than ${ITEM_PHOTO_MAX} photos can be uploaded.`;
   }
 
+  if (!input.merchandiseWeight) {
+    errors.merchandiseWeight = "Select a merchandise weight.";
+  } else if (!isMerchandiseWeightLabel(input.merchandiseWeight)) {
+    errors.merchandiseWeight = "Select a valid merchandise weight.";
+  }
+
   const sourcePer = input.sourcePer as SourcePer | "";
   if (!sourcePer) {
     errors.sourcePer = "Select how this item is sourced.";
@@ -133,12 +139,6 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     const validOz = PIECE_WEIGHT_OPTIONS.some((entry) => entry.oz === oz);
     if (!validOz) {
       errors.pieceWeightOz = "Select a piece weight.";
-    }
-
-    if (!input.merchandiseWeight) {
-      errors.merchandiseWeight = "Select a merchandise weight.";
-    } else if (!isMerchandiseWeightLabel(input.merchandiseWeight)) {
-      errors.merchandiseWeight = "Select a valid merchandise weight.";
     }
 
     if (!isValidMoneyInput(input.sellingPrice)) {
@@ -208,6 +208,7 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "description",
     "photos",
     "sourcePer",
+    "merchandiseWeight",
     "caseBy",
     "buyingPrice",
     "pieceWeightOz",
@@ -215,7 +216,6 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "contents",
     "singleItemUnit",
     "sellingPrice",
-    "merchandiseWeight",
   ];
 
   for (const field of order) {

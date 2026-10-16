@@ -200,9 +200,7 @@ export function AddItemModal({
       setPieceWeightOz(
         item.pieceWeightOz > 0 ? String(item.pieceWeightOz) : "",
       );
-      setMerchandiseWeight(
-        item.merchandiseWeight || pieceWeightLabel(item.pieceWeightOz),
-      );
+      setMerchandiseWeight(item.merchandiseWeight);
       setCaseWeightLbs(
         item.caseWeightLbs > 0
           ? item.caseWeightLbs % 1 === 0
@@ -335,8 +333,7 @@ export function AddItemModal({
         sourcePer: resolvedSourcePer,
         caseBy: resolvedCaseBy,
         pieceWeightOz: resolvedPieceOz,
-        merchandiseWeight:
-          resolvedSourcePer === "Unit" ? merchandiseWeight : "",
+        merchandiseWeight,
         caseWeightLbs: resolvedCaseLbs,
         buyingPrice: buying,
         contents: resolvedContents,
@@ -764,6 +761,37 @@ export function AddItemModal({
                   <FieldError message={errors.sourcePer} />
                 </div>
 
+                <div data-field="merchandiseWeight">
+                  <Field label="Merchandise weight" required>
+                    <Select
+                      value={merchandiseWeight}
+                      onChange={(value) => {
+                        setMerchandiseWeight(value);
+                        if (errors.merchandiseWeight) {
+                          setErrors((current) => ({
+                            ...current,
+                            merchandiseWeight: undefined,
+                          }));
+                        }
+                      }}
+                      className="w-full"
+                      aria-label="Merchandise weight"
+                      placeholder="Select"
+                      buttonClassName={cn(
+                        errors.merchandiseWeight && INVALID_BORDER,
+                      )}
+                      options={[
+                        { value: "", label: "Select" },
+                        ...MERCHANDISE_WEIGHT_OPTIONS.map((entry) => ({
+                          value: entry.label,
+                          label: entry.label,
+                        })),
+                      ]}
+                    />
+                  </Field>
+                  <FieldError message={errors.merchandiseWeight} />
+                </div>
+
                 {sourcePer === "Unit" ? (
                   <>
                     <div data-field="buyingPrice">
@@ -918,36 +946,6 @@ export function AddItemModal({
                         value={formatFinalMarginPercent(finalMargin)}
                       />
                     </Field>
-                    <div data-field="merchandiseWeight">
-                      <Field label="Merchandise weight" required>
-                        <Select
-                          value={merchandiseWeight}
-                          onChange={(value) => {
-                            setMerchandiseWeight(value);
-                            if (errors.merchandiseWeight) {
-                              setErrors((current) => ({
-                                ...current,
-                                merchandiseWeight: undefined,
-                              }));
-                            }
-                          }}
-                          className="w-full"
-                          aria-label="Merchandise weight"
-                          placeholder="Select"
-                          buttonClassName={cn(
-                            errors.merchandiseWeight && INVALID_BORDER,
-                          )}
-                          options={[
-                            { value: "", label: "Select" },
-                            ...MERCHANDISE_WEIGHT_OPTIONS.map((entry) => ({
-                              value: entry.label,
-                              label: entry.label,
-                            })),
-                          ]}
-                        />
-                      </Field>
-                      <FieldError message={errors.merchandiseWeight} />
-                    </div>
                   </div>
                 </>
               ) : null}

@@ -981,7 +981,11 @@ function SubcategoryStack({
     previewRef.current = sourceIds;
     pointerRef.current = { x: event.clientX, y: event.clientY };
     scrollerRef.current = findScrollParent(listEl);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer can already be gone if the gesture ends immediately.
+    }
 
     stopDragListenersRef.current?.();
     const previousCursor = document.body.style.cursor;

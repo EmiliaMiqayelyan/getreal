@@ -30,10 +30,7 @@ export type Item = {
   caseBy: CaseBy | "";
   /** Piece weight in ounces when sourcePer is Unit. */
   pieceWeightOz: number;
-  /**
-   * Customer-facing weight label when sourced by Unit.
-   * Independent of piece weight, which is used for cost.
-   */
+  /** Customer-facing weight label. Independent of piece weight, which is used for cost. */
   merchandiseWeight: string;
   /** Total case weight in lbs when caseBy is Lbs / case. */
   caseWeightLbs: number;
