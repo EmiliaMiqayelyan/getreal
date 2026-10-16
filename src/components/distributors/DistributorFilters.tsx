@@ -17,6 +17,7 @@ type DistributorFiltersProps = {
   onLocationChange: (value: string) => void;
   onWeekdayChange: (value: string) => void;
   onAdd: () => void;
+  canCreate?: boolean;
   onExport?: ExportHandler;
 };
 
@@ -30,6 +31,7 @@ export function DistributorFilters({
   onLocationChange,
   onWeekdayChange,
   onAdd,
+  canCreate = true,
   onExport,
 }: DistributorFiltersProps) {
   const filtersActive = Boolean(query.trim() || location || weekday);
@@ -78,14 +80,16 @@ export function DistributorFilters({
           onExport={onExport}
           className="w-full sm:w-auto"
         />
-        <Button
-          variant="primary"
-          onClick={onAdd}
-          className="w-full sm:w-auto"
-        >
-          <Plus size={14} />
-          Create Distributor
-        </Button>
+        {canCreate ? (
+          <Button
+            variant="primary"
+            onClick={onAdd}
+            className="w-full sm:w-auto"
+          >
+            <Plus size={14} />
+            Create Distributor
+          </Button>
+        ) : null}
       </div>
     </div>
   );

@@ -2,13 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 
 import { ROUTES } from "@/constants";
-import { getRole, getSessionUserName, logout } from "@/lib/auth";
+import { getSessionRoleLabel, getSessionUserName, logout } from "@/lib/auth";
 import { cn } from "@/utils/cn";
-
-const ROLE_LABELS = {
-  superadmin: "Super Admin",
-  warehouse: "Warehouse",
-} as const;
 
 type UserMenuProps = {
   className?: string;
@@ -18,7 +13,7 @@ export function UserMenu({ className }: UserMenuProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const roleLabel = ROLE_LABELS[getRole() ?? "superadmin"];
+  const roleLabel = getSessionRoleLabel();
   const displayName = getSessionUserName();
 
   useEffect(() => {

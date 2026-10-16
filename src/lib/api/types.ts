@@ -185,6 +185,21 @@ export type ApiInventory = {
   updatedAt?: string;
 };
 
+/** One fridge that still has this order line in stock. FIFO by expiration. */
+export type ApiAvailableLocation = {
+  id: string;
+  location: string;
+  quantity: number;
+  expirationDate?: string | null;
+};
+
+/** Units already taken from one fridge for a packed order line. */
+export type ApiItemPick = {
+  inventoryRecordId: string;
+  location?: string;
+  quantity: number;
+};
+
 export type ApiOrderItem = {
   productId?: string;
   name?: string;
@@ -201,9 +216,18 @@ export type ApiOrderItem = {
   expirationDate?: string | null;
   /** Packing: cooler UUID this line was packed into. */
   coolerId?: string | null;
-  /** Packing: inventory lot this line was picked from. */
+  /**
+   * Packing: first inventory lot this line was picked from.
+   * Multi-fridge lines also send `picks`.
+   */
   inventoryRecordId?: string | null;
   packed?: boolean;
+  /** Fridges with stock, earliest expiration first. */
+  availableLocations?: ApiAvailableLocation[] | null;
+  /** Units still available across every fridge. */
+  totalAvailableQuantity?: number | null;
+  /** Where the packer took this line from. Null until it is packed. */
+  picks?: ApiItemPick[] | null;
   /** Receiving: saved by POST /receiving/:orderId/validate. */
   status?: "accepted" | "rejected" | null;
   reasons?: string[] | null;

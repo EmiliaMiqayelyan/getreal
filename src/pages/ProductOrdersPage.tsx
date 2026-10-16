@@ -38,6 +38,7 @@ import {
 } from "@/constants/distributorOrders";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -363,6 +364,10 @@ function ExpandableOrders({
 
 export default function ProductOrdersPage() {
   useDocumentTitle("Distributor Orders");
+  const { sessionPermissions } = useRolesUsers();
+  const canCreateCustom = sessionPermissions.distributorOrdersCreateCustom;
+  const canOrderFromList = sessionPermissions.distributorOrdersFromCustomerList;
+  const canSeeDelivered = sessionPermissions.distributorOrdersAccessDelivered;
   const { notifyApiError, showError } = useApiFeedback();
   const { distributors, products, items } = useAppCatalog();
   const catalogRef = useRef({ distributors, products, items });
@@ -376,6 +381,9 @@ export default function ProductOrdersPage() {
     "products",
   ]);
   const [tab, setTab] = useState<Tab>("Orders");
+  useEffect(() => {
+    if (!canSeeDelivered && tab === "Delivered") setTab("Orders");
+  }, [canSeeDelivered, tab]);
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
   const [distributorFilter, setDistributorFilter] = useState("");
@@ -1349,14 +1357,16 @@ export default function ProductOrdersPage() {
                       }}
                       className="w-full sm:w-auto"
                     />
-                    <Button
-                      variant="primary"
-                      onClick={openManualFlow}
-                      className="w-full sm:w-auto"
-                    >
-                      <Plus className="size-3.5" />
-                      Create Order
-                    </Button>
+                    {canCreateCustom ? (
+                      <Button
+                        variant="primary"
+                        onClick={openManualFlow}
+                        className="w-full sm:w-auto"
+                      >
+                        <Plus className="size-3.5" />
+                        Create Order
+                      </Button>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -1464,16 +1474,18 @@ export default function ProductOrdersPage() {
             </div>
           }
           center={
-            <Tabs
-              embedded
-              aria-label="Order views"
-              items={[
-                { id: "Orders", label: "Orders", width: 103 },
-                { id: "Delivered", label: "Delivered", width: 93 },
-              ]}
-              value={tab}
-              onChange={(id) => setTab(id as "Orders" | "Delivered")}
-            />
+            canSeeDelivered ? (
+              <Tabs
+                embedded
+                aria-label="Order views"
+                items={[
+                  { id: "Orders", label: "Orders", width: 103 },
+                  { id: "Delivered", label: "Delivered", width: 93 },
+                ]}
+                value={tab}
+                onChange={(id) => setTab(id as "Orders" | "Delivered")}
+              />
+            ) : null
           }
         />
 
@@ -1554,14 +1566,16 @@ export default function ProductOrdersPage() {
                       <h2 className="text-[20px] font-semibold tracking-tight text-[#111118]">
                         Order List
                       </h2>
-                      <Button
-                        variant="dark"
-                        onClick={openListedOrder}
-                        disabled={visibleDemandOrders.length === 0}
-                        size="sm"
-                      >
-                        Order now
-                      </Button>
+                      {canOrderFromList ? (
+                        <Button
+                          variant="dark"
+                          onClick={openListedOrder}
+                          disabled={visibleDemandOrders.length === 0}
+                          size="sm"
+                        >
+                          Order now
+                        </Button>
+                      ) : null}
                     </div>
                     <ScrollTable minWidth={960}>
                       <div
@@ -1905,15 +1919,17 @@ export default function ProductOrdersPage() {
                           </div>
                         ) : (
                           <>
-                            <Button
-                              variant="primary"
-                              size="sm"
-                              disabled={placing !== null}
-                              onClick={() => submitDistributorOrder(key)}
-                              className="font-semibold"
-                            >
-                              {placing === key ? "Sending..." : "Order now"}
-                            </Button>
+                            {canOrderFromList ? (
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                disabled={placing !== null}
+                                onClick={() => submitDistributorOrder(key)}
+                                className="font-semibold"
+                              >
+                                {placing === key ? "Sending..." : "Order now"}
+                              </Button>
+                            ) : null}
                             <span className="text-[12px] text-[#8A8A8A]">
                               Expected delivery{" "}
                               <span className="font-semibold text-[#111118]">

@@ -27,6 +27,7 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
@@ -46,6 +47,7 @@ import type {
   PackingHandoffUpdate,
   PackingLine,
   PackingOrder,
+  PackingPick,
   PackingSourceOption,
 } from "@/types/packing";
 import { cn } from "@/utils/cn";
@@ -66,7 +68,15 @@ import {
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
 import {
+  lineAllocation,
+  packingLineSummary,
+  pickTotal,
+  picksFromOrderItem,
+  samePicks,
+} from "@/utils/packingPicks";
+import {
   buildPackingCatalog,
+  orderLineOptions,
   productItemIdMap,
   type PackingCatalog,
 } from "@/utils/packingSources";
@@ -88,7 +98,7 @@ type SourceOption = PackingSourceOption;
 
 const COOLER_PLACEHOLDER = "Cooler";
 
-const SOURCE_PANEL_WIDTH = 700;
+const SOURCE_PANEL_WIDTH = 760;
 
 /** Format like `7/29/26, 8:45am`. */
 function formatPackTimestamp(date = new Date()): string {
@@ -135,14 +145,12 @@ function coolerUuid(token: string, options: PackingCoolerOption[]) {
 type LineWrite = {
   productId: string;
   coolerId: string;
-  inventoryRecordId: string;
-  /** Lot packed before this edit. Unpacked first so it returns to stock. */
-  releaseLot: boolean;
+  picks: PackingPick[];
 };
 
 /**
- * Lines whose cooler, lot, or packed state differ from what the server has.
- * Returns an error message instead when a line can't be sent.
+ * Lines whose cooler, fridge split, or packed state differ from what the
+ * server has. Returns an error message instead when a line can't be sent.
  */
 function lineWrites(
   original: PackingLine[],
@@ -152,26 +160,35 @@ function lineWrites(
   const writes: LineWrite[] = [];
   for (const item of next) {
     const base = original.find((entry) => entry.id === item.id);
-    const lot = item.selected?.inventoryRecordId ?? "";
+    const picks = lineAllocation(item);
     const unchanged =
       base?.packed &&
       base.coolerId === item.coolerId &&
-      base.selected?.inventoryRecordId === lot;
+      samePicks(lineAllocation(base), picks);
     if (unchanged) continue;
 
     const productId = item.catalogItemId.trim();
     const coolerId = coolerUuid(item.coolerId, coolerOptions);
     if (!isUuid(productId)) return `"${item.name}" has no server product id.`;
     if (!coolerId) return `Cooler ${item.coolerId} has no server id.`;
-    if (!isUuid(lot)) return `"${item.name}" has no inventory lot selected.`;
-
-    const previousLot = base?.selected?.inventoryRecordId;
-    writes.push({
-      productId,
-      coolerId,
-      inventoryRecordId: lot,
-      releaseLot: Boolean(base?.packed && previousLot && previousLot !== lot),
-    });
+    if (!picks.length) return `"${item.name}" has no fridge selected.`;
+    if (pickTotal(picks) !== item.qty) {
+      return `"${item.name}" picks must add up to ${item.qty}.`;
+    }
+    for (const pick of picks) {
+      if (!isUuid(pick.inventoryRecordId)) {
+        return `"${item.name}" has no inventory lot selected.`;
+      }
+      const option = item.options.find(
+        (entry) => entry.inventoryRecordId === pick.inventoryRecordId,
+      );
+      const stock = option?.quantity;
+      if (stock != null && pick.quantity > stock) {
+        const place = option?.location || "That fridge";
+        return `${place} only has ${stock} for "${item.name}".`;
+      }
+    }
+    writes.push({ productId, coolerId, picks });
   }
   return writes;
 }
@@ -181,7 +198,13 @@ function coolerAssigned(coolerId: string) {
 }
 
 function itemReady(item: PackingLine) {
-  return Boolean(item.selected) && coolerAssigned(item.coolerId) && item.packed;
+  const picks = lineAllocation(item);
+  return (
+    picks.length > 0 &&
+    pickTotal(picks) === item.qty &&
+    coolerAssigned(item.coolerId) &&
+    item.packed
+  );
 }
 
 function applyHandoff(
@@ -229,30 +252,41 @@ function isDraftDirty(original: PackOrder, draft: PackOrder): boolean {
     return (
       item.packed !== base.packed ||
       item.coolerId !== base.coolerId ||
-      item.selected?.inventoryRecordId !== base.selected?.inventoryRecordId ||
-      item.selected?.itemId !== base.selected?.itemId
+      !samePicks(lineAllocation(item), lineAllocation(base))
     );
   });
 }
 
+const PICK_COLUMNS =
+  "grid grid-cols-[minmax(0,1.05fr)_minmax(0,1.05fr)_108px_64px_72px_minmax(88px,0.8fr)] items-center gap-x-3";
+
 function SourcePicker({
   anchor,
   options,
-  onChoose,
+  orderedQty,
+  picks,
+  onApply,
   onClose,
 }: {
   anchor: HTMLElement;
   options: SourceOption[];
-  onChoose: (option: SourceOption) => void;
+  orderedQty: number;
+  picks: PackingPick[];
+  onApply: (picks: PackingPick[]) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
+  const [qtyById, setQtyById] = useState<Record<string, number>>(() => {
+    const initial: Record<string, number> = {};
+    for (const pick of picks) initial[pick.inventoryRecordId] = pick.quantity;
+    return initial;
+  });
   const panelRef = useRef<HTMLDivElement>(null);
   const anchorRef = useRef(anchor);
   anchorRef.current = anchor;
   const menuBox = useFloatingMenu(true, anchorRef, panelRef, {
     width: SOURCE_PANEL_WIDTH,
-    maxHeight: 320,
+    maxHeight: 420,
   });
 
   const filtered = options.filter((option) => {
@@ -264,10 +298,77 @@ function SourcePicker({
       option.expDate.toLowerCase().includes(q) ||
       option.itemId.toLowerCase().includes(q) ||
       option.location.toLowerCase().includes(q) ||
-      (option.quantity != null && String(option.quantity).includes(q)) ||
-      (option.available != null && String(option.available).includes(q))
+      (option.quantity != null && String(option.quantity).includes(q))
     );
   });
+
+  const taken = options.reduce(
+    (sum, option) => sum + (qtyById[option.inventoryRecordId] ?? 0),
+    0,
+  );
+  const stockKnown = options.every((option) => option.quantity != null);
+  const stockTotal = options.reduce(
+    (sum, option) => sum + (option.quantity ?? 0),
+    0,
+  );
+  const short = stockKnown && stockTotal < orderedQty;
+  const overStock = options.some((option) => {
+    const stock = option.quantity;
+    const take = qtyById[option.inventoryRecordId] ?? 0;
+    return stock != null && take > stock;
+  });
+  const ready = taken === orderedQty && !short && !overStock && orderedQty > 0;
+
+  function applyQty(next: Record<string, number>) {
+    const allocation = options
+      .map((option) => ({
+        inventoryRecordId: option.inventoryRecordId,
+        quantity: next[option.inventoryRecordId] ?? 0,
+      }))
+      .filter((pick) => pick.quantity > 0);
+    if (pickTotal(allocation) !== orderedQty) return;
+    onApply(allocation);
+  }
+
+  function fillFrom(option: SourceOption) {
+    const stock = option.quantity ?? 0;
+    if (stock <= 0) return;
+    const current = qtyById[option.inventoryRecordId] ?? 0;
+    let others = 0;
+    let otherFridges = 0;
+    for (const entry of options) {
+      if (entry.inventoryRecordId === option.inventoryRecordId) continue;
+      const qty = qtyById[entry.inventoryRecordId] ?? 0;
+      if (qty <= 0) continue;
+      others += qty;
+      otherFridges += 1;
+    }
+    const replacingSingleFridge =
+      current === 0 &&
+      stock >= orderedQty &&
+      (otherFridges === 0 || (otherFridges === 1 && others === orderedQty));
+    if (replacingSingleFridge) {
+      onApply([
+        { inventoryRecordId: option.inventoryRecordId, quantity: orderedQty },
+      ]);
+      return;
+    }
+    const room = Math.max(orderedQty - others, 0);
+    const take = Math.min(stock, room);
+    if (take <= 0) return;
+    const next = { ...qtyById, [option.inventoryRecordId]: take };
+    const allocation = options
+      .map((entry) => ({
+        inventoryRecordId: entry.inventoryRecordId,
+        quantity: next[entry.inventoryRecordId] ?? 0,
+      }))
+      .filter((pick) => pick.quantity > 0);
+    if (pickTotal(allocation) === orderedQty) {
+      onApply(allocation);
+      return;
+    }
+    setQtyById(next);
+  }
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -295,62 +396,120 @@ function SourcePicker({
   return createPortal(
     <div
       ref={panelRef}
-      role="listbox"
+      role="dialog"
       aria-label="Distributor / Source"
       data-scroll-lock-allow
       className="ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain rounded-[10px] border border-[#00000014] bg-white shadow-[0_12px_32px_rgba(0,0,0,0.14)]"
       style={floatingMenuStyle(menuBox)}
     >
-      <div className="sticky top-0 bg-white px-3 pt-3 pb-2">
-        <div className="relative">
-          <SearchField
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            fill
-          />
+      <div className="sticky top-0 z-[1] bg-white px-3 pt-3 pb-2">
+        <SearchField
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search"
+          fill
+        />
+        <p className="mt-2 px-1 text-[12px] text-[#8A8A8A]">
+          Earliest expiration is first. Take {orderedQty} total.
+          {short ? ` Only ${stockTotal} in stock.` : ""}
+        </p>
+        <div
+          className={cn(
+            PICK_COLUMNS,
+            "mt-2 px-1 text-[11px] font-semibold tracking-[0.04em] text-[#8A8A8A] uppercase",
+          )}
+        >
+          <span>Distributor</span>
+          <span>Source</span>
+          <span>Exp date</span>
+          <span className="text-right">In stock</span>
+          <span className="text-right">Take</span>
+          <span>Location</span>
         </div>
       </div>
       <div className="px-1 pb-1.5">
-        {filtered.map((option) => (
-          <div
-            key={option.inventoryRecordId}
-            role="option"
-            tabIndex={0}
-            onClick={() => onChoose(option)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                onChoose(option);
-              }
-            }}
-            className="grid w-full cursor-pointer grid-cols-[minmax(0,1.05fr)_minmax(0,1.1fr)_108px_28px_28px_minmax(88px,0.85fr)] items-center gap-x-3 rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]"
-          >
-            <span className="min-w-0 truncate">{option.distributor}</span>
-            <span className="min-w-0 truncate">{option.source}</span>
-            <span className="whitespace-nowrap">{option.expDate}</span>
-            <span className="text-right tabular-nums">
-              {option.quantity ?? ""}
-            </span>
-            <span className="text-right tabular-nums">
-              {option.available ?? ""}
-            </span>
-            <LocationHover
-              hoverOnly
-              className="text-[13px] text-[#111118]"
-              label="Location name"
-              placeLabel="Location place"
-              locationPlace={option.address || option.location}
+        {filtered.map((option) => {
+          const take = qtyById[option.inventoryRecordId] ?? 0;
+          const stock = option.quantity;
+          const tooMany = stock != null && take > stock;
+          return (
+            <div
+              key={option.inventoryRecordId}
+              role="option"
+              tabIndex={0}
+              onClick={() => fillFrom(option)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  fillFrom(option);
+                }
+              }}
+              className={cn(
+                PICK_COLUMNS,
+                "w-full cursor-pointer rounded-[8px] px-3 py-2.5 text-left text-[13px] text-[#111118] hover:bg-[#FAFAF8]",
+                tooMany && "bg-[#FDECEC]",
+              )}
             >
-              {option.location}
-            </LocationHover>
-          </div>
-        ))}
+              <span className="min-w-0 truncate">{option.distributor}</span>
+              <span className="min-w-0 truncate">{option.source}</span>
+              <span className="whitespace-nowrap">{option.expDate}</span>
+              <span className="text-right tabular-nums">{stock ?? ""}</span>
+              <input
+                inputMode="numeric"
+                aria-label={`Take from ${option.location || option.source}`}
+                value={take > 0 ? String(take) : ""}
+                placeholder="0"
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+                onChange={(event) => {
+                  const raw = event.target.value.replace(/[^\d]/g, "");
+                  const nextQty = raw === "" ? 0 : Number(raw);
+                  setQtyById((current) => ({
+                    ...current,
+                    [option.inventoryRecordId]: nextQty,
+                  }));
+                }}
+                className={cn(
+                  "h-8 w-full rounded-[6px] border bg-white px-2 text-right text-[13px] tabular-nums outline-none",
+                  tooMany ? "border-[#E25B5B]" : "border-[#00000014]",
+                )}
+              />
+              <LocationHover
+                hoverOnly
+                className="text-[13px] text-[#111118]"
+                label="Location name"
+                placeLabel="Location place"
+                locationPlace={option.address || option.location}
+              >
+                {option.location}
+              </LocationHover>
+            </div>
+          );
+        })}
         {!filtered.length ? (
           <div className="px-3 py-4 text-center text-[12px] text-[#8A8A8A]">
             No sources found
           </div>
         ) : null}
+      </div>
+      <div className="sticky bottom-0 flex items-center justify-between gap-3 border-t border-[#00000014] bg-white px-4 py-3">
+        <span
+          className={cn(
+            "text-[13px] font-medium tabular-nums",
+            ready ? "text-[#2F8F4E]" : "text-[#8A8A8A]",
+          )}
+        >
+          Taken {taken} of {orderedQty}
+        </span>
+        <button
+          type="button"
+          disabled={!ready}
+          onClick={() => applyQty(qtyById)}
+          className="rounded-[8px] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-40"
+          style={{ background: ORANGE }}
+        >
+          Apply
+        </button>
       </div>
     </div>,
     document.body,
@@ -388,29 +547,31 @@ function mapStandardOrder(
   const lineCooler = coolerIds[0] || COOLER_PLACEHOLDER;
   const items: PackingLine[] = (order.items ?? []).map((line, lineIndex) => {
     const name = line.name || line.itemName || "N/A";
-    const match = catalog.optionsFor({
-      productId: line.productId,
-      name,
-      itemCode: line.itemCode,
-    });
+    const match = orderLineOptions(
+      {
+        productId: line.productId,
+        name,
+        itemCode: line.itemCode,
+        quantity: line.quantity,
+        packed: line.packed,
+        inventoryRecordId: line.inventoryRecordId,
+        availableLocations: line.availableLocations,
+        picks: line.picks,
+      },
+      catalog,
+    );
     const category =
       match.category !== "Items"
         ? match.category
         : line.subcategoryName?.trim() ||
           line.categoryName?.trim() ||
           categoryForItem(name);
-    const recordId = line.inventoryRecordId?.trim() || "";
-    const selected = recordId
-      ? (match.options.find((option) => option.inventoryRecordId === recordId) ??
-        catalog.optionForRecord?.(recordId))
+    const picks = picksFromOrderItem(line);
+    const primaryId =
+      picks[0]?.inventoryRecordId || line.inventoryRecordId?.trim() || "";
+    const selected = primaryId
+      ? match.options.find((option) => option.inventoryRecordId === primaryId)
       : undefined;
-    const options =
-      selected &&
-      !match.options.some(
-        (option) => option.inventoryRecordId === selected.inventoryRecordId,
-      )
-        ? [selected, ...match.options]
-        : match.options;
     const savedCooler = line.coolerId?.trim();
     return {
       id: `${code}-${lineIndex + 1}`,
@@ -423,7 +584,8 @@ function mapStandardOrder(
         : lineCooler,
       packed: Boolean(line.packed),
       selected,
-      options,
+      picks: picks.length ? picks : undefined,
+      options: match.options,
     };
   });
   const packerName = [order.packer?.firstName, order.packer?.lastName]
@@ -504,8 +666,12 @@ function PackingDetail({
     const incomplete = draft.items.filter((item) => !itemReady(item));
     if (incomplete.length) {
       const missing = incomplete[0]!;
+      const picks = lineAllocation(missing);
       const parts: string[] = [];
-      if (!missing.selected) parts.push("distributor/source");
+      if (!picks.length) parts.push("distributor/source");
+      else if (pickTotal(picks) !== missing.qty) {
+        parts.push(`fridge quantities that add up to ${missing.qty}`);
+      }
       if (!coolerAssigned(missing.coolerId)) parts.push("cooler ID");
       if (!missing.packed) parts.push("Item Packed");
       setValidationError(
@@ -529,9 +695,14 @@ function PackingDetail({
 
   function markPacked(item: PackingLine) {
     if (locked) return;
-    if (!item.selected || !coolerAssigned(item.coolerId)) {
+    const picks = lineAllocation(item);
+    const allocated = pickTotal(picks) === item.qty && picks.length > 0;
+    if (!allocated || !coolerAssigned(item.coolerId)) {
       const parts: string[] = [];
-      if (!item.selected) parts.push("distributor/source");
+      if (!picks.length) parts.push("distributor/source");
+      else if (!allocated) {
+        parts.push(`fridge quantities that add up to ${item.qty}`);
+      }
       if (!coolerAssigned(item.coolerId)) parts.push("cooler ID");
       setValidationError(
         `"${item.name}" still needs ${parts.join(" and ")} before it can be packed.`,
@@ -612,6 +783,7 @@ function PackingDetail({
                 <div>
                     {items.map((item) => {
                       const sourceOpen = openMenu?.id === item.id;
+                      const summary = packingLineSummary(item);
 
                       return (
                         <div
@@ -642,11 +814,7 @@ function PackingDetail({
                                 );
                               }}
                               className="inline-flex max-w-full items-center gap-1 text-left text-[13px] disabled:cursor-default"
-                              title={
-                                item.selected
-                                  ? `${item.selected.distributor} / ${item.selected.source}`
-                                  : undefined
-                              }
+                              title={summary.source || undefined}
                             >
                               <ChevronDown
                                 size={14}
@@ -655,24 +823,30 @@ function PackingDetail({
                               <span
                                 className={cn(
                                   "truncate",
-                                  item.selected
+                                  summary.source
                                     ? "text-[#111118]"
                                     : "text-[#8A8A8A]",
                                 )}
                               >
-                                {item.selected
-                                  ? `${item.selected.distributor} / ${item.selected.source}`
-                                  : "Select"}
+                                {summary.source || "Select"}
                               </span>
                             </button>
                             {sourceOpen ? (
                               <SourcePicker
                                 anchor={openMenu.anchor}
                                 options={item.options}
+                                orderedQty={item.qty}
+                                picks={lineAllocation(item)}
                                 onClose={() => setOpenMenu(null)}
-                                onChoose={(option) => {
+                                onApply={(picks) => {
+                                  const primary = item.options.find(
+                                    (option) =>
+                                      option.inventoryRecordId ===
+                                      picks[0]?.inventoryRecordId,
+                                  );
                                   updateItem(item.id, {
-                                    selected: option,
+                                    picks,
+                                    selected: primary,
                                     packed: false,
                                   });
                                   setOpenMenu(null);
@@ -681,11 +855,11 @@ function PackingDetail({
                             ) : null}
                           </div>
                           <div className={cn(cell, "truncate")}>
-                            {item.selected?.expDate ?? ""}
+                            {summary.expDate}
                           </div>
                           <div className={cell}>
-                            {item.selected?.itemId ? (
-                              <IdPill>{item.selected.itemId}</IdPill>
+                            {summary.itemId ? (
+                              <IdPill>{summary.itemId}</IdPill>
                             ) : null}
                           </div>
                           <div className={cell}>
@@ -693,13 +867,9 @@ function PackingDetail({
                               className="text-[13px] text-[#111118]"
                               label="Location name"
                               placeLabel="Location place"
-                              locationPlace={
-                                item.selected?.address ||
-                                item.selected?.location ||
-                                ""
-                              }
+                              locationPlace={summary.locationPlace}
                             >
-                              {item.selected?.location ?? ""}
+                              {summary.location}
                             </LocationHover>
                           </div>
                           <div className={cell}>
@@ -808,6 +978,8 @@ const PACK_COLUMNS =
 
 export default function PackingCoolersPage() {
   useDocumentTitle("Cooler Packing");
+  const { sessionPermissions } = useRolesUsers();
+  const canAct = sessionPermissions.coolerPackingMakeActions;
 
   const { upsertPacking, markLoaded, markPackingStarted, packingByCode } =
     usePackingHandoff();
@@ -1014,7 +1186,7 @@ export default function PackingCoolersPage() {
       }
     }
     // GET /orders/:id is cached server-side and can predate packing writes.
-    // The list rows already carry each line's cooler, lot, and packed flag.
+    // The list rows already carry each line's cooler, fridge picks, and packed flag.
     setActiveOrderId(order.id);
   }
 
@@ -1069,13 +1241,13 @@ export default function PackingCoolersPage() {
               try {
                 let remote: ApiOrder | null = null;
                 for (const write of writes) {
-                  if (write.releaseLot) {
-                    await ordersApi.unpackItem(orderId, write.productId);
-                  }
+                  const single = write.picks.length === 1 ? write.picks[0] : undefined;
                   remote = await ordersApi.packItem(orderId, write.productId, {
                     coolerId: write.coolerId,
-                    inventoryRecordId: write.inventoryRecordId,
                     packed: true,
+                    ...(single
+                      ? { inventoryRecordId: single.inventoryRecordId }
+                      : { picks: write.picks }),
                   });
                 }
                 if (!activeOrder.packedAt) {
@@ -1237,12 +1409,16 @@ export default function PackingCoolersPage() {
               >
                 <button
                   type="button"
-                  onClick={() => openPacking(order)}
+                  onClick={() => {
+                    if (canAct) openPacking(order);
+                  }}
                   className="min-w-0 text-left"
                 >
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
-                    <ChevronRight size={14} className="text-[#A9A9A9]" />
+                    {canAct ? (
+                      <ChevronRight size={14} className="text-[#A9A9A9]" />
+                    ) : null}
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
                     <IdPill>{order.code}</IdPill>
@@ -1267,13 +1443,15 @@ export default function PackingCoolersPage() {
                         {order.packedAt}
                       </span>
                     </div>
-                  ) : (
+                  ) : canAct ? (
                     <Button
                       variant="dark"
                       onClick={() => openPacking(order)}
                     >
                       Start Packing
                     </Button>
+                  ) : (
+                    <span className="text-[13px] text-[#8A8A8A]">Not packed</span>
                   )}
                 </div>
 
@@ -1285,7 +1463,7 @@ export default function PackingCoolersPage() {
                           <IdPill key={coolerId}>{coolerId}</IdPill>
                         ))}
                       </div>
-                      {!loaded ? (
+                      {!loaded && canAct ? (
                         <button
                           type="button"
                           onClick={() => openPacking(order)}
@@ -1314,7 +1492,7 @@ export default function PackingCoolersPage() {
                           {order.loadedAt}
                         </span>
                       </div>
-                    ) : (
+                    ) : canAct ? (
                       <Button
                         variant="dark"
                         disabled={loadingOrderIds.has(order.id)}
@@ -1331,7 +1509,7 @@ export default function PackingCoolersPage() {
                           "Load Now"
                         )}
                       </Button>
-                    )
+                    ) : null
                   ) : null}
                 </div>
               </div>

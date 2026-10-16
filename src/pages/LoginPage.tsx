@@ -6,14 +6,13 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Label } from "@/components/ui/Label";
 import { BrandLogo } from "@/components/layout/BrandLogo";
-import { APP_NAME } from "@/constants";
+import { APP_NAME, ROUTES } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { isApiConfigured } from "@/lib/api";
 import {
   API_LOGIN_HINTS,
   DEMO_ACCOUNTS,
-  getHomeRoute,
   isAuthenticated,
   login,
 } from "@/lib/auth";
@@ -33,7 +32,7 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
 
   if (isAuthenticated()) {
-    return <Navigate to={getHomeRoute()} replace />;
+    return <Navigate to={getRoleHome() ?? ROUTES.distributors} replace />;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -49,7 +48,7 @@ export default function LoginPage() {
       return;
     }
 
-    navigate(getRoleHome(result.role), { replace: true });
+    navigate(getRoleHome() ?? ROUTES.distributors, { replace: true });
   }
 
   return (

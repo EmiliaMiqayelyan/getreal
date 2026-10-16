@@ -16,6 +16,7 @@ import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
@@ -105,6 +106,10 @@ function toPayload(draft: Draft): NotificationRulePayload | null {
 
 export default function PushNotificationsPage() {
   useDocumentTitle("Push Notifications");
+  const { sessionPermissions } = useRolesUsers();
+  const canCreateNotification = sessionPermissions.notificationsCreate;
+  const canEditNotification = sessionPermissions.notificationsEdit;
+  const canDeleteNotification = sessionPermissions.notificationsDelete;
 
   const apiConfigured = isApiConfigured();
   const { notifyApiError, showSuccess } = useApiFeedback();
@@ -337,14 +342,16 @@ export default function PushNotificationsPage() {
               ]}
             />
 
-            <Button
-              variant="primary"
-              onClick={openCreate}
-              className="ml-auto"
-            >
-              <Plus size={14} />
-              Add Push Notification
-            </Button>
+            {canCreateNotification ? (
+              <Button
+                variant="primary"
+                onClick={openCreate}
+                className="ml-auto"
+              >
+                <Plus size={14} />
+                Add Push Notification
+              </Button>
+            ) : null}
           </div>
         }
       />
@@ -395,14 +402,18 @@ export default function PushNotificationsPage() {
                   <div className="min-w-0 truncate text-[13px] leading-5 text-[#111118]">
                     {item.body}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => openEdit(item)}
-                    className="justify-self-end text-[13px] font-medium whitespace-nowrap"
-                    style={{ color: LINK_BLUE }}
-                  >
-                    Edit
-                  </button>
+                  {canEditNotification || canDeleteNotification ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(item)}
+                      className="justify-self-end text-[13px] font-medium whitespace-nowrap"
+                      style={{ color: LINK_BLUE }}
+                    >
+                      Edit
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                 </div>
               );
             })}
@@ -429,7 +440,7 @@ export default function PushNotificationsPage() {
         size="md"
         footer={
           <div className="flex w-full items-center justify-between gap-4">
-            {draft.id ? (
+            {draft.id && canDeleteNotification ? (
               <Button
                 variant="dangerGhost"
                 onClick={() => void removeNotification()}
@@ -450,7 +461,11 @@ export default function PushNotificationsPage() {
               </Button>
               <Button
                 variant="dark"
-                disabled={!canSave || pending !== null}
+                disabled={
+                  !canSave ||
+                  pending !== null ||
+                  (draft.id ? !canEditNotification : !canCreateNotification)
+                }
                 onClick={() => void save()}
               >
                 {pending === "save" ? "Saving..." : "Save"}

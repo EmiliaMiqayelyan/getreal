@@ -7,10 +7,8 @@ import {
   type ReactNode,
 } from "react";
 
-import { ADMIN_ROLE_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS } from "@/data/admin";
-import { getRole } from "@/lib/auth";
+import { getSessionPermissions } from "@/lib/auth";
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
-import { hasPageAccess } from "@/utils/rolePermissions";
 import {
   loadManagedRoles,
   loadRoleUsers,
@@ -87,30 +85,7 @@ export function RolesUsersProvider({ children }: { children: ReactNode }) {
     [setUsers],
   );
 
-  const sessionPermissions = useMemo(() => {
-    const role = getRole();
-    // Prefer a user without personal permissions, so one user's extras do
-    // not change the session for everyone with that role.
-    const byRole = (matches: (type: string) => boolean) =>
-      users.find(
-        (user) =>
-          !user.personalPermissions?.length && matches(user.type.toLowerCase()),
-      ) ?? users.find((user) => matches(user.type.toLowerCase()));
-    if (role === "warehouse") {
-      const warehouse =
-        byRole((type) => type.includes("warehouse")) ??
-        users.find((user) => user.id === "U003");
-      const permissions = warehouse?.permissions ?? DEFAULT_ROLE_PERMISSIONS;
-      return hasPageAccess(permissions)
-        ? permissions
-        : DEFAULT_ROLE_PERMISSIONS;
-    }
-    const superadmin =
-      byRole((type) => type.includes("super") || type === "admin") ??
-      users.find((user) => user.id === "U001");
-    const permissions = superadmin?.permissions ?? ADMIN_ROLE_PERMISSIONS;
-    return hasPageAccess(permissions) ? permissions : ADMIN_ROLE_PERMISSIONS;
-  }, [users]);
+  const sessionPermissions = useMemo(() => getSessionPermissions(), []);
 
   const value = useMemo(
     () => ({

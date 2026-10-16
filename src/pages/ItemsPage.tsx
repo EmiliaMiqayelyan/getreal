@@ -15,6 +15,7 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
@@ -287,6 +288,12 @@ function PhotoThumb({ item }: { item: Item }) {
 
 export default function ItemsPage() {
   useDocumentTitle("Items");
+  const { sessionPermissions } = useRolesUsers();
+  const canCreate = sessionPermissions.itemsCreate;
+  const canEdit = sessionPermissions.itemsEdit;
+  const canRemove = sessionPermissions.itemsRemove;
+  const canEditPricing = sessionPermissions.itemsEditPricing;
+  const canOpenItem = canEdit || canRemove || canEditPricing;
 
   const {
     items: rows,
@@ -645,14 +652,16 @@ export default function ItemsPage() {
                 }}
                 className="w-full sm:w-auto"
               />
-              <Button
-                variant="primary"
-                onClick={openCreate}
-                className="w-full sm:w-auto"
-              >
-                <Plus size={14} />
-                Add Item
-              </Button>
+              {canCreate ? (
+                <Button
+                  variant="primary"
+                  onClick={openCreate}
+                  className="w-full sm:w-auto"
+                >
+                  <Plus size={14} />
+                  Add Item
+                </Button>
+              ) : null}
             </div>
           </div>
         }
@@ -705,13 +714,15 @@ export default function ItemsPage() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={EDIT_LINK}
-                    >
-                      Edit
-                    </button>
+                    {canOpenItem ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={EDIT_LINK}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -801,14 +812,18 @@ export default function ItemsPage() {
                       description={row.preorderInfo}
                       label="Pre-order"
                     />
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={cn(EDIT_LINK, "justify-self-end")}
-                      aria-label={`Edit ${getItemDisplayName(row)}`}
-                    >
-                      Edit
-                    </button>
+                    {canOpenItem ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={cn(EDIT_LINK, "justify-self-end")}
+                        aria-label={`Edit ${getItemDisplayName(row)}`}
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                 );
               })}
@@ -828,7 +843,10 @@ export default function ItemsPage() {
         open={modalOpen}
         item={editing}
         onClose={closeModal}
-        onDelete={handleDeleteItem}
+        onDelete={canRemove ? handleDeleteItem : undefined}
+        canEditDetails={!editing || canEdit}
+        canEditPricing={!editing || canEditPricing}
+        canSave={!editing || canEdit || canEditPricing}
         onSave={async (item) => {
           if (itemSaveLock.current) return;
           itemSaveLock.current = true;

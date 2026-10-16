@@ -11,6 +11,7 @@ import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -92,6 +93,10 @@ function SourcePhoto({
 
 export default function SourcePage() {
   useDocumentTitle("Source");
+  const { sessionPermissions } = useRolesUsers();
+  const canCreate = sessionPermissions.sourceCreate;
+  const canEdit = sessionPermissions.sourceEdit;
+  const canRemove = sessionPermissions.sourceRemove;
 
   const {
     sources: rows,
@@ -202,6 +207,7 @@ export default function SourcePage() {
             onLocationChange={setLocationFilter}
             onDistributorChange={setDistributorFilter}
             onAdd={openCreate}
+            canCreate={canCreate}
             onExport={async (request: ExportRequest) => {
               const source = request.scope === "all" ? rows : filtered;
               downloadSourcesCsv(
@@ -257,13 +263,15 @@ export default function SourcePage() {
                         </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={EDIT_LINK}
-                    >
-                      Edit
-                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={EDIT_LINK}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -332,14 +340,18 @@ export default function SourcePage() {
                       {getSourceDistributorDisplay(row)}
                     </div>
                     <DescriptionHover description={row.description} />
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={cn(EDIT_LINK, "justify-self-end")}
-                      aria-label={`Edit ${row.name}`}
-                    >
-                      Edit
-                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={cn(EDIT_LINK, "justify-self-end")}
+                        aria-label={`Edit ${row.name}`}
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                 );
               })}
@@ -359,7 +371,7 @@ export default function SourcePage() {
         open={modalOpen}
         source={editing}
         onClose={closeModal}
-        onRemove={handleRemoveSource}
+        onRemove={canRemove ? handleRemoveSource : undefined}
         onSave={(source) => {
           void (async () => {
             if (isApiConfigured()) {

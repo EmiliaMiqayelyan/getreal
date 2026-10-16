@@ -17,6 +17,7 @@ type SourceFiltersProps = {
   onLocationChange: (value: string) => void;
   onDistributorChange: (value: string) => void;
   onAdd: () => void;
+  canCreate?: boolean;
   onExport?: ExportHandler;
 };
 
@@ -31,6 +32,7 @@ export function SourceFilters({
   onLocationChange,
   onDistributorChange,
   onAdd,
+  canCreate = true,
   onExport,
 }: SourceFiltersProps) {
   const filtersActive = Boolean(query.trim() || location || distributor);
@@ -82,14 +84,16 @@ export function SourceFilters({
           onExport={onExport}
           className="w-full sm:w-auto"
         />
-        <Button
-          variant="primary"
-          onClick={onAdd}
-          className="w-full sm:w-auto"
-        >
-          <Plus size={14} />
-          Create Source
-        </Button>
+        {canCreate ? (
+          <Button
+            variant="primary"
+            onClick={onAdd}
+            className="w-full sm:w-auto"
+          >
+            <Plus size={14} />
+            Create Source
+          </Button>
+        ) : null}
       </div>
     </div>
   );

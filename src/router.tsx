@@ -2,7 +2,8 @@ import { createBrowserRouter, Navigate } from "react-router";
 
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { ROUTES } from "@/constants";
-import { getHomeRoute, getRole, isAuthenticated } from "@/lib/auth";
+import { getRoleHome } from "@/constants/navigation";
+import { isAuthenticated } from "@/lib/auth";
 import { lazyPage } from "@/lib/lazyPage";
 import LoginPage from "@/pages/LoginPage";
 
@@ -28,23 +29,10 @@ const PushNotificationsPage = lazyPage(
 );
 
 function HomeRedirect() {
-  return (
-    <Navigate to={isAuthenticated() ? getHomeRoute() : ROUTES.login} replace />
-  );
-}
-
-function RoleGuard({
-  allow,
-  children,
-}: {
-  allow: Array<"superadmin" | "warehouse">;
-  children: React.ReactNode;
-}) {
-  const role = getRole();
-  if (!role || !allow.includes(role)) {
-    return <Navigate to={getHomeRoute()} replace />;
+  if (!isAuthenticated()) {
+    return <Navigate to={ROUTES.login} replace />;
   }
-  return children;
+  return <Navigate to={getRoleHome() ?? ROUTES.distributors} replace />;
 }
 
 export const router = createBrowserRouter([
@@ -61,115 +49,59 @@ export const router = createBrowserRouter([
     children: [
       {
         path: ROUTES.dashboard,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <DashboardPage />
-          </RoleGuard>
-        ),
+        element: <DashboardPage />,
       },
       {
         path: ROUTES.distributors,
-        element: (
-          <RoleGuard allow={["superadmin", "warehouse"]}>
-            <DistributorsPage />
-          </RoleGuard>
-        ),
+        element: <DistributorsPage />,
       },
       {
         path: ROUTES.source,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <SourcePage />
-          </RoleGuard>
-        ),
+        element: <SourcePage />,
       },
       {
         path: ROUTES.items,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <ItemsPage />
-          </RoleGuard>
-        ),
+        element: <ItemsPage />,
       },
       {
         path: ROUTES.productsForSale,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <ProductsForSalePage />
-          </RoleGuard>
-        ),
+        element: <ProductsForSalePage />,
       },
       {
         path: ROUTES.productOrders,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <ProductOrdersPage />
-          </RoleGuard>
-        ),
+        element: <ProductOrdersPage />,
       },
       {
         path: ROUTES.inventory,
-        element: (
-          <RoleGuard allow={["superadmin", "warehouse"]}>
-            <InventoryPage />
-          </RoleGuard>
-        ),
+        element: <InventoryPage />,
       },
       {
         path: ROUTES.customers,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <CustomersPage />
-          </RoleGuard>
-        ),
+        element: <CustomersPage />,
       },
       {
         path: ROUTES.customerOrders,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <CustomerOrdersPage />
-          </RoleGuard>
-        ),
+        element: <CustomerOrdersPage />,
       },
       {
         path: ROUTES.distributorDeliveries,
-        element: (
-          <RoleGuard allow={["superadmin", "warehouse"]}>
-            <DistributorDeliveriesPage />
-          </RoleGuard>
-        ),
+        element: <DistributorDeliveriesPage />,
       },
       {
         path: ROUTES.packingCoolers,
-        element: (
-          <RoleGuard allow={["superadmin", "warehouse"]}>
-            <PackingCoolersPage />
-          </RoleGuard>
-        ),
+        element: <PackingCoolersPage />,
       },
       {
         path: ROUTES.packerManager,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <PackerManagerPage />
-          </RoleGuard>
-        ),
+        element: <PackerManagerPage />,
       },
       {
         path: ROUTES.roles,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <RolesPage />
-          </RoleGuard>
-        ),
+        element: <RolesPage />,
       },
       {
         path: ROUTES.notifications,
-        element: (
-          <RoleGuard allow={["superadmin"]}>
-            <PushNotificationsPage />
-          </RoleGuard>
-        ),
+        element: <PushNotificationsPage />,
       },
     ],
   },

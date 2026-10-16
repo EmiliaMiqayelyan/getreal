@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -28,6 +30,7 @@ import {
   productFromItem,
 } from "@/constants/productsForSale";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -182,6 +185,13 @@ function findScrollParent(element: HTMLElement | null) {
   return null;
 }
 
+const ProductAccessContext = createContext({
+  canAdd: true,
+  canToggleLive: true,
+  canChangePlacement: true,
+  canView: true,
+});
+
 function DragHandleControl({
   label,
   className,
@@ -233,11 +243,12 @@ function ProductCells({
   interactive: boolean;
   onHandlePointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const access = useContext(ProductAccessContext);
   const display = resolveProductTableDisplay(row, catalog);
   const handle = (
     <DragHandleControl
       label={`Reorder ${display.merchandisingName}`}
-      interactive={interactive}
+      interactive={interactive && access.canChangePlacement}
       onPointerDown={onHandlePointerDown}
       className={
         layout === "mobile"
@@ -258,6 +269,7 @@ function ProductCells({
           <div className="flex justify-end">
             <Switch
               checked={row.live}
+              disabled={!access.canToggleLive}
               label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
               onCheckedChange={(live) => onToggleLive(row.id, live)}
             />
@@ -274,15 +286,17 @@ function ProductCells({
               {display.unitOfSales}
             </span>
           </div>
-          <div className="mt-2 flex items-center gap-3">
-            <button
-              type="button"
-              className={EDIT_LINK}
-              onClick={() => onView(row)}
-            >
-              View
-            </button>
-          </div>
+          {access.canView ? (
+            <div className="mt-2 flex items-center gap-3">
+              <button
+                type="button"
+                className={EDIT_LINK}
+                onClick={() => onView(row)}
+              >
+                View
+              </button>
+            </div>
+          ) : null}
         </div>
       </>
     );
@@ -297,6 +311,7 @@ function ProductCells({
       <div className="flex items-center">
         <Switch
           checked={row.live}
+          disabled={!access.canToggleLive}
           label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
           onCheckedChange={(live) => onToggleLive(row.id, live)}
         />
@@ -324,9 +339,11 @@ function ProductCells({
         {display.unitOfSales}
       </div>
       <div className="flex items-center justify-end gap-3">
-        <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
-          View
-        </button>
+        {access.canView ? (
+          <button type="button" className={EDIT_LINK} onClick={() => onView(row)}>
+            View
+          </button>
+        ) : null}
       </div>
     </>
   );
@@ -462,6 +479,7 @@ function SubcategoryTable({
   ) => void;
   onHeadingPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
+  const access = useContext(ProductAccessContext);
   const [session, setSession] = useState<DragSession | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -580,7 +598,7 @@ function SubcategoryTable({
     id: string,
     layout: DragLayout,
   ) {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !access.canChangePlacement) return;
     event.preventDefault();
     const rowEl = rowRefs.current.get(`${layout}:${id}`);
     if (!rowEl) return;
@@ -843,6 +861,7 @@ function SubcategoryStack({
   ) => void;
   onReorder: (orderedNames: string[]) => void;
 }) {
+  const access = useContext(ProductAccessContext);
   const [session, setSession] = useState<DragSession | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
   const sectionRefs = useRef(new Map<string, HTMLDivElement>());
@@ -962,7 +981,7 @@ function SubcategoryStack({
   }, []);
 
   function startDrag(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
-    if (event.button !== 0 || !canReorder) return;
+    if (event.button !== 0 || !canReorder || !access.canChangePlacement) return;
     event.preventDefault();
     const sectionEl = sectionRefs.current.get(id);
     const listEl = listRef.current;
@@ -1092,7 +1111,7 @@ function SubcategoryStack({
                       )
                     }
                     onHeadingPointerDown={
-                      canReorder
+                      canReorder && access.canChangePlacement
                         ? (event) => startDrag(event, section.subcategory)
                         : undefined
                     }
@@ -1129,6 +1148,16 @@ function SubcategoryStack({
 
 export default function ProductsForSalePage() {
   useDocumentTitle("Products For Sale");
+  const { sessionPermissions } = useRolesUsers();
+  const productAccess = useMemo(
+    () => ({
+      canAdd: sessionPermissions.productsAddItem,
+      canToggleLive: sessionPermissions.productsToggleLive,
+      canChangePlacement: sessionPermissions.productsChangePlacement,
+      canView: sessionPermissions.productsView,
+    }),
+    [sessionPermissions],
+  );
 
   const {
     products,
@@ -1254,6 +1283,7 @@ export default function ProductsForSalePage() {
   }, [categoryNames, tab]);
 
   function toggleLive(id: string, live: boolean) {
+    if (!productAccess.canToggleLive) return;
     const target = products.find((row) => row.id === id);
     setProducts((current) =>
       current.map((row) => (row.id === id ? { ...row, live } : row)),
@@ -1290,6 +1320,7 @@ export default function ProductsForSalePage() {
     targetId: string,
     visibleIds: string[],
   ) {
+    if (!productAccess.canChangePlacement) return;
     setProducts((current) => {
       const previous = current;
       const next = reorderProductsInSubcategory(
@@ -1317,6 +1348,7 @@ export default function ProductsForSalePage() {
   }
 
   function handleSubcategoryReorder(category: string, orderedNames: string[]) {
+    if (!productAccess.canChangePlacement) return;
     const previous = subcategoryRecords;
     const next = applyVisibleSubcategoryOrder(previous, category, orderedNames);
     if (next === previous) return;
@@ -1365,6 +1397,7 @@ export default function ProductsForSalePage() {
   }
 
   return (
+    <ProductAccessContext.Provider value={productAccess}>
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
       <Header
         title="Products For Sale"
@@ -1422,14 +1455,16 @@ export default function ProductsForSalePage() {
               ]}
             />
 
-            <Button
-              variant="primary"
-              onClick={() => setAddOpen(true)}
-              className="w-full sm:ml-auto sm:w-auto"
-            >
-              <Plus size={14} />
-              Add Product for Sale
-            </Button>
+            {productAccess.canAdd ? (
+              <Button
+                variant="primary"
+                onClick={() => setAddOpen(true)}
+                className="w-full sm:ml-auto sm:w-auto"
+              >
+                <Plus size={14} />
+                Add Product for Sale
+              </Button>
+            ) : null}
           </div>
         }
         below={
@@ -1556,5 +1591,6 @@ export default function ProductsForSalePage() {
         ) : null}
       </div>
     </div>
+    </ProductAccessContext.Provider>
   );
 }

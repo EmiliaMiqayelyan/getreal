@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER, ID_PILL } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -261,10 +262,12 @@ function LocationSelect({
 function InventoryLocationCell({
   location,
   address,
+  canEdit = true,
   onEditLocation,
 }: {
   location: string;
   address?: string;
+  canEdit?: boolean;
   onEditLocation: () => void;
 }) {
   return (
@@ -276,6 +279,7 @@ function InventoryLocationCell({
       >
         {location}
       </LocationHover>
+      {canEdit ? (
       <button
         type="button"
         aria-label="Edit location"
@@ -294,6 +298,7 @@ function InventoryLocationCell({
           className="opacity-70"
         />
       </button>
+      ) : null}
     </div>
   );
 }
@@ -1150,6 +1155,9 @@ function withStoredOrder(current: InventorySection[], order: ReceivedOrder) {
 
 export default function InventoryPage() {
   useDocumentTitle("Inventory");
+  const { sessionPermissions } = useRolesUsers();
+  const canStock = sessionPermissions.inventoryStockItems;
+  const canChangeLocation = sessionPermissions.inventoryChangeLocation;
   const liveInventory = isApiConfigured();
   const { pendingHandoffs, removeHandoff } = useReceivingHandoff();
   const {
@@ -1498,6 +1506,7 @@ export default function InventoryPage() {
     productId: string,
     lotIndex: number,
   ) {
+    if (!canChangeLocation) return;
     const section = sections.find((entry) => entry.id === sectionId);
     const product = section?.products.find((entry) => entry.id === productId);
     const lot = product?.lots[lotIndex];
@@ -1748,7 +1757,7 @@ export default function InventoryPage() {
     return { ok: true, storedIds: ready.map((item) => item.id) };
   }
 
-  if (activeOrder) {
+  if (activeOrder && canStock) {
     return (
       <StockItemsView
         order={activeOrder}
@@ -1827,8 +1836,11 @@ export default function InventoryPage() {
               <button
                 key={order.id}
                 type="button"
-                onClick={() => setStoringId(order.id)}
-                className="flex w-full items-center rounded-[12px] px-5 py-3.5 text-left text-white"
+                disabled={!canStock}
+                onClick={() => {
+                  if (canStock) setStoringId(order.id);
+                }}
+                className="flex w-full items-center rounded-[12px] px-5 py-3.5 text-left text-white disabled:cursor-default"
                 style={{ background: GREEN }}
               >
                 <span className="shrink-0 text-[13px] font-medium whitespace-nowrap">
@@ -1854,11 +1866,13 @@ export default function InventoryPage() {
                 <span className="ml-4 min-w-[160px] flex-1 text-[13px] whitespace-nowrap">
                   {order.receivedAt}
                 </span>
-                <ChevronRight
-                  size={28}
-                  strokeWidth={2.25}
-                  className="ml-4 shrink-0 text-white"
-                />
+                {canStock ? (
+                  <ChevronRight
+                    size={28}
+                    strokeWidth={2.25}
+                    className="ml-4 shrink-0 text-white"
+                  />
+                ) : null}
               </button>
             ))}
           </div>
@@ -2036,6 +2050,7 @@ export default function InventoryPage() {
                                               <InventoryLocationCell
                                                 location={lot.location}
                                                 address={lot.address}
+                                                canEdit={canChangeLocation}
                                                 onEditLocation={() =>
                                                   openEditLocation(
                                                     section.id,

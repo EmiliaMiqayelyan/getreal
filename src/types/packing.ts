@@ -28,6 +28,12 @@ export type PackingSourceOption = {
   address: string;
 };
 
+/** Units the packer takes from one fridge. */
+export type PackingPick = {
+  inventoryRecordId: string;
+  quantity: number;
+};
+
 export type PackingLine = {
   id: string;
   /** Catalog item id. API: order line productId. */
@@ -37,6 +43,11 @@ export type PackingLine = {
   category: string;
   qty: number;
   selected?: PackingSourceOption;
+  /**
+   * Fridge split for this line. Empty until the packer allocates.
+   * A selected lot with no picks still means the whole quantity comes from that lot.
+   */
+  picks?: PackingPick[];
   /** Cooler code, or "Cooler" until one is chosen. */
   coolerId: string;
   packed: boolean;

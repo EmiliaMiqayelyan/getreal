@@ -255,13 +255,20 @@ export const ordersApi = {
   },
 
   /**
-   * PATCH /orders/:id/items/:productId/pack. Saves the line's cooler and
-   * inventory lot; the server marks that lot `picked`.
+   * PATCH /orders/:id/items/:productId/pack.
+   * One fridge: `inventoryRecordId` (the whole ordered quantity).
+   * Several fridges: `picks`, whose quantities must add up to the ordered quantity.
+   * Packing again restores the previous picks, then deducts the new ones.
    */
   packItem(
     id: string,
     productId: string,
-    body: { coolerId?: string; inventoryRecordId?: string; packed?: boolean },
+    body: {
+      coolerId?: string;
+      inventoryRecordId?: string;
+      packed?: boolean;
+      picks?: { inventoryRecordId: string; quantity: number }[];
+    },
   ) {
     return apiRequest<unknown>(`/orders/${id}/items/${productId}/pack`, {
       method: "PATCH",
@@ -273,8 +280,8 @@ export const ordersApi = {
   },
 
   /**
-   * PATCH /orders/:id/items/:productId/unpack. Clears the line's cooler, lot,
-   * and packed flag, and returns the lot to `in_stock`.
+   * PATCH /orders/:id/items/:productId/unpack. Clears picks, sets packed
+   * false, and puts each deducted quantity back in its fridge.
    */
   unpackItem(id: string, productId: string) {
     return apiRequest<unknown>(`/orders/${id}/items/${productId}/unpack`, {

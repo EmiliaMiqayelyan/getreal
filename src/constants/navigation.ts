@@ -1,5 +1,7 @@
 import { ROUTES } from "@/constants";
-import type { AppRole } from "@/lib/auth";
+import { getSessionPermissions, type AppRole } from "@/lib/auth";
+import type { RolePermissions } from "@/types/admin";
+import { canAccessPath } from "@/utils/rolesUsers";
 
 export type NavItem = {
   label: string;
@@ -90,35 +92,39 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-export const WAREHOUSE_NAV_SECTIONS: NavSection[] = [
-  {
-    title: "WAREHOUSE",
-    items: [
-      {
-        label: "Distributor Receiving",
-        href: ROUTES.distributorDeliveries,
-        icon: "cart",
-      },
-      { label: "Inventory", href: ROUTES.inventory, icon: "inventory" },
-      {
-        label: "Cooler Packing",
-        href: ROUTES.packingCoolers,
-        icon: "package",
-      },
-      { label: "Distributors", href: ROUTES.distributors, icon: "truck" },
-    ],
-  },
-];
-
 /** @deprecated Prefer SUPERADMIN_NAV_SECTIONS / getNavSections */
 export const NAV_SECTIONS = SUPERADMIN_NAV_SECTIONS;
 
-export function getNavSections(role: AppRole | null): NavSection[] {
-  if (role === "warehouse") return WAREHOUSE_NAV_SECTIONS;
-  return SUPERADMIN_NAV_SECTIONS;
+function resolveNavPermissions(
+  input?: AppRole | null | RolePermissions,
+): RolePermissions {
+  if (input && typeof input === "object") return input;
+  return getSessionPermissions();
 }
 
-export function getRoleHome(role: AppRole | null): string {
-  if (role === "warehouse") return ROUTES.distributorDeliveries;
-  return ROUTES.distributors;
+/** Sections and links the signed-in user is allowed to open. */
+export function getNavSections(
+  roleOrPermissions?: AppRole | null | RolePermissions,
+): NavSection[] {
+  const permissions = resolveNavPermissions(roleOrPermissions);
+  return SUPERADMIN_NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((item) =>
+      canAccessPath(permissions, item.href),
+    ),
+  })).filter((section) => section.items.length > 0);
+}
+
+/** First page this user can open. */
+export function getRoleHome(
+  roleOrPermissions?: AppRole | null | RolePermissions,
+): string | null {
+  const permissions = resolveNavPermissions(roleOrPermissions);
+  for (const section of SUPERADMIN_NAV_SECTIONS) {
+    for (const item of section.items) {
+      if (canAccessPath(permissions, item.href)) return item.href;
+    }
+  }
+  if (permissions.sidebarDashboard) return ROUTES.dashboard;
+  return null;
 }

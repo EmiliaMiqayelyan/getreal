@@ -924,7 +924,8 @@ export default function RolesPage() {
                     const fromRole = Boolean(rolePermissions?.[key]);
                     return {
                       checked: fromRole || permissions[key],
-                      disabled: locked || fromRole,
+                      disabled:
+                        locked || fromRole || !sessionPermissions.rolesAddUser,
                       title: fromRole
                         ? `Granted by the ${user.type} role`
                         : undefined,
@@ -981,13 +982,15 @@ export default function RolesPage() {
                           </span>
                         </div>
                         <div className="text-right">
-                          <button
-                            type="button"
-                            onClick={() => openEditModal(user)}
-                            className="text-[13px] font-medium text-[#2165D4]"
-                          >
-                            {isUnassignedRoleRow(user) ? "Add User" : "Edit"}
-                          </button>
+                          {sessionPermissions.rolesAddUser ? (
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(user)}
+                              className="text-[13px] font-medium text-[#2165D4]"
+                            >
+                              {isUnassignedRoleRow(user) ? "Add User" : "Edit"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
 

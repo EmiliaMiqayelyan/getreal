@@ -275,6 +275,7 @@ export default function PackerManagerPage() {
     usePackingHandoff();
   const { sessionPermissions } = useRolesUsers();
   const canAssign = sessionPermissions.packerManagerAssignPacker;
+  const canViewCustomer = sessionPermissions.packerManagerViewCustomerDetails;
   const { notifyApiError, showError } = useApiFeedback();
 
   const apiLive = packerManagerApiLive();
@@ -664,12 +665,16 @@ export default function PackerManagerPage() {
               >
                 <button
                   type="button"
-                  onClick={() => setSelectedOrderId(order.id)}
+                  onClick={() => {
+                    if (canViewCustomer) setSelectedOrderId(order.id);
+                  }}
                   className="min-w-0 text-left"
                 >
                   <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
                     {order.customer}
-                    <ChevronRight size={14} className="text-[#A9A9A9]" />
+                    {canViewCustomer ? (
+                      <ChevronRight size={14} className="text-[#A9A9A9]" />
+                    ) : null}
                   </div>
                   <div className="mt-1.5 flex items-center gap-2">
                     <IdPill>{order.code}</IdPill>
@@ -691,7 +696,7 @@ export default function PackerManagerPage() {
                     }
                     title={
                       !canAssign
-                        ? "Only a Packer Manager can assign a packer"
+                        ? "You don't have permission to assign a packer"
                         : assignLocked
                           ? "Packing has started. The packer can't be changed."
                           : "Assign packer"

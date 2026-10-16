@@ -1,4 +1,9 @@
-import type { ApiInventory, ApiProduct } from "@/lib/api/types";
+import type {
+  ApiAvailableLocation,
+  ApiInventory,
+  ApiItemPick,
+  ApiProduct,
+} from "@/lib/api/types";
 import type { PackingSourceOption } from "@/types/packing";
 
 export type PackingLineLookup = {
@@ -116,6 +121,131 @@ export function buildPackingCatalog(
       return row ? (describeRecord(row) ?? undefined) : undefined;
     },
   };
+}
+
+type OrderLineStock = {
+  productId?: string;
+  name?: string;
+  itemCode?: string | null;
+  quantity?: number;
+  packed?: boolean;
+  inventoryRecordId?: string | null;
+  availableLocations?: ApiAvailableLocation[] | null;
+  picks?: ApiItemPick[] | null;
+};
+
+function stockHeldByLine(line: OrderLineStock) {
+  const held = new Map<string, number>();
+  if (!line.packed) return held;
+  const picks = line.picks ?? [];
+  if (picks.length) {
+    for (const pick of picks) {
+      const id = pick.inventoryRecordId?.trim();
+      if (!id || !(pick.quantity > 0)) continue;
+      held.set(id, (held.get(id) ?? 0) + pick.quantity);
+    }
+    return held;
+  }
+  const id = line.inventoryRecordId?.trim();
+  if (id && (line.quantity ?? 0) > 0) held.set(id, line.quantity ?? 0);
+  return held;
+}
+
+function optionFromLocation(
+  location: ApiAvailableLocation,
+  stock: number,
+  onHand: number,
+  enriched: PackingSourceOption | undefined,
+  fallbackLocation: string,
+): PackingSourceOption {
+  const id = location.id.trim();
+  const name = location.location?.trim() || enriched?.location || fallbackLocation;
+  return {
+    inventoryRecordId: id,
+    itemId: enriched?.itemId || id,
+    distributor: enriched?.distributor || "N/A",
+    source: enriched?.source || "N/A",
+    expDate: formatExpDate(location.expirationDate) || enriched?.expDate || "",
+    expirationIso: location.expirationDate?.trim() || enriched?.expirationIso || "",
+    quantity: stock,
+    available: onHand,
+    location: name,
+    address: enriched?.address || name,
+  };
+}
+
+/**
+ * Fridges the packer can take this line from.
+ * Prefers `availableLocations` (already FIFO). Falls back to the inventory
+ * catalog when the order payload has no fridge list.
+ * Packed quantities are added back so a saved split can be edited: the
+ * server restores those units before it applies the next pack.
+ */
+export function orderLineOptions(
+  line: OrderLineStock,
+  catalog: PackingCatalog,
+): SourceGroup {
+  const match = catalog.optionsFor(line);
+  const locations = (line.availableLocations ?? []).filter((location) =>
+    location.id?.trim(),
+  );
+  if (!locations.length) {
+    const recordId = line.inventoryRecordId?.trim() || "";
+    const selected = recordId
+      ? (match.options.find((option) => option.inventoryRecordId === recordId) ??
+        catalog.optionForRecord?.(recordId))
+      : undefined;
+    const options =
+      selected &&
+      !match.options.some(
+        (option) => option.inventoryRecordId === selected.inventoryRecordId,
+      )
+        ? [selected, ...match.options]
+        : match.options;
+    return { category: match.category, options };
+  }
+
+  const held = stockHeldByLine(line);
+  const options: PackingSourceOption[] = [];
+  const seen = new Set<string>();
+
+  for (const location of locations) {
+    const id = location.id.trim();
+    const onHand = typeof location.quantity === "number" ? location.quantity : 0;
+    const stock = onHand + (held.get(id) ?? 0);
+    if (stock <= 0) continue;
+    seen.add(id);
+    options.push(
+      optionFromLocation(
+        location,
+        stock,
+        onHand,
+        catalog.optionForRecord?.(id),
+        "",
+      ),
+    );
+  }
+
+  for (const [id, quantity] of held) {
+    if (seen.has(id) || quantity <= 0) continue;
+    const pick = line.picks?.find((entry) => entry.inventoryRecordId?.trim() === id);
+    options.push(
+      optionFromLocation(
+        {
+          id,
+          location: pick?.location?.trim() || "",
+          quantity: 0,
+          expirationDate: null,
+        },
+        quantity,
+        0,
+        catalog.optionForRecord?.(id),
+        pick?.location?.trim() || "",
+      ),
+    );
+  }
+
+  return { category: match.category, options };
 }
 
 export function productItemIdMap(products: ApiProduct[]) {

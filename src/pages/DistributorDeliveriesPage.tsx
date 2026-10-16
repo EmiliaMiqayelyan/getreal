@@ -33,6 +33,7 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useReceivingHandoff } from "@/context/ReceivingHandoffContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
@@ -1410,6 +1411,9 @@ const ROW_GRID =
 
 export default function DistributorDeliveriesPage() {
   useDocumentTitle("Distributor Receiving");
+  const { sessionPermissions } = useRolesUsers();
+  const canValidate = sessionPermissions.receivingValidate;
+  const canEditReceiving = sessionPermissions.receivingEdit;
   const { pushHandoff, markDeliveryReceived } = useReceivingHandoff();
   const { notifyApiError, showError } = useApiFeedback();
 
@@ -1807,7 +1811,7 @@ export default function DistributorDeliveriesPage() {
     setExpanded(new Set([orderId]));
   }
 
-  if (checkingOrder) {
+  if (checkingOrder && canValidate) {
     return (
       <CheckOrderView
         order={checkingOrder}
@@ -1826,7 +1830,7 @@ export default function DistributorDeliveriesPage() {
           itemResults[viewingOrder.id] ?? checksFromLines(viewingOrder.items)
         }
         detailsLoading={detailLoadingIds.has(viewingOrder.id)}
-        readOnly
+        readOnly={!canEditReceiving}
         onClose={() => setViewingId(null)}
         onAccepted={() => undefined}
       />
@@ -2053,7 +2057,7 @@ export default function DistributorDeliveriesPage() {
                             <Check size={10} strokeWidth={3} />
                           </span>
                         </button>
-                      ) : (
+                      ) : canValidate ? (
                         <button
                           type="button"
                           onClick={() => setCheckingId(order.id)}
@@ -2062,7 +2066,7 @@ export default function DistributorDeliveriesPage() {
                         >
                           Validate
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 

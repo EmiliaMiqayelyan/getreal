@@ -34,6 +34,7 @@ import { Select } from "@/components/ui/Select";
 import { Tabs } from "@/components/ui/Tabs";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
@@ -1067,11 +1068,15 @@ function StepNode({
   step,
   order,
   lockReason,
+  allowHover = true,
+  allowStatusChange = true,
   onStatusClick,
 }: {
   step: TimelineStep;
   order: CustomerOrderRow;
   lockReason?: string;
+  allowHover?: boolean;
+  allowStatusChange?: boolean;
   onStatusClick: (anchor: DOMRect) => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -1110,7 +1115,7 @@ function StepNode({
   }
 
   function show() {
-    if (!step.done) return;
+    if (!allowHover || !step.done) return;
     window.clearTimeout(hideTimer.current);
     place();
     setHover(true);
@@ -1138,7 +1143,7 @@ function StepNode({
           aria-disabled={lockReason ? true : undefined}
           onClick={(event) => {
             event.stopPropagation();
-            if (lockReason) return;
+            if (lockReason || !allowStatusChange) return;
             onStatusClick(event.currentTarget.getBoundingClientRect());
           }}
           className={cn(
@@ -1185,9 +1190,13 @@ function StepNode({
 
 function OrderTimelineTrack({
   order,
+  canChangeStatus = true,
+  canSeeStatusInfo = true,
   onStatusClick,
 }: {
   order: CustomerOrderRow;
+  canChangeStatus?: boolean;
+  canSeeStatusInfo?: boolean;
   onStatusClick: (stepKey: TimelineStepKey, anchor: DOMRect) => void;
 }) {
   const progressIndex = orderProgressIndex(order.steps, order.status);
@@ -1226,8 +1235,10 @@ function OrderTimelineTrack({
               step={step}
               order={order}
               lockReason={lockReason}
+              allowHover={canSeeStatusInfo}
+              allowStatusChange={canChangeStatus}
               onStatusClick={(anchor) => {
-                if (lockReason) return;
+                if (lockReason || !canChangeStatus) return;
                 onStatusClick(step.key, anchor);
               }}
             />
@@ -1257,6 +1268,11 @@ function DayHeaderIcon() {
 
 export default function CustomerOrdersPage() {
   useDocumentTitle("Customer Orders");
+  const { sessionPermissions } = useRolesUsers();
+  const canViewDetails = sessionPermissions.customerOrdersViewDetails;
+  const canChangeStatus = sessionPermissions.customerOrdersChangeStatuses;
+  const canSeeStatusInfo = sessionPermissions.customerOrdersStatusHover;
+  const canSeeCompleted = sessionPermissions.customerOrdersAccessCompleted;
 
   const { packingByCode } = usePackingHandoff();
   const { notifyApiError } = useApiFeedback();
@@ -1271,6 +1287,9 @@ export default function CustomerOrdersPage() {
   const [loading, setLoading] = useState(apiConfigured);
   const [completedLoading, setCompletedLoading] = useState(apiConfigured);
   const [activeTab, setActiveTab] = useState<"Orders" | "Completed">("Orders");
+  useEffect(() => {
+    if (!canSeeCompleted && activeTab === "Completed") setActiveTab("Orders");
+  }, [activeTab, canSeeCompleted]);
   const [appliedDateId, setAppliedDateId] = useState(() =>
     apiConfigured ? toDeliveryDateId(upcomingWednesday()) : "",
   );
@@ -1867,21 +1886,23 @@ export default function CustomerOrdersPage() {
           </div>
         }
         center={
-          <Tabs
-            embedded
-            aria-label="Order views"
-            items={[
-              { id: "Orders", label: "Orders", width: 103 },
-              { id: "Completed", label: "Completed", width: 118 },
-            ]}
-            value={activeTab}
-            onChange={(id) => {
-              setActiveTab(id as "Orders" | "Completed");
-              setSelectedOrderId(null);
-              setStatusMenu(null);
-              setCalendarOpen(false);
-            }}
-          />
+          canSeeCompleted ? (
+            <Tabs
+              embedded
+              aria-label="Order views"
+              items={[
+                { id: "Orders", label: "Orders", width: 103 },
+                { id: "Completed", label: "Completed", width: 118 },
+              ]}
+              value={activeTab}
+              onChange={(id) => {
+                setActiveTab(id as "Orders" | "Completed");
+                setSelectedOrderId(null);
+                setStatusMenu(null);
+                setCalendarOpen(false);
+              }}
+            />
+          ) : null
         }
       />
 
@@ -1994,15 +2015,19 @@ export default function CustomerOrdersPage() {
                       >
                         <button
                           type="button"
-                          onClick={() => setSelectedOrderId(order.id)}
+                          onClick={() => {
+                            if (canViewDetails) setSelectedOrderId(order.id);
+                          }}
                           className="text-left"
                         >
                           <div className="flex items-center gap-1 text-[16px] font-semibold text-[#2E2E2E]">
                             {display(order.customerName)}
-                            <ChevronRight
-                              size={13}
-                              className="text-[#A9A9A9]"
-                            />
+                            {canViewDetails ? (
+                              <ChevronRight
+                                size={13}
+                                className="text-[#A9A9A9]"
+                              />
+                            ) : null}
                           </div>
                           <div className="mt-1.5 flex flex-wrap items-center gap-2">
                             <IdPill>{order.id}</IdPill>
@@ -2016,7 +2041,10 @@ export default function CustomerOrdersPage() {
                         <div className="col-span-6">
                           <OrderTimelineTrack
                             order={order}
+                            canChangeStatus={canChangeStatus}
+                            canSeeStatusInfo={canSeeStatusInfo}
                             onStatusClick={(stepKey, anchor) => {
+                              if (!canChangeStatus) return;
                               const progress = orderProgressIndex(
                                 order.steps,
                                 order.status,
@@ -2115,10 +2143,13 @@ export default function CustomerOrdersPage() {
                           {dayOrders.map((order) => (
                             <div
                               key={order.id}
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => setSelectedOrderId(order.id)}
+                              role={canViewDetails ? "button" : undefined}
+                              tabIndex={canViewDetails ? 0 : undefined}
+                              onClick={() => {
+                                if (canViewDetails) setSelectedOrderId(order.id);
+                              }}
                               onKeyDown={(event) => {
+                                if (!canViewDetails) return;
                                 if (event.key === "Enter" || event.key === " ") {
                                   event.preventDefault();
                                   setSelectedOrderId(order.id);

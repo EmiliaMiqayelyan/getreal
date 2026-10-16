@@ -61,6 +61,12 @@ type AddItemModalProps = {
   onSave: (item: Item) => void | Promise<void>;
   /** Delete the item being edited. Edit mode only. */
   onDelete?: () => void | Promise<void>;
+  /** Name, category, and other non-price fields. */
+  canEditDetails?: boolean;
+  /** Selling price field. */
+  canEditPricing?: boolean;
+  /** Show the save button. */
+  canSave?: boolean;
   item?: Item | null;
 };
 
@@ -78,6 +84,9 @@ export function AddItemModal({
   onClose,
   onSave,
   onDelete,
+  canEditDetails = true,
+  canEditPricing = true,
+  canSave = true,
   item = null,
 }: AddItemModalProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -377,7 +386,12 @@ export function AddItemModal({
           </button>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-auto px-6 pt-4 pb-5">
+        <div
+          className={cn(
+            "flex-1 space-y-6 overflow-auto px-6 pt-4 pb-5",
+            !canEditDetails && "pointer-events-none opacity-80 select-none",
+          )}
+        >
           <section>
             <h3 className="mb-3 text-[11px] font-semibold tracking-[0.06em] text-[#6B7180] uppercase">
               Basic Info
@@ -923,11 +937,19 @@ export function AddItemModal({
                         value={formatCalculatedMoney(pricing.suggestedPrice)}
                       />
                     </Field>
-                    <div data-field="sellingPrice">
+                    <div
+                      data-field="sellingPrice"
+                      className={cn(
+                        !canEditDetails &&
+                          canEditPricing &&
+                          "pointer-events-auto opacity-100",
+                      )}
+                    >
                       <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
+                          disabled={!canEditPricing}
                           onChange={(value) => {
                             setSellingPrice(sanitizeMoneyTyping(value));
                             if (errors.sellingPrice) {
@@ -1065,11 +1087,19 @@ export function AddItemModal({
                     </Field>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <div data-field="sellingPrice">
+                    <div
+                      data-field="sellingPrice"
+                      className={cn(
+                        !canEditDetails &&
+                          canEditPricing &&
+                          "pointer-events-auto opacity-100",
+                      )}
+                    >
                       <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
+                          disabled={!canEditPricing}
                           onChange={(value) => {
                             setSellingPrice(sanitizeMoneyTyping(value));
                             if (errors.sellingPrice) {
@@ -1132,11 +1162,19 @@ export function AddItemModal({
                         value={formatCalculatedMoney(pricing.suggestedPrice)}
                       />
                     </Field>
-                    <div data-field="sellingPrice">
+                    <div
+                      data-field="sellingPrice"
+                      className={cn(
+                        !canEditDetails &&
+                          canEditPricing &&
+                          "pointer-events-auto opacity-100",
+                      )}
+                    >
                       <Field label="Selling Price" required>
                         <MoneyInput
                           value={sellingPrice}
                           placeholder="0.00"
+                          disabled={!canEditPricing}
                           onChange={(value) => {
                             setSellingPrice(sanitizeMoneyTyping(value));
                             if (errors.sellingPrice) {
@@ -1194,13 +1232,15 @@ export function AddItemModal({
             <Button variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button
-              variant="dark"
-              onClick={handleSave}
-              disabled={saving || deleting}
-            >
-              {isEdit ? "Save Item" : "Create Item"}
-            </Button>
+            {canSave ? (
+              <Button
+                variant="dark"
+                onClick={handleSave}
+                disabled={saving || deleting}
+              >
+                {isEdit ? "Save Item" : "Create Item"}
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>
@@ -1297,11 +1337,13 @@ function MoneyInput({
   onChange,
   placeholder,
   invalid = false,
+  disabled = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   invalid?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="relative">
@@ -1312,6 +1354,7 @@ function MoneyInput({
         value={value}
         placeholder={placeholder}
         inputMode="decimal"
+        disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
         className={cn("w-full pl-7", invalid && INVALID_BORDER)}
       />

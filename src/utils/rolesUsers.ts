@@ -171,12 +171,25 @@ export const ROUTE_PERMISSION_KEY: Record<string, keyof RolePermissions> = {
   "/notifications": "accessNotifications",
 };
 
+export function permissionKeyForPath(
+  pathname: string,
+): keyof RolePermissions | undefined {
+  const path =
+    pathname.length > 1 && pathname.endsWith("/")
+      ? pathname.slice(0, -1)
+      : pathname;
+  const match = Object.keys(ROUTE_PERMISSION_KEY)
+    .sort((left, right) => right.length - left.length)
+    .find((route) => path === route || path.startsWith(`${route}/`));
+  return match ? ROUTE_PERMISSION_KEY[match] : undefined;
+}
+
 export function canAccessPath(
   permissions: RolePermissions | null | undefined,
   pathname: string,
 ): boolean {
-  if (!permissions) return true;
-  const key = ROUTE_PERMISSION_KEY[pathname];
-  if (!key) return true;
+  if (!permissions) return false;
+  const key = permissionKeyForPath(pathname);
+  if (!key) return false;
   return Boolean(permissions[key]);
 }

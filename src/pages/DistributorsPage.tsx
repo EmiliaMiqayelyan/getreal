@@ -14,6 +14,7 @@ import {
   useAppCatalog,
   useCatalogSlice,
 } from "@/context/AppCatalogContext";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
@@ -327,6 +328,10 @@ function NotesHover({ notes }: { notes: string }) {
 
 export default function DistributorsPage() {
   useDocumentTitle("Distributors");
+  const { sessionPermissions } = useRolesUsers();
+  const canCreate = sessionPermissions.distributorsCreate;
+  const canEdit = sessionPermissions.distributorsEdit;
+  const canDelete = sessionPermissions.distributorsDelete;
 
   const {
     distributors: rows,
@@ -453,6 +458,7 @@ export default function DistributorsPage() {
             onLocationChange={setLocationFilter}
             onWeekdayChange={setWeekdayFilter}
             onAdd={openCreate}
+            canCreate={canCreate}
             onExport={async (request: ExportRequest) => {
               const source = request.scope === "all" ? rows : filtered;
               downloadDistributorsCsv(
@@ -499,13 +505,15 @@ export default function DistributorsPage() {
                         {getPrimaryContactName(row)}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={EDIT_LINK}
-                    >
-                      Edit
-                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={EDIT_LINK}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -588,14 +596,18 @@ export default function DistributorsPage() {
                     </div>
                     <FilesMenu documents={row.documents} />
                     <NotesHover notes={row.notes} />
-                    <button
-                      type="button"
-                      onClick={() => openEdit(row)}
-                      className={cn(EDIT_LINK, "justify-self-end")}
-                      aria-label={`Edit ${row.name}`}
-                    >
-                      Edit
-                    </button>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(row)}
+                        className={cn(EDIT_LINK, "justify-self-end")}
+                        aria-label={`Edit ${row.name}`}
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <span />
+                    )}
                   </div>
                 );
               })}
@@ -615,7 +627,7 @@ export default function DistributorsPage() {
         open={modalOpen}
         distributor={editing}
         onClose={closeModal}
-        onRemove={handleRemoveDistributor}
+        onRemove={canDelete ? handleRemoveDistributor : undefined}
         onSave={(distributor) => {
           void (async () => {
             if (isApiConfigured()) {

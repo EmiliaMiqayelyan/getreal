@@ -9,11 +9,41 @@ import {
   mapApiRoleToAppRole,
   usernameToLoginEmail,
 } from "@/lib/api/session";
+import type { RolePermissions } from "@/types/admin";
+import {
+  ADMIN_ROLE_PERMISSIONS,
+  apiPermissionNames,
+  DEFAULT_ROLE_PERMISSIONS,
+  permissionsForRoleType,
+  permissionsFromApiNames,
+} from "@/utils/rolePermissions";
 
 const AUTH_STORAGE_KEY = "getreal.auth";
 const ROLE_STORAGE_KEY = "getreal.role";
 const LAST_ACTIVE_KEY = "getreal.lastActive";
 const USER_NAME_KEY = "getreal.userName";
+const SESSION_PROFILE_KEY = "getreal.sessionProfile";
+
+/** API permission strings for the offline warehouse demo account. */
+const WAREHOUSE_API_PERMISSIONS = [
+  "read:orders",
+  "update:orders",
+  "update:order_status",
+  "read:inventory",
+  "manage:inventory",
+  "read:receiving",
+  "manage:receiving",
+  "read:users",
+  "read:coolers",
+];
+
+type SessionProfile = {
+  id?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+  permissions: string[];
+};
 
 /** Log out after this much idle time (1 hour). */
 export const IDLE_TIMEOUT_MS = 60 * 60 * 1000;
@@ -84,10 +114,107 @@ function clearSessionStorage(): void {
     localStorage.removeItem(ROLE_STORAGE_KEY);
     localStorage.removeItem(LAST_ACTIVE_KEY);
     localStorage.removeItem(USER_NAME_KEY);
+    localStorage.removeItem(SESSION_PROFILE_KEY);
     setAuthToken(null);
   } catch {
     // no-op
   }
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> | null {
+  const segment = token.split(".")[1];
+  if (!segment) return null;
+  try {
+    const padded = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(padded.padEnd(padded.length + ((4 - (padded.length % 4)) % 4), "="));
+    const parsed = JSON.parse(json) as unknown;
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredProfile(): SessionProfile | null {
+  try {
+    const raw = localStorage.getItem(SESSION_PROFILE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as SessionProfile;
+    if (!parsed || typeof parsed !== "object") return null;
+    return {
+      id: parsed.id,
+      email: parsed.email,
+      name: parsed.name,
+      role: parsed.role,
+      permissions: apiPermissionNames(parsed.permissions),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveSessionProfile(profile: SessionProfile): void {
+  try {
+    localStorage.setItem(SESSION_PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // no-op
+  }
+}
+
+/** Signed-in user. Permission strings prefer the JWT, which the API enforces. */
+export function getSessionProfile(): SessionProfile {
+  const stored = readStoredProfile();
+  const payload = (() => {
+    const token = getAuthToken();
+    return token ? decodeJwtPayload(token) : null;
+  })();
+  const tokenPermissions = apiPermissionNames(payload?.permissions);
+  const tokenRole = typeof payload?.role === "string" ? payload.role : undefined;
+  const tokenEmail = typeof payload?.email === "string" ? payload.email : undefined;
+  const tokenId = typeof payload?.id === "string" ? payload.id : undefined;
+  return {
+    id: tokenId || stored?.id,
+    email: tokenEmail || stored?.email,
+    name: stored?.name,
+    role: tokenRole || stored?.role,
+    permissions: tokenPermissions.length
+      ? tokenPermissions
+      : (stored?.permissions ?? []),
+  };
+}
+
+function formatRoleLabel(role: string): string {
+  const normalized = role.trim().toLowerCase();
+  if (normalized === "admin" || normalized.includes("super")) return "Super Admin";
+  return role
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function getSessionRoleLabel(): string {
+  const role = getSessionProfile().role?.trim();
+  if (role) return formatRoleLabel(role);
+  if (getRole() === "warehouse") return "Warehouse";
+  return "Super Admin";
+}
+
+/** Checkbox permissions for the signed-in user. */
+export function getSessionPermissions(): RolePermissions {
+  if (!isAuthenticated()) return { ...DEFAULT_ROLE_PERMISSIONS };
+
+  if (!isApiConfigured()) {
+    return getRole() === "warehouse"
+      ? permissionsFromApiNames(WAREHOUSE_API_PERMISSIONS)
+      : { ...ADMIN_ROLE_PERMISSIONS };
+  }
+
+  const profile = getSessionProfile();
+  if (profile.permissions.length) {
+    return permissionsFromApiNames(profile.permissions);
+  }
+  return permissionsForRoleType(profile.role || getRole() || "");
 }
 
 export function isAuthenticated(): boolean {
@@ -127,6 +254,8 @@ export function getRole(): AppRole | null {
 }
 
 export function getSessionUserName(): string {
+  const profileName = getSessionProfile().name?.trim();
+  if (profileName) return profileName;
   try {
     return localStorage.getItem(USER_NAME_KEY) ?? "James Miller";
   } catch {
@@ -171,17 +300,21 @@ function extractLoginToken(response: unknown): string {
 }
 
 function extractLoginUser(response: unknown): {
+  id?: string;
   role?: string;
   name?: string;
   email?: string;
+  permissions: string[];
 } {
-  if (!response || typeof response !== "object") return {};
+  if (!response || typeof response !== "object") return { permissions: [] };
   const user = (response as { user?: Record<string, unknown> }).user;
-  if (!user || typeof user !== "object") return {};
+  if (!user || typeof user !== "object") return { permissions: [] };
   return {
+    id: typeof user.id === "string" ? user.id : undefined,
     role: typeof user.role === "string" ? user.role : undefined,
     name: typeof user.name === "string" ? user.name : undefined,
     email: typeof user.email === "string" ? user.email : undefined,
+    permissions: apiPermissionNames(user.permissions),
   };
 }
 
@@ -224,11 +357,16 @@ export async function login(
 
     const user = extractLoginUser(response);
     const role = mapApiRoleToAppRole(user.role);
+    const displayName = user.name || user.email || email;
     localStorage.setItem(ROLE_STORAGE_KEY, role);
-    localStorage.setItem(
-      USER_NAME_KEY,
-      user.name || user.email || email,
-    );
+    localStorage.setItem(USER_NAME_KEY, displayName);
+    saveSessionProfile({
+      id: user.id,
+      email: user.email || email,
+      name: displayName,
+      role: user.role,
+      permissions: user.permissions,
+    });
     touchActivity();
     return { ok: true, role };
   } catch (error) {

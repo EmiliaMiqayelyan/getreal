@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/Select";
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 import { PINNED_HEADER, SUB_ROW_PAD, TABLE_HEADER } from "@/constants/table";
 import { ADMIN_CUSTOMERS } from "@/data/admin";
+import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
@@ -733,12 +734,14 @@ function CustomerTable({
   customers,
   expandedId,
   detailLoadingId,
+  canViewDetails = true,
   onToggle,
   onViewOrder,
 }: {
   customers: AdminCustomer[];
   expandedId: string | null;
   detailLoadingId: string | null;
+  canViewDetails?: boolean;
   onToggle: (id: string) => void;
   onViewOrder: (customer: AdminCustomer, order: AdminCustomerOrder) => void;
 }) {
@@ -757,7 +760,7 @@ function CustomerTable({
       {/* Mobile cards */}
       <div className="space-y-2 md:hidden">
         {customers.map((customer) => {
-          const open = expandedId === customer.id;
+          const open = canViewDetails && expandedId === customer.id;
           return (
             <div
               key={customer.id}
@@ -767,7 +770,9 @@ function CustomerTable({
                 <button
                   type="button"
                   aria-label={open ? "Collapse" : "Expand"}
-                  onClick={() => onToggle(customer.id)}
+                  onClick={() => {
+                    if (canViewDetails) onToggle(customer.id);
+                  }}
                   className="mt-1 shrink-0"
                 >
                   <ChevronRight
@@ -780,7 +785,9 @@ function CustomerTable({
                 </button>
                 <button
                   type="button"
-                  onClick={() => onToggle(customer.id)}
+                  onClick={() => {
+                    if (canViewDetails) onToggle(customer.id);
+                  }}
                   className="min-w-0 flex-1 text-left"
                 >
                   <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -865,7 +872,7 @@ function CustomerTable({
             </div>
 
             {customers.map((customer, index) => {
-              const open = expandedId === customer.id;
+              const open = canViewDetails && expandedId === customer.id;
               const isLast = index === customers.length - 1;
 
               return (
@@ -881,7 +888,9 @@ function CustomerTable({
                       type="button"
                       aria-label={open ? "Collapse" : "Expand"}
                       aria-expanded={open}
-                      onClick={() => onToggle(customer.id)}
+                      onClick={() => {
+                    if (canViewDetails) onToggle(customer.id);
+                  }}
                       className="relative z-[1] flex justify-self-start"
                     >
                       <ChevronRight
@@ -895,7 +904,9 @@ function CustomerTable({
 
                     <button
                       type="button"
-                      onClick={() => onToggle(customer.id)}
+                      onClick={() => {
+                    if (canViewDetails) onToggle(customer.id);
+                  }}
                       className="text-left"
                     >
                       <IdPill>{customer.id}</IdPill>
@@ -967,6 +978,8 @@ function CustomerTable({
 
 export default function CustomersPage() {
   useDocumentTitle("Customers");
+  const { sessionPermissions } = useRolesUsers();
+  const canViewDetails = sessionPermissions.customersViewDetails;
 
   const { notifyApiError } = useApiFeedback();
   const apiConfigured = isApiConfigured();
@@ -1286,6 +1299,7 @@ export default function CustomersPage() {
                   customers={active}
                   expandedId={expandedId}
                   detailLoadingId={detailLoadingId}
+                  canViewDetails={canViewDetails}
                   onToggle={(id) =>
                     setExpandedId((current) => (current === id ? null : id))
                   }
@@ -1306,6 +1320,7 @@ export default function CustomersPage() {
                   customers={inactive}
                   expandedId={expandedId}
                   detailLoadingId={detailLoadingId}
+                  canViewDetails={canViewDetails}
                   onToggle={(id) =>
                     setExpandedId((current) => (current === id ? null : id))
                   }
