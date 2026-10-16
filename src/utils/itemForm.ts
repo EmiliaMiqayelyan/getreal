@@ -2,7 +2,6 @@ import {
   CASE_BY_OPTIONS,
   isMerchandiseWeightLabel,
   PIECE_WEIGHT_OPTIONS,
-  SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
   type CaseBy,
   type SourcePer,
@@ -32,7 +31,6 @@ export type ItemFormInput = {
   caseWeightLbs: string;
   buyingPrice: string;
   contents: string;
-  singleItemUnit: string;
   sellingPrice: string;
   distributorOptions: string[];
   sourceOptions: string[];
@@ -56,7 +54,6 @@ export type ItemFormErrors = {
   caseWeightLbs?: string;
   buyingPrice?: string;
   contents?: string;
-  singleItemUnit?: string;
   sellingPrice?: string;
 };
 
@@ -168,14 +165,6 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     if (!isValidPositiveDecimalInput(input.caseWeightLbs)) {
       errors.caseWeightLbs = "Enter total case weight in lbs.";
     }
-
-    if (!input.singleItemUnit) {
-      errors.singleItemUnit = "Select a single item unit.";
-    } else if (
-      !(SINGLE_ITEM_UNITS as readonly string[]).includes(input.singleItemUnit)
-    ) {
-      errors.singleItemUnit = "Select a valid single item unit.";
-    }
   }
 
   const contents = parseContentsInput(input.contents);
@@ -211,7 +200,6 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "pieceWeightOz",
     "caseWeightLbs",
     "contents",
-    "singleItemUnit",
     "sellingPrice",
   ];
 

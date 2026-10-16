@@ -14,7 +14,6 @@ import {
   CASE_BY_OPTIONS,
   MERCHANDISE_WEIGHT_OPTIONS,
   PIECE_WEIGHT_OPTIONS,
-  SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
   pieceWeightLabel,
   type CaseBy,
@@ -122,7 +121,6 @@ export function AddItemModal({
   const [caseWeightLbs, setCaseWeightLbs] = useState("");
   const [buyingPrice, setBuyingPrice] = useState("");
   const [contents, setContents] = useState("");
-  const [singleItemUnit, setSingleItemUnit] = useState("");
   const [sellingPrice, setSellingPrice] = useState("");
   const [errors, setErrors] = useState<ItemFormErrors>({});
   const [saving, setSaving] = useState(false);
@@ -221,7 +219,6 @@ export function AddItemModal({
       );
       setBuyingPrice(formatMoneyInput(item.buyingPrice));
       setContents(item.contents > 0 ? String(item.contents) : "");
-      setSingleItemUnit(item.singleItemUnit);
       setSellingPrice(formatMoneyInput(item.sellingPrice));
       return;
     }
@@ -242,7 +239,6 @@ export function AddItemModal({
     setCaseWeightLbs("");
     setBuyingPrice("");
     setContents("");
-    setSingleItemUnit("");
     setSellingPrice("");
     setManageSubcategoriesOpen(false);
   }, [item, open]);
@@ -283,7 +279,6 @@ export function AddItemModal({
       caseWeightLbs,
       buyingPrice,
       contents,
-      singleItemUnit,
       sellingPrice,
       distributorOptions,
       sourceOptions,
@@ -317,9 +312,7 @@ export function AddItemModal({
     const resolvedSingleUnit =
       resolvedSourcePer === "Unit"
         ? pieceWeightLabel(resolvedPieceOz) || "Each"
-        : resolvedCaseBy === "Lbs / case"
-          ? singleItemUnit
-          : "";
+        : "";
 
     savingRef.current = true;
     setSaving(true);
@@ -754,7 +747,6 @@ export function AddItemModal({
                         setCaseWeightLbs("");
                         setContents("");
                         setPieceWeightOz("");
-                        setSingleItemUnit("");
                         if (errors.sourcePer || errors.caseBy) {
                           setErrors((current) => ({
                             ...current,
@@ -874,7 +866,6 @@ export function AddItemModal({
                           setCaseBy(next);
                           if (next !== "Lbs / case") {
                             setCaseWeightLbs("");
-                            setSingleItemUnit("");
                           }
                           if (errors.caseBy || errors.caseWeightLbs) {
                             setErrors((current) => ({
@@ -1027,47 +1018,6 @@ export function AddItemModal({
                         />
                       </Field>
                       <FieldError message={errors.contents} />
-                    </div>
-                    <div data-field="singleItemUnit">
-                      <Field label="Single Item Unit" required>
-                        <Select
-                          value={singleItemUnit}
-                          onChange={(value) => {
-                            setSingleItemUnit(value);
-                            if (errors.singleItemUnit) {
-                              setErrors((current) => ({
-                                ...current,
-                                singleItemUnit: undefined,
-                              }));
-                            }
-                          }}
-                          className="w-full"
-                          aria-label="Single Item Unit"
-                          placeholder="Select"
-                          buttonClassName={cn(
-                            errors.singleItemUnit && INVALID_BORDER,
-                          )}
-                          options={[
-                            { value: "", label: "Select" },
-                            ...SINGLE_ITEM_UNITS.map((entry) => ({
-                              value: entry,
-                              label: entry,
-                            })),
-                            ...(singleItemUnit &&
-                            !(SINGLE_ITEM_UNITS as readonly string[]).includes(
-                              singleItemUnit,
-                            )
-                              ? [
-                                  {
-                                    value: singleItemUnit,
-                                    label: singleItemUnit,
-                                  },
-                                ]
-                              : []),
-                          ]}
-                        />
-                      </Field>
-                      <FieldError message={errors.singleItemUnit} />
                     </div>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">

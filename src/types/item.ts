@@ -40,7 +40,7 @@ export type Item = {
   buyingPrice: number;
   /** Pieces per case when sourcing by Case; 1 when Unit. */
   contents: number;
-  /** Piece label for Unit and Lbs / case. Units / case does not use one. */
+  /** Piece-weight label when sourced per unit. Case items do not collect one. */
   singleItemUnit: string;
   sellingPrice: number;
   photos: ItemPhoto[];
@@ -78,14 +78,6 @@ export const PIECE_WEIGHT_OPTIONS = [
 
 /** Same weight choices as piece weight. Sent to the API as the option label. */
 export const MERCHANDISE_WEIGHT_OPTIONS = PIECE_WEIGHT_OPTIONS;
-
-export const SINGLE_ITEM_UNITS = [
-  "1 steak (12 oz)",
-  "1 lb",
-  "Dozen",
-  "Bunch",
-  "Each",
-] as const;
 
 export function pieceWeightLabel(oz: number) {
   const match = PIECE_WEIGHT_OPTIONS.find((entry) => entry.oz === oz);

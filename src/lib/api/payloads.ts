@@ -288,9 +288,7 @@ export function toCreateItemPayload(
         ? item.caseBy || "Units / case"
         : item.sourcePer || undefined,
     singleItemUnit:
-      item.sourcePer === "Case" && item.caseBy === "Units / case"
-        ? ""
-        : item.singleItemUnit || undefined,
+      item.sourcePer === "Case" ? "" : item.singleItemUnit || undefined,
     merchandiseWeight: item.merchandiseWeight || null,
     description: item.description.trim() || undefined,
     preOrderInformation: item.preorderInfo.trim() || null,
