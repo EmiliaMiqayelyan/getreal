@@ -14,6 +14,7 @@ import {
   CASE_BY_OPTIONS,
   MERCHANDISE_WEIGHT_OPTIONS,
   PIECE_WEIGHT_OPTIONS,
+  SINGLE_ITEM_UNITS,
   SOURCE_PER_OPTIONS,
   pieceWeightLabel,
   type CaseBy,
@@ -1048,13 +1049,13 @@ export function AddItemModal({
                           )}
                           options={[
                             { value: "", label: "Select" },
-                            ...PIECE_WEIGHT_OPTIONS.map((entry) => ({
-                              value: entry.label,
-                              label: entry.label,
+                            ...SINGLE_ITEM_UNITS.map((entry) => ({
+                              value: entry,
+                              label: entry,
                             })),
                             ...(singleItemUnit &&
-                            !PIECE_WEIGHT_OPTIONS.some(
-                              (entry) => entry.label === singleItemUnit,
+                            !(SINGLE_ITEM_UNITS as readonly string[]).includes(
+                              singleItemUnit,
                             )
                               ? [
                                   {
