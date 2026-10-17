@@ -26,15 +26,12 @@ import {
   notificationRulesApi,
 } from "@/lib/api";
 import type {
+  ApiNotificationIcon,
   ApiNotificationTrigger,
   NotificationRulePayload,
   NotificationScheduleUnit,
 } from "@/lib/api/notifications";
-import {
-  findNotificationIcon,
-  iconFilenameForDefaultId,
-  NOTIFICATION_ICONS,
-} from "@/lib/notificationIcons";
+import type { ApiNotificationRule } from "@/lib/api/types";
 import type { PushNotification } from "@/types/notification";
 import { cn } from "@/utils/cn";
 import { recordRef } from "@/utils/entityIds";
@@ -225,15 +222,34 @@ function draftFromNotification(
     minutes: parts.minutes,
     header: item.title,
     description: item.body,
-    iconUrl: findNotificationIcon(item.iconUrl)?.id ?? "",
+    iconUrl: item.iconUrl,
     action: item.action,
     httpMethod: item.httpMethod,
   };
 }
 
+/** The icons endpoint owns the real address. Send that URL, never a file name. */
+function resolveIconUrl(
+  value: string,
+  icons: ApiNotificationIcon[],
+): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const byUrl = icons.find((icon) => icon.url === trimmed);
+  if (byUrl) return byUrl.url;
+  const bare = decodeURIComponent(trimmed.split("/").pop() ?? trimmed).replace(
+    /\.svg$/i,
+    "",
+  );
+  const byId = icons.find((icon) => icon.id === trimmed || icon.id === bare);
+  if (byId) return byId.url;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
+}
+
 function toPayload(
   draft: Draft,
   triggers: ApiNotificationTrigger[],
+  icons: ApiNotificationIcon[],
 ): NotificationRulePayload | null {
   const title = draft.header.trim();
   const subtext = draft.description.trim();
@@ -249,7 +265,7 @@ function toPayload(
     timing,
     scheduleDelay: schedule.scheduleDelay,
     scheduleUnit: schedule.scheduleUnit,
-    iconUrl: findNotificationIcon(draft.iconUrl)?.id || null,
+    iconUrl: resolveIconUrl(draft.iconUrl, icons),
     ...(!match && draft.action
       ? { action: draft.action, httpMethod: draft.httpMethod || "POST" }
       : {}),
@@ -269,11 +285,13 @@ function countOptions(max: number, current: string): SelectOption[] {
 }
 
 function IconPicker({
+  icons,
   value,
   onChange,
 }: {
+  icons: ApiNotificationIcon[];
   value: string;
-  onChange: (iconId: string) => void;
+  onChange: (url: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -284,7 +302,7 @@ function IconPicker({
     minWidth: 260,
     maxHeight: 320,
   });
-  const selected = findNotificationIcon(value);
+  const selected = icons.find((icon) => icon.url === value);
 
   useEffect(() => {
     if (!open) return;
@@ -331,13 +349,13 @@ function IconPicker({
           )}
         >
           {selected ? (
-            <img src={selected.src} alt="" className="size-11 object-contain" />
+            <img src={selected.url} alt="" className="size-11 object-contain" />
           ) : (
             <Box size={18} className="text-[#3B82F6]" strokeWidth={1.75} />
           )}
         </span>
         <span className="text-[14px] text-[#111118]">
-          {selected?.label ?? "Select Icon"}
+          {selected?.name ?? "Select Icon"}
         </span>
         <ChevronDown
           size={16}
@@ -372,16 +390,16 @@ function IconPicker({
                   Select Icon
                 </button>
               </li>
-              {NOTIFICATION_ICONS.map((icon) => {
-                const isSelected = icon.id === selected?.id;
+              {icons.map((icon) => {
+                const isSelected = icon.url === value;
                 return (
-                  <li key={icon.id}>
+                  <li key={icon.id || icon.url}>
                     <button
                       type="button"
                       role="option"
                       aria-selected={isSelected}
                       onClick={() => {
-                        onChange(icon.id);
+                        onChange(icon.url);
                         setOpen(false);
                       }}
                       className={cn(
@@ -392,16 +410,16 @@ function IconPicker({
                       )}
                     >
                       <img
-                        src={icon.src}
+                        src={icon.url}
                         alt=""
                         className="size-8 shrink-0 object-contain"
                       />
-                      <span className="truncate">{icon.label}</span>
+                      <span className="truncate">{icon.name}</span>
                     </button>
                   </li>
                 );
               })}
-              {!NOTIFICATION_ICONS.length ? (
+              {!icons.length ? (
                 <li className="px-3 py-2 text-[13px] text-[#8A8A8A]">
                   No icons available
                 </li>
@@ -427,6 +445,7 @@ export default function PushNotificationsPage() {
   const [triggerCatalog, setTriggerCatalog] = useState<ApiNotificationTrigger[]>(
     [],
   );
+  const [iconCatalog, setIconCatalog] = useState<ApiNotificationIcon[]>([]);
   const [loading, setLoading] = useState(apiConfigured);
   const [pending, setPending] = useState<null | "save" | "remove">(null);
   const [query, setQuery] = useState("");
@@ -469,11 +488,14 @@ export default function PushNotificationsPage() {
   useEffect(() => {
     if (!apiConfigured) return;
     let cancelled = false;
-    void notificationRulesApi
-      .triggers()
-      .then((triggers) => {
+    void Promise.all([
+      notificationRulesApi.triggers(),
+      notificationRulesApi.icons(),
+    ])
+      .then(([triggers, icons]) => {
         if (cancelled) return;
         setTriggerCatalog(triggers);
+        setIconCatalog(icons);
       })
       .catch((error) => {
         if (cancelled) return;
@@ -553,10 +575,34 @@ export default function PushNotificationsPage() {
   }
 
   const payload = useMemo(
-    () => toPayload(draft, triggerCatalog),
-    [draft, triggerCatalog],
+    () => toPayload(draft, triggerCatalog, iconCatalog),
+    [draft, triggerCatalog, iconCatalog],
   );
   const canSave = Boolean(payload);
+
+  function storeSavedRule(
+    saved: ApiNotificationRule,
+    match?: { id?: string; recordId?: string },
+  ) {
+    const mapped = mapApiNotificationRule(saved, 0);
+    setItems((current) => {
+      const index = current.findIndex(
+        (item) =>
+          (match?.recordId && item.recordId === match.recordId) ||
+          (match?.id && item.id === match.id) ||
+          (mapped.recordId && item.recordId === mapped.recordId),
+      );
+      if (index === -1) return [mapped, ...current];
+      const previous = current[index];
+      const next = current.slice();
+      next[index] = {
+        ...mapped,
+        id: previous.id || mapped.id,
+        recordId: previous.recordId ?? mapped.recordId,
+      };
+      return next;
+    });
+  }
 
   async function refreshRules() {
     const rules = await notificationRulesApi.list({ fresh: true });
@@ -596,9 +642,10 @@ export default function PushNotificationsPage() {
     if (!payload || !canSave || pending) return;
     setPending("save");
     try {
+      let saved;
       if (draft.id) {
         const pathId = recordRef({
-          id: draft.id ?? "",
+          id: draft.id,
           recordId: draft.recordId,
         });
         if (!pathId) {
@@ -606,12 +653,12 @@ export default function PushNotificationsPage() {
             "This notification is not linked to a server record.",
           );
         }
-        await notificationRulesApi.update(pathId, payload);
-        showSuccess("Notification updated.");
+        saved = await notificationRulesApi.update(pathId, payload);
       } else {
-        await notificationRulesApi.create(payload);
-        showSuccess("Notification created.");
+        saved = await notificationRulesApi.create(payload);
       }
+      storeSavedRule(saved, { id: draft.id, recordId: draft.recordId });
+      showSuccess(draft.id ? "Notification updated." : "Notification created.");
       setModalOpen(false);
       setDraft(emptyDraft());
       try {
@@ -633,16 +680,16 @@ export default function PushNotificationsPage() {
 
   function applyTrigger(triggerKey: string) {
     const trigger = matchTrigger(triggerCatalog, triggerKey);
-    const iconFilename = trigger
-      ? iconFilenameForDefaultId(trigger.defaultIconId)
-      : "";
+    const icon = trigger
+      ? iconCatalog.find((item) => item.id === trigger.defaultIconId)
+      : undefined;
     const allowed = trigger?.allowedTimings ?? ["before", "after"];
     setDraft((current) => ({
       ...current,
       triggerKey,
       header: trigger?.defaultTitle || current.header,
       description: trigger?.defaultBody || current.description,
-      iconUrl: iconFilename || current.iconUrl,
+      iconUrl: icon?.url || current.iconUrl,
       action: trigger?.action || current.action,
       httpMethod: trigger?.httpMethod || current.httpMethod,
       period:
@@ -954,6 +1001,7 @@ export default function PushNotificationsPage() {
           </div>
 
           <IconPicker
+            icons={iconCatalog}
             value={draft.iconUrl}
             onChange={(iconUrl) =>
               setDraft((current) => ({ ...current, iconUrl }))
