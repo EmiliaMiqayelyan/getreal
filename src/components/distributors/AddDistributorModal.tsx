@@ -56,7 +56,7 @@ type DocDraft = {
 type AddDistributorModalProps = {
   open: boolean;
   onClose: () => void;
-  onSave?: (distributor: Distributor) => void;
+  onSave?: (distributor: Distributor) => void | Promise<void>;
   /** Remove the distributor being edited from the list. Edit mode only. */
   onRemove?: () => void;
   distributor?: Distributor | null;
@@ -115,6 +115,7 @@ export function AddDistributorModal({
   const [errors, setErrors] = useState<DistributorFormErrors>({});
   const [docError, setDocError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -196,6 +197,7 @@ export function AddDistributorModal({
   }
 
   function handleClose() {
+    if (saving) return;
     onClose();
   }
 
@@ -208,7 +210,8 @@ export function AddDistributorModal({
     handleClose();
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (saving) return;
     const nextErrors = validateDistributorForm({
       name,
       street,
@@ -237,7 +240,9 @@ export function AddDistributorModal({
 
     setErrors({});
 
-    const formattedContacts = contacts.map((contact) => ({
+    setSaving(true);
+    try {
+      const formattedContacts = contacts.map((contact) => ({
       ...contact,
       phone: formatPhone(contact.phone),
     }));
@@ -264,7 +269,7 @@ export function AddDistributorModal({
       zip: zip.trim(),
     };
 
-    onSave?.({
+    await onSave?.({
       id: distributor?.id ?? "",
       name: name.trim(),
       paymentTerms: payment,
@@ -289,7 +294,11 @@ export function AddDistributorModal({
       docs: docs.length ? String(docs.length) : null,
       products: distributor?.products ?? [],
     });
-    handleClose();
+    } catch {
+      // Parent reports the error. Keep the form open.
+    } finally {
+      setSaving(false);
+    }
   }
 
   const orderedDays = WEEK_DAYS.filter((day) => days.includes(day));
@@ -931,7 +940,7 @@ export function AddDistributorModal({
             <Button variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button variant="dark" onClick={handleSave}>
+            <Button variant="dark" loading={saving} onClick={() => void handleSave()}>
               {isEdit ? "Save Distributor" : "Create Distributor"}
             </Button>
           </div>

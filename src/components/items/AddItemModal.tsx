@@ -1171,7 +1171,7 @@ export function AddItemModal({
               disabled={saving || deleting}
               className="cursor-pointer text-[13px] font-medium text-[#111118] underline disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {deleting ? "Deleting..." : "Delete Item"}
+              Delete Item
             </button>
           ) : (
             <span />
@@ -1184,7 +1184,8 @@ export function AddItemModal({
               <Button
                 variant="dark"
                 onClick={handleSave}
-                disabled={saving || deleting}
+                disabled={deleting}
+                loading={saving}
               >
                 {isEdit ? "Save Item" : "Create Item"}
               </Button>
@@ -1200,7 +1201,7 @@ export function AddItemModal({
         confirmLabel="Delete"
         confirmVariant="danger"
         onClose={() => setConfirmDelete(false)}
-        onConfirm={() => void handleDelete()}
+        onConfirm={handleDelete}
       />
 
       <ManageSubcategoriesModal

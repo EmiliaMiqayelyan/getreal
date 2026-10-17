@@ -628,8 +628,7 @@ export default function DistributorsPage() {
         distributor={editing}
         onClose={closeModal}
         onRemove={canDelete ? handleRemoveDistributor : undefined}
-        onSave={(distributor) => {
-          void (async () => {
+        onSave={async (distributor) => {
             if (isApiConfigured()) {
               try {
                 const documents = await resolveDistributorDocuments(
@@ -685,7 +684,7 @@ export default function DistributorsPage() {
                 return;
               } catch (error) {
                 notifyApiError(error, "Failed to save distributor.");
-                return;
+                throw error;
               }
             }
 
@@ -700,7 +699,6 @@ export default function DistributorsPage() {
               saveDistributor({ ...distributor, id }, "create");
             }
             closeModal();
-          })();
         }}
       />
     </div>

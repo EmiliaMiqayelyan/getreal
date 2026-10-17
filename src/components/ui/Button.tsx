@@ -1,6 +1,18 @@
+import { Loader2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
 import { cn } from "@/utils/cn";
+
+/** Spinner used inside buttons while a server request is in flight. */
+export function ButtonSpinner({ className }: { className?: string }) {
+  return (
+    <Loader2
+      size={14}
+      className={cn("shrink-0 animate-spin", className)}
+      aria-hidden
+    />
+  );
+}
 
 export type ButtonVariant =
   | "primary"
@@ -21,6 +33,8 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   /** Ignored — size comes from the shared Button token. Kept for compatibility. */
   size?: ButtonSize;
+  /** Shows the in-button spinner and blocks another click while a request runs. */
+  loading?: boolean;
 };
 
 const isTextOnly = (variant: ButtonVariant) =>
@@ -32,20 +46,27 @@ export function Button({
   variant = "primary",
   size: _size,
   type = "button",
+  loading = false,
+  disabled,
   ...props
 }: ButtonProps) {
   const textOnly = isTextOnly(variant);
   const isDark = variant === "dark";
   const isDanger = variant === "danger";
+  const isDisabled = Boolean(disabled) || loading;
 
   return (
     <button
       type={type}
+      {...props}
+      disabled={isDisabled}
+      aria-busy={loading || undefined}
       className={cn(
         "inline-flex w-fit items-center justify-center transition-colors",
         "leading-4 font-semibold tracking-normal",
         "focus-visible:ring-2 focus-visible:ring-[#2E2E2E]/20 focus-visible:outline-none",
-        "disabled:pointer-events-none disabled:opacity-40",
+        "disabled:pointer-events-none",
+        isDisabled && !loading && "opacity-40",
         textOnly && "gap-[5.63px] px-0",
         !textOnly &&
           !isDark &&
@@ -73,8 +94,13 @@ export function Button({
         /* Force consistent label size — wins over call-site text-* overrides */
         !isDanger && "!text-[12px]",
       )}
-      {...props}
     >
+      {loading ? (
+        <>
+          <ButtonSpinner />
+          <span className="sr-only">Loading</span>
+        </>
+      ) : null}
       {children}
     </button>
   );

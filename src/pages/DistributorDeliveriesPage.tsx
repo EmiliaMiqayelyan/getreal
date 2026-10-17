@@ -26,6 +26,7 @@ import {
 import { ExportButton } from "@/components/shared/ExportButton";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
+import { ButtonSpinner } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
@@ -1385,11 +1386,16 @@ function CheckOrderView({
           <button
             type="button"
             disabled={saving}
+            aria-busy={saving}
             onClick={() => void handleAcceptOrder()}
-            className="inline-flex h-10 items-center rounded-[10px] px-5 text-[14px] font-semibold text-white disabled:opacity-40"
+            className={cn(
+              "inline-flex h-10 items-center gap-2 rounded-[10px] px-5 text-[14px] font-semibold text-white",
+              saving ? "pointer-events-none" : "disabled:opacity-40",
+            )}
             style={{ background: ORANGE }}
           >
-            {saving ? "Saving…" : "Accept Order"}
+            {saving ? <ButtonSpinner /> : null}
+            Accept Order
           </button>
         )}
       </div>

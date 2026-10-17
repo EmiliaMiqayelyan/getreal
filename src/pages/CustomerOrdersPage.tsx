@@ -943,9 +943,9 @@ function StatusChangeModal({
             variant="primary"
             className="ml-3"
             onClick={onConfirm}
-            disabled={saving}
+            loading={saving}
           >
-            {saving ? "Saving…" : `Set to ${header}`}
+            {`Set to ${header}`}
           </Button>
         </>
       }

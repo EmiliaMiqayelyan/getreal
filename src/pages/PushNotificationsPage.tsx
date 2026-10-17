@@ -5,7 +5,7 @@ import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { Box, ChevronDown, Plus } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonSpinner } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
@@ -853,9 +853,11 @@ export default function PushNotificationsPage() {
                 type="button"
                 onClick={() => void removeNotification()}
                 disabled={pending !== null}
-                className="cursor-pointer text-[13px] font-medium text-[#111118] underline disabled:cursor-not-allowed disabled:opacity-40"
+                aria-busy={pending === "remove"}
+                className="inline-flex cursor-pointer items-center gap-2 text-[13px] font-medium text-[#111118] underline disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {pending === "remove" ? "Removing..." : "Remove Notification"}
+                {pending === "remove" ? <ButtonSpinner /> : null}
+                Remove Notification
               </button>
             ) : (
               <span />
@@ -872,12 +874,13 @@ export default function PushNotificationsPage() {
                 variant="dark"
                 disabled={
                   !canSave ||
-                  pending !== null ||
+                  pending === "remove" ||
                   (draft.id ? !canEditNotification : !canCreateNotification)
                 }
+                loading={pending === "save"}
                 onClick={() => void save()}
               >
-                {pending === "save" ? "Saving..." : "Save"}
+                Save
               </Button>
             </div>
           </div>

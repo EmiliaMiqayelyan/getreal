@@ -15,7 +15,7 @@ import { validateAddProductForSale } from "@/utils/productForSaleForm";
 type AddProductForSaleModalProps = {
   open: boolean;
   onClose: () => void;
-  onAdd: (item: Item) => void;
+  onAdd: (item: Item) => void | Promise<void>;
   catalog: Item[];
   existingProducts: ProductForSale[];
   /** Item IDs already on the Products For Sale list (excluded from picker). */
@@ -33,6 +33,7 @@ export function AddProductForSaleModal({
   const [menuOpen, setMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [itemError, setItemError] = useState("");
+  const [saving, setSaving] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -48,6 +49,7 @@ export function AddProductForSaleModal({
     setMenuOpen(false);
     setQuery("");
     setItemError("");
+    setSaving(false);
   }, [open]);
 
   useEffect(() => {
@@ -60,7 +62,7 @@ export function AddProductForSaleModal({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, menuOpen, onClose]);
+  }, [open, menuOpen, onClose, saving]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -107,7 +109,8 @@ export function AddProductForSaleModal({
   const selected = catalog.find((item) => item.id === selectedId) ?? null;
   const canSubmit = Boolean(selected);
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    if (saving) return;
     const errors = validateAddProductForSale({
       selectedItemId: selectedId,
       catalog,
@@ -118,11 +121,19 @@ export function AddProductForSaleModal({
       return;
     }
     if (!selected) return;
-    onAdd(selected);
-    onClose();
+    setSaving(true);
+    try {
+      await onAdd(selected);
+      onClose();
+    } catch {
+      // Parent reports the error and the dialog stays open.
+    } finally {
+      setSaving(false);
+    }
   }
 
   function handleClose() {
+    if (saving) return;
     setItemError("");
     onClose();
   }
@@ -240,7 +251,12 @@ export function AddProductForSaleModal({
           <Button variant="ghost" onClick={handleClose}>
             Cancel
           </Button>
-          <Button variant="dark" disabled={!canSubmit} onClick={handleSubmit}>
+          <Button
+            variant="dark"
+            disabled={!canSubmit}
+            loading={saving}
+            onClick={() => void handleSubmit()}
+          >
             Add to List
           </Button>
         </div>

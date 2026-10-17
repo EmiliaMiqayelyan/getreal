@@ -18,6 +18,7 @@ import {
 } from "@/components/shared/DeliveryDateChip";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
+import { ButtonSpinner } from "@/components/ui/Button";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
@@ -688,6 +689,7 @@ export default function PackerManagerPage() {
                   <button
                     type="button"
                     disabled={!canOpenAssign || savingCode === order.code}
+                    aria-busy={savingCode === order.code}
                     aria-haspopup={canOpenAssign ? "listbox" : undefined}
                     aria-expanded={
                       canOpenAssign
@@ -714,9 +716,18 @@ export default function PackerManagerPage() {
                             },
                       );
                     }}
-                    className="inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118] disabled:cursor-not-allowed disabled:opacity-60"
+                    className={cn(
+                      "inline-flex h-9 max-w-full items-center gap-2 rounded-[10px] border border-[#00000014] bg-white px-3 text-[13px] text-[#111118] disabled:cursor-not-allowed",
+                      savingCode === order.code
+                        ? "pointer-events-none"
+                        : "disabled:opacity-60",
+                    )}
                   >
-                    <Package size={14} className="shrink-0 text-[#8A8A8A]" />
+                    {savingCode === order.code ? (
+                      <ButtonSpinner />
+                    ) : (
+                      <Package size={14} className="shrink-0 text-[#8A8A8A]" />
+                    )}
                     <span className="truncate">{packerLabel}</span>
                     <ChevronDown size={13} className="shrink-0 text-[#8A8A8A]" />
                   </button>

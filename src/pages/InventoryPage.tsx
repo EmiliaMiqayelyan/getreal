@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronRight, Minus, Plus, X } from "lucide-react";
 import { Header } from "@/components/layout/AdminHeader";
 import { LocationHover } from "@/components/shared/LocationHover";
 import { AppLoader } from "@/components/ui/AppLoader";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonSpinner } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
@@ -593,7 +593,8 @@ function SplitModal({
           <Button
             variant="dark"
             onClick={onConfirm}
-            disabled={!canConfirm || confirming}
+            disabled={!canConfirm}
+            loading={confirming}
             size="sm"
             className="rounded-[10px] px-5 text-[14px] font-semibold"
           >
@@ -982,14 +983,16 @@ function StockItemsView({
             type="button"
             onClick={() => void handleComplete()}
             disabled={!canCompleteStorage || saving}
+            aria-busy={saving}
             className={cn(
-              "inline-flex h-10 items-center rounded-[10px] px-6 text-[14px] font-semibold text-white transition-opacity",
-              (!canCompleteStorage || saving) &&
-                "cursor-not-allowed opacity-50",
+              "inline-flex h-10 items-center gap-2 rounded-[10px] px-6 text-[14px] font-semibold text-white transition-opacity",
+              !canCompleteStorage && !saving && "cursor-not-allowed opacity-50",
+              saving && "pointer-events-none",
             )}
             style={{ background: ORANGE }}
           >
-            {saving ? "Storing…" : "Complete Storage"}
+            {saving ? <ButtonSpinner /> : null}
+            Complete Storage
           </button>
         </div>
       </div>

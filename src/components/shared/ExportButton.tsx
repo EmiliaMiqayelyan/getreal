@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, Loader2 } from "lucide-react";
+import { Check, ChevronDown, Download } from "lucide-react";
 
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonSpinner } from "@/components/ui/Button";
 import { ToastLayer } from "@/components/ui/ToastLayer";
 import type { ExportHandler, ExportScope } from "@/types/export";
 import { cn } from "@/utils/cn";
@@ -99,18 +99,15 @@ export function ExportButton({
         <Button
           type="button"
           variant="outline"
-          disabled={disabled || busy}
+          disabled={disabled}
+          loading={busy}
           aria-haspopup="dialog"
           aria-expanded={panelOpen}
           aria-label={`Export ${entityLabel}`}
           onClick={() => setPanelOpen((open) => !open)}
           className="w-full sm:w-auto"
         >
-          {busy ? (
-            <Loader2 size={14} className="animate-spin" />
-          ) : (
-            <Download size={14} />
-          )}
+          {busy ? null : <Download size={14} />}
           Export
           <ChevronDown size={14} className="opacity-60" />
         </Button>
@@ -167,14 +164,10 @@ export function ExportButton({
               <Button
                 type="button"
                 variant="dark"
-                disabled={busy}
+                loading={busy}
                 onClick={() => void confirmExport()}
               >
-                {busy ? (
-                  <Loader2 size={14} className="animate-spin" />
-                ) : (
-                  <Download size={14} />
-                )}
+                {busy ? null : <Download size={14} />}
                 Export CSV
               </Button>
             </div>
@@ -188,7 +181,7 @@ export function ExportButton({
             {toast.startsWith("Download started") ? (
               <Check size={14} className="mt-0.5 shrink-0 text-[#7DDF8A]" />
             ) : busy ? (
-              <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin" />
+              <ButtonSpinner className="mt-0.5" />
             ) : null}
             <span>{toast}</span>
           </div>

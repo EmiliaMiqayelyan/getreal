@@ -295,9 +295,10 @@ export function RoleManagementModal({
                   <Button
                     variant="dangerGhost"
                     onClick={handleDelete}
-                    disabled={busy !== null}
+                    disabled={busy !== null && busy !== "delete"}
+                    loading={busy === "delete"}
                   >
-                    {busy === "delete" ? "Deleting..." : "Delete Role"}
+                    Delete Role
                   </Button>
                   <div className="flex items-center gap-4">
                     <Button
@@ -310,10 +311,11 @@ export function RoleManagementModal({
                     <Button
                       variant="dark"
                       onClick={handleSave}
-                      disabled={busy !== null}
+                      disabled={busy !== null && busy !== "save"}
+                      loading={busy === "save"}
                       className="shrink-0 whitespace-nowrap"
                     >
-                      {busy === "save" ? "Saving..." : "Save Role"}
+                      Save Role
                     </Button>
                   </div>
                 </div>

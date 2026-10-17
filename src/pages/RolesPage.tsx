@@ -1223,9 +1223,10 @@ export default function RolesPage() {
                 <Button
                   variant="dangerGhost"
                   onClick={deleteUser}
-                  disabled={pending !== null}
+                  disabled={pending !== null && pending !== "delete"}
+                  loading={pending === "delete"}
                 >
-                  {pending === "delete" ? "Deleting..." : "Delete User"}
+                  Delete User
                 </Button>
               ) : (
                 <span />
@@ -1242,9 +1243,10 @@ export default function RolesPage() {
                 <Button
                   variant="dark"
                   onClick={saveUser}
-                  disabled={pending !== null}
+                  disabled={pending !== null && pending !== "save"}
+                  loading={pending === "save"}
                 >
-                  {pending === "save" ? "Saving..." : "Save"}
+                  Save
                 </Button>
               </div>
             </div>

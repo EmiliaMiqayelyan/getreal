@@ -372,8 +372,7 @@ export default function SourcePage() {
         source={editing}
         onClose={closeModal}
         onRemove={canRemove ? handleRemoveSource : undefined}
-        onSave={(source) => {
-          void (async () => {
+        onSave={async (source) => {
             if (isApiConfigured()) {
               if (!source.distributorId) {
                 notifyApiError(
@@ -462,7 +461,6 @@ export default function SourcePage() {
               return [{ ...source, id: nextSourceId(current) }, ...current];
             });
             closeModal();
-          })();
         }}
       />
     </div>

@@ -441,11 +441,11 @@ export function CreateManualOrderFlow({
                 <div className="col-span-4 flex min-w-0 flex-wrap items-center gap-3">
                   <Button
                     variant="primary"
-                    disabled={saving}
+                    loading={saving}
                     onClick={createOrder}
                     className="font-semibold"
                   >
-                    {saving ? "Sending..." : "Order now"}
+                    Order now
                   </Button>
                   <span className="text-[13px] text-[#8A8A8A]">
                     Expected delivery{" "}
@@ -518,18 +518,15 @@ export function CreateManualOrderFlow({
           <Button
             variant="primary"
             size="lg"
-            disabled={saving || (step === "create" && !canReview)}
+            disabled={step === "create" && !canReview}
+            loading={step === "review" && saving}
             onClick={() => {
               if (step === "create") setStep("review");
               else createOrder();
             }}
             className="font-semibold"
           >
-            {step === "create"
-              ? "Review Order"
-              : saving
-                ? "Sending..."
-                : "Create Order"}
+            {step === "create" ? "Review Order" : "Create Order"}
           </Button>
         </div>
       </div>

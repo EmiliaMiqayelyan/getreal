@@ -1032,6 +1032,13 @@ export default function ProductOrdersPage() {
     const group = reviewGroups.find((entry) => reviewGroupKey(entry) === key);
     if (!group || !activeDemandId) return;
 
+    // A single distributor is the whole review. Confirming it finishes the
+    // order and leaves this page, same as Order All.
+    if (reviewGroups.length === 1) {
+      await orderAll();
+      return;
+    }
+
     const sentGroup: ReviewGroup = { ...group };
     let listRefreshed = false;
 
@@ -1923,11 +1930,16 @@ export default function ProductOrdersPage() {
                               <Button
                                 variant="primary"
                                 size="sm"
-                                disabled={placing !== null}
+                                disabled={
+                                  placing !== null &&
+                                  placing !== key &&
+                                  placing !== "all"
+                                }
+                                loading={placing === key || placing === "all"}
                                 onClick={() => submitDistributorOrder(key)}
                                 className="font-semibold"
                               >
-                                {placing === key ? "Sending..." : "Order now"}
+                                Order now
                               </Button>
                             ) : null}
                             <span className="text-[12px] text-[#8A8A8A]">
@@ -2030,20 +2042,17 @@ export default function ProductOrdersPage() {
             variant="primary"
             size="lg"
             disabled={
-              placing !== null ||
+              (placing !== null && placing !== "all") ||
               (view === "orderList" ? !canReview : !canOrderAll)
             }
+            loading={view === "review" && placing === "all"}
             onClick={() => {
               if (view === "review") orderAll();
               else setView("review");
             }}
             className="font-semibold"
           >
-            {view === "review"
-              ? placing === "all"
-                ? "Sending..."
-                : "Order All"
-              : "Review Order"}
+            {view === "review" ? "Order All" : "Review Order"}
           </Button>
         </div>
       </div>

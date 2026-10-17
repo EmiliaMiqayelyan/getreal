@@ -37,7 +37,7 @@ export function ManageSubcategoriesModal({
   const [editValue, setEditValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<null | "create" | "rename" | "remove">(null);
 
   const options = subcategoriesForCategory(subcategoriesByCategory, category);
 
@@ -47,16 +47,16 @@ export function ManageSubcategoriesModal({
     setEditingName(null);
     setEditValue("");
     setError(null);
-    setBusy(false);
+    setBusy(null);
   }, [open, category]);
 
   if (!open) return null;
 
   async function handleCreate() {
     if (busy) return;
-    setBusy(true);
+    setBusy("create");
     const result = await addSubcategory(category, draftName);
-    setBusy(false);
+    setBusy(null);
     if (result) {
       setError(result);
       return;
@@ -81,9 +81,9 @@ export function ManageSubcategoriesModal({
 
   async function handleRename() {
     if (!editingName || busy) return;
-    setBusy(true);
+    setBusy("rename");
     const result = await renameSubcategory(category, editingName, editValue);
-    setBusy(false);
+    setBusy(null);
     if (result) {
       setError(result);
       return;
@@ -103,9 +103,9 @@ export function ManageSubcategoriesModal({
     const name = pendingRemove;
     if (!name || busy) return;
 
-    setBusy(true);
+    setBusy("remove");
     const result = await removeSubcategory(category, name);
-    setBusy(false);
+    setBusy(null);
     if (result) {
       setError(result);
       return;
@@ -171,7 +171,7 @@ export function ManageSubcategoriesModal({
                   if (error) setError(null);
                 }}
                 placeholder="e.g. Organ Meat"
-                disabled={!category || busy}
+                disabled={!category || busy !== null}
                 className="min-w-0 flex-1"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -183,7 +183,8 @@ export function ManageSubcategoriesModal({
               <Button
                 variant="dark"
                 size="sm"
-                disabled={!category || !draftName.trim() || busy}
+                disabled={!category || !draftName.trim() || busy !== null}
+                loading={busy === "create"}
                 onClick={() => void handleCreate()}
               >
                 <Plus size={14} />
@@ -222,7 +223,7 @@ export function ManageSubcategoriesModal({
                           }}
                           className="min-w-0 flex-1"
                           autoFocus
-                          disabled={busy}
+                          disabled={busy !== null}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               event.preventDefault();
@@ -246,7 +247,8 @@ export function ManageSubcategoriesModal({
                             <Button
                               variant="dark"
                               size="sm"
-                              disabled={busy}
+                              disabled={busy !== null && busy !== "rename"}
+                              loading={busy === "rename"}
                               onClick={() => void handleRename()}
                             >
                               Save
@@ -254,7 +256,7 @@ export function ManageSubcategoriesModal({
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={busy}
+                              disabled={busy !== null}
                               onClick={cancelEdit}
                             >
                               Cancel
@@ -265,7 +267,7 @@ export function ManageSubcategoriesModal({
                             <button
                               type="button"
                               aria-label={`Edit ${name}`}
-                              disabled={busy}
+                              disabled={busy !== null}
                               onClick={() => startEdit(name)}
                               className={cn(
                                 "cursor-pointer rounded-md p-1.5 text-[#6B6B6B]",
@@ -278,7 +280,7 @@ export function ManageSubcategoriesModal({
                             <button
                               type="button"
                               aria-label={`Delete ${name}`}
-                              disabled={busy}
+                              disabled={busy !== null}
                               onClick={() => handleRemove(name)}
                               className={cn(
                                 "cursor-pointer rounded-md p-1.5 text-[#6B6B6B]",
@@ -317,7 +319,7 @@ export function ManageSubcategoriesModal({
         confirmLabel="Remove"
         confirmVariant="danger"
         onClose={() => setPendingRemove(null)}
-        onConfirm={() => void confirmRemove()}
+        onConfirm={() => confirmRemove()}
       />
     </div>
   );

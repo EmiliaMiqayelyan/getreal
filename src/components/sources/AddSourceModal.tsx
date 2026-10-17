@@ -31,7 +31,7 @@ import { getSourceDistributorSelection } from "@/utils/sources";
 type AddSourceModalProps = {
   open: boolean;
   onClose: () => void;
-  onSave: (source: Source) => void;
+  onSave: (source: Source) => void | Promise<void>;
   /** Remove the source being edited from the list. Edit mode only. */
   onRemove?: () => void;
   source?: Source | null;
@@ -124,6 +124,7 @@ export function AddSourceModal({
   }
 
   function handleClose() {
+    if (saving) return;
     setErrors({});
     onClose();
   }
@@ -138,6 +139,7 @@ export function AddSourceModal({
   }
 
   async function handleSave() {
+    if (saving) return;
     const nextErrors = validateSourceForm({
       name,
       street,
@@ -166,23 +168,11 @@ export function AddSourceModal({
 
     let nextLogoUrl = logoUrl;
     const pendingFile = logoFileRef.current;
-    if (pendingFile) {
-      if (!isUploadableImage(pendingFile)) {
-        rejectImage("Upload a JPEG, PNG, or WebP image.");
-        return;
-      }
-      if (isApiConfigured()) {
-        setSaving(true);
-        try {
-          nextLogoUrl = await uploadImage(pendingFile);
-        } catch {
-          rejectImage("This image could not be uploaded and was removed.");
-          return;
-        } finally {
-          setSaving(false);
-        }
-      }
-    } else if (nextLogoUrl?.startsWith("blob:")) {
+    if (pendingFile && !isUploadableImage(pendingFile)) {
+      rejectImage("Upload a JPEG, PNG, or WebP image.");
+      return;
+    }
+    if (!pendingFile && nextLogoUrl?.startsWith("blob:")) {
       rejectImage("This image could not be uploaded and was removed.");
       return;
     }
@@ -196,20 +186,34 @@ export function AddSourceModal({
       zip: zip.trim(),
     };
 
-    onSave({
-      id: source?.id ?? "SOR-TEMP",
-      name: name.trim(),
-      ...addressParts,
-      fullAddress: composeSourceFullAddress(addressParts),
-      location: composeSourceLocation(addressParts),
-      distributor: hasExternalDistributor ? distributor : "",
-      distributorId: hasExternalDistributor
-        ? resolveDistributorId(distributor, distributors)
-        : undefined,
-      description: description.trim(),
-      logoUrl: nextLogoUrl,
-      logoName: nextLogoUrl ? logoName : undefined,
-    });
+    setSaving(true);
+    try {
+      if (pendingFile && isApiConfigured()) {
+        try {
+          nextLogoUrl = await uploadImage(pendingFile);
+        } catch {
+          rejectImage("This image could not be uploaded and was removed.");
+          return;
+        }
+      }
+
+      await onSave({
+        id: source?.id ?? "SOR-TEMP",
+        name: name.trim(),
+        ...addressParts,
+        fullAddress: composeSourceFullAddress(addressParts),
+        location: composeSourceLocation(addressParts),
+        distributor: hasExternalDistributor ? distributor : "",
+        distributorId: hasExternalDistributor
+          ? resolveDistributorId(distributor, distributors)
+          : undefined,
+        description: description.trim(),
+        logoUrl: nextLogoUrl,
+        logoName: nextLogoUrl ? logoName : undefined,
+      });
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -508,8 +512,12 @@ export function AddSourceModal({
             <Button variant="ghost" onClick={handleClose}>
               Cancel
             </Button>
-            <Button variant="dark" disabled={saving} onClick={() => void handleSave()}>
-              {saving ? "Saving..." : isEdit ? "Save Source" : "Create Source"}
+            <Button
+              variant="dark"
+              loading={saving}
+              onClick={() => void handleSave()}
+            >
+              {isEdit ? "Save Source" : "Create Source"}
             </Button>
           </div>
         </div>

@@ -1362,7 +1362,7 @@ export default function ProductsForSalePage() {
     });
   }
 
-  function handleAdd(item: Item) {
+  async function handleAdd(item: Item) {
     const errors = validateAddProductForSale({
       selectedItemId: item.id,
       catalog,
@@ -1370,30 +1370,28 @@ export default function ProductsForSalePage() {
     });
     if (errors.item) return;
 
-    void (async () => {
-      const draft = productFromItem(
-        item,
-        nextProductId(products),
-        nextProductSortOrder(products),
-      );
+    const draft = productFromItem(
+      item,
+      nextProductId(products),
+      nextProductSortOrder(products),
+    );
 
-      if (isApiConfigured()) {
-        try {
-          const created = await productsApi.create(
-            toCreateProductPayload(draft, catalog),
-          );
-          const mapped = mapApiProductToProductForSale(created, 0, catalog);
-          setProducts((current) => [...current, { ...draft, ...mapped }]);
-          showSuccess("Product added.");
-          return;
-        } catch (error) {
-          notifyApiError(error, "Failed to add product.");
-          return;
-        }
+    if (isApiConfigured()) {
+      try {
+        const created = await productsApi.create(
+          toCreateProductPayload(draft, catalog),
+        );
+        const mapped = mapApiProductToProductForSale(created, 0, catalog);
+        setProducts((current) => [...current, { ...draft, ...mapped }]);
+        showSuccess("Product added.");
+        return;
+      } catch (error) {
+        notifyApiError(error, "Failed to add product.");
+        throw error;
       }
+    }
 
-      setProducts((current) => [...current, draft]);
-    })();
+    setProducts((current) => [...current, draft]);
   }
 
   return (
