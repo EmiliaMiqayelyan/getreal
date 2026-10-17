@@ -370,9 +370,12 @@ export type ApiRole = {
 
 export type ApiNotificationRule = {
   id?: string;
+  notificationCode?: string | null;
   notificationRuleCode?: string;
   ruleCode?: string;
   code?: string;
+  /** Human-readable trigger, e.g. "Order Confirmation". */
+  trigger?: string | null;
   /** Event path that fires the rule, e.g. `/api/v1/orders`. */
   action?: string;
   actionEndpoint?: string;
@@ -381,8 +384,13 @@ export type ApiNotificationRule = {
   triggerMethod?: string;
   title?: string;
   subtext?: string;
+  /** `before` or `after` the triggering event. */
+  timing?: string | null;
   scheduleDelay?: number | string;
   scheduleUnit?: string;
+  iconUrl?: string | null;
+  targetStatus?: string | null;
+  category?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

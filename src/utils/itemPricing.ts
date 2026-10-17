@@ -108,12 +108,12 @@ export function calcCostPerUnit(buyingPrice: number, contents: number) {
 }
 
 /**
- * 40% margin suggested price in the Figma prototype is markup on cost:
- * cost × (1 + 40/100).
+ * 40% margin suggested price is cost per piece times the remaining share:
+ * cost × (1 - 40/100) = cost × 0.6.
  */
 export function calcSuggestedPrice(costPerPiece: number, marginPercent = 40) {
-  if (costPerPiece <= 0 || marginPercent < 0) return 0;
-  return costPerPiece * (1 + marginPercent / 100);
+  if (costPerPiece <= 0 || marginPercent < 0 || marginPercent > 100) return 0;
+  return costPerPiece * (1 - marginPercent / 100);
 }
 
 /**
@@ -144,6 +144,11 @@ function formulaAmount(value: number, forceDecimals = false) {
   return `$ ${text}`;
 }
 
+function suggestedPriceFormula(costPerPiece: number) {
+  const suggestedPrice = calcSuggestedPrice(costPerPiece);
+  return `40% Margin Suggested Price = Cost per piece × 0.6 (${formulaAmount(costPerPiece, true)} × 0.6 = ${formulaAmount(suggestedPrice, true)} )`;
+}
+
 /** Live formula captions from the pricing prototype. */
 export function pricingFormulaLines(
   input: PricingInputs & { costPerLb: number; costPerPiece: number },
@@ -152,6 +157,7 @@ export function pricingFormulaLines(
     const ounces = input.pieceWeightOz > 0 ? input.pieceWeightOz : 0;
     return [
       `Cost per piece = (Piece weight)/16 × Price per lb (e.g. ${ounces} / 16 × ${formulaAmount(input.buyingPrice)} = ${formulaAmount(input.costPerPiece, true)} )`,
+      suggestedPriceFormula(input.costPerPiece),
     ];
   }
 
@@ -159,12 +165,14 @@ export function pricingFormulaLines(
     return [
       `Cost per lb = Case price ÷ Total case weight (${formulaAmount(input.buyingPrice)} ÷ ${input.caseWeightLbs || 0} lbs = ${formulaAmount(input.costPerLb, true)} )`,
       `Cost per piece = Case price ÷ Pieces per case (${formulaAmount(input.buyingPrice)} ÷ ${input.piecesPerCase || 0} = ${formulaAmount(input.costPerPiece, true)} )`,
+      suggestedPriceFormula(input.costPerPiece),
     ];
   }
 
   if (input.sourcePer === "Case" && input.caseBy === "Units / case") {
     return [
       `Cost per piece = Case price ÷ Pieces per case (${formulaAmount(input.buyingPrice)} ÷ ${input.piecesPerCase || 0} = ${formulaAmount(input.costPerPiece, true)} )`,
+      suggestedPriceFormula(input.costPerPiece),
     ];
   }
 

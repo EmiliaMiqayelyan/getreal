@@ -16,7 +16,7 @@ export type CreateItemPayload = {
   buyingUnit?: string;
   singleItemUnit?: string;
   /**
-   * Label from the merchandise weight dropdown.
+   * Customer-facing weight text.
    * Null clears a stored value.
    */
   merchandiseWeight?: string | null;

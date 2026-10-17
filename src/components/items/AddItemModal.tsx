@@ -12,7 +12,6 @@ import { useScrollLock } from "@/hooks/useScrollLock";
 import { findSubcategoryIdByName } from "@/lib/api/mappers";
 import {
   CASE_BY_OPTIONS,
-  MERCHANDISE_WEIGHT_OPTIONS,
   PIECE_WEIGHT_OPTIONS,
   SOURCE_PER_OPTIONS,
   pieceWeightLabel,
@@ -31,6 +30,7 @@ import {
   hasItemFormErrors,
   ITEM_DESCRIPTION_MAX,
   ITEM_PHOTO_MAX,
+  MERCHANDISE_WEIGHT_MAX,
   validateItemForm,
   type ItemFormErrors,
 } from "@/utils/itemForm";
@@ -337,7 +337,7 @@ export function AddItemModal({
         sourcePer: resolvedSourcePer,
         caseBy: resolvedCaseBy,
         pieceWeightOz: resolvedPieceOz,
-        merchandiseWeight,
+        merchandiseWeight: merchandiseWeight.trim(),
         caseWeightLbs: resolvedCaseLbs,
         buyingPrice: buying,
         contents: resolvedContents,
@@ -771,37 +771,6 @@ export function AddItemModal({
                   <FieldError message={errors.sourcePer} />
                 </div>
 
-                <div data-field="merchandiseWeight">
-                  <Field label="Merchandise weight" required>
-                    <Select
-                      value={merchandiseWeight}
-                      onChange={(value) => {
-                        setMerchandiseWeight(value);
-                        if (errors.merchandiseWeight) {
-                          setErrors((current) => ({
-                            ...current,
-                            merchandiseWeight: undefined,
-                          }));
-                        }
-                      }}
-                      className="w-full"
-                      aria-label="Merchandise weight"
-                      placeholder="Select"
-                      buttonClassName={cn(
-                        errors.merchandiseWeight && INVALID_BORDER,
-                      )}
-                      options={[
-                        { value: "", label: "Select" },
-                        ...MERCHANDISE_WEIGHT_OPTIONS.map((entry) => ({
-                          value: entry.label,
-                          label: entry.label,
-                        })),
-                      ]}
-                    />
-                  </Field>
-                  <FieldError message={errors.merchandiseWeight} />
-                </div>
-
                 {sourcePer === "Unit" ? (
                   <>
                     <div data-field="buyingPrice">
@@ -1150,6 +1119,34 @@ export function AddItemModal({
                   </div>
                 </>
               ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div data-field="merchandiseWeight">
+                  <Field label="Merchandise weight" required>
+                    <Input
+                      value={merchandiseWeight}
+                      maxLength={MERCHANDISE_WEIGHT_MAX}
+                      placeholder="e.g. 8 oz"
+                      aria-label="Merchandise weight"
+                      onChange={(event) => {
+                        setMerchandiseWeight(event.target.value);
+                        if (errors.merchandiseWeight) {
+                          setErrors((current) => ({
+                            ...current,
+                            merchandiseWeight: undefined,
+                          }));
+                        }
+                      }}
+                      className={cn(
+                        "w-full",
+                        errors.merchandiseWeight && INVALID_BORDER,
+                      )}
+                    />
+                  </Field>
+                  <FieldError message={errors.merchandiseWeight} />
+                </div>
+              </div>
+
               {formulaLines.length ? (
                 <div className="space-y-0.5">
                   {formulaLines.map((line) => (

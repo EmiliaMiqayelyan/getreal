@@ -16,9 +16,12 @@ import type {
   DistributorDocument,
 } from "@/types/distributor";
 import type { CaseBy, Item, ItemPhoto, SourcePer } from "@/types/item";
-import { isMerchandiseWeightLabel, pieceWeightOzFromLabel } from "@/types/item";
+import { pieceWeightOzFromLabel } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
-import type { PushNotification } from "@/types/notification";
+import type {
+  NotificationTiming,
+  PushNotification,
+} from "@/types/notification";
 import type { Source } from "@/types/source";
 import { codeFrom, isUuid, preferModelId } from "@/utils/entityIds";
 import {
@@ -407,9 +410,7 @@ export function mapApiItemToItem(
     merchandiseWeightRecord.merchandise_weight ??
     ""
   ).trim();
-  const merchandiseWeight = isMerchandiseWeightLabel(merchandiseWeightRaw)
-    ? merchandiseWeightRaw
-    : "";
+  const merchandiseWeight = merchandiseWeightRaw;
   const contents = Math.max(1, item.contents ?? 1);
   const buyingPrice = centsToDollars(item.buyingPrice);
 
@@ -868,6 +869,19 @@ function readScheduleDelay(value: unknown): number {
   return 0;
 }
 
+function ruleText(rule: ApiNotificationRule, key: string): string {
+  const record = rule as Record<string, unknown>;
+  const snake = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+  const value = record[key] ?? record[snake];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function readTiming(rule: ApiNotificationRule): NotificationTiming {
+  const timing = ruleText(rule, "timing").toLowerCase();
+  if (timing === "before" || timing === "after") return timing;
+  return "";
+}
+
 export function mapApiNotificationRule(
   rule: ApiNotificationRule,
   index: number,
@@ -876,17 +890,20 @@ export function mapApiNotificationRule(
   return {
     id: preferModelId(
       rule,
-      ["notificationRuleCode", "ruleCode", "code"],
+      ["notificationCode", "notificationRuleCode", "ruleCode", "code"],
       recordId ?? `PN-${String(index + 1).padStart(3, "0")}`,
     ),
     recordId,
+    trigger: ruleText(rule, "trigger"),
     action: rule.action?.trim() || rule.actionEndpoint?.trim() || "",
     httpMethod:
       (rule.httpMethod ?? rule.triggerMethod)?.trim().toUpperCase() || "",
     title: rule.title?.trim() || "",
     body: rule.subtext?.trim() || "",
+    timing: readTiming(rule),
     scheduleDelay: readScheduleDelay(rule.scheduleDelay),
     scheduleUnit: rule.scheduleUnit?.trim().toLowerCase() || "minutes",
+    iconUrl: ruleText(rule, "iconUrl"),
   };
 }
 

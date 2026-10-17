@@ -1,6 +1,5 @@
 import {
   CASE_BY_OPTIONS,
-  isMerchandiseWeightLabel,
   PIECE_WEIGHT_OPTIONS,
   SOURCE_PER_OPTIONS,
   type CaseBy,
@@ -14,6 +13,7 @@ import {
 
 export const ITEM_DESCRIPTION_MAX = 320;
 export const ITEM_PHOTO_MAX = 3;
+export const MERCHANDISE_WEIGHT_MAX = 100;
 
 export type ItemFormInput = {
   name: string;
@@ -110,10 +110,11 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
     errors.photos = `No more than ${ITEM_PHOTO_MAX} photos can be uploaded.`;
   }
 
-  if (!input.merchandiseWeight) {
-    errors.merchandiseWeight = "Select a merchandise weight.";
-  } else if (!isMerchandiseWeightLabel(input.merchandiseWeight)) {
-    errors.merchandiseWeight = "Select a valid merchandise weight.";
+  const merchandiseWeight = input.merchandiseWeight.trim();
+  if (!merchandiseWeight) {
+    errors.merchandiseWeight = "Enter a merchandise weight.";
+  } else if (merchandiseWeight.length > MERCHANDISE_WEIGHT_MAX) {
+    errors.merchandiseWeight = `Merchandise weight must be ${MERCHANDISE_WEIGHT_MAX} characters or fewer.`;
   }
 
   const sourcePer = input.sourcePer as SourcePer | "";
@@ -194,13 +195,13 @@ export function firstItemFormErrorField(errors: ItemFormErrors) {
     "description",
     "photos",
     "sourcePer",
-    "merchandiseWeight",
     "caseBy",
     "buyingPrice",
     "pieceWeightOz",
     "caseWeightLbs",
     "contents",
     "sellingPrice",
+    "merchandiseWeight",
   ];
 
   for (const field of order) {

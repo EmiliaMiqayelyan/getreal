@@ -76,9 +76,6 @@ export const PIECE_WEIGHT_OPTIONS = [
   { label: "16 oz = lb", oz: 16 },
 ] as const;
 
-/** Same weight choices as piece weight. Sent to the API as the option label. */
-export const MERCHANDISE_WEIGHT_OPTIONS = PIECE_WEIGHT_OPTIONS;
-
 export function pieceWeightLabel(oz: number) {
   const match = PIECE_WEIGHT_OPTIONS.find((entry) => entry.oz === oz);
   return match?.label ?? "";
@@ -87,8 +84,4 @@ export function pieceWeightLabel(oz: number) {
 export function pieceWeightOzFromLabel(label: string) {
   const match = PIECE_WEIGHT_OPTIONS.find((entry) => entry.label === label);
   return match?.oz ?? 0;
-}
-
-export function isMerchandiseWeightLabel(label: string) {
-  return MERCHANDISE_WEIGHT_OPTIONS.some((entry) => entry.label === label);
 }
