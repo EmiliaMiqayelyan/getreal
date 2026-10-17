@@ -621,11 +621,12 @@ function PackingDetail({
   coolerOptions: PackingCoolerOption[];
   locked: boolean;
   onClose: () => void;
-  onReady: (order: PackOrder) => void;
+  onReady: (order: PackOrder) => boolean | Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(order);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [openMenu, setOpenMenu] = useState<{
     id: string;
     anchor: HTMLElement;
@@ -655,6 +656,7 @@ function PackingDetail({
   }
 
   function requestClose() {
+    if (saving) return;
     if (!locked && isDraftDirty(order, draft)) {
       setLeaveConfirmOpen(true);
       return;
@@ -662,7 +664,8 @@ function PackingDetail({
     onClose();
   }
 
-  function handleReady() {
+  async function handleReady() {
+    if (saving) return;
     const incomplete = draft.items.filter((item) => !itemReady(item));
     if (incomplete.length) {
       const missing = incomplete[0]!;
@@ -684,13 +687,15 @@ function PackingDetail({
     }
 
     const coolerIds = collectCoolerIds(draft.items);
-    onReady({
+    setSaving(true);
+    const completed = await onReady({
       ...draft,
       coolerIds,
       packedAt: order.packedAt ?? formatPackTimestamp(),
       loadedAt: order.loadedAt,
       items: draft.items,
     });
+    if (!completed) setSaving(false);
   }
 
   function markPacked(item: PackingLine) {
@@ -939,21 +944,35 @@ function PackingDetail({
         <button
           type="button"
           onClick={requestClose}
-          className="text-[14px] font-medium text-[#111118]"
+          disabled={saving}
+          className={cn(
+            "text-[14px] font-medium text-[#111118]",
+            saving && "pointer-events-none opacity-40",
+          )}
         >
           Cancel & Close
         </button>
         {locked ? null : (
           <button
             type="button"
-            onClick={handleReady}
+            onClick={() => void handleReady()}
+            disabled={saving}
+            aria-busy={saving}
             className={cn(
-              "rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white",
-              !allReady && "opacity-40",
+              "inline-flex items-center justify-center gap-2 rounded-[8px] px-6 py-2.5 text-[14px] font-semibold text-white",
+              !allReady && !saving && "opacity-40",
+              saving && "pointer-events-none",
             )}
             style={{ background: ORANGE }}
           >
-            Cooler Ready
+            {saving ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Saving...
+              </>
+            ) : (
+              "Cooler Ready"
+            )}
           </button>
         )}
       </div>
@@ -1224,73 +1243,72 @@ export default function PackingCoolersPage() {
         coolerOptions={coolerOptions}
         locked={Boolean(activeOrder.loadedAt)}
         onClose={() => setActiveOrderId(null)}
-        onReady={(updated) => {
-          void (async () => {
-            let saved = updated;
-            if (apiLive && updated.recordId) {
-              const orderId = updated.recordId;
-              const writes = lineWrites(
-                activeOrder.items,
-                updated.items,
-                coolerOptions,
-              );
-              if (typeof writes === "string") {
-                showError(writes);
-                return;
-              }
-              try {
-                let remote: ApiOrder | null = null;
-                for (const write of writes) {
-                  const single = write.picks.length === 1 ? write.picks[0] : undefined;
-                  remote = await ordersApi.packItem(orderId, write.productId, {
-                    coolerId: write.coolerId,
-                    packed: true,
-                    ...(single
-                      ? { inventoryRecordId: single.inventoryRecordId }
-                      : { picks: write.picks }),
-                  });
-                }
-                if (!activeOrder.packedAt) {
-                  remote = await ordersApi.coolerReady(orderId);
-                }
-                const fromServer = remote
-                  ? applyRemoteOrder(activeOrder, remote)
-                  : null;
-                saved = {
-                  ...updated,
-                  packedAt:
-                    fromServer?.packedAt ??
-                    updated.packedAt ??
-                    formatPackTimestamp(),
-                  loadedAt: fromServer?.loadedAt ?? updated.loadedAt,
-                  coolerIds: fromServer?.coolerIds.length
-                    ? fromServer.coolerIds
-                    : updated.coolerIds,
-                };
-              } catch (error) {
-                notifyApiError(error, "Failed to save packing.");
-                return;
-              }
-            }
-            setOrders((current) =>
-              current.map((order) =>
-                order.id === saved.id ? saved : order,
-              ),
+        onReady={async (updated) => {
+          let saved = updated;
+          if (apiLive && updated.recordId) {
+            const orderId = updated.recordId;
+            const writes = lineWrites(
+              activeOrder.items,
+              updated.items,
+              coolerOptions,
             );
-            upsertPacking({
-              orderCode: saved.code,
-              packedAt: saved.packedAt,
-              coolerReadyAt: saved.packedAt,
-              loadedAt: saved.loadedAt,
-              coolerIds: saved.coolerIds,
-              packerName:
-                packingByCode[saved.code]?.packerName || saved.packerName || "",
-              packerId: packingByCode[saved.code]?.packerId || saved.packerId,
-              packingStartedAt: packingByCode[saved.code]?.packingStartedAt,
-              items: saved.items,
-            });
-            setActiveOrderId(null);
-          })();
+            if (typeof writes === "string") {
+              showError(writes);
+              return false;
+            }
+            try {
+              let remote: ApiOrder | null = null;
+              for (const write of writes) {
+                const single = write.picks.length === 1 ? write.picks[0] : undefined;
+                remote = await ordersApi.packItem(orderId, write.productId, {
+                  coolerId: write.coolerId,
+                  packed: true,
+                  ...(single
+                    ? { inventoryRecordId: single.inventoryRecordId }
+                    : { picks: write.picks }),
+                });
+              }
+              if (!activeOrder.packedAt) {
+                remote = await ordersApi.coolerReady(orderId);
+              }
+              const fromServer = remote
+                ? applyRemoteOrder(activeOrder, remote)
+                : null;
+              saved = {
+                ...updated,
+                packedAt:
+                  fromServer?.packedAt ??
+                  updated.packedAt ??
+                  formatPackTimestamp(),
+                loadedAt: fromServer?.loadedAt ?? updated.loadedAt,
+                coolerIds: fromServer?.coolerIds.length
+                  ? fromServer.coolerIds
+                  : updated.coolerIds,
+              };
+            } catch (error) {
+              notifyApiError(error, "Failed to save packing.");
+              return false;
+            }
+          }
+          setOrders((current) =>
+            current.map((order) =>
+              order.id === saved.id ? saved : order,
+            ),
+          );
+          upsertPacking({
+            orderCode: saved.code,
+            packedAt: saved.packedAt,
+            coolerReadyAt: saved.packedAt,
+            loadedAt: saved.loadedAt,
+            coolerIds: saved.coolerIds,
+            packerName:
+              packingByCode[saved.code]?.packerName || saved.packerName || "",
+            packerId: packingByCode[saved.code]?.packerId || saved.packerId,
+            packingStartedAt: packingByCode[saved.code]?.packingStartedAt,
+            items: saved.items,
+          });
+          setActiveOrderId(null);
+          return true;
         }}
       />
     );
