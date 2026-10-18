@@ -1,8 +1,11 @@
 import type {
   ApiAvailableLocation,
+  ApiDistributor,
   ApiInventory,
+  ApiItem,
   ApiItemPick,
   ApiProduct,
+  ApiSource,
 } from "@/lib/api/types";
 import type { PackingSourceOption } from "@/types/packing";
 
@@ -10,6 +13,14 @@ export type PackingLineLookup = {
   productId?: string;
   name?: string;
   itemCode?: string | null;
+  itemId?: string | null;
+  distributorName?: string | null;
+  sourceName?: string | null;
+};
+
+export type PackingParty = {
+  distributor: string;
+  source: string;
 };
 
 type SourceGroup = {
@@ -21,6 +32,8 @@ export type PackingCatalog = {
   optionsFor(line: PackingLineLookup): SourceGroup;
   /** Any lot by id, including ones already picked for this order. */
   optionForRecord?(inventoryRecordId: string): PackingSourceOption | undefined;
+  /** Catalog distributor and source for this order line. */
+  partyFor?(line: PackingLineLookup): PackingParty | undefined;
 };
 
 function formatExpDate(value?: string | null) {
@@ -34,22 +47,115 @@ function formatExpDate(value?: string | null) {
   });
 }
 
-function optionFromRecord(row: ApiInventory): PackingSourceOption | null {
+function partyName(value?: string | null) {
+  const text = value?.trim() ?? "";
+  if (!text || text === "N/A" || text === "—" || text === "-") return "";
+  return text;
+}
+
+function preferParty(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    const text = partyName(value);
+    if (text) return text;
+  }
+  return "N/A";
+}
+
+function nestedName(value: unknown) {
+  if (typeof value === "string") return value.trim();
+  if (!value || typeof value !== "object") return "";
+  const name = (value as { name?: unknown }).name;
+  return typeof name === "string" ? name.trim() : "";
+}
+
+function rememberParty(
+  map: Map<string, PackingParty>,
+  key: string | null | undefined,
+  party: PackingParty,
+) {
+  const trimmed = key?.trim().toLowerCase();
+  if (!trimmed || map.has(trimmed)) return;
+  map.set(trimmed, party);
+}
+
+/**
+ * Distributor and source for each catalog item.
+ * Inventory lots often omit the names, so packing resolves them from the
+ * item, then from the distributor and source lists.
+ */
+export function packingParties(input: {
+  items: readonly ApiItem[];
+  distributors: readonly ApiDistributor[];
+  sources: readonly ApiSource[];
+}) {
+  const distributorsById = new Map<string, string>();
+  for (const row of input.distributors) {
+    const id = row.id?.trim();
+    const name = row.name?.trim();
+    if (id && name) distributorsById.set(id, name);
+  }
+  const sourcesById = new Map<string, string>();
+  for (const row of input.sources) {
+    const id = row.id?.trim();
+    const name = row.name?.trim();
+    if (id && name) sourcesById.set(id, name);
+  }
+
+  const map = new Map<string, PackingParty>();
+  for (const item of input.items) {
+    const raw = item as ApiItem & {
+      distributor?: unknown;
+      source?: unknown;
+    };
+    const distributor =
+      nestedName(raw.distributor) ||
+      (item.distributorId
+        ? distributorsById.get(item.distributorId) || ""
+        : "");
+    const source =
+      nestedName(raw.source) ||
+      (item.sourceId ? sourcesById.get(item.sourceId) || "" : "");
+    if (!distributor && !source) continue;
+    const party = { distributor, source };
+    rememberParty(map, item.id, party);
+    rememberParty(map, item.itemCode, party);
+    rememberParty(map, item.name ? `name:${item.name}` : "", party);
+    rememberParty(
+      map,
+      item.merchandisingName ? `name:${item.merchandisingName}` : "",
+      party,
+    );
+  }
+  return map;
+}
+
+function optionFromRecord(
+  row: ApiInventory,
+  parties: ReadonlyMap<string, PackingParty>,
+): PackingSourceOption | null {
   if ((row.quantity ?? 0) <= 0) return null;
   const status = row.status?.trim().toLowerCase();
   if (status && status !== "in_stock" && status !== "reserved") return null;
-  return describeRecord(row);
+  return describeRecord(row, parties);
 }
 
-function describeRecord(row: ApiInventory): PackingSourceOption | null {
+function describeRecord(
+  row: ApiInventory,
+  parties: ReadonlyMap<string, PackingParty>,
+): PackingSourceOption | null {
   const inventoryRecordId = row.id?.trim();
   if (!inventoryRecordId) return null;
   const location = row.location?.trim() || "";
+  const party = partyForKeys(parties, [
+    row.itemId,
+    row.itemCode,
+    row.itemName ? `name:${row.itemName}` : "",
+  ]);
   return {
     inventoryRecordId,
     itemId: row.itemCode?.trim() || inventoryRecordId,
-    distributor: row.distributorName?.trim() || "N/A",
-    source: row.sourceName?.trim() || "N/A",
+    distributor: preferParty(row.distributorName, party?.distributor),
+    source: preferParty(row.sourceName, party?.source),
     expDate: formatExpDate(row.expirationDate),
     expirationIso: row.expirationDate?.trim() || "",
     quantity:
@@ -62,6 +168,19 @@ function describeRecord(row: ApiInventory): PackingSourceOption | null {
   };
 }
 
+function partyForKeys(
+  parties: ReadonlyMap<string, PackingParty>,
+  keys: Array<string | null | undefined>,
+) {
+  for (const key of keys) {
+    const trimmed = key?.trim().toLowerCase();
+    if (!trimmed) continue;
+    const party = parties.get(trimmed);
+    if (party && (party.distributor || party.source)) return party;
+  }
+  return undefined;
+}
+
 /**
  * Inventory lots the packer can pick, keyed the way an order line can refer
  * to them. Order lines send the product-for-sale id; inventory rows use the
@@ -70,6 +189,7 @@ function describeRecord(row: ApiInventory): PackingSourceOption | null {
 export function buildPackingCatalog(
   rows: ApiInventory[],
   productItemIds: ReadonlyMap<string, string> = new Map(),
+  parties: ReadonlyMap<string, PackingParty> = new Map(),
 ): PackingCatalog {
   const byItemId = new Map<string, SourceGroup>();
   const byName = new Map<string, SourceGroup>();
@@ -80,20 +200,29 @@ export function buildPackingCatalog(
     if (id) byRecordId.set(id, row);
   }
 
-  function add(map: Map<string, SourceGroup>, key: string, group: SourceGroup, option: PackingSourceOption) {
+  function add(
+    map: Map<string, SourceGroup>,
+    key: string,
+    group: SourceGroup,
+    option: PackingSourceOption,
+  ) {
     const existing = map.get(key);
     if (!existing) {
       map.set(key, { category: group.category, options: [option] });
       return;
     }
-    if (existing.options.some((entry) => entry.inventoryRecordId === option.inventoryRecordId)) {
+    if (
+      existing.options.some(
+        (entry) => entry.inventoryRecordId === option.inventoryRecordId,
+      )
+    ) {
       return;
     }
     existing.options.push(option);
   }
 
   for (const row of rows) {
-    const option = optionFromRecord(row);
+    const option = optionFromRecord(row, parties);
     if (!option) continue;
     const category = row.subcategory?.trim() || row.category?.trim() || "Items";
     const group = { category, options: [option] };
@@ -108,7 +237,9 @@ export function buildPackingCatalog(
   return {
     optionsFor(line) {
       const productId = line.productId?.trim();
-      const catalogItemId = productId ? productItemIds.get(productId) : undefined;
+      const catalogItemId = productId
+        ? productItemIds.get(productId)
+        : undefined;
       const byId = catalogItemId ? byItemId.get(catalogItemId) : undefined;
       const byLineCode = line.itemCode?.trim().toLowerCase();
       const byItemCode = byLineCode ? byCode.get(byLineCode) : undefined;
@@ -118,15 +249,24 @@ export function buildPackingCatalog(
     },
     optionForRecord(inventoryRecordId) {
       const row = byRecordId.get(inventoryRecordId.trim());
-      return row ? (describeRecord(row) ?? undefined) : undefined;
+      return row ? (describeRecord(row, parties) ?? undefined) : undefined;
+    },
+    partyFor(line) {
+      const productId = line.productId?.trim();
+      const catalogItemId = productId
+        ? productItemIds.get(productId)
+        : undefined;
+      return partyForKeys(parties, [
+        line.itemId,
+        catalogItemId,
+        line.itemCode,
+        line.name ? `name:${line.name}` : "",
+      ]);
     },
   };
 }
 
-type OrderLineStock = {
-  productId?: string;
-  name?: string;
-  itemCode?: string | null;
+type OrderLineStock = PackingLineLookup & {
   quantity?: number;
   packed?: boolean;
   inventoryRecordId?: string | null;
@@ -157,16 +297,30 @@ function optionFromLocation(
   onHand: number,
   enriched: PackingSourceOption | undefined,
   fallbackLocation: string,
+  party: PackingParty | undefined,
+  line: PackingLineLookup,
 ): PackingSourceOption {
   const id = location.id.trim();
-  const name = location.location?.trim() || enriched?.location || fallbackLocation;
+  const name =
+    location.location?.trim() || enriched?.location || fallbackLocation;
   return {
     inventoryRecordId: id,
     itemId: enriched?.itemId || id,
-    distributor: enriched?.distributor || "N/A",
-    source: enriched?.source || "N/A",
+    distributor: preferParty(
+      location.distributorName,
+      enriched?.distributor,
+      line.distributorName,
+      party?.distributor,
+    ),
+    source: preferParty(
+      location.sourceName,
+      enriched?.source,
+      line.sourceName,
+      party?.source,
+    ),
     expDate: formatExpDate(location.expirationDate) || enriched?.expDate || "",
-    expirationIso: location.expirationDate?.trim() || enriched?.expirationIso || "",
+    expirationIso:
+      location.expirationDate?.trim() || enriched?.expirationIso || "",
     quantity: stock,
     available: onHand,
     location: name,
@@ -186,22 +340,33 @@ export function orderLineOptions(
   catalog: PackingCatalog,
 ): SourceGroup {
   const match = catalog.optionsFor(line);
+  const party = catalog.partyFor?.(line);
   const locations = (line.availableLocations ?? []).filter((location) =>
     location.id?.trim(),
   );
   if (!locations.length) {
     const recordId = line.inventoryRecordId?.trim() || "";
     const selected = recordId
-      ? (match.options.find((option) => option.inventoryRecordId === recordId) ??
-        catalog.optionForRecord?.(recordId))
+      ? (match.options.find(
+          (option) => option.inventoryRecordId === recordId,
+        ) ?? catalog.optionForRecord?.(recordId))
       : undefined;
-    const options =
+    const options = (
       selected &&
       !match.options.some(
         (option) => option.inventoryRecordId === selected.inventoryRecordId,
       )
         ? [selected, ...match.options]
-        : match.options;
+        : match.options
+    ).map((option) => ({
+      ...option,
+      distributor: preferParty(
+        option.distributor,
+        line.distributorName,
+        party?.distributor,
+      ),
+      source: preferParty(option.source, line.sourceName, party?.source),
+    }));
     return { category: match.category, options };
   }
 
@@ -211,7 +376,8 @@ export function orderLineOptions(
 
   for (const location of locations) {
     const id = location.id.trim();
-    const onHand = typeof location.quantity === "number" ? location.quantity : 0;
+    const onHand =
+      typeof location.quantity === "number" ? location.quantity : 0;
     const stock = onHand + (held.get(id) ?? 0);
     if (stock <= 0) continue;
     seen.add(id);
@@ -222,13 +388,17 @@ export function orderLineOptions(
         onHand,
         catalog.optionForRecord?.(id),
         "",
+        party,
+        line,
       ),
     );
   }
 
   for (const [id, quantity] of held) {
     if (seen.has(id) || quantity <= 0) continue;
-    const pick = line.picks?.find((entry) => entry.inventoryRecordId?.trim() === id);
+    const pick = line.picks?.find(
+      (entry) => entry.inventoryRecordId?.trim() === id,
+    );
     options.push(
       optionFromLocation(
         {
@@ -241,6 +411,8 @@ export function orderLineOptions(
         0,
         catalog.optionForRecord?.(id),
         pick?.location?.trim() || "",
+        party,
+        line,
       ),
     );
   }

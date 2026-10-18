@@ -191,6 +191,10 @@ export type ApiAvailableLocation = {
   location: string;
   quantity: number;
   expirationDate?: string | null;
+  /** Distributor that supplied this lot. Falls back to the catalog item. */
+  distributorName?: string | null;
+  /** Catalog source for the item in this lot. */
+  sourceName?: string | null;
 };
 
 /** Units already taken from one fridge for a packed order line. */
@@ -210,8 +214,11 @@ export type ApiOrderItem = {
   unit?: string;
   frequency?: string;
   itemCode?: string | null;
+  /** Catalog item id. Inventory lots are keyed by this, not the product id. */
+  itemId?: string | null;
   categoryName?: string | null;
   subcategoryName?: string | null;
+  distributorName?: string | null;
   sourceName?: string | null;
   expirationDate?: string | null;
   /** Packing: cooler UUID this line was packed into. */
