@@ -16,6 +16,7 @@ import {
   DEFAULT_ROLE_PERMISSIONS,
   permissionsForRoleType,
   permissionsFromApiNames,
+  API_PERMISSION_FOR,
 } from "@/utils/rolePermissions";
 
 const AUTH_STORAGE_KEY = "getreal.auth";
@@ -198,6 +199,16 @@ export function getSessionRoleLabel(): string {
   if (role) return formatRoleLabel(role);
   if (getRole() === "warehouse") return "Warehouse";
   return "Super Admin";
+}
+
+/** API permission strings on the signed-in account. */
+export function getSessionPermissionNames(): string[] {
+  if (!isAuthenticated()) return [];
+  if (!isApiConfigured()) {
+    if (getRole() === "warehouse") return [...WAREHOUSE_API_PERMISSIONS];
+    return [...new Set([...Object.values(API_PERMISSION_FOR), "manage:orders"])];
+  }
+  return getSessionProfile().permissions;
 }
 
 /** Checkbox permissions for the signed-in user. */

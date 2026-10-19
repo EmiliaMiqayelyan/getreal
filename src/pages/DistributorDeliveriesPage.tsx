@@ -68,7 +68,8 @@ import {
   formatExpectedDelivery,
   parseDeliveryDateId,
   deliveryWeekId,
-  shiftDateId,
+  earliestCurrentChipId,
+  shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
@@ -1456,8 +1457,10 @@ export default function DistributorDeliveriesPage() {
               .filter(Boolean),
           ),
         ].sort();
-        const preferred = deliveryWeekId(dateIds[dateIds.length - 1] ?? "");
-        if (!preferred) return;
+        const latest = deliveryWeekId(dateIds[dateIds.length - 1] ?? "");
+        if (!latest) return;
+        const floor = earliestCurrentChipId(latest);
+        const preferred = latest >= floor ? latest : floor;
         setActiveDateId((current) => current || preferred);
       })
       .catch((error) => {
@@ -1654,10 +1657,9 @@ export default function DistributorDeliveriesPage() {
 
   function shiftChipWindow(delta: number) {
     setActiveDateId((current) =>
-      shiftDateId(
-        deliveryWeekId(current) ||
-          toDeliveryDateId(upcomingWednesday()),
-        delta * 7,
+      shiftCurrentWeekId(
+        deliveryWeekId(current) || toDeliveryDateId(upcomingWednesday()),
+        delta,
       ),
     );
   }
@@ -1942,9 +1944,10 @@ export default function DistributorDeliveriesPage() {
             })}
           </div>
 
-          <div className={cn("relative z-20 shrink-0", DATE_NAV_GROUP)}>
+          <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
             <DateNavButton
               aria-label="Previous dates"
+              disabled={chipCenter <= earliestCurrentChipId(chipCenter)}
               onClick={() => shiftChipWindow(-1)}
             >
               <ChevronLeft size={14} />
@@ -1964,6 +1967,7 @@ export default function DistributorDeliveriesPage() {
             </DateNavButton>
             {calendarOpen ? (
               <DeliveryDateCalendar
+                disablePast
                 dateCounts={dateCounts}
                 deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                 selectedDateId={chipCenter}

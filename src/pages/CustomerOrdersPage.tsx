@@ -56,8 +56,9 @@ import {
   isWednesdayDateId,
   parseDeliveryDateId,
   deliveryWeekId,
+  earliestCurrentChipId,
   pickDefaultDeliveryChipId,
-  shiftDateId,
+  shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
@@ -1652,7 +1653,7 @@ export default function CustomerOrdersPage() {
   }
 
   function shiftDeliveryDate(delta: number) {
-    commitDeliveryDate(shiftDateId(chipAnchorDateId, delta * 7));
+    commitDeliveryDate(shiftCurrentWeekId(chipAnchorDateId, delta));
   }
 
   function loadMoreActive() {
@@ -1944,6 +1945,9 @@ export default function CustomerOrdersPage() {
                 >
                   <DateNavButton
                     aria-label="Previous dates"
+                    disabled={
+                      chipAnchorDateId <= earliestCurrentChipId(chipAnchorDateId)
+                    }
                     onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
@@ -1964,6 +1968,7 @@ export default function CustomerOrdersPage() {
 
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      disablePast
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       dateCounts={deliveryCounts}
                       selectedDateId={appliedDateId}

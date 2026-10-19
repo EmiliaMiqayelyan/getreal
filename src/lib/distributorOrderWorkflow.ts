@@ -110,9 +110,12 @@ export function parseAggregateDateLabel(label: string, today = new Date()) {
 }
 
 function calendarDayId(value: string) {
-  const match = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  if (match) return match[1];
-  return deliveryDateIdFromValue(value);
+  const trimmed = value.trim();
+  // A date-only value is already the delivery day. A timestamp has to be read
+  // in local time: `new Date` JSON from a SQL date is the previous UTC day
+  // in timezones ahead of UTC, and the date prefix would hide that delivery.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  return deliveryDateIdFromValue(trimmed);
 }
 
 function dateIdFromAggregateEntry(

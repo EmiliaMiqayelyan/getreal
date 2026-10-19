@@ -350,6 +350,16 @@ const API_PERMISSION_IMPLIES: Record<string, string[]> = {
 
 const UI_OWNED_API_PERMISSIONS = new Set(Object.values(API_PERMISSION_FOR));
 
+/** True when every required API permission is granted, including implied reads. */
+export function grantsApiPermissions(
+  held: string[],
+  required: string[],
+): boolean {
+  if (!required.length) return false;
+  const granted = expandApiPermissions(held);
+  return required.every((name) => granted.has(name));
+}
+
 function expandApiPermissions(keys: Iterable<string>): Set<string> {
   const granted = new Set<string>();
   const queue = [...keys];

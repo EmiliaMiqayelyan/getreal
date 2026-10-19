@@ -1,9 +1,11 @@
 import type { ManagedRole, RolePermissions, RoleUser } from "@/types/admin";
 import { ADMIN_USERS } from "@/data/admin";
+import { getRole, getSessionPermissionNames, getSessionProfile } from "@/lib/auth";
 import {
   ADMIN_ROLE_PERMISSIONS,
   MANAGER_ROLE_PERMISSIONS,
   WAREHOUSE_ROLE_PERMISSIONS,
+  grantsApiPermissions,
   normalizePermissions,
 } from "@/utils/rolePermissions";
 
@@ -171,17 +173,70 @@ export const ROUTE_PERMISSION_KEY: Record<string, keyof RolePermissions> = {
   "/notifications": "accessNotifications",
 };
 
-export function permissionKeyForPath(
-  pathname: string,
-): keyof RolePermissions | undefined {
+/**
+ * Permissions required to load the page. A shared string such as `read:orders`
+ * is not enough when the page calls a stricter endpoint.
+ */
+const PAGE_REQUIRED_PERMISSIONS: Record<string, string[]> = {
+  "/dashboard": ["view:dashboard"],
+  "/distributors": ["read:distributors"],
+  "/source": ["manage:sources"],
+  "/items": ["read:inventory"],
+  "/products-for-sale": ["read:products"],
+  "/product-orders": ["manage:orders"],
+  "/customers": ["read:users"],
+  "/customer-orders": ["read:orders"],
+  "/inventory": ["read:inventory"],
+  "/distributor-deliveries": ["read:receiving"],
+  "/packing-coolers": ["read:coolers", "read:orders"],
+  "/packer-manager": ["read:users", "read:orders"],
+  "/roles": ["read:roles"],
+  "/notifications": ["manage:notifications"],
+};
+
+/**
+ * Built-in roles only open the pages that belong to that job.
+ * Custom roles fall through and use the permission list above.
+ */
+const ROLE_PAGE_ALLOW: Record<string, readonly string[] | "*"> = {
+  admin: "*",
+  superadmin: "*",
+  packer: ["/packing-coolers"],
+  driver: ["/customer-orders"],
+  warehouse: [
+    "/distributor-deliveries",
+    "/inventory",
+    "/packing-coolers",
+    "/packer-manager",
+  ],
+  distributor: ["/distributors"],
+  customer: [],
+};
+
+function matchedAppRoute(pathname: string): string | undefined {
   const path =
     pathname.length > 1 && pathname.endsWith("/")
       ? pathname.slice(0, -1)
       : pathname;
-  const match = Object.keys(ROUTE_PERMISSION_KEY)
+  return Object.keys(ROUTE_PERMISSION_KEY)
     .sort((left, right) => right.length - left.length)
     .find((route) => path === route || path.startsWith(`${route}/`));
-  return match ? ROUTE_PERMISSION_KEY[match] : undefined;
+}
+
+export function permissionKeyForPath(
+  pathname: string,
+): keyof RolePermissions | undefined {
+  const route = matchedAppRoute(pathname);
+  return route ? ROUTE_PERMISSION_KEY[route] : undefined;
+}
+
+function roleAllowsPage(route: string): boolean {
+  const role = (getSessionProfile().role || getRole() || "").trim().toLowerCase();
+  if (!role) return true;
+  const allow = ROLE_PAGE_ALLOW[role];
+  if (!allow) return true;
+  if (allow === "*") return true;
+  return allow.includes(route);
 }
 
 export function canAccessPath(
@@ -189,7 +244,11 @@ export function canAccessPath(
   pathname: string,
 ): boolean {
   if (!permissions) return false;
-  const key = permissionKeyForPath(pathname);
-  if (!key) return false;
-  return Boolean(permissions[key]);
+  const route = matchedAppRoute(pathname);
+  if (!route) return false;
+  const required = PAGE_REQUIRED_PERMISSIONS[route];
+  if (!required || !grantsApiPermissions(getSessionPermissionNames(), required)) {
+    return false;
+  }
+  return roleAllowsPage(route);
 }
