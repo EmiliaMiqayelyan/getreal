@@ -48,8 +48,8 @@ export type PackingLine = {
    * A selected lot with no picks still means the whole quantity comes from that lot.
    */
   picks?: PackingPick[];
-  /** Cooler code, or "Cooler" until one is chosen. */
-  coolerId: string;
+  /** Cooler codes chosen for this line. Empty until the packer selects one. */
+  coolerIds: string[];
   packed: boolean;
   options: PackingSourceOption[];
 };

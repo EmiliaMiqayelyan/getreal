@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
 import { cn } from "@/utils/cn";
@@ -179,6 +179,195 @@ export function Select({
                       <span className="block min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap">
                         {label}
                       </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
+type MultiSelectProps = {
+  values: string[];
+  onChange: (values: string[]) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  className?: string;
+  buttonClassName?: string;
+  "aria-label"?: string;
+  disabled?: boolean;
+  variant?: "default" | "flat";
+};
+
+/** Flat or bordered list that stays open so more than one option can be chosen. */
+export function MultiSelect({
+  values,
+  onChange,
+  options,
+  placeholder,
+  className,
+  buttonClassName,
+  disabled = false,
+  variant = "default",
+  "aria-label": ariaLabel,
+}: MultiSelectProps) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const listId = useId();
+  const menuBox = useFloatingMenu(open, buttonRef, listRef, {
+    minWidth: 240,
+    maxHeight: 240,
+  });
+
+  const cleanOptions = options.filter((option) => option.label.trim().length > 0);
+  const selectedLabels = values
+    .map((value) => cleanOptions.find((option) => option.value === value)?.label)
+    .filter((label): label is string => Boolean(label));
+  const displayLabel = selectedLabels.join(", ") || placeholder || "";
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onPointerDown(event: MouseEvent) {
+      const target = event.target as Node;
+      if (
+        rootRef.current?.contains(target) ||
+        listRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setOpen(false);
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const isFlat = variant === "flat";
+
+  function toggle(value: string) {
+    onChange(
+      values.includes(value)
+        ? values.filter((current) => current !== value)
+        : [...values, value],
+    );
+  }
+
+  return (
+    <div ref={rootRef} className={cn("relative min-w-0", className)}>
+      <button
+        ref={buttonRef}
+        type="button"
+        disabled={disabled}
+        title={displayLabel}
+        aria-label={ariaLabel ?? displayLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "relative flex max-w-full cursor-pointer items-center text-left outline-none transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+          isFlat
+            ? "h-auto w-full min-w-0 gap-1 border-0 bg-transparent p-0 text-[13px]"
+            : cn(
+                "w-full justify-between rounded-[9.38px] border border-[#00000014] bg-white",
+                "focus:border-black/20",
+                open && "border-black/20",
+                "h-[33.75px] py-0 pr-9 pl-3.5 text-[13px]",
+              ),
+          selectedLabels.length ? "text-foreground" : "text-muted",
+          buttonClassName,
+        )}
+      >
+        {isFlat ? (
+          <ChevronDown
+            size={14}
+            className={cn(
+              "shrink-0 text-muted transition-transform",
+              open && "rotate-180",
+            )}
+          />
+        ) : null}
+        <span className="truncate">{displayLabel || "\u00A0"}</span>
+        {!isFlat ? (
+          <ChevronDown
+            size={14}
+            className={cn(
+              "pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-muted transition-transform",
+              open && "rotate-180",
+            )}
+          />
+        ) : null}
+      </button>
+
+      {open
+        ? createPortal(
+            <ul
+              ref={listRef}
+              id={listId}
+              role="listbox"
+              aria-multiselectable="true"
+              aria-label={ariaLabel ?? displayLabel}
+              data-scroll-lock-allow
+              className={cn(
+                "ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain",
+                "flex flex-col gap-0 rounded-[8px] border border-[#00000014] bg-white p-0",
+                "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
+              )}
+              style={floatingMenuStyle(menuBox)}
+            >
+              {cleanOptions.map((option, index) => {
+                const isSelected = values.includes(option.value);
+                const label = option.label.trim() || "\u00A0";
+
+                return (
+                  <li
+                    key={`${option.value}::${option.label}::${index}`}
+                    role="presentation"
+                    className="m-0 block h-9 max-h-9 min-h-9 shrink-0 list-none overflow-hidden p-0"
+                    style={{ height: ROW_H, maxHeight: ROW_H, minHeight: ROW_H }}
+                  >
+                    <button
+                      type="button"
+                      role="option"
+                      title={option.label}
+                      aria-selected={isSelected}
+                      disabled={option.disabled}
+                      onClick={() => {
+                        if (option.disabled) return;
+                        toggle(option.value);
+                      }}
+                      className={cn(
+                        "flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden px-3 text-left text-[13px] leading-5 whitespace-nowrap transition-colors",
+                        "disabled:cursor-not-allowed disabled:opacity-40",
+                        isSelected
+                          ? "bg-[#28402B] font-medium text-white hover:bg-[#28402B]"
+                          : "bg-white text-[#111118] hover:bg-[#F5F5F3]",
+                      )}
+                      style={{ height: ROW_H }}
+                    >
+                      <span className="block min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap">
+                        {label}
+                      </span>
+                      {isSelected ? (
+                        <Check size={14} strokeWidth={2.5} className="shrink-0" />
+                      ) : (
+                        <span className="size-3.5 shrink-0" aria-hidden />
+                      )}
                     </button>
                   </li>
                 );

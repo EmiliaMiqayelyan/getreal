@@ -167,7 +167,7 @@ function makeLine(
     category: spec.category,
     qty: spec.qty,
     selected,
-    coolerId: packed?.coolerId ?? COOLER_PLACEHOLDER,
+    coolerIds: packed ? [packed.coolerId] : [],
     packed: Boolean(packed && selected),
     options,
   };
@@ -209,7 +209,7 @@ function order(input: {
   const coolerIds = Array.from(
     new Set(
       items
-        .map((item) => item.coolerId)
+        .flatMap((item) => item.coolerIds)
         .filter((coolerId) => coolerId && coolerId !== COOLER_PLACEHOLDER),
     ),
   );
