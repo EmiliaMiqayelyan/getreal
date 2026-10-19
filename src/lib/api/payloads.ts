@@ -40,7 +40,13 @@ function distributorAddressPayload(distributor: Distributor) {
   const city = distributor.city?.trim() ?? "";
   const state = distributor.state?.trim() ?? "";
   const zip = distributor.zip?.trim() ?? "";
-  if (street || apt || city || state || zip) {
+  const hasStructuredAddress =
+    distributor.street != null ||
+    distributor.apt != null ||
+    distributor.city != null ||
+    distributor.state != null ||
+    distributor.zip != null;
+  if (hasStructuredAddress || street || apt || city || state || zip) {
     return {
       address: [street, apt].filter(Boolean).join(", ") || undefined,
       city: city || undefined,
@@ -123,7 +129,7 @@ export function toCreateDistributorPayload(
   );
   return {
     name: distributor.name.trim(),
-    address: parsed.address || distributor.fullAddress || undefined,
+    address: parsed.address || undefined,
     city: parsed.city,
     state: parsed.state,
     zipCode: parsed.zipCode,
@@ -155,7 +161,13 @@ function sourceAddressPayload(source: Source) {
   const city = source.city?.trim() ?? "";
   const state = source.state?.trim() ?? "";
   const zip = source.zip?.trim() ?? "";
-  if (street || apt || city || state || zip) {
+  const hasStructuredAddress =
+    source.street != null ||
+    source.apt != null ||
+    source.city != null ||
+    source.state != null ||
+    source.zip != null;
+  if (hasStructuredAddress || street || apt || city || state || zip) {
     return {
       address: [street, apt].filter(Boolean).join(", ") || undefined,
       city: city || undefined,

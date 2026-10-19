@@ -373,7 +373,6 @@ export function AddDistributorModal({
                   )}
                 >
                   Street Address
-                  <span className="text-danger"> *</span>
                 </label>
                 <Input
                   value={street}
@@ -414,7 +413,6 @@ export function AddDistributorModal({
                     )}
                   >
                     City
-                    <span className="text-danger"> *</span>
                   </label>
                   <Input
                     value={city}
@@ -439,7 +437,6 @@ export function AddDistributorModal({
                     )}
                   >
                     State
-                    <span className="text-danger"> *</span>
                   </label>
                   <Input
                     value={state}
@@ -465,7 +462,6 @@ export function AddDistributorModal({
                     )}
                   >
                     Zip
-                    <span className="text-danger"> *</span>
                   </label>
                   <Input
                     value={zip}

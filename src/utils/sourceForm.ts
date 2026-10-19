@@ -63,23 +63,11 @@ export function validateSourceForm(input: SourceFormInput): SourceFormErrors {
     errors.name = "Source name is required.";
   }
 
-  if (!input.street.trim()) {
-    errors.street = "Street address is required.";
-  }
-
-  if (!input.city.trim()) {
-    errors.city = "City is required.";
-  }
-
-  if (!input.state.trim()) {
-    errors.state = "State is required.";
-  } else if (!/^[A-Za-z]{2}$/.test(input.state.trim())) {
+  if (input.state.trim() && !/^[A-Za-z]{2}$/.test(input.state.trim())) {
     errors.state = "Enter a 2-letter state.";
   }
 
-  if (!input.zip.trim()) {
-    errors.zip = "ZIP code is required.";
-  } else if (!ZIP_CODE.test(input.zip.trim())) {
+  if (input.zip.trim() && !ZIP_CODE.test(input.zip.trim())) {
     errors.zip = "Enter a valid ZIP code.";
   }
 

@@ -267,7 +267,6 @@ export function AddSourceModal({
               <FormField
                 label="Street Address"
                 error={errors.street}
-                required
                 labelClassName="uppercase tracking-[0.06em]"
               >
                 <div data-field="street">
@@ -303,7 +302,6 @@ export function AddSourceModal({
                 <FormField
                   label="City"
                   error={errors.city}
-                  required
                   labelClassName="uppercase tracking-[0.06em]"
                 >
                   <div data-field="city">
@@ -328,7 +326,6 @@ export function AddSourceModal({
                 <FormField
                   label="State"
                   error={errors.state}
-                  required
                   labelClassName="uppercase tracking-[0.06em]"
                 >
                   <div data-field="state">
@@ -354,7 +351,6 @@ export function AddSourceModal({
                 <FormField
                   label="Zip"
                   error={errors.zip}
-                  required
                   labelClassName="uppercase tracking-[0.06em]"
                 >
                   <div data-field="zip">
