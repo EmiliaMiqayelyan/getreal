@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { DATE_CHIP_WIDTH } from "@/components/shared/DeliveryDateChip";
 import {
+  earliestCurrentChipId,
   shiftDateId,
   weekChips,
   weeksBetween,
@@ -24,6 +25,7 @@ function nextStart(start: string, activeDateId: string, capacity: number) {
 
 /**
  * Weekly date chips that fill the row they render in, up to the nav buttons.
+ * Dates before today are left out, and the row fills forward from the current week.
  * Attach `chipRowRef` to the chip scroll container. The window holds still while the
  * active week is visible, slides one week when it steps past an edge, and recenters on jumps.
  */
@@ -54,10 +56,12 @@ export function useWeekChipWindow(
     return () => observer.disconnect();
   }, [row]);
 
-  const start =
+  const floor = earliestCurrentChipId(activeDateId);
+  const unclamped =
     range.capacity === capacity
       ? nextStart(range.start, activeDateId, capacity)
       : centeredStart(activeDateId, capacity);
+  const start = unclamped < floor ? floor : unclamped;
   if (start !== range.start || capacity !== range.capacity) {
     setRange({ start, capacity });
   }

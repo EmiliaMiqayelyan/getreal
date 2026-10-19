@@ -108,8 +108,9 @@ import {
   deliveryWeekId,
   formatExpectedDelivery,
   parseDeliveryDateId,
+  earliestCurrentChipId,
   pickDefaultDeliveryChipId,
-  shiftDateId,
+  shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
@@ -428,9 +429,14 @@ export default function ProductOrdersPage() {
     "Orders created successfully",
   );
 
+  const [knownDeliveryDateIds, setKnownDeliveryDateIds] = useState<string[]>(
+    [],
+  );
+
   const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
     const dateIds = [
+      ...knownDeliveryDateIds,
       ...demandOrders
         .filter((order) => order.lines.length > 0)
         .flatMap((order) => demandDateIds(order)),
@@ -441,7 +447,7 @@ export default function ProductOrdersPage() {
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return counts;
-  }, [demandOrders, inProgress]);
+  }, [demandOrders, inProgress, knownDeliveryDateIds]);
   const { chipRowRef, chips: visibleDeliveryChips } = useWeekChipWindow(
     activeDeliveryDateId,
     deliveryCounts,
@@ -516,7 +522,7 @@ export default function ProductOrdersPage() {
   }
 
   function shiftDeliveryDate(delta: number) {
-    selectDeliveryDate(shiftDateId(activeDeliveryDateId, delta * 7));
+    selectDeliveryDate(shiftCurrentWeekId(activeDeliveryDateId, delta));
   }
 
   function showPlacedOrder(order: PlacedOrder) {
@@ -535,6 +541,7 @@ export default function ProductOrdersPage() {
     });
     if (generation !== loadGeneration.current) return null;
     demandDayIdsRef.current = snapshot.demandDayIds;
+    setKnownDeliveryDateIds(snapshot.demandDateIds);
     return snapshot;
   }
 
@@ -586,6 +593,7 @@ export default function ProductOrdersPage() {
       .then((snapshot) => {
         if (cancelled || generation !== loadGeneration.current) return;
         demandDayIdsRef.current = snapshot.demandDayIds;
+        setKnownDeliveryDateIds(snapshot.demandDateIds);
         setDemandOrders(snapshot.demand);
         setInProgress(snapshot.inProgress);
         if (snapshot.demandError) showError(snapshot.demandError);
@@ -1520,6 +1528,10 @@ export default function ProductOrdersPage() {
                 <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
                   <DateNavButton
                     aria-label="Previous dates"
+                    disabled={
+                      activeDeliveryDateId <=
+                      earliestCurrentChipId(activeDeliveryDateId)
+                    }
                     onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
@@ -1539,6 +1551,7 @@ export default function ProductOrdersPage() {
                   </DateNavButton>
                   {calendarOpen ? (
                     <DeliveryDateCalendar
+                      disablePast
                       dateCounts={deliveryCounts}
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       selectedDateId={activeDeliveryDateId}

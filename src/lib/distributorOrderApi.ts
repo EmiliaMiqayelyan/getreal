@@ -15,7 +15,6 @@ import {
   deliveryDateIdFromValue,
   deliveryWeekId,
   formatExpectedDelivery,
-  shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
@@ -364,8 +363,8 @@ export async function loadDistributorOrderScreen(
     loadOpenDistributorOrders(fresh).catch(() => [] as ApiOrder[]),
   ]);
 
-  // Older weeks load when their chip is opened.
-  const firstWeekId = shiftDateId(toDeliveryDateId(upcomingWednesday()), -7);
+  // Chips start at the current delivery week. Older weeks are not shown.
+  const firstWeekId = toDeliveryDateId(upcomingWednesday());
   const demandDayIds = aggregateDemandDayIds(demandResult.demand);
   const days = demandDayIds.filter(
     (dayId) => deliveryWeekId(dayId) >= firstWeekId,

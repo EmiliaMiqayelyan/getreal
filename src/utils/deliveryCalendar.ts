@@ -155,6 +155,31 @@ export function shiftDateId(dateId: string, days: number, fallback = new Date())
   return toDeliveryDateId(date);
 }
 
+/**
+ * First weekly chip on the same weekday as `dateId` that is still today or later.
+ * A Wednesday id stays on Wednesday, so Monday maps to the coming Wednesday
+ * and Friday maps to the next one.
+ */
+export function earliestCurrentChipId(dateId: string, from = new Date()) {
+  const today = startOfLocalDay(from);
+  const anchor = parseDeliveryDateId(dateId) ?? today;
+  const delta = (anchor.getDay() - today.getDay() + 7) % 7;
+  const earliest = new Date(today);
+  earliest.setDate(today.getDate() + delta);
+  return toDeliveryDateId(earliest);
+}
+
+/** Move a weekly chip by `deltaWeeks`, never earlier than today. */
+export function shiftCurrentWeekId(
+  dateId: string,
+  deltaWeeks: number,
+  from = new Date(),
+) {
+  const next = shiftDateId(dateId, deltaWeeks * 7, from);
+  const floor = earliestCurrentChipId(dateId, from);
+  return next < floor ? floor : next;
+}
+
 /** `length` consecutive weekly chips starting at `startDateId`. */
 export function weekChips(
   startDateId: string,
@@ -181,15 +206,14 @@ export function weeksBetween(fromId: string, toId: string) {
   return days % 7 === 0 ? days / 7 : null;
 }
 
-/** Today, otherwise the next chip, otherwise the most recent one. */
+/** Today, otherwise the next chip. Past chips are skipped. */
 export function pickDefaultDeliveryChipId(
   chips: { id: string }[],
   from = new Date(),
 ) {
   if (chips.length === 0) return "";
   const today = toDeliveryDateId(from);
-  const upcoming = chips.find((chip) => chip.id >= today);
-  return (upcoming ?? chips[chips.length - 1]).id;
+  return chips.find((chip) => chip.id >= today)?.id ?? "";
 }
 
 /** Delivery days from today through the next several months. */

@@ -57,8 +57,9 @@ import {
 import {
   deliveryDateIdFromValue,
   formatTodayLabel,
+  earliestCurrentChipId,
   parseDeliveryDateId,
-  shiftDateId,
+  shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
@@ -86,10 +87,8 @@ async function listAllPages<T>(
   return items;
 }
 
-/** Calendar day from `YYYY-MM-DD` or an ISO timestamp, without a timezone shift. */
 function orderDeliveryDateId(value?: string | null) {
-  const day = /^(\d{4}-\d{2}-\d{2})/.exec(value?.trim() ?? "");
-  return day?.[1] ?? deliveryDateIdFromValue(value);
+  return deliveryDateIdFromValue(value);
 }
 
 const ROW_GRID =
@@ -481,7 +480,7 @@ export default function PackerManagerPage() {
   const listWindow = useLazyWindow(rows, `${search}|${sortBy}|${activeDateId}`);
 
   function cycleChip(delta: number) {
-    setActiveDateId((current) => shiftDateId(current, delta * 7));
+    setActiveDateId((current) => shiftCurrentWeekId(current, delta));
   }
 
   async function handleAssign(orderCode: string, packer: EligiblePacker) {
@@ -591,9 +590,10 @@ export default function PackerManagerPage() {
             ))}
           </div>
 
-          <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+          <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
             <DateNavButton
               aria-label="Previous dates"
+              disabled={activeDateId <= earliestCurrentChipId(activeDateId)}
               onClick={() => cycleChip(-1)}
             >
               <ChevronLeft size={14} />
@@ -614,6 +614,7 @@ export default function PackerManagerPage() {
 
             {calendarOpen ? (
               <DeliveryDateCalendar
+                disablePast
                 dateCounts={deliveryCounts}
                 selectedDateId={activeDateId}
                 initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}

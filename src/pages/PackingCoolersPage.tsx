@@ -31,7 +31,8 @@ import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { usePackingHandoff } from "@/context/PackingHandoffContext";
-import { useRolesUsers } from "@/context/RolesUsersContext";
+import { getSessionPermissionNames } from "@/lib/auth";
+import { grantsApiPermissions } from "@/utils/rolePermissions";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useFloatingMenu } from "@/hooks/useFloatingMenu";
@@ -75,8 +76,9 @@ import {
   deliveryDateIdFromValue,
   formatExpectedDelivery,
   formatTodayLabel,
+  earliestCurrentChipId,
   parseDeliveryDateId,
-  shiftDateId,
+  shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
@@ -1017,8 +1019,9 @@ const PACK_COLUMNS =
 
 export default function PackingCoolersPage() {
   useDocumentTitle("Cooler Packing");
-  const { sessionPermissions } = useRolesUsers();
-  const canAct = sessionPermissions.coolerPackingMakeActions;
+  const canAct = grantsApiPermissions(getSessionPermissionNames(), [
+    "update:order_status",
+  ]);
 
   const { upsertPacking, markLoaded, markPackingStarted, packingByCode } =
     usePackingHandoff();
@@ -1112,8 +1115,8 @@ export default function PackingCoolersPage() {
     void Promise.all([
       loadStandardOrders(),
       coolersApi.list(),
-      inventoryApi.list({ fresh: true }),
-      productsApi.list({ fresh: true }),
+      inventoryApi.list({ fresh: true }).catch(() => []),
+      productsApi.list({ fresh: true }).catch(() => []),
       itemsApi.list({ fresh: true }).catch(() => []),
       distributorsApi.list({ fresh: true }).catch(() => []),
       sourcesApi.list({ fresh: true }).catch(() => []),
@@ -1158,12 +1161,10 @@ export default function PackingCoolersPage() {
               ),
             ].sort();
             if (dates.length) {
-              setActiveDateId((current) =>
-                dates.includes(current)
-                  ? current
-                  : (dates.find((date) => date >= current) ??
-                    dates[dates.length - 1]!),
-              );
+              setActiveDateId((current) => {
+                if (dates.includes(current)) return current;
+                return dates.find((date) => date >= current) ?? current;
+              });
             }
             datePinned.current = true;
           }
@@ -1265,7 +1266,7 @@ export default function PackingCoolersPage() {
   }
 
   function cycleChip(delta: number) {
-    setActiveDateId((current) => shiftDateId(current, delta * 7));
+    setActiveDateId((current) => shiftCurrentWeekId(current, delta));
   }
 
   if (activeOrder) {
@@ -1389,9 +1390,10 @@ export default function PackingCoolersPage() {
             ))}
           </div>
 
-          <div className={cn("relative shrink-0", DATE_NAV_GROUP)}>
+          <div className={cn("relative z-30 shrink-0", DATE_NAV_GROUP)}>
             <DateNavButton
               aria-label="Previous dates"
+              disabled={activeDateId <= earliestCurrentChipId(activeDateId)}
               onClick={() => cycleChip(-1)}
             >
               <ChevronLeft size={14} />
@@ -1409,6 +1411,7 @@ export default function PackingCoolersPage() {
 
             {calendarOpen ? (
               <DeliveryDateCalendar
+                disablePast
                 dateCounts={deliveryCounts}
                 selectedDateId={activeDateId}
                 initialMonth={parseDeliveryDateId(activeDateId) ?? new Date()}
@@ -1578,7 +1581,7 @@ export default function PackingCoolersPage() {
                 {loadFailed
                   ? "Couldn't load packing orders."
                   : apiLive && !hydrated.some((order) => order.packerId)
-                    ? "No orders have a packer yet. Assign one in Packer Manager."
+                    ? "No orders have a packer yet."
                     : "No orders match your filters."}
               </div>
             )}
