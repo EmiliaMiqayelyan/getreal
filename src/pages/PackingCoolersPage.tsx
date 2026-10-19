@@ -11,7 +11,11 @@ import {
 import { DeliveryDateCalendar } from "@/components/orders/DeliveryDateCalendar";
 import { Header } from "@/components/layout/AdminHeader";
 import { UserMenu } from "@/components/layout/UserMenu";
-import { DateNavButton, CalendarIcon, DATE_NAV_GROUP } from "@/components/shared/DateNavButton";
+import {
+  DateNavButton,
+  CalendarIcon,
+  DATE_NAV_GROUP,
+} from "@/components/shared/DateNavButton";
 import {
   DeliveryDateChip,
   DATE_CHIP_ROW,
@@ -40,7 +44,16 @@ import {
   PACKING_COOLERS,
   sourcesForItem,
 } from "@/data/packingInventory";
-import { coolersApi, inventoryApi, isApiConfigured, ordersApi, productsApi } from "@/lib/api";
+import {
+  coolersApi,
+  distributorsApi,
+  inventoryApi,
+  isApiConfigured,
+  itemsApi,
+  ordersApi,
+  productsApi,
+  sourcesApi,
+} from "@/lib/api";
 import type { ApiOrder, ApiOrderCooler } from "@/lib/api/types";
 import type {
   PackingCoolerOption,
@@ -77,6 +90,7 @@ import {
 import {
   buildPackingCatalog,
   orderLineOptions,
+  packingParties,
   productItemIdMap,
   type PackingCatalog,
 } from "@/utils/packingSources";
@@ -598,6 +612,9 @@ function mapStandardOrder(
         productId: line.productId,
         name,
         itemCode: line.itemCode,
+        itemId: line.itemId,
+        distributorName: line.distributorName,
+        sourceName: line.sourceName,
         quantity: line.quantity,
         packed: line.packed,
         inventoryRecordId: line.inventoryRecordId,
@@ -640,10 +657,13 @@ function mapStandardOrder(
       options: match.options,
     };
   });
-  const packerName = [order.packer?.firstName, order.packer?.lastName]
-    .filter(Boolean)
-    .join(" ")
-    .trim() || order.packer?.name?.trim() || undefined;
+  const packerName =
+    [order.packer?.firstName, order.packer?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    order.packer?.name?.trim() ||
+    undefined;
   return {
     id: code,
     recordId: orderRecordId(order),
@@ -778,7 +798,7 @@ function PackingDetail({
           <div>
             <h1 className="text-[22px] font-semibold tracking-tight text-[#111118]">
               Cooler Packing{" "}
-              <span className="font-normal italic text-[#6B6B6B]">
+              <span className="font-normal text-[#6B6B6B] italic">
                 for {draft.customer}
               </span>
             </h1>
@@ -838,146 +858,146 @@ function PackingDetail({
                   <div aria-hidden />
                 </div>
                 <div>
-                    {items.map((item) => {
-                      const sourceOpen = openMenu?.id === item.id;
-                      const summary = packingLineSummary(item);
+                  {items.map((item) => {
+                    const sourceOpen = openMenu?.id === item.id;
+                    const summary = packingLineSummary(item);
 
-                      return (
-                        <div
-                          key={item.id}
-                          id={`pack-item-${item.id}`}
-                          className={cn(
-                            PACK_COLUMNS,
-                            "border-b border-[#00000014] py-3.5 last:border-b-0",
-                            sourceOpen && "bg-[#FAFAF8]",
-                          )}
-                        >
-                          <div className={cn(cell, "truncate font-medium")}>
-                            {item.name}
-                          </div>
-                          <div className={cn(cell, "font-semibold")}>
-                            {item.qty}
-                          </div>
-                          <div className={cell}>
-                            <button
-                              type="button"
-                              disabled={locked}
-                              onClick={(event) => {
-                                const anchor = event.currentTarget;
-                                setOpenMenu((current) =>
-                                  current?.id === item.id
-                                    ? null
-                                    : { id: item.id, anchor },
+                    return (
+                      <div
+                        key={item.id}
+                        id={`pack-item-${item.id}`}
+                        className={cn(
+                          PACK_COLUMNS,
+                          "border-b border-[#00000014] py-3.5 last:border-b-0",
+                          sourceOpen && "bg-[#FAFAF8]",
+                        )}
+                      >
+                        <div className={cn(cell, "truncate font-medium")}>
+                          {item.name}
+                        </div>
+                        <div className={cn(cell, "font-semibold")}>
+                          {item.qty}
+                        </div>
+                        <div className={cell}>
+                          <button
+                            type="button"
+                            disabled={locked}
+                            onClick={(event) => {
+                              const anchor = event.currentTarget;
+                              setOpenMenu((current) =>
+                                current?.id === item.id
+                                  ? null
+                                  : { id: item.id, anchor },
+                              );
+                            }}
+                            className="inline-flex max-w-full items-center gap-1 text-left text-[13px] disabled:cursor-default"
+                            title={summary.source || undefined}
+                          >
+                            <ChevronDown
+                              size={14}
+                              className="shrink-0 text-[#8A8A8A]"
+                            />
+                            <span
+                              className={cn(
+                                "truncate",
+                                summary.source
+                                  ? "text-[#111118]"
+                                  : "text-[#8A8A8A]",
+                              )}
+                            >
+                              {summary.source || "Select"}
+                            </span>
+                          </button>
+                          {sourceOpen ? (
+                            <SourcePicker
+                              anchor={openMenu.anchor}
+                              options={item.options}
+                              orderedQty={item.qty}
+                              picks={lineAllocation(item)}
+                              onClose={() => setOpenMenu(null)}
+                              onApply={(picks) => {
+                                const primary = item.options.find(
+                                  (option) =>
+                                    option.inventoryRecordId ===
+                                    picks[0]?.inventoryRecordId,
                                 );
+                                updateItem(item.id, {
+                                  picks,
+                                  selected: primary,
+                                  packed: false,
+                                });
+                                setOpenMenu(null);
                               }}
-                              className="inline-flex max-w-full items-center gap-1 text-left text-[13px] disabled:cursor-default"
-                              title={summary.source || undefined}
-                            >
-                              <ChevronDown
-                                size={14}
-                                className="shrink-0 text-[#8A8A8A]"
-                              />
-                              <span
-                                className={cn(
-                                  "truncate",
-                                  summary.source
-                                    ? "text-[#111118]"
-                                    : "text-[#8A8A8A]",
-                                )}
-                              >
-                                {summary.source || "Select"}
-                              </span>
-                            </button>
-                            {sourceOpen ? (
-                              <SourcePicker
-                                anchor={openMenu.anchor}
-                                options={item.options}
-                                orderedQty={item.qty}
-                                picks={lineAllocation(item)}
-                                onClose={() => setOpenMenu(null)}
-                                onApply={(picks) => {
-                                  const primary = item.options.find(
-                                    (option) =>
-                                      option.inventoryRecordId ===
-                                      picks[0]?.inventoryRecordId,
-                                  );
-                                  updateItem(item.id, {
-                                    picks,
-                                    selected: primary,
-                                    packed: false,
-                                  });
-                                  setOpenMenu(null);
-                                }}
-                              />
-                            ) : null}
-                          </div>
-                          <div className={cn(cell, "truncate")}>
-                            {summary.expDate}
-                          </div>
-                          <div className={cell}>
-                            {summary.itemId ? (
-                              <IdPill>{summary.itemId}</IdPill>
-                            ) : null}
-                          </div>
-                          <div className={cell}>
-                            <LocationHover
-                              className="text-[13px] text-[#111118]"
-                              label="Location name"
-                              placeLabel="Location place"
-                              locationPlace={summary.locationPlace}
-                            >
-                              {summary.location}
-                            </LocationHover>
-                          </div>
-                          <div className={cell}>
-                            <MultiSelect
-                              values={chosenCoolers(item.coolerIds)}
+                            />
+                          ) : null}
+                        </div>
+                        <div className={cn(cell, "truncate")}>
+                          {summary.expDate}
+                        </div>
+                        <div className={cell}>
+                          {summary.itemId ? (
+                            <IdPill>{summary.itemId}</IdPill>
+                          ) : null}
+                        </div>
+                        <div className={cell}>
+                          <LocationHover
+                            className="text-[13px] text-[#111118]"
+                            label="Location name"
+                            placeLabel="Location place"
+                            locationPlace={summary.locationPlace}
+                          >
+                            {summary.location}
+                          </LocationHover>
+                        </div>
+                        <div className={cell}>
+                          <MultiSelect
+                            values={chosenCoolers(item.coolerIds)}
                               disabled={locked}
                               placeholder={COOLER_PLACEHOLDER}
-                              onChange={(values) =>
-                                updateItem(item.id, {
-                                  coolerIds: values,
-                                  packed: values.length ? item.packed : false,
+                            onChange={(values) =>
+                              updateItem(item.id, {
+                                coolerIds: values,
+                                packed: values.length ? item.packed : false,
                                 })
                               }
                               aria-label="Cooler ID"
                               variant="flat"
                               className="w-full"
-                              buttonClassName={
-                                chosenCoolers(item.coolerIds).length
-                                  ? "text-[#111118]"
-                                  : "text-[#8A8A8A]"
-                              }
-                              options={coolerOptions.map((cooler) => ({
+                            buttonClassName={
+                              chosenCoolers(item.coolerIds).length
+                                ? "text-[#111118]"
+                                : "text-[#8A8A8A]"
+                            }
+                            options={coolerOptions.map((cooler) => ({
                                 value: cooler.label,
                                 label: cooler.label,
-                              }))}
-                            />
-                          </div>
-                          <div className="text-right">
-                            {item.packed ? (
-                              <span className="inline-flex items-center justify-end gap-2">
-                                <span className="text-[13px] font-medium text-[#2F8F4E]">
-                                  Packed
-                                </span>
-                                <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
-                                  <Check size={11} strokeWidth={3} />
-                                </span>
-                              </span>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => markPacked(item)}
-                                className="text-[13px] font-medium"
-                                style={{ color: LINK_BLUE }}
-                              >
-                                Item Packed
-                              </button>
-                            )}
-                          </div>
+                            }))}
+                          />
                         </div>
-                      );
-                    })}
+                        <div className="text-right">
+                          {item.packed ? (
+                            <span className="inline-flex items-center justify-end gap-2">
+                              <span className="text-[13px] font-medium text-[#2F8F4E]">
+                                Packed
+                              </span>
+                              <span className="inline-flex size-5 items-center justify-center rounded-full bg-[#2F8F4E] text-white">
+                                <Check size={11} strokeWidth={3} />
+                              </span>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => markPacked(item)}
+                              className="text-[13px] font-medium"
+                              style={{ color: LINK_BLUE }}
+                            >
+                              Item Packed
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </ScrollTable>
             </section>
@@ -1075,8 +1095,7 @@ export default function PackingCoolersPage() {
   const loadingOrderIdsRef = useRef(new Set<string>());
 
   const hydrated = useMemo(
-    () =>
-      orders.map((order) => applyHandoff(order, packingByCode[order.code])),
+    () => orders.map((order) => applyHandoff(order, packingByCode[order.code])),
     [orders, packingByCode],
   );
 
@@ -1140,46 +1159,61 @@ export default function PackingCoolersPage() {
       coolersApi.list(),
       inventoryApi.list({ fresh: true }),
       productsApi.list({ fresh: true }),
+      itemsApi.list({ fresh: true }).catch(() => []),
+      distributorsApi.list({ fresh: true }).catch(() => []),
+      sourcesApi.list({ fresh: true }).catch(() => []),
     ])
-      .then(([orderItems, coolers, inventoryRows, products]) => {
-        if (cancelled) return;
-        const labels = new Map<string, string>();
-        const options = coolers.flatMap((cooler) => {
-          const id = cooler.id?.trim() ?? "";
-          if (!id) return [];
-          const label = cooler.coolerCode?.trim() || id;
-          labels.set(id, label);
-          labels.set(label, label);
-          return [{ id, label }];
-        });
-        coolerLabelsRef.current = labels;
-        if (options.length) setCoolerOptions(options);
-        catalogRef.current = buildPackingCatalog(
+      .then(
+        ([
+          orderItems,
+          coolers,
           inventoryRows,
-          productItemIdMap(products),
-        );
-        const mapped = orderItems.map((order, index) =>
-          mapStandardOrder(order, index, catalogRef.current, labels),
-        );
-        setOrders(mapped);
-        if (!datePinned.current) {
-          const dates = [
-            ...new Set(
-              mapped
-                .filter((order) => order.packerId && order.deliveryDateId)
-                .map((order) => order.deliveryDateId),
-            ),
-          ].sort();
-          if (dates.length) {
-            setActiveDateId((current) =>
-              dates.includes(current)
-                ? current
-                : (dates.find((date) => date >= current) ?? dates[dates.length - 1]!),
-            );
+          products,
+          items,
+          distributors,
+          sources,
+        ]) => {
+          if (cancelled) return;
+          const labels = new Map<string, string>();
+          const options = coolers.flatMap((cooler) => {
+            const id = cooler.id?.trim() ?? "";
+            if (!id) return [];
+            const label = cooler.coolerCode?.trim() || id;
+            labels.set(id, label);
+            labels.set(label, label);
+            return [{ id, label }];
+          });
+          coolerLabelsRef.current = labels;
+          if (options.length) setCoolerOptions(options);
+          catalogRef.current = buildPackingCatalog(
+            inventoryRows,
+            productItemIdMap(products),
+            packingParties({ items, distributors, sources }),
+          );
+          const mapped = orderItems.map((order, index) =>
+            mapStandardOrder(order, index, catalogRef.current, labels),
+          );
+          setOrders(mapped);
+          if (!datePinned.current) {
+            const dates = [
+              ...new Set(
+                mapped
+                  .filter((order) => order.packerId && order.deliveryDateId)
+                  .map((order) => order.deliveryDateId),
+              ),
+            ].sort();
+            if (dates.length) {
+              setActiveDateId((current) =>
+                dates.includes(current)
+                  ? current
+                  : (dates.find((date) => date >= current) ??
+                    dates[dates.length - 1]!),
+              );
+            }
+            datePinned.current = true;
           }
-          datePinned.current = true;
-        }
-      })
+        },
+      )
       .catch((error) => {
         if (!cancelled) {
           setLoadFailed(true);
@@ -1202,8 +1236,7 @@ export default function PackingCoolersPage() {
       let loadedAt = formatPackTimestamp();
       if (apiLive && order.recordId) {
         const remote = await ordersApi.loaded(order.recordId);
-        loadedAt =
-          displayOperationalTimestamp(remote.loadedAt) ?? loadedAt;
+        loadedAt = displayOperationalTimestamp(remote.loadedAt) ?? loadedAt;
       }
       setOrders((current) =>
         current.map((entry) =>
@@ -1304,7 +1337,8 @@ export default function PackingCoolersPage() {
             try {
               let remote: ApiOrder | null = null;
               for (const write of writes) {
-                const single = write.picks.length === 1 ? write.picks[0] : undefined;
+                const single =
+                  write.picks.length === 1 ? write.picks[0] : undefined;
                 remote = await ordersApi.packItem(orderId, write.productId, {
                   coolerId: write.coolerId,
                   packed: true,
@@ -1350,9 +1384,7 @@ export default function PackingCoolersPage() {
             }
           }
           setOrders((current) =>
-            current.map((order) =>
-              order.id === saved.id ? saved : order,
-            ),
+            current.map((order) => (order.id === saved.id ? saved : order)),
           );
           upsertPacking({
             orderCode: saved.code,
@@ -1423,10 +1455,7 @@ export default function PackingCoolersPage() {
             >
               <ChevronLeft size={14} />
             </DateNavButton>
-            <DateNavButton
-              aria-label="Next dates"
-              onClick={() => cycleChip(1)}
-            >
+            <DateNavButton aria-label="Next dates" onClick={() => cycleChip(1)}>
               <ChevronRight size={14} />
             </DateNavButton>
             <DateNavButton
@@ -1455,159 +1484,164 @@ export default function PackingCoolersPage() {
         {loading ? (
           <AppLoader variant="table" label="Loading orders" className="mt-4" />
         ) : (
-        <>
-        {filtered.length ? (
-        <ScrollTable fill minWidth={960} className="mt-4">
-          <div
-            className={cn(
-              ROW_GRID,
-              MUTED_HEADER,
-              PINNED_HEADER,
-              "h-10 border-b border-[#00000014]",
-            )}
-          >
-            <div>Customer Order ID</div>
-            <div>Action</div>
-            <div>Cooler ID</div>
-            <div>Loading</div>
-          </div>
-
-          {listWindow.visible.map((order) => {
-            const packed = Boolean(order.packedAt);
-            const loaded = Boolean(order.loadedAt);
-
-            return (
-              <div
-                key={order.id}
-                className={cn(
-                  ROW_GRID,
-                  "min-h-[88px] border-b border-[#00000014] py-4 last:border-b-0",
-                )}
-              >
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (canAct) openPacking(order);
-                  }}
-                  className="min-w-0 text-left"
-                >
-                  <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
-                    {order.customer}
-                    {canAct ? (
-                      <ChevronRight size={14} className="text-[#A9A9A9]" />
-                    ) : null}
-                  </div>
-                  <div className="mt-1.5 flex items-center gap-2">
-                    <IdPill>{order.code}</IdPill>
-                    <span className="text-[12px] text-[#8A8A8A]">
-                      {order.itemCount}{" "}
-                      {order.itemCount === 1 ? "item" : "items"}
-                    </span>
-                  </div>
-                </button>
-
-                <div>
-                  {packed ? (
-                    <div className="inline-flex flex-wrap items-center gap-3">
-                      <span
-                        className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
-                        style={{ background: PACKED_GREEN }}
-                      >
-                        Packed
-                        <Check size={12} strokeWidth={3} />
-                      </span>
-                      <span className="text-[12px] text-[#111118]">
-                        {order.packedAt}
-                      </span>
-                    </div>
-                  ) : canAct ? (
-                    <Button
-                      variant="dark"
-                      onClick={() => openPacking(order)}
-                    >
-                      Start Packing
-                    </Button>
-                  ) : (
-                    <span className="text-[13px] text-[#8A8A8A]">Not packed</span>
+          <>
+            {filtered.length ? (
+              <ScrollTable fill minWidth={960} className="mt-4">
+                <div
+                  className={cn(
+                    ROW_GRID,
+                    MUTED_HEADER,
+                    PINNED_HEADER,
+                    "h-10 border-b border-[#00000014]",
                   )}
+                >
+                  <div>Customer Order ID</div>
+                  <div>Action</div>
+                  <div>Cooler ID</div>
+                  <div>Loading</div>
                 </div>
 
-                <div>
-                  {packed && order.coolerIds.length ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        {order.coolerIds.map((coolerId) => (
-                          <IdPill key={coolerId}>{coolerId}</IdPill>
-                        ))}
-                      </div>
-                      {!loaded && canAct ? (
-                        <button
-                          type="button"
-                          onClick={() => openPacking(order)}
-                          className="inline-flex h-9 items-center text-[13px] font-medium"
-                          style={{ color: LINK_BLUE }}
-                        >
-                          Edit
-                        </button>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
+                {listWindow.visible.map((order) => {
+                  const packed = Boolean(order.packedAt);
+                  const loaded = Boolean(order.loadedAt);
 
-                <div>
-                  {packed ? (
-                    loaded ? (
-                      <div className="inline-flex flex-wrap items-center gap-3">
-                        <span
-                          className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
-                          style={{ background: PACKED_GREEN }}
-                        >
-                          Loaded
-                          <Check size={12} strokeWidth={3} />
-                        </span>
-                        <span className="text-[12px] text-[#111118]">
-                          {order.loadedAt}
-                        </span>
-                      </div>
-                    ) : canAct ? (
-                      <Button
-                        variant="dark"
-                        disabled={loadingOrderIds.has(order.id)}
-                        aria-busy={loadingOrderIds.has(order.id)}
-                        onClick={() => void markOrderLoaded(order)}
-                        className="rounded-[10px] text-[12px]"
+                  return (
+                    <div
+                      key={order.id}
+                      className={cn(
+                        ROW_GRID,
+                        "min-h-[88px] border-b border-[#00000014] py-4 last:border-b-0",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (canAct) openPacking(order);
+                        }}
+                        className="min-w-0 text-left"
                       >
-                        {loadingOrderIds.has(order.id) ? (
-                          <>
-                            <Loader2 size={14} className="animate-spin" />
-                            Loading...
-                          </>
+                        <div className="flex items-center gap-1 text-[14px] font-semibold text-[#111118]">
+                          {order.customer}
+                          {canAct ? (
+                            <ChevronRight
+                              size={14}
+                              className="text-[#A9A9A9]"
+                            />
+                          ) : null}
+                        </div>
+                        <div className="mt-1.5 flex items-center gap-2">
+                          <IdPill>{order.code}</IdPill>
+                          <span className="text-[12px] text-[#8A8A8A]">
+                            {order.itemCount}{" "}
+                            {order.itemCount === 1 ? "item" : "items"}
+                          </span>
+                        </div>
+                      </button>
+
+                      <div>
+                        {packed ? (
+                          <div className="inline-flex flex-wrap items-center gap-3">
+                            <span
+                              className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                              style={{ background: PACKED_GREEN }}
+                            >
+                              Packed
+                              <Check size={12} strokeWidth={3} />
+                            </span>
+                            <span className="text-[12px] text-[#111118]">
+                              {order.packedAt}
+                            </span>
+                          </div>
+                        ) : canAct ? (
+                          <Button
+                            variant="dark"
+                            onClick={() => openPacking(order)}
+                          >
+                            Start Packing
+                          </Button>
                         ) : (
-                          "Load Now"
+                          <span className="text-[13px] text-[#8A8A8A]">
+                            Not packed
+                          </span>
                         )}
-                      </Button>
-                    ) : null
-                  ) : null}
-                </div>
+                      </div>
+
+                      <div>
+                        {packed && order.coolerIds.length ? (
+                          <div className="flex items-center gap-3">
+                            <div className="flex flex-col gap-1.5">
+                              {order.coolerIds.map((coolerId) => (
+                                <IdPill key={coolerId}>{coolerId}</IdPill>
+                              ))}
+                            </div>
+                            {!loaded && canAct ? (
+                              <button
+                                type="button"
+                                onClick={() => openPacking(order)}
+                                className="inline-flex h-9 items-center text-[13px] font-medium"
+                                style={{ color: LINK_BLUE }}
+                              >
+                                Edit
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+
+                      <div>
+                        {packed ? (
+                          loaded ? (
+                            <div className="inline-flex flex-wrap items-center gap-3">
+                              <span
+                                className="inline-flex h-9 items-center gap-1.5 rounded-[10px] px-3.5 text-[12px] font-semibold text-white"
+                                style={{ background: PACKED_GREEN }}
+                              >
+                                Loaded
+                                <Check size={12} strokeWidth={3} />
+                              </span>
+                              <span className="text-[12px] text-[#111118]">
+                                {order.loadedAt}
+                              </span>
+                            </div>
+                          ) : canAct ? (
+                            <Button
+                              variant="dark"
+                              disabled={loadingOrderIds.has(order.id)}
+                              aria-busy={loadingOrderIds.has(order.id)}
+                              onClick={() => void markOrderLoaded(order)}
+                              className="rounded-[10px] text-[12px]"
+                            >
+                              {loadingOrderIds.has(order.id) ? (
+                                <>
+                                  <Loader2 size={14} className="animate-spin" />
+                                  Loading...
+                                </>
+                              ) : (
+                                "Load Now"
+                              )}
+                            </Button>
+                          ) : null
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+                <InfiniteScrollSentinel
+                  hasMore={listWindow.hasMore}
+                  loadedCount={listWindow.loadedCount}
+                  onLoadMore={listWindow.loadMore}
+                />
+              </ScrollTable>
+            ) : (
+              <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
+                {loadFailed
+                  ? "Couldn't load packing orders."
+                  : apiLive && !hydrated.some((order) => order.packerId)
+                    ? "No orders have a packer yet. Assign one in Packer Manager."
+                    : "No orders match your filters."}
               </div>
-            );
-          })}
-          <InfiniteScrollSentinel
-            hasMore={listWindow.hasMore}
-            loadedCount={listWindow.loadedCount}
-            onLoadMore={listWindow.loadMore}
-          />
-        </ScrollTable>
-        ) : (
-          <div className="mt-4 rounded-[10px] border border-[#00000014] bg-white px-6 py-12 text-center text-[14px] text-[#8A8A8A]">
-            {loadFailed
-              ? "Couldn't load packing orders."
-              : apiLive && !hydrated.some((order) => order.packerId)
-                ? "No orders have a packer yet. Assign one in Packer Manager."
-                : "No orders match your filters."}
-          </div>
-        )}
-        </>
+            )}
+          </>
         )}
       </div>
     </div>

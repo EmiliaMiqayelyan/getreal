@@ -115,20 +115,10 @@ export function validateDistributorForm(
     errors.name = "Distributor name is required.";
   }
 
-  if (!input.street.trim()) {
-    errors.street = "Street address is required.";
-  }
-  if (!input.city.trim()) {
-    errors.city = "City is required.";
-  }
-  if (!input.state.trim()) {
-    errors.state = "State is required.";
-  } else if (!/^[A-Za-z]{2}$/.test(input.state.trim())) {
+  if (input.state.trim() && !/^[A-Za-z]{2}$/.test(input.state.trim())) {
     errors.state = "Enter a 2-letter state.";
   }
-  if (!input.zip.trim()) {
-    errors.zip = "ZIP code is required.";
-  } else if (!/^\d{5}(?:-\d{4})?$/.test(input.zip.trim())) {
+  if (input.zip.trim() && !/^\d{5}(?:-\d{4})?$/.test(input.zip.trim())) {
     errors.zip = "Enter a valid ZIP code.";
   }
 
