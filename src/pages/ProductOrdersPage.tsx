@@ -66,7 +66,6 @@ import {
   categorySections,
   demandDateIds,
   demandOrdersForDate,
-  demandVisibleOnDate,
   previewRowsForOrder,
   replaceDemandForDate,
   reviewGroupKey,
@@ -109,7 +108,6 @@ import {
   formatExpectedDelivery,
   parseDeliveryDateId,
   earliestCurrentChipId,
-  pickDefaultDeliveryChipId,
   shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
@@ -414,8 +412,6 @@ export default function ProductOrdersPage() {
     null,
   );
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
-  const pickedInitialDate = useRef(false);
-  const userPickedDate = useRef(false);
   const loadGeneration = useRef(0);
   const demandDayIdsRef = useRef<string[]>([]);
 
@@ -517,7 +513,6 @@ export default function ProductOrdersPage() {
   function selectDeliveryDate(dateId: string) {
     const wednesday = deliveryWeekId(dateId);
     if (!parseDeliveryDateId(wednesday)) return;
-    userPickedDate.current = true;
     setActiveDeliveryDateId(wednesday);
   }
 
@@ -668,82 +663,12 @@ export default function ProductOrdersPage() {
     };
   }, [activeDeliveryDateId, demandReady, notifyApiError]);
 
-  useEffect(() => {
-    if (!demandReady || pickedInitialDate.current) return;
-
-    const progressDateIds = [
-      ...new Set(
-        inProgress.map((order) => placedOrderDateId(order)).filter(Boolean),
-      ),
-    ].sort();
-    const progressOnActiveDate = inProgress.some((order) => {
-      const dateId = placedOrderDateId(order);
-      return !dateId || dateId === activeDeliveryDateId;
-    });
-
-    // The chip starts on the next Wednesday. Open orders on another day
-    // were loaded and then hidden, so the section looked empty.
-    if (
-      inProgress.length > 0 &&
-      !progressOnActiveDate &&
-      progressDateIds.length > 0
-    ) {
-      pickedInitialDate.current = true;
-      const dateId = pickDefaultDeliveryChipId(
-        progressDateIds.map((id) => ({ id })),
-      );
-      if (dateId) setActiveDeliveryDateId(dateId);
-      return;
-    }
-
-    if (inProgress.length > 0 && progressOnActiveDate) {
-      pickedInitialDate.current = true;
-      return;
-    }
-
-    const datesWithLines = visibleDeliveryChips.filter((chip) =>
-      demandOrders.some(
-        (order) =>
-          order.lines.length > 0 && demandVisibleOnDate(order, chip.id),
-      ),
-    );
-    if (
-      demandOrders.some((order) => order.lines.length > 0) &&
-      datesWithLines.length === 0
-    ) {
-      return;
-    }
-    pickedInitialDate.current = true;
-    const alreadyVisible = demandOrders.some(
-      (order) =>
-        order.lines.length > 0 &&
-        demandVisibleOnDate(order, activeDeliveryDateId),
-    );
-    if (alreadyVisible) return;
-    const dateId = pickDefaultDeliveryChipId(
-      datesWithLines.length > 0 ? datesWithLines : visibleDeliveryChips,
-    );
-    if (dateId) setActiveDeliveryDateId(dateId);
-  }, [
-    activeDeliveryDateId,
-    demandOrders,
-    demandReady,
-    inProgress,
-    visibleDeliveryChips,
-  ]);
-
   const filteredInProgress = useMemo(() => {
-    const matched = filterPlacedOrders(inProgress, {
-      search,
-      productFilter,
-      distributorFilter,
-      deliveryDateId: activeDeliveryDateId,
-    });
-    if (matched.length > 0 || userPickedDate.current) return matched;
     return filterPlacedOrders(inProgress, {
       search,
       productFilter,
       distributorFilter,
+      deliveryDateId: activeDeliveryDateId,
     });
   }, [
     activeDeliveryDateId,

@@ -57,7 +57,6 @@ import {
   parseDeliveryDateId,
   deliveryWeekId,
   earliestCurrentChipId,
-  pickDefaultDeliveryChipId,
   shiftCurrentWeekId,
   toDeliveryDateId,
   upcomingWednesday,
@@ -1292,7 +1291,7 @@ export default function CustomerOrdersPage() {
     if (!canSeeCompleted && activeTab === "Completed") setActiveTab("Orders");
   }, [activeTab, canSeeCompleted]);
   const [appliedDateId, setAppliedDateId] = useState(() =>
-    apiConfigured ? toDeliveryDateId(upcomingWednesday()) : "",
+    toDeliveryDateId(upcomingWednesday()),
   );
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -1306,7 +1305,6 @@ export default function CustomerOrdersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
-  const defaultDeliveryApplied = useRef(false);
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const calendarAnchorRef = useRef<HTMLDivElement>(null);
@@ -1628,27 +1626,13 @@ export default function CustomerOrdersPage() {
   }, [calendarOpen]);
 
   useEffect(() => {
-    if (appliedDateId && !isWednesdayDateId(appliedDateId)) {
-      setAppliedDateId(
-        deliveryWeekId(appliedDateId) || toDeliveryDateId(upcomingWednesday()),
-      );
-      return;
-    }
-    if (defaultDeliveryApplied.current) return;
-    const withOrders = deliveryChips.filter((chip) => chip.count > 0);
-    if (withOrders.length === 0) return;
-    if (withOrders.some((chip) => chip.id === appliedDateId)) {
-      defaultDeliveryApplied.current = true;
-      return;
-    }
-    const dateId = pickDefaultDeliveryChipId(withOrders);
-    if (!dateId) return;
-    defaultDeliveryApplied.current = true;
-    setAppliedDateId(dateId);
-  }, [appliedDateId, deliveryChips]);
+    if (!appliedDateId || isWednesdayDateId(appliedDateId)) return;
+    setAppliedDateId(
+      deliveryWeekId(appliedDateId) || toDeliveryDateId(upcomingWednesday()),
+    );
+  }, [appliedDateId]);
 
   function commitDeliveryDate(dateId: string) {
-    defaultDeliveryApplied.current = true;
     setAppliedDateId(deliveryWeekId(dateId) || dateId);
   }
 

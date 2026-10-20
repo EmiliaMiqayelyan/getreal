@@ -1425,7 +1425,9 @@ export default function DistributorDeliveriesPage() {
   const { notifyApiError, showError } = useApiFeedback();
 
   const [activeTab, setActiveTab] = useState<"Orders" | "Received">("Orders");
-  const [activeDateId, setActiveDateId] = useState("");
+  const [activeDateId, setActiveDateId] = useState(() =>
+    toDeliveryDateId(upcomingWednesday()),
+  );
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [productFilter, setProductFilter] = useState("");
@@ -1449,19 +1451,6 @@ export default function DistributorDeliveriesPage() {
       .then((mapped) => {
         if (cancelled) return;
         setOrders(mapped);
-        const dateIds = [
-          ...new Set(
-            mapped
-              .filter((order) => !order.checked)
-              .map((order) => order.deliveryDateId)
-              .filter(Boolean),
-          ),
-        ].sort();
-        const latest = deliveryWeekId(dateIds[dateIds.length - 1] ?? "");
-        if (!latest) return;
-        const floor = earliestCurrentChipId(latest);
-        const preferred = latest >= floor ? latest : floor;
-        setActiveDateId((current) => current || preferred);
       })
       .catch((error) => {
         if (!cancelled) notifyApiError(error, "Failed to load deliveries.");

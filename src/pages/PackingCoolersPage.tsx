@@ -1075,7 +1075,6 @@ export default function PackingCoolersPage() {
   const apiLive = isApiConfigured();
   const catalogRef = useRef<PackingCatalog>(OFFLINE_CATALOG);
   const coolerLabelsRef = useRef<Map<string, string>>(new Map());
-  const datePinned = useRef(false);
 
   const [orders, setOrders] = useState(() =>
     apiLive ? [] : createPackingOrders(),
@@ -1197,22 +1196,6 @@ export default function PackingCoolersPage() {
             mapStandardOrder(order, index, catalogRef.current, labels),
           );
           setOrders(mapped);
-          if (!datePinned.current) {
-            const dates = [
-              ...new Set(
-                mapped
-                  .filter((order) => order.packerId && order.deliveryDateId)
-                  .map((order) => order.deliveryDateId),
-              ),
-            ].sort();
-            if (dates.length) {
-              setActiveDateId((current) => {
-                if (dates.includes(current)) return current;
-                return dates.find((date) => date >= current) ?? current;
-              });
-            }
-            datePinned.current = true;
-          }
         },
       )
       .catch((error) => {
