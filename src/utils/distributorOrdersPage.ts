@@ -14,7 +14,10 @@ import type {
   WorkingOrderRow,
 } from "@/types/distributorOrder";
 import { downloadCsvFile, exportFilename } from "@/utils/csvExport";
-import { deliveryDateIdFromValue } from "@/utils/deliveryCalendar";
+import {
+  deliveryDateIdFromValue,
+  deliveryWeekId,
+} from "@/utils/deliveryCalendar";
 
 export type OrderDemandFilterCriteria = {
   query: string;
@@ -43,12 +46,13 @@ export function createPlacedOrderFromReviewGroup(
   deliveryId: string,
   deliveryDate: string,
   deliveryDateId = "",
+  orderDate = formatOrderTimestamp(),
 ): PlacedOrder {
   return {
     id: `placed-${group.distributor}-${group.source}-${Date.now()}`,
     deliveryId,
     distributor: group.distributor,
-    orderDate: formatOrderTimestamp(),
+    orderDate,
     deliveryDate,
     deliveryDateId,
     totalPrice: group.totalPrice,
@@ -98,9 +102,46 @@ export function placedOrderMergeKey(order: PlacedOrder) {
   const distributor = order.distributor.trim().toLowerCase();
   const orderDate = order.orderDate.trim();
   if (!distributor || !orderDate) return `solo:${order.id}`;
-  const delivery =
-    order.deliveryDateId?.trim() || order.deliveryDate.trim() || "";
+  const deliveryRaw =
+    order.deliveryDateId?.trim() ||
+    deliveryDateIdFromValue(order.deliveryDate) ||
+    order.deliveryDate.trim() ||
+    "";
+  const delivery = deliveryWeekId(deliveryRaw) || deliveryRaw;
   return `${distributor}|${orderDate}|${delivery}`;
+}
+
+/**
+ * Stamp every just-created order with the same order / delivery labels so the
+ * In Progress table merges them immediately (before a full page refresh).
+ */
+export function alignCreatedPlacedOrders(
+  orders: PlacedOrder[],
+  createdIds: Iterable<string>,
+  alignment: {
+    orderDate: string;
+    deliveryDateId?: string;
+    deliveryDate?: string;
+  },
+): PlacedOrder[] {
+  const ids = new Set(
+    [...createdIds].map((id) => id.trim()).filter(Boolean),
+  );
+  if (ids.size === 0) return orders;
+
+  return orders.map((order) => {
+    const match =
+      ids.has(order.id) ||
+      (order.recordId ? ids.has(order.recordId) : false) ||
+      (order.memberIds?.some((id) => ids.has(id)) ?? false);
+    if (!match) return order;
+    return {
+      ...order,
+      orderDate: alignment.orderDate,
+      deliveryDateId: alignment.deliveryDateId || order.deliveryDateId,
+      deliveryDate: alignment.deliveryDate || order.deliveryDate,
+    };
+  });
 }
 
 /**

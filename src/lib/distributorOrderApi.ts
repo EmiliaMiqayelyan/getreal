@@ -34,6 +34,19 @@ function readString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function readTimestamp(value: unknown): Date | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const text = readString(value);
+  if (!text) return null;
+  return parseOrderDate(text);
+}
+
 function parseOrderDate(value: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T12:00:00`);
   return new Date(value);
@@ -130,10 +143,17 @@ export function mapApiDistributorOrder(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  const when = readString(order.deliveryDate);
-  const created = readString(order.createdAt);
+  const rawDelivery: unknown = order.deliveryDate;
+  const when =
+    typeof rawDelivery === "string"
+      ? rawDelivery.trim()
+      : rawDelivery instanceof Date
+        ? rawDelivery.toISOString()
+        : readString(rawDelivery);
   const deliveryDate = when ? parseOrderDate(when) : null;
-  const createdDate = created ? parseOrderDate(created) : null;
+  const createdDate = readTimestamp(
+    (order as ApiOrder & { createdAt?: unknown }).createdAt,
+  );
 
   return {
     id: orderRecordId(order) || orderModelId(order, `dist-${index + 1}`),
@@ -142,10 +162,7 @@ export function mapApiDistributorOrder(
       readString((order as ApiOrder & { deliveryCode?: string }).deliveryCode) ||
       orderModelId(order, `dist-${index + 1}`),
     distributor: readDistributorName(order, distributors),
-    orderDate:
-      createdDate && !Number.isNaN(createdDate.getTime())
-        ? formatOrderTimestamp(createdDate)
-        : "",
+    orderDate: createdDate ? formatOrderTimestamp(createdDate) : "",
     deliveryDate:
       deliveryDate && !Number.isNaN(deliveryDate.getTime())
         ? formatExpectedDelivery(deliveryDate)
@@ -262,23 +279,52 @@ export function mergeCreatedDistributorOrder(
   created: ApiOrder,
   distributors: Distributor[],
   deliveryDate?: string,
+  orderDate?: string,
 ): { orders: PlacedOrder[]; placed: PlacedOrder } {
+  const rawCreatedDelivery: unknown = created.deliveryDate;
+  const createdDelivery =
+    typeof rawCreatedDelivery === "string"
+      ? rawCreatedDelivery.trim()
+      : rawCreatedDelivery instanceof Date
+        ? rawCreatedDelivery.toISOString()
+        : readString(rawCreatedDelivery);
   const mapped = mapApiDistributorOrder(
     {
       ...created,
       type: created.type?.trim() || "distributor",
-      deliveryDate: created.deliveryDate?.trim() || deliveryDate,
+      deliveryDate: createdDelivery || deliveryDate,
     },
     distributors,
     0,
   );
-  const existing = orders.find(
+  const placed: PlacedOrder = {
+    ...mapped,
+    orderDate: orderDate || mapped.orderDate,
+    deliveryDateId:
+      mapped.deliveryDateId || deliveryDateIdFromValue(deliveryDate),
+  };
+  const existingIndex = orders.findIndex(
     (order) =>
-      (mapped.recordId && order.recordId === mapped.recordId) ||
-      order.id === mapped.id,
+      (placed.recordId && order.recordId === placed.recordId) ||
+      order.id === placed.id,
   );
-  if (existing) return { orders, placed: existing };
-  return { orders: [mapped, ...orders], placed: mapped };
+  if (existingIndex >= 0) {
+    const existing = {
+      ...orders[existingIndex],
+      orderDate: orderDate || orders[existingIndex].orderDate,
+      deliveryDateId:
+        orders[existingIndex].deliveryDateId || placed.deliveryDateId,
+      deliveryDate: orders[existingIndex].deliveryDate || placed.deliveryDate,
+      items:
+        orders[existingIndex].items.length > 0
+          ? orders[existingIndex].items
+          : placed.items,
+    };
+    const next = orders.slice();
+    next[existingIndex] = existing;
+    return { orders: next, placed: existing };
+  }
+  return { orders: [placed, ...orders], placed };
 }
 
 type DemandCatalog = { products: ProductForSale[]; items: Item[] };

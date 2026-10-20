@@ -82,6 +82,7 @@ import type { ExportRequest } from "@/types/export";
 import { cn } from "@/utils/cn";
 import { exportFilename } from "@/utils/csvExport";
 import {
+  alignCreatedPlacedOrders,
   appendInProgressOrders,
   applyCalculatedQuantitiesForCategory,
   onHandForOrderLine,
@@ -90,6 +91,7 @@ import {
   type DeliveredFilterCriteria,
   filterDeliveredOrders,
   filterOrderDemandRows,
+  formatOrderTimestamp,
   getDeliveredEmptyMessage,
   getOrderDemandEmptyMessage,
   groupDeliveredOrders,
@@ -965,25 +967,38 @@ export default function ProductOrdersPage() {
     if (isApiConfigured()) {
       setPlacing(key);
       try {
+        const deliveryDate = toOrderDeliveryDateIso(activeDeliveryDateId);
+        const batchOrderDate = formatOrderTimestamp();
         const created = await syncReviewGroupOrder(
           group,
           distributors,
           products,
           items,
-          toOrderDeliveryDateIso(activeDeliveryDateId),
+          deliveryDate,
         );
         if (!created) return;
         sentGroup.orderId = orderRecordId(created);
+        const createdId = orderRecordId(created) || created.id;
         const snapshot = await fetchDistributorOrders(true);
-        const deliveryDate = toOrderDeliveryDateIso(activeDeliveryDateId);
         if (snapshot) {
           const merged = mergeCreatedDistributorOrder(
             snapshot.inProgress,
             created,
             distributors,
             deliveryDate,
+            batchOrderDate,
           );
-          setInProgress(merged.orders);
+          setInProgress(
+            alignCreatedPlacedOrders(
+              merged.orders,
+              createdId ? [createdId] : [],
+              {
+                orderDate: batchOrderDate,
+                deliveryDateId: activeDeliveryDateId,
+                deliveryDate: expectedDeliveryLabel,
+              },
+            ),
+          );
           if (snapshot.demandError) {
             showError(snapshot.demandError);
           } else {
@@ -998,14 +1013,22 @@ export default function ProductOrdersPage() {
             listRefreshed = true;
           }
         } else {
-          setInProgress(
-            (current) =>
+          setInProgress((current) =>
+            alignCreatedPlacedOrders(
               mergeCreatedDistributorOrder(
                 current,
                 created,
                 distributors,
                 deliveryDate,
+                batchOrderDate,
               ).orders,
+              createdId ? [createdId] : [],
+              {
+                orderDate: batchOrderDate,
+                deliveryDateId: activeDeliveryDateId,
+                deliveryDate: expectedDeliveryLabel,
+              },
+            ),
           );
         }
       } catch (error) {
@@ -1052,6 +1075,8 @@ export default function ProductOrdersPage() {
     const groups = [...parent.sentGroups, ...remaining];
     if (groups.length === 0) return;
 
+    const batchOrderDate = formatOrderTimestamp();
+
     if (isApiConfigured()) {
       setPlacing("all");
       const deliveryDate = toOrderDeliveryDateIso(activeDeliveryDateId);
@@ -1070,6 +1095,9 @@ export default function ProductOrdersPage() {
           const key = reviewGroupKey(group);
           setOrderedDistributors((prev) => new Set(prev).add(key));
         }
+        const createdIds = createdOrders
+          .map((order) => orderRecordId(order) || order.id)
+          .filter((id): id is string => Boolean(id));
         const snapshot = await fetchDistributorOrders(true);
         let progress = snapshot?.inProgress ?? [];
         let placed: PlacedOrder | null = null;
@@ -1079,9 +1107,23 @@ export default function ProductOrdersPage() {
             created,
             distributors,
             deliveryDate,
+            batchOrderDate,
           );
           progress = merged.orders;
           placed = merged.placed;
+        }
+        progress = alignCreatedPlacedOrders(progress, createdIds, {
+          orderDate: batchOrderDate,
+          deliveryDateId: activeDeliveryDateId,
+          deliveryDate: expectedDeliveryLabel,
+        });
+        if (placed) {
+          placed = {
+            ...placed,
+            orderDate: batchOrderDate,
+            deliveryDateId: activeDeliveryDateId,
+            deliveryDate: expectedDeliveryLabel,
+          };
         }
         if (snapshot) {
           if (snapshot.demandError) {
@@ -1102,9 +1144,14 @@ export default function ProductOrdersPage() {
                 created,
                 distributors,
                 deliveryDate,
+                batchOrderDate,
               ).orders;
             }
-            return next;
+            return alignCreatedPlacedOrders(next, createdIds, {
+              orderDate: batchOrderDate,
+              deliveryDateId: activeDeliveryDateId,
+              deliveryDate: expectedDeliveryLabel,
+            });
           });
         }
         if (placed) showPlacedOrder(placed);
@@ -1126,6 +1173,7 @@ export default function ProductOrdersPage() {
         deliveryId,
         expectedDeliveryLabel,
         activeDeliveryDateId,
+        batchOrderDate,
       );
       deliveryCounter = [order, ...deliveryCounter];
       return order;
