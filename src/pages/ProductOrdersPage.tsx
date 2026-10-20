@@ -466,19 +466,10 @@ export default function ProductOrdersPage() {
         lines: filterOrderDemandRows(
           previewRowsForOrder(order),
           orderDemandCriteria,
-        ).map((row) => ({
-          ...row,
-          dateReceivingBy: row.dateReceivingBy || expectedDeliveryLabel,
-        })),
+        ),
       }))
       .filter((entry) => entry.lines.length > 0);
-  }, [
-    expectedDeliveryLabel,
-    orderDemandCriteria,
-    ordersForDate,
-    productFilter,
-    search,
-  ]);
+  }, [orderDemandCriteria, ordersForDate, productFilter, search]);
 
   const filteredPreview = useMemo(
     () => visibleDemandOrders.flatMap((entry) => entry.lines),

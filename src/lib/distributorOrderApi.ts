@@ -303,6 +303,7 @@ async function loadDemandForDays(
             products: input.products,
             items: input.items,
             assignDateId: deliveryWeekId(dayIds[index]),
+            orderDateId: dayIds[index],
           }).orders
         : [],
     ),

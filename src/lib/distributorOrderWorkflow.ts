@@ -224,24 +224,20 @@ function resolveUnit(
   return match?.singleItemUnit?.trim() || "";
 }
 
-function formatReceivingBy(value: string | null | undefined, fallback: string) {
-  const raw = value?.trim() ?? "";
-  if (!raw) return fallback;
-  const dayId = calendarDayId(raw);
-  const date = dayId ? parseDeliveryDateId(dayId) : null;
-  if (!date) return fallback;
-  return formatExpectedDelivery(date);
-}
-
 /**
- * Lines belong to `dates` (customer delivery). `dateReceivingBy` is only the
- * column value. Pass `assignDateId` when this payload was loaded for one day.
+ * Lines belong to `dates` (customer delivery week). `dateReceivingBy` is the
+ * column value: the customer order's own calendar day, or the open shipment
+ * day when quantity is already incoming.
+ * Pass `assignDateId` for the Wednesday chip and `orderDateId` for the exact
+ * day this payload was loaded for.
  */
 export function mapAggregateDemand(input: {
   demand: AggregateDemand;
   products: ProductForSale[];
   items: Item[];
   assignDateId?: string;
+  /** Exact `YYYY-MM-DD` requested from aggregate-demand. Not the Wednesday chip. */
+  orderDateId?: string;
   today?: Date;
 }): { orders: DemandOrder[]; dateIds: string[] } {
   const today = input.today ?? new Date();
@@ -270,22 +266,33 @@ export function mapAggregateDemand(input: {
           if (qtyNeeded != null && qtyNeeded <= 0) continue;
           const suggestedQty =
             qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
-          // dateReceivingBy is the column only. Customer delivery dates come
-          // from `dates`. A later receiving day must not hide the line.
+          const qtyReceiving = readNumber(item.quantityReceiving);
+          // The chip is the Wednesday of the delivery week. The column must
+          // stay on the order's own day, even when that day is not Wednesday.
+          const exactOrderDateId =
+            calendarDayId(item.orderDeliveryDate?.trim() || "") ||
+            calendarDayId(input.orderDateId?.trim() || "");
+          const incomingDateId =
+            qtyReceiving > 0
+              ? calendarDayId(item.dateReceivingBy?.trim() || "")
+              : "";
           const lineDateId =
             deliveryWeekId(
               input.assignDateId ||
+                exactOrderDateId ||
                 announcedDateIds[0] ||
-                calendarDayId(item.dateReceivingBy?.trim() || "") ||
                 toDeliveryDateId(upcomingWednesday(today)),
             ) || toDeliveryDateId(upcomingWednesday(today));
-          const lineDate =
-            parseDeliveryDateId(lineDateId) ?? upcomingWednesday(today);
+          const receivingDateId = incomingDateId || exactOrderDateId;
+          const receivingDate = receivingDateId
+            ? parseDeliveryDateId(receivingDateId)
+            : null;
           const row: WorkingOrderRow = {
             id: [
               distributor.id || distributorName,
               source.id || sourceName,
               itemId || itemCode || itemName,
+              exactOrderDateId,
             ].join("::"),
             sku: itemCode || itemId,
             catalogItemId: itemId || undefined,
@@ -293,11 +300,10 @@ export function mapAggregateDemand(input: {
             category: item.categoryName?.trim() || categoryName,
             custOrderTotal,
             inStock,
-            qtyReceiving: readNumber(item.quantityReceiving),
-            dateReceivingBy: formatReceivingBy(
-              item.dateReceivingBy,
-              formatExpectedDelivery(lineDate),
-            ),
+            qtyReceiving,
+            dateReceivingBy: receivingDate
+              ? formatExpectedDelivery(receivingDate)
+              : "",
             suggestedQty,
             quantity: 0,
             productId: resolveOrderProductId(

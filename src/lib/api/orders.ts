@@ -95,7 +95,10 @@ export type AggregateDemandItem = {
   /** Integer cents. */
   lineSubtotal?: number;
   unit?: string;
+  /** `YYYY-MM-DD` of an open distributor shipment. */
   dateReceivingBy?: string | null;
+  /** `YYYY-MM-DD` of the customer orders behind this line. */
+  orderDeliveryDate?: string | null;
   distributorId?: string;
   distributorName?: string;
   sourceId?: string;
