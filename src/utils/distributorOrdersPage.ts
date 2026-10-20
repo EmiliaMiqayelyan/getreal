@@ -90,14 +90,78 @@ export function appendInProgressOrders(
   return [...created, ...base];
 }
 
+/**
+ * Group key for collapsing separate API orders (one per source) that share a
+ * distributor and were placed at the same displayed order time.
+ */
+export function placedOrderMergeKey(order: PlacedOrder) {
+  const distributor = order.distributor.trim().toLowerCase();
+  const orderDate = order.orderDate.trim();
+  if (!distributor || !orderDate) return `solo:${order.id}`;
+  const delivery =
+    order.deliveryDateId?.trim() || order.deliveryDate.trim() || "";
+  return `${distributor}|${orderDate}|${delivery}`;
+}
+
+/**
+ * One table row per distributor + order timestamp. Items and totals from
+ * matching API orders are combined; expand still lists every line.
+ */
+export function mergePlacedOrdersForDisplay(
+  orders: PlacedOrder[],
+): PlacedOrder[] {
+  const groups = new Map<string, PlacedOrder[]>();
+  const keys: string[] = [];
+
+  for (const order of orders) {
+    const key = placedOrderMergeKey(order);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      keys.push(key);
+    }
+    groups.get(key)!.push(order);
+  }
+
+  return keys.map((key) => {
+    const members = groups.get(key)!;
+    if (members.length === 1) {
+      const only = members[0];
+      return {
+        ...only,
+        deliveryIds: only.deliveryIds ?? [only.deliveryId],
+        memberIds: only.memberIds ?? [only.id],
+      };
+    }
+
+    const [first] = members;
+    const deliveryIds = [
+      ...new Set(members.map((entry) => entry.deliveryId).filter(Boolean)),
+    ];
+    const items = members.flatMap((entry) => entry.items);
+    const totalPrice = members.reduce((sum, entry) => sum + entry.totalPrice, 0);
+
+    return {
+      ...first,
+      deliveryId: deliveryIds[0] ?? first.deliveryId,
+      deliveryIds,
+      memberIds: members.map((entry) => entry.id),
+      totalPrice,
+      items,
+    };
+  });
+}
+
 function moneyLabel(value: number) {
   if (Number.isInteger(value)) return `$${value}`;
   return `$${value.toFixed(2)}`;
 }
 
 function invoiceText(order: PlacedOrder) {
+  const deliveryIds = order.deliveryIds?.length
+    ? order.deliveryIds
+    : [order.deliveryId];
   return [
-    `Invoice — Delivery ${order.deliveryId}`,
+    `Invoice - Delivery ${deliveryIds.join(", ")}`,
     `Distributor: ${order.distributor}`,
     `Order Date: ${order.orderDate}`,
     `Delivery Date: ${order.deliveryDate}`,
@@ -343,9 +407,13 @@ export function filterDeliveredOrders(
 
     if (!query) return true;
 
+    const deliveryIds = order.deliveryIds?.length
+      ? order.deliveryIds
+      : [order.deliveryId];
+
     return (
       order.distributor.toLowerCase().includes(query) ||
-      order.deliveryId.includes(query) ||
+      deliveryIds.some((id) => id.toLowerCase().includes(query)) ||
       order.zipCode.includes(query) ||
       order.items.some((item) => item.itemName.toLowerCase().includes(query))
     );
@@ -414,7 +482,7 @@ export function getDeliveredEmptyMessage(criteria: DeliveredFilterCriteria) {
 
 /** Matches the price text in the distributor order tables. */
 function tableMoney(value: number) {
-  if (!Number.isFinite(value)) return "—";
+  if (!Number.isFinite(value)) return "-";
   if (Number.isInteger(value)) return `$${value}`;
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
 }
@@ -455,10 +523,12 @@ export function downloadDistributorOrdersCsv(
     ["In Progress"],
     [...IN_PROGRESS_HEADERS],
     ...inProgress.map((order) => [
-      order.deliveryId,
+      order.deliveryIds?.length
+        ? order.deliveryIds.join("; ")
+        : order.deliveryId,
       order.distributor,
-      order.orderDate || "—",
-      order.deliveryDate || "—",
+      order.orderDate || "-",
+      order.deliveryDate || "-",
       tableMoney(order.totalPrice),
     ]),
     [],
@@ -467,9 +537,9 @@ export function downloadDistributorOrdersCsv(
     ...orderList.map((row) => [
       row.itemName,
       String(row.custOrderTotal),
-      row.inStock == null ? "—" : String(row.inStock),
+      row.inStock == null ? "-" : String(row.inStock),
       String(row.qtyReceiving),
-      row.dateReceivingBy || "—",
+      row.dateReceivingBy || "-",
     ]),
   ];
   downloadCsvFile(filename, rows);
@@ -487,10 +557,12 @@ export function downloadDeliveredOrdersCsv(
         rows.push([
           group.week,
           day.day,
-          order.deliveryId,
+          order.deliveryIds?.length
+            ? order.deliveryIds.join("; ")
+            : order.deliveryId,
           order.distributor,
-          order.orderDate || "—",
-          order.deliveryDate || "—",
+          order.orderDate || "-",
+          order.deliveryDate || "-",
           tableMoney(order.totalPrice),
         ]);
       }

@@ -95,8 +95,10 @@ import {
   groupDeliveredOrders,
   downloadDeliveredOrdersCsv,
   downloadDistributorOrdersCsv,
+  mergePlacedOrdersForDisplay,
   nextDeliveryId,
   openOrderInvoice,
+  placedOrderMergeKey,
   sortDeliveredOrders,
   uniqueDeliveredFieldValues,
 } from "@/utils/distributorOrdersPage";
@@ -155,9 +157,13 @@ function filterPlacedOrders(
 ) {
   const q = criteria.search.trim().toLowerCase();
   const seen = new Set<string>();
-  return orders.filter((order) => {
+  const unique = orders.filter((order) => {
     if (seen.has(order.id)) return false;
     seen.add(order.id);
+    return true;
+  });
+
+  return mergePlacedOrdersForDisplay(unique).filter((order) => {
     const orderDateId = placedOrderDateId(order);
     if (
       criteria.deliveryDateId &&
@@ -179,9 +185,12 @@ function filterPlacedOrders(
       return false;
     }
     if (!q) return true;
+    const deliveryIds = order.deliveryIds?.length
+      ? order.deliveryIds
+      : [order.deliveryId];
     return (
       order.distributor.toLowerCase().includes(q) ||
-      order.deliveryId.includes(q) ||
+      deliveryIds.some((id) => id.toLowerCase().includes(q)) ||
       order.items.some((item) => item.itemName.toLowerCase().includes(q))
     );
   });
@@ -286,7 +295,17 @@ function ExpandableOrders({
                 />
               </button>
               <div className="min-w-0 overflow-hidden">
-                <IdPill>{order.deliveryId}</IdPill>
+                <div className="flex min-w-0 items-center gap-1">
+                  <IdPill>{order.deliveryId}</IdPill>
+                  {(order.deliveryIds?.length ?? 0) > 1 ? (
+                    <span
+                      className="shrink-0 text-[11px] font-semibold text-[#8A8A8A]"
+                      title={order.deliveryIds?.join(", ")}
+                    >
+                      +{(order.deliveryIds?.length ?? 1) - 1}
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                 {order.distributor}
@@ -426,10 +445,7 @@ export default function ProductOrdersPage() {
 
   const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    const seen = new Set<string>();
-    for (const order of inProgress) {
-      if (seen.has(order.id)) continue;
-      seen.add(order.id);
+    for (const order of mergePlacedOrdersForDisplay(inProgress)) {
       const id = placedOrderDateId(order);
       if (!id) continue;
       counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -693,10 +709,10 @@ export default function ProductOrdersPage() {
   );
 
   const deliveredFlat = useMemo(() => {
-    const filtered = filterDeliveredOrders(
+    const merged = mergePlacedOrdersForDisplay(
       deliveredSource,
-      deliveredFilterCriteria,
-    );
+    ) as DeliveredOrder[];
+    const filtered = filterDeliveredOrders(merged, deliveredFilterCriteria);
     return sortDeliveredOrders(filtered, deliveredFilterCriteria.sortBy);
   }, [deliveredFilterCriteria, deliveredSource]);
   const deliveredWindow = useLazyWindow(
@@ -1142,26 +1158,45 @@ export default function ProductOrdersPage() {
     if (!nextOpen || !isApiConfigured()) return;
 
     const source = delivered ? deliveredOrders : inProgress;
-    const order = source.find((entry) => entry.id === id);
-    if (!order?.recordId || order.items.length > 0) return;
+    const primary = source.find((entry) => entry.id === id);
+    if (!primary) return;
+
+    const members = source.filter(
+      (entry) => placedOrderMergeKey(entry) === placedOrderMergeKey(primary),
+    );
+    const needsLoad = members.filter(
+      (entry) => entry.recordId && entry.items.length === 0,
+    );
+    if (needsLoad.length === 0) return;
 
     setDetailLoadingId(id);
-    void ordersApi
-      .getById(order.recordId)
-      .then((detail) => {
+    void Promise.all(
+      needsLoad.map((entry) =>
+        ordersApi.getById(entry.recordId!).then((detail) => ({
+          id: entry.id,
+          items: delivered
+            ? mapApiDistributorDelivered(detail, distributors, 0).items
+            : mapApiDistributorOrder(detail, distributors, 0).items,
+        })),
+      ),
+    )
+      .then((loaded) => {
+        const byId = new Map(loaded.map((entry) => [entry.id, entry.items]));
         if (delivered) {
-          const mapped = mapApiDistributorDelivered(detail, distributors, 0);
           setDeliveredOrders((current) =>
             current.map((entry) =>
-              entry.id === id ? { ...entry, items: mapped.items } : entry,
+              byId.has(entry.id)
+                ? { ...entry, items: byId.get(entry.id)! }
+                : entry,
             ),
           );
           return;
         }
-        const mapped = mapApiDistributorOrder(detail, distributors, 0);
         setInProgress((current) =>
           current.map((entry) =>
-            entry.id === id ? { ...entry, items: mapped.items } : entry,
+            byId.has(entry.id)
+              ? { ...entry, items: byId.get(entry.id)! }
+              : entry,
           ),
         );
       })

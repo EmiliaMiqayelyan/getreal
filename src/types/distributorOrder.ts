@@ -63,6 +63,13 @@ export type PlacedOrder = {
   /** UUID for GET /orders/:id. */
   recordId?: string;
   deliveryId: string;
+  /**
+   * All delivery IDs when several API orders are shown as one row
+   * (same distributor + order time).
+   */
+  deliveryIds?: string[];
+  /** Member order ids for a merged display row. */
+  memberIds?: string[];
   distributor: string;
   orderDate: string;
   deliveryDate: string;
