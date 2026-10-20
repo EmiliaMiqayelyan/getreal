@@ -295,17 +295,7 @@ function ExpandableOrders({
                 />
               </button>
               <div className="min-w-0 overflow-hidden">
-                <div className="flex min-w-0 items-center gap-1">
-                  <IdPill>{order.deliveryId}</IdPill>
-                  {(order.deliveryIds?.length ?? 0) > 1 ? (
-                    <span
-                      className="shrink-0 text-[11px] font-semibold text-[#8A8A8A]"
-                      title={order.deliveryIds?.join(", ")}
-                    >
-                      +{(order.deliveryIds?.length ?? 1) - 1}
-                    </span>
-                  ) : null}
-                </div>
+                <IdPill>{order.deliveryId}</IdPill>
               </div>
               <div className="min-w-0 truncate text-[13px] font-semibold text-[#111118]">
                 {order.distributor}
