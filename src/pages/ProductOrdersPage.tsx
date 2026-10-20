@@ -64,7 +64,6 @@ import {
   applyAggregateDemandSnapshot,
   buildReviewGroups,
   categorySections,
-  demandDateIds,
   demandOrdersForDate,
   previewRowsForOrder,
   replaceDemandForDate,
@@ -425,25 +424,18 @@ export default function ProductOrdersPage() {
     "Orders created successfully",
   );
 
-  const [knownDeliveryDateIds, setKnownDeliveryDateIds] = useState<string[]>(
-    [],
-  );
-
   const deliveryCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    const dateIds = [
-      ...knownDeliveryDateIds,
-      ...demandOrders
-        .filter((order) => order.lines.length > 0)
-        .flatMap((order) => demandDateIds(order)),
-      ...inProgress.map((order) => placedOrderDateId(order)),
-    ];
-    for (const id of dateIds) {
+    const seen = new Set<string>();
+    for (const order of inProgress) {
+      if (seen.has(order.id)) continue;
+      seen.add(order.id);
+      const id = placedOrderDateId(order);
       if (!id) continue;
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
     return counts;
-  }, [demandOrders, inProgress, knownDeliveryDateIds]);
+  }, [inProgress]);
   const { chipRowRef, chips: visibleDeliveryChips } = useWeekChipWindow(
     activeDeliveryDateId,
     deliveryCounts,
@@ -536,7 +528,6 @@ export default function ProductOrdersPage() {
     });
     if (generation !== loadGeneration.current) return null;
     demandDayIdsRef.current = snapshot.demandDayIds;
-    setKnownDeliveryDateIds(snapshot.demandDateIds);
     return snapshot;
   }
 
@@ -588,7 +579,6 @@ export default function ProductOrdersPage() {
       .then((snapshot) => {
         if (cancelled || generation !== loadGeneration.current) return;
         demandDayIdsRef.current = snapshot.demandDayIds;
-        setKnownDeliveryDateIds(snapshot.demandDateIds);
         setDemandOrders(snapshot.demand);
         setInProgress(snapshot.inProgress);
         if (snapshot.demandError) showError(snapshot.demandError);
