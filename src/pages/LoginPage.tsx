@@ -9,12 +9,7 @@ import { APP_NAME, ROUTES } from "@/constants";
 import { getRoleHome } from "@/constants/navigation";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { isApiConfigured } from "@/lib/api";
-import {
-  API_LOGIN_HINTS,
-  DEMO_ACCOUNTS,
-  isAuthenticated,
-  login,
-} from "@/lib/auth";
+import { isAuthenticated, login } from "@/lib/auth";
 
 export default function LoginPage() {
   useDocumentTitle("Login");
@@ -107,9 +102,7 @@ export default function LoginPage() {
                   autoComplete="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder={
-                    apiMode ? "admin@example.com" : "Enter username"
-                  }
+                  placeholder={apiMode ? "Enter email" : "Enter username"}
                   className="w-full"
                   required
                 />
@@ -146,56 +139,6 @@ export default function LoginPage() {
                 Sign in
               </Button>
             </form>
-
-            <div className="text-muted mt-6 space-y-1.5 text-center text-xs leading-relaxed">
-              {apiMode ? (
-                <>
-                  <p>
-                    Admin:{" "}
-                    <span className="text-muted-strong font-medium">
-                      {API_LOGIN_HINTS.superadmin.email}
-                    </span>{" "}
-                    /{" "}
-                    <span className="text-muted-strong font-medium">
-                      {API_LOGIN_HINTS.superadmin.password}
-                    </span>
-                  </p>
-                  <p>
-                    Warehouse:{" "}
-                    <span className="text-muted-strong font-medium">
-                      {API_LOGIN_HINTS.warehouse.email}
-                    </span>{" "}
-                    /{" "}
-                    <span className="text-muted-strong font-medium">
-                      {API_LOGIN_HINTS.warehouse.password}
-                    </span>
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p>
-                    Super Admin:{" "}
-                    <span className="text-muted-strong font-medium">
-                      {DEMO_ACCOUNTS.superadmin.username}
-                    </span>{" "}
-                    /{" "}
-                    <span className="text-muted-strong font-medium">
-                      {DEMO_ACCOUNTS.superadmin.password}
-                    </span>
-                  </p>
-                  <p>
-                    Warehouse:{" "}
-                    <span className="text-muted-strong font-medium">
-                      {DEMO_ACCOUNTS.warehouse.username}
-                    </span>{" "}
-                    /{" "}
-                    <span className="text-muted-strong font-medium">
-                      {DEMO_ACCOUNTS.warehouse.password}
-                    </span>
-                  </p>
-                </>
-              )}
-            </div>
           </div>
         </div>
       </div>
