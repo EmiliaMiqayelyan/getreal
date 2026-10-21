@@ -4,7 +4,7 @@ import type { Item } from "@/types/item";
 import type { Source } from "@/types/source";
 import { findByEntityRef, matchesEntityRef } from "@/utils/entityIds";
 import { parseDeliveryDateId } from "@/utils/deliveryCalendar";
-import { getItemDisplayName } from "@/utils/items";
+import { getItemDisplayName, getItemUnitLabel } from "@/utils/items";
 
 function resolveItemSourceName(item: Item, sources: Source[]) {
   if (item.source.trim()) return item.source;
@@ -35,7 +35,7 @@ export function toManualCatalogItem(
     source: source || "Unassigned source",
     inStock: 0,
     price: item.buyingPrice,
-    unit: item.singleItemUnit || "Each",
+    unit: getItemUnitLabel(item) || "Each",
   };
 }
 

@@ -240,8 +240,10 @@ export function flattenInventory(row: ApiInventory): ApiInventory {
     unit:
       firstLabel(
         row.unit,
-        readLabel(raw, ["unit"]),
-        item ? readLabel(item, ["singleItemUnit", "unit"]) : undefined,
+        readLabel(raw, ["unit", "singleItemUnit", "buyingUnit"]),
+        item
+          ? readLabel(item, ["singleItemUnit", "buyingUnit", "unit"])
+          : undefined,
       ) ?? null,
     expirationDate:
       firstLabel(

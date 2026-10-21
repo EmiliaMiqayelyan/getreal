@@ -279,7 +279,10 @@ export function mapPendingStorageOrder(
       source: nestedName(raw.source) ?? readText(raw, ["sourceName"]) ?? "",
       purchased: linePriceLabel(line),
       qty: Number.isFinite(quantity) ? quantity : 0,
-      unit: line.unit?.trim() || readText(raw, ["singleItemUnit"]) || "—",
+      unit:
+        line.unit?.trim() ||
+        readText(raw, ["singleItemUnit", "buyingUnit"]) ||
+        "—",
       qtyAfterUnpack: "",
       expDate: expiration ? formatExp(expiration) : "—",
       expirationIso: expiration ? expirationIso(expiration) : "",

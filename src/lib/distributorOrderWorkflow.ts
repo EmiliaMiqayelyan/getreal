@@ -221,7 +221,11 @@ function resolveUnit(
       item.id === itemCode ||
       item.recordId === itemCode,
   );
-  return match?.singleItemUnit?.trim() || "";
+  if (!match) return "";
+  const single = match.singleItemUnit.trim();
+  if (single) return single;
+  if (match.sourcePer === "Case") return match.caseBy.trim() || "Case";
+  return match.sourcePer.trim();
 }
 
 /**
@@ -325,7 +329,8 @@ export function mapAggregateDemand(input: {
                   itemId,
                   itemCode,
                   input.items,
-                  item.buyingUnit || item.singleItemUnit || item.unit,
+                  // Prefer the piece label; Case items only have buyingUnit.
+                  item.singleItemUnit || item.buyingUnit || item.unit,
                 ),
                 qtyPerUnit: Math.max(0, readNumber(item.qtyPerUnit)),
               },

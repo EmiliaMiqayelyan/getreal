@@ -535,7 +535,7 @@ export default function ProductOrdersPage() {
     const run = deliveredGeneration.current;
     const page = deliveredPage + 1;
     setDeliveredLoading(true);
-    void loadDeliveredDistributorOrders(distributors, page)
+    void loadDeliveredDistributorOrders(distributors, page, { items })
       .then((result) => {
         if (run !== deliveredGeneration.current) return;
         setDeliveredOrders((current) => {
@@ -596,6 +596,7 @@ export default function ProductOrdersPage() {
     setDeliveredLoading(true);
     void loadDeliveredDistributorOrders(catalogRef.current.distributors, 1, {
       fresh: true,
+      items: catalogRef.current.items,
     })
       .then((result) => {
         if (cancelled || deliveredRun !== deliveredGeneration.current) return;
@@ -881,6 +882,7 @@ export default function ProductOrdersPage() {
           snapshot?.inProgress ?? [],
           created,
           distributors,
+          items,
           draft.deliveryDateIso,
         );
         if (snapshot) {
@@ -894,6 +896,7 @@ export default function ProductOrdersPage() {
                 current,
                 created,
                 distributors,
+                items,
                 draft.deliveryDateIso,
               ).orders,
           );
@@ -985,6 +988,7 @@ export default function ProductOrdersPage() {
             snapshot.inProgress,
             created,
             distributors,
+            items,
             deliveryDate,
             batchOrderDate,
           );
@@ -1019,6 +1023,7 @@ export default function ProductOrdersPage() {
                 current,
                 created,
                 distributors,
+                items,
                 deliveryDate,
                 batchOrderDate,
               ).orders,
@@ -1106,6 +1111,7 @@ export default function ProductOrdersPage() {
             progress,
             created,
             distributors,
+            items,
             deliveryDate,
             batchOrderDate,
           );
@@ -1143,6 +1149,7 @@ export default function ProductOrdersPage() {
                 next,
                 created,
                 distributors,
+                items,
                 deliveryDate,
                 batchOrderDate,
               ).orders;
@@ -1213,8 +1220,8 @@ export default function ProductOrdersPage() {
         ordersApi.getById(entry.recordId!).then((detail) => ({
           id: entry.id,
           items: delivered
-            ? mapApiDistributorDelivered(detail, distributors, 0).items
-            : mapApiDistributorOrder(detail, distributors, 0).items,
+            ? mapApiDistributorDelivered(detail, distributors, 0, items).items
+            : mapApiDistributorOrder(detail, distributors, 0, items).items,
         })),
       ),
     )
@@ -1437,6 +1444,7 @@ export default function ProductOrdersPage() {
                           all =
                             await loadAllDeliveredDistributorOrders(
                               distributors,
+                              items,
                             );
                         } catch (error) {
                           notifyApiError(

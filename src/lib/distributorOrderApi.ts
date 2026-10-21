@@ -19,6 +19,7 @@ import {
   upcomingWednesday,
 } from "@/utils/deliveryCalendar";
 import { formatOrderTimestamp } from "@/utils/distributorOrdersPage";
+import { getItemUnitLabel } from "@/utils/items";
 import {
   aggregateDemandDayIds,
   aggregateDemandHasItems,
@@ -122,10 +123,37 @@ function linePrice(line: ApiOrderItem) {
   return 0;
 }
 
+function catalogUnitForLine(line: ApiOrderItem, catalog: Item[]) {
+  if (catalog.length === 0) return "";
+  const raw = line as ApiOrderItem & Record<string, unknown>;
+  const refs = [
+    readString(line.itemId),
+    readString(raw.itemCode),
+    lineSku(line),
+  ].filter((ref) => ref && ref !== "—");
+  if (refs.length === 0) return "";
+  const match = catalog.find((item) =>
+    refs.some((ref) => item.recordId === ref || item.id === ref),
+  );
+  return getItemUnitLabel(match);
+}
+
+function lineUnit(line: ApiOrderItem, catalog: Item[]) {
+  const raw = line as ApiOrderItem & Record<string, unknown>;
+  // API often only fills `unit` from singleItemUnit (empty for Case items).
+  return (
+    readString(line.unit) ||
+    readString(raw.singleItemUnit) ||
+    readString(raw.buyingUnit) ||
+    catalogUnitForLine(line, catalog)
+  );
+}
+
 export function mapApiDistributorOrder(
   order: ApiOrder,
   distributors: Distributor[],
   index: number,
+  catalogItems: Item[] = [],
 ): PlacedOrder {
   const rawLines =
     order.items ??
@@ -137,7 +165,7 @@ export function mapApiDistributorOrder(
     source: lineSource(line),
     quantity: Number(line.quantity) || 0,
     price: linePrice(line),
-    unit: readString(line.unit),
+    unit: lineUnit(line, catalogItems),
   }));
   const computed = items.reduce(
     (sum, item) => sum + item.price * item.quantity,
@@ -203,8 +231,14 @@ export function mapApiDistributorDelivered(
   order: ApiOrder,
   distributors: Distributor[],
   index: number,
+  catalogItems: Item[] = [],
 ): DeliveredOrder {
-  const placed = mapApiDistributorOrder(order, distributors, index);
+  const placed = mapApiDistributorOrder(
+    order,
+    distributors,
+    index,
+    catalogItems,
+  );
   const stamp =
     order.deliveryDate?.trim() ||
     order.receivedAt?.trim() ||
@@ -236,7 +270,7 @@ function loadOpenDistributorOrders(fresh: boolean) {
 export async function loadDeliveredDistributorOrders(
   distributors: Distributor[],
   page: number,
-  options?: { fresh?: boolean },
+  options?: { fresh?: boolean; items?: Item[] },
 ): Promise<{ orders: DeliveredOrder[]; hasMore: boolean }> {
   const result = await ordersApi.list({
     page,
@@ -246,9 +280,10 @@ export async function loadDeliveredDistributorOrders(
     fresh: options?.fresh,
   });
   const offset = (page - 1) * DELIVERED_PAGE_SIZE;
+  const catalog = options?.items ?? [];
   return {
     orders: result.items.map((order, index) =>
-      mapApiDistributorDelivered(order, distributors, offset + index),
+      mapApiDistributorDelivered(order, distributors, offset + index, catalog),
     ),
     hasMore:
       result.items.length > 0 && offset + result.items.length < result.total,
@@ -258,6 +293,7 @@ export async function loadDeliveredDistributorOrders(
 /** Every delivered distributor order, for "Export all". */
 export async function loadAllDeliveredDistributorOrders(
   distributors: Distributor[],
+  catalogItems: Item[] = [],
 ): Promise<DeliveredOrder[]> {
   const listed = await collectPaginated((page, limit) =>
     ordersApi.list({
@@ -269,7 +305,7 @@ export async function loadAllDeliveredDistributorOrders(
     }),
   );
   return listed.map((order, index) =>
-    mapApiDistributorDelivered(order, distributors, index),
+    mapApiDistributorDelivered(order, distributors, index, catalogItems),
   );
 }
 
@@ -278,6 +314,7 @@ export function mergeCreatedDistributorOrder(
   orders: PlacedOrder[],
   created: ApiOrder,
   distributors: Distributor[],
+  catalogItems: Item[] = [],
   deliveryDate?: string,
   orderDate?: string,
 ): { orders: PlacedOrder[]; placed: PlacedOrder } {
@@ -296,6 +333,7 @@ export function mergeCreatedDistributorOrder(
     },
     distributors,
     0,
+    catalogItems,
   );
   const placed: PlacedOrder = {
     ...mapped,
@@ -437,7 +475,7 @@ export async function loadDistributorOrderScreen(
     ...new Set(days.map((dayId) => deliveryWeekId(dayId))),
   ];
   const inProgress = openOrders.map((order, index) =>
-    mapApiDistributorOrder(order, input.distributors, index),
+    mapApiDistributorOrder(order, input.distributors, index, input.items),
   );
 
   return {

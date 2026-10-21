@@ -16,6 +16,20 @@ export function getItemSaleUnit(item: Item) {
   return item.merchandiseWeight.trim() || item.singleItemUnit.trim() || "—";
 }
 
+/**
+ * Buying / inventory unit label.
+ * Case items leave `singleItemUnit` empty and use `caseBy` (from buyingUnit).
+ */
+export function getItemUnitLabel(
+  item: Pick<Item, "singleItemUnit" | "sourcePer" | "caseBy"> | undefined,
+) {
+  if (!item) return "";
+  const single = item.singleItemUnit.trim();
+  if (single) return single;
+  if (item.sourcePer === "Case") return item.caseBy.trim() || "Case";
+  return item.sourcePer.trim();
+}
+
 export function getItemPrimaryPhoto(item: Item) {
   const primary =
     item.photos.find((photo) => photo.isPrimary) ?? item.photos[0];

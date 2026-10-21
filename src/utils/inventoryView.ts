@@ -2,6 +2,7 @@ import type { ApiInventory } from "@/lib/api/types";
 import type { Item } from "@/types/item";
 import { ITEM_CATEGORIES, ITEM_SUBCATEGORIES } from "@/types/item";
 import { codeFrom, findByEntityRef, isUuid } from "@/utils/entityIds";
+import { getItemUnitLabel } from "@/utils/items";
 
 export type InventoryLot = {
   /** Inventory record id used for PATCH. */
@@ -171,7 +172,12 @@ function lotFromRow(
     deliveryDate: formatInventoryDate(readString(row, "deliveryDate")),
     purchased: formatPurchasedField(row.purchased),
     qty: row.quantity ?? 0,
-    unit: readString(row, "unit") || item?.singleItemUnit?.trim() || "—",
+    unit:
+      readString(row, "unit") ||
+      readString(row, "buyingUnit") ||
+      readString(row, "singleItemUnit") ||
+      getItemUnitLabel(item) ||
+      "—",
     location,
     address,
   };
@@ -367,7 +373,7 @@ export function appendUnreceivedItems(
       id,
       name: item.merchandisingName.trim() || item.name.trim() || "N/A",
       distributor: item.distributor.trim() || "—",
-      unit: item.singleItemUnit.trim() || "—",
+      unit: getItemUnitLabel(item) || "—",
       lots: [],
     });
     section.products.sort((left, right) => left.name.localeCompare(right.name));
