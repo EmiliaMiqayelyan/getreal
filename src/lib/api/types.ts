@@ -178,7 +178,10 @@ export type ApiInventory = {
   purchased?: string | number | null;
   /** Purchase price in integer cents. */
   buyingPrice?: number | null;
+  /** singleItemUnit || buyingUnit from the catalog item. */
   unit?: string | null;
+  buyingUnit?: string | null;
+  singleItemUnit?: string | null;
   expirationDate?: string | null;
   status?: string | null;
   createdAt?: string;
@@ -211,7 +214,10 @@ export type ApiOrderItem = {
   quantity?: number;
   /** Unit price in integer cents. */
   price?: number;
+  /** singleItemUnit || buyingUnit from the catalog item. */
   unit?: string;
+  buyingUnit?: string | null;
+  singleItemUnit?: string | null;
   frequency?: string;
   itemCode?: string | null;
   /** Catalog item id. Inventory lots are keyed by this, not the product id. */

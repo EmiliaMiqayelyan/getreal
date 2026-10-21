@@ -1122,12 +1122,12 @@ export function AddItemModal({
 
               <div className="grid gap-3 sm:grid-cols-3">
                 <div data-field="merchandiseWeight">
-                  <Field label="Merchandise weight" required>
+                  <Field label="Merchandise unit" required>
                     <Input
                       value={merchandiseWeight}
                       maxLength={MERCHANDISE_WEIGHT_MAX}
                       placeholder="e.g. 8 oz"
-                      aria-label="Merchandise weight"
+                      aria-label="Merchandise unit"
                       onChange={(event) => {
                         setMerchandiseWeight(event.target.value);
                         if (errors.merchandiseWeight) {

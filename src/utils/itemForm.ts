@@ -112,9 +112,9 @@ export function validateItemForm(input: ItemFormInput): ItemFormErrors {
 
   const merchandiseWeight = input.merchandiseWeight.trim();
   if (!merchandiseWeight) {
-    errors.merchandiseWeight = "Enter a merchandise weight.";
+    errors.merchandiseWeight = "Enter a merchandise unit.";
   } else if (merchandiseWeight.length > MERCHANDISE_WEIGHT_MAX) {
-    errors.merchandiseWeight = `Merchandise weight must be ${MERCHANDISE_WEIGHT_MAX} characters or fewer.`;
+    errors.merchandiseWeight = `Merchandise unit must be ${MERCHANDISE_WEIGHT_MAX} characters or fewer.`;
   }
 
   const sourcePer = input.sourcePer as SourcePer | "";
