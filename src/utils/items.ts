@@ -11,11 +11,6 @@ export function getItemDisplayName(item: Item) {
   return item.merchandisingName.trim() || item.name;
 }
 
-/** Unit shown under sale price. Merchandise weight wins when the item has one. */
-export function getItemSaleUnit(item: Item) {
-  return item.merchandiseWeight.trim() || item.singleItemUnit.trim() || "—";
-}
-
 /**
  * Buying / inventory unit label.
  * Case items leave `singleItemUnit` empty and use `caseBy` (from buyingUnit).
@@ -28,6 +23,15 @@ export function getItemUnitLabel(
   if (single) return single;
   if (item.sourcePer === "Case") return item.caseBy.trim() || "Case";
   return item.sourcePer.trim();
+}
+
+/** Unit of Sales: merchandise weight, then piece/case buying label. */
+export function getItemSaleUnit(item: Item) {
+  return (
+    item.merchandiseWeight.trim() ||
+    getItemUnitLabel(item) ||
+    "—"
+  );
 }
 
 export function getItemPrimaryPhoto(item: Item) {

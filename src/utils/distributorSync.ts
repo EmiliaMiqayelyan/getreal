@@ -3,6 +3,7 @@ import type { Item } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import type { Source } from "@/types/source";
 import { apiId, findByEntityRef, matchesEntityRef } from "@/utils/entityIds";
+import { getItemSaleUnit } from "@/utils/items";
 import { getSourceEffectiveDistributor, findSourceForRecord } from "@/utils/sources";
 
 type DistributorLinked = {
@@ -212,7 +213,7 @@ export function syncProductWithItem(
     distributor: item.distributor,
     distributorId: item.distributorId,
     salesPrice: item.sellingPrice,
-    unitOfSales: item.singleItemUnit,
+    unitOfSales: getItemSaleUnit(item),
     photos: item.photos.map((photo) => ({ ...photo })),
     description: item.description,
   };

@@ -5,7 +5,7 @@ import {
 } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import { findByEntityRef } from "@/utils/entityIds";
-import { getItemDisplayName } from "@/utils/items";
+import { getItemDisplayName, getItemSaleUnit } from "@/utils/items";
 import type { SubcategoryMap } from "@/utils/subcategories";
 
 export type ProductTableDisplay = {
@@ -48,7 +48,7 @@ export function resolveProductTableDisplay(
     merchandisingName: getItemDisplayName(item),
     source: item.source || "—",
     salesPrice: item.sellingPrice,
-    unitOfSales: item.singleItemUnit || "—",
+    unitOfSales: getItemSaleUnit(item),
   };
 }
 
@@ -74,7 +74,7 @@ export function resolveProductDetails(
     merchandisingName: getItemDisplayName(item),
     source: item.source || "—",
     salesPrice: item.sellingPrice,
-    unitOfSales: item.singleItemUnit || "—",
+    unitOfSales: getItemSaleUnit(item),
     photos: item.photos,
     description: item.description,
   };

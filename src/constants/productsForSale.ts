@@ -1,5 +1,6 @@
 import type { ProductForSale } from "@/types/productForSale";
 import type { Item } from "@/types/item";
+import { getItemSaleUnit } from "@/utils/items";
 
 function fromItem(
   item: Item,
@@ -20,7 +21,7 @@ function fromItem(
     distributor: item.distributor,
     distributorId: item.distributorId,
     salesPrice: item.sellingPrice,
-    unitOfSales: item.singleItemUnit,
+    unitOfSales: getItemSaleUnit(item),
     photos: item.photos.map((photo) => ({ ...photo })),
     description: item.description,
   };

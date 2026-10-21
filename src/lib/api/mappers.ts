@@ -33,6 +33,7 @@ import {
   parseAddressParts,
   WEEK_DAYS,
 } from "@/utils/format";
+import { getItemSaleUnit } from "@/utils/items";
 
 import type {
   ApiCategory,
@@ -508,7 +509,7 @@ export function mapApiProductToProductForSale(
     distributor: linked?.distributor ?? "",
     distributorId: linked?.distributorId,
     salesPrice: centsToDollars(priceCents),
-    unitOfSales: linked?.singleItemUnit ?? "Each",
+    unitOfSales: linked ? getItemSaleUnit(linked) : "Each",
     photos: linked?.photos ?? [],
     description: product.description ?? linked?.description ?? "",
   };
