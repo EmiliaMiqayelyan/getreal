@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
+import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiSubcategory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -31,7 +31,7 @@ export const subcategoriesApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/subcategories/${id}`).then(
+    return apiRequest<unknown>(`/subcategories/${id}`, FRESH_READ).then(
       (payload) =>
         pickNamedEntity<ApiSubcategory>(payload, "subcategory") ??
         (payload as ApiSubcategory),

@@ -1,5 +1,5 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
+import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiSource } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -32,7 +32,7 @@ export const sourcesApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/sources/${id}`).then(
+    return apiRequest<unknown>(`/sources/${id}`, FRESH_READ).then(
       (payload) =>
         pickNamedEntity<ApiSource>(payload, "source") ??
         (payload as ApiSource),

@@ -447,6 +447,8 @@ export default function PushNotificationsPage() {
   );
   const [iconCatalog, setIconCatalog] = useState<ApiNotificationIcon[]>([]);
   const [loading, setLoading] = useState(apiConfigured);
+  const rulesLoadRef = useRef(0);
+  const editRequestRef = useRef(0);
   const [pending, setPending] = useState<null | "save" | "remove">(null);
   const [query, setQuery] = useState("");
   const [triggerFilter, setTriggerFilter] = useState("");
@@ -462,12 +464,13 @@ export default function PushNotificationsPage() {
       return () => undefined;
     }
 
+    const loadId = ++rulesLoadRef.current;
     let cancelled = false;
     setLoading(true);
     void notificationRulesApi
       .list({ fresh: true })
       .then((rules) => {
-        if (cancelled) return;
+        if (cancelled || loadId !== rulesLoadRef.current) return;
         setItems(rules.map(mapApiNotificationRule));
       })
       .catch((error) => {
@@ -546,6 +549,7 @@ export default function PushNotificationsPage() {
   }
 
   function openEdit(item: PushNotification) {
+    const requestId = ++editRequestRef.current;
     setDraft(draftFromNotification(item, triggerCatalog));
     setModalOpen(true);
     const pathId = recordRef(item);
@@ -553,6 +557,7 @@ export default function PushNotificationsPage() {
     void notificationRulesApi
       .getById(pathId)
       .then((remote) => {
+        if (requestId !== editRequestRef.current) return;
         const mapped = mapApiNotificationRule(remote, 0);
         setDraft((current) =>
           current.recordId === item.recordId
@@ -564,6 +569,7 @@ export default function PushNotificationsPage() {
         );
       })
       .catch((error) => {
+        if (requestId !== editRequestRef.current) return;
         notifyApiError(error, "Failed to load notification details.");
       });
   }
@@ -605,7 +611,9 @@ export default function PushNotificationsPage() {
   }
 
   async function refreshRules() {
+    const loadId = ++rulesLoadRef.current;
     const rules = await notificationRulesApi.list({ fresh: true });
+    if (loadId !== rulesLoadRef.current) return;
     setItems(rules.map(mapApiNotificationRule));
   }
 
@@ -639,6 +647,7 @@ export default function PushNotificationsPage() {
   }
 
   async function save() {
+    editRequestRef.current += 1;
     if (!payload || !canSave || pending) return;
     setPending("save");
     try {

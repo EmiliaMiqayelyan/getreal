@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { DescriptionHover } from "@/components/shared/DescriptionHover";
@@ -110,6 +110,7 @@ export default function SourcePage() {
   const [distributorFilter, setDistributorFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Source | null>(null);
+  const editRequestRef = useRef(0);
 
   const locationOptions = useMemo(() => uniqueSourceLocations(rows), [rows]);
 
@@ -142,6 +143,7 @@ export default function SourcePage() {
   }
 
   function openEdit(source: Source) {
+    const requestId = ++editRequestRef.current;
     setEditing(source);
     setModalOpen(true);
     const pathId = recordRef(source);
@@ -154,17 +156,20 @@ export default function SourcePage() {
     void sourcesApi
       .getById(pathId)
       .then((remote) => {
+        if (requestId !== editRequestRef.current) return;
         const mapped = mapApiSourceToSource(remote, 0, distributorsById);
         setEditing((current) =>
           current?.id === source.id ? { ...mapped, id: current.id } : current,
         );
       })
       .catch((error) => {
+        if (requestId !== editRequestRef.current) return;
         notifyApiError(error, "Failed to load source details.");
       });
   }
 
   function closeModal() {
+    editRequestRef.current += 1;
     setModalOpen(false);
     setEditing(null);
   }
@@ -373,6 +378,7 @@ export default function SourcePage() {
         onClose={closeModal}
         onRemove={canRemove ? handleRemoveSource : undefined}
         onSave={async (source) => {
+            editRequestRef.current += 1;
             if (isApiConfigured()) {
               if (!source.distributorId) {
                 notifyApiError(
@@ -402,19 +408,9 @@ export default function SourcePage() {
                       row.id === editing.id
                         ? {
                             ...source,
-                            ...mapped,
                             id: editing.id,
                             recordId: mapped.recordId ?? editing.recordId,
-                            fullAddress:
-                              source.fullAddress || mapped.fullAddress,
-                            location: source.location || mapped.location,
-                            street: mapped.street || source.street,
-                            apt: mapped.apt || source.apt,
-                            city: mapped.city || source.city,
-                            state: mapped.state || source.state,
-                            zip: mapped.zip || source.zip,
-                            logoUrl: source.logoUrl ?? mapped.logoUrl,
-                            logoName: source.logoName,
+                            logoUrl: mapped.logoUrl || source.logoUrl,
                           }
                         : row,
                     ),
@@ -429,16 +425,9 @@ export default function SourcePage() {
                   setSources((current) => [
                     {
                       ...source,
-                      ...mapped,
-                      fullAddress: source.fullAddress || mapped.fullAddress,
-                      location: source.location || mapped.location,
-                      street: mapped.street || source.street,
-                      apt: mapped.apt || source.apt,
-                      city: mapped.city || source.city,
-                      state: mapped.state || source.state,
-                      zip: mapped.zip || source.zip,
-                      logoUrl: source.logoUrl ?? mapped.logoUrl,
-                      logoName: source.logoName,
+                      id: mapped.id || source.id,
+                      recordId: mapped.recordId,
+                      logoUrl: mapped.logoUrl || source.logoUrl,
                     },
                     ...current,
                   ]);

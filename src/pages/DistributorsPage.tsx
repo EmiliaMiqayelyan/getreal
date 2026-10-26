@@ -347,6 +347,7 @@ export default function DistributorsPage() {
   const [weekdayFilter, setWeekdayFilter] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Distributor | null>(null);
+  const editRequestRef = useRef(0);
 
   const locationOptions = useMemo(
     () => uniqueDistributorLocations(rows),
@@ -374,6 +375,7 @@ export default function DistributorsPage() {
   }
 
   function openEdit(distributor: Distributor) {
+    const requestId = ++editRequestRef.current;
     setEditing(distributor);
     setModalOpen(true);
     const pathId = recordRef(distributor);
@@ -381,17 +383,22 @@ export default function DistributorsPage() {
     void distributorsApi
       .getById(pathId)
       .then((remote) => {
+        if (requestId !== editRequestRef.current) return;
         const mapped = mapApiDistributorToDistributor(remote, 0);
         setEditing((current) =>
-          current?.id === distributor.id ? { ...mapped, id: current.id } : current,
+          current?.id === distributor.id
+            ? { ...mapped, id: current.id }
+            : current,
         );
       })
       .catch((error) => {
+        if (requestId !== editRequestRef.current) return;
         notifyApiError(error, "Failed to load distributor details.");
       });
   }
 
   function closeModal() {
+    editRequestRef.current += 1;
     setModalOpen(false);
     setEditing(null);
   }
@@ -629,6 +636,7 @@ export default function DistributorsPage() {
         onClose={closeModal}
         onRemove={canDelete ? handleRemoveDistributor : undefined}
         onSave={async (distributor) => {
+            editRequestRef.current += 1;
             if (isApiConfigured()) {
               try {
                 const documents = await resolveDistributorDocuments(
@@ -655,11 +663,11 @@ export default function DistributorsPage() {
                   saveDistributor(
                     {
                       ...withDocs,
-                      ...mapped,
                       id: editing.id,
                       recordId: mapped.recordId ?? editing.recordId,
-                      categories: withDocs.categories,
-                      products: withDocs.products,
+                      documents: withDocs.documents.length
+                        ? withDocs.documents
+                        : mapped.documents,
                     },
                     "update",
                     editing,
@@ -670,9 +678,11 @@ export default function DistributorsPage() {
                   saveDistributor(
                     {
                       ...withDocs,
-                      ...mapped,
-                      categories: withDocs.categories,
-                      products: withDocs.products,
+                      id: mapped.id || withDocs.id,
+                      recordId: mapped.recordId,
+                      documents: withDocs.documents.length
+                        ? withDocs.documents
+                        : mapped.documents,
                     },
                     "create",
                   );

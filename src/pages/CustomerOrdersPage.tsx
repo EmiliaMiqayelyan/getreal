@@ -1305,6 +1305,7 @@ export default function CustomerOrdersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
+  const ordersEpochRef = useRef(0);
   const ordersRef = useRef(orders);
   ordersRef.current = orders;
   const calendarAnchorRef = useRef<HTMLDivElement>(null);
@@ -1328,6 +1329,7 @@ export default function CustomerOrdersPage() {
     let cancelled = false;
     loadLock.current = true;
     setLoading(true);
+    const epoch = ordersEpochRef.current;
 
     void collectPaginated((page, limit) =>
       ordersApi.list({
@@ -1338,7 +1340,7 @@ export default function CustomerOrdersPage() {
       }),
     )
       .then((remote) => {
-        if (cancelled) return;
+        if (cancelled || epoch !== ordersEpochRef.current) return;
         const mapped: CustomerOrderRow[] = remote.map((order, index) =>
           mapApiOrderToActive(order, `API-CO-${index + 1}`),
         );
@@ -1703,6 +1705,7 @@ export default function CustomerOrdersPage() {
         }
       }
       const doneCount = targetIndex + 1;
+      ordersEpochRef.current += 1;
       setOrders((current) =>
         current.map((order) =>
           order.id === orderId

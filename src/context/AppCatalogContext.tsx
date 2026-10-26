@@ -174,8 +174,18 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   >(() => catalogRecordsFromMap(loadSubcategories()));
   const [loadedSlices, setLoadedSlices] = useState<CatalogSlice[]>([]);
   const loadedRef = useRef<Set<CatalogSlice>>(new Set());
-  const inflightRef = useRef<Map<CatalogSlice, Promise<void>>>(new Map());
+  /** Bumps on each local edit so an older catalog response cannot replace it. */
+  const revisionRef = useRef(0);
+  /** Bumps on each catalog load so only the latest response is applied. */
+  const loadSeqRef = useRef(0);
+  /** True while a catalog response is being written, so that write is not an edit. */
+  const applyingRemoteRef = useRef(false);
   const { showError } = useToast();
+
+  function noteLocalEdit() {
+    if (applyingRemoteRef.current) return;
+    revisionRef.current += 1;
+  }
 
   const subcategoriesByCategory = useMemo(
     () => mapFromCatalogRecords(subcategoryRecords),
@@ -188,6 +198,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
         | Distributor[]
         | ((current: Distributor[]) => Distributor[]),
     ) => {
+      noteLocalEdit();
       setCatalog((current) => {
         const distributors =
           typeof updater === "function"
@@ -205,6 +216,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       mode: SaveDistributorMode,
       previous: Distributor | null = null,
     ) => {
+      noteLocalEdit();
       setCatalog((current) => {
         const distributors =
           mode === "create"
@@ -231,6 +243,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
   );
 
   const removeDistributor = useCallback((id: string) => {
+    noteLocalEdit();
     setCatalog((current) => ({
       ...current,
       distributors: current.distributors.filter((entry) => entry.id !== id),
@@ -239,6 +252,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
 
   const setItems = useCallback(
     (updater: Item[] | ((current: Item[]) => Item[])) => {
+      noteLocalEdit();
       setCatalog((current) => {
         const nextItems =
           typeof updater === "function" ? updater(current.items) : updater;
@@ -265,6 +279,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
 
   const setSources = useCallback(
     (updater: Source[] | ((current: Source[]) => Source[])) => {
+      noteLocalEdit();
       setCatalog((current) => {
         const nextSources =
           typeof updater === "function" ? updater(current.sources) : updater;
@@ -312,6 +327,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
         | ProductForSale[]
         | ((current: ProductForSale[]) => ProductForSale[]),
     ) => {
+      noteLocalEdit();
       setCatalog((current) => {
         const nextProducts =
           typeof updater === "function"
@@ -451,6 +467,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
                 : entry,
             ),
           );
+          noteLocalEdit();
           setCatalog((current) => ({
             ...current,
             ...applySubcategoryRename(
@@ -469,6 +486,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       }
 
       setSubcategoryRecords(catalogRecordsFromMap(localResult.map));
+      noteLocalEdit();
       setCatalog((current) => ({
         ...current,
         ...applySubcategoryRename(
@@ -517,6 +535,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
                 !(entry.category === category && entry.name === name),
             ),
           );
+          noteLocalEdit();
           setCatalog((current) => ({
             ...current,
             ...applySubcategoryRemoval(
@@ -533,6 +552,7 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
       }
 
       setSubcategoryRecords(catalogRecordsFromMap(localResult.map));
+      noteLocalEdit();
       setCatalog((current) => ({
         ...current,
         ...applySubcategoryRemoval(
@@ -577,38 +597,24 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
         : slices.filter((slice) => !loadedRef.current.has(slice));
       if (needed.length === 0) return;
 
-      const waiting = needed.filter((slice) => inflightRef.current.has(slice));
-      const toStart = needed.filter((slice) => !inflightRef.current.has(slice));
+      // A new visit always fetches. It does not wait for a request that
+      // started before the latest edit and then apply that older list.
+      let ownerId = ++loadSeqRef.current;
 
-      if (toStart.length === 0) {
-        await Promise.all(
-          waiting.map((slice) => inflightRef.current.get(slice)!),
-        );
-        return;
-      }
-
-      let finish = () => {};
-      const done = new Promise<void>((resolve) => {
-        finish = resolve;
-      });
-      for (const slice of toStart) inflightRef.current.set(slice, done);
-
-      try {
-        if (waiting.length > 0) {
-          await Promise.all(
-            waiting.map((slice) => inflightRef.current.get(slice)!),
-          );
+      const applyResult = (
+        result: Awaited<ReturnType<typeof loadCatalogSlices>>,
+      ) => {
+        applyingRemoteRef.current = true;
+        try {
+          if (result.distributors) setDistributors(result.distributors);
+          if (result.sources) setSources(result.sources);
+          if (result.categories) setCategories(result.categories);
+          if (result.subcategories) setSubcategoryRecords(result.subcategories);
+          if (result.items) setItems(result.items);
+          if (result.products) setProducts(result.products);
+        } finally {
+          applyingRemoteRef.current = false;
         }
-        const result = await loadCatalogSlices(toStart, lookupRef.current, {
-          fresh,
-        });
-        // Replace the slice with the server list so removals show up on return.
-        if (result.distributors) setDistributors(result.distributors);
-        if (result.sources) setSources(result.sources);
-        if (result.categories) setCategories(result.categories);
-        if (result.subcategories) setSubcategoryRecords(result.subcategories);
-        if (result.items) setItems(result.items);
-        if (result.products) setProducts(result.products);
         if (result.failures.length > 0) {
           const preview = result.failures.slice(0, 2).join(" | ");
           showError(
@@ -617,8 +623,10 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
               : `Some data failed to load. ${preview}`,
           );
         }
-      } finally {
-        for (const slice of toStart) loadedRef.current.add(slice);
+      };
+
+      const markLoaded = () => {
+        for (const slice of needed) loadedRef.current.add(slice);
         setLoadedSlices((current) => {
           const next = [...loadedRef.current];
           if (
@@ -629,12 +637,29 @@ export function AppCatalogProvider({ children }: { children: ReactNode }) {
           }
           return next;
         });
-        for (const slice of toStart) {
-          if (inflightRef.current.get(slice) === done) {
-            inflightRef.current.delete(slice);
-          }
+      };
+
+      try {
+        const revisionAtStart = revisionRef.current;
+        const result = await loadCatalogSlices(needed, lookupRef.current, {
+          fresh: true,
+        });
+        if (ownerId !== loadSeqRef.current) return;
+
+        if (revisionRef.current !== revisionAtStart) {
+          ownerId = ++loadSeqRef.current;
+          const revisionForRetry = revisionRef.current;
+          const retry = await loadCatalogSlices(needed, lookupRef.current, {
+            fresh: true,
+          });
+          if (ownerId !== loadSeqRef.current) return;
+          if (revisionRef.current === revisionForRetry) applyResult(retry);
+          return;
         }
-        finish();
+
+        applyResult(result);
+      } finally {
+        if (ownerId === loadSeqRef.current) markLoaded();
       }
     },
     [setCategories, setDistributors, setItems, setProducts, setSources, setSubcategoryRecords, showError],

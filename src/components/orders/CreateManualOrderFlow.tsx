@@ -11,6 +11,7 @@ import { TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog } from "@/context/AppCatalogContext";
 import type { ManualLine, ManualOrderDraft } from "@/types/distributorOrder";
 import { cn } from "@/utils/cn";
+import { formatCaseBesideStock } from "@/utils/distributorOrdersPage";
 import { formatClock } from "@/utils/format";
 import {
   createManualLines,
@@ -300,12 +301,17 @@ export function CreateManualOrderFlow({
                                   <span className="min-w-0 flex-[1.2] truncate text-[13px] font-medium text-[#111118]">
                                     {line.name}
                                   </span>
-                                  <span className="w-[88px] shrink-0 text-[13px] text-[#111118]">
+                                  <span className="shrink-0 whitespace-nowrap text-[13px] text-[#111118]">
                                     In stock: {line.inStock}
+                                    {line.sourcePer === "Case"
+                                      ? ` · ${formatCaseBesideStock(line.price, line.piecesPerCase, money)}`
+                                      : ""}
                                   </span>
-                                  <span className="w-[96px] shrink-0 text-[13px] text-[#111118]">
-                                    {money(line.price)}/{line.unit}
-                                  </span>
+                                  {line.sourcePer === "Case" ? null : (
+                                    <span className="w-[96px] shrink-0 whitespace-nowrap text-[13px] text-[#111118]">
+                                      {money(line.price)}/{line.unit}
+                                    </span>
+                                  )}
                                   <div className="ml-auto">
                                     <QtyStepper
                                       value={line.quantity}

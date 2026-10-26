@@ -116,12 +116,30 @@ export function AddDistributorModal({
   const [docError, setDocError] = useState("");
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [saving, setSaving] = useState(false);
+  const formDirtyRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      formDirtyRef.current = false;
+      return;
+    }
+    const markDirty = () => {
+      formDirtyRef.current = true;
+    };
+    document.addEventListener("pointerdown", markDirty, true);
+    document.addEventListener("keydown", markDirty, true);
+    return () => {
+      document.removeEventListener("pointerdown", markDirty, true);
+      document.removeEventListener("keydown", markDirty, true);
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) {
       uploadedFilesRef.current.clear();
       return;
     }
+    if (formDirtyRef.current) return;
 
     setErrors({});
     setDocError("");

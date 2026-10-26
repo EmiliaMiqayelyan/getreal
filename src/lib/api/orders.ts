@@ -1,6 +1,7 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { ApiError, apiRequest } from "./client";
+import { FRESH_READ } from "./requestDedupe";
 import { collectPaginated } from "./collectPages";
 import type { ApiOrder } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
@@ -208,7 +209,7 @@ export const ordersApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/orders/${id}`).then(
+    return apiRequest<unknown>(`/orders/${id}`, FRESH_READ).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
     );

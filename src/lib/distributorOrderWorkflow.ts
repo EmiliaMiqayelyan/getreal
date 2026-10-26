@@ -207,6 +207,24 @@ function resolveOrderProductId(
   return product ? recordRef(product) : undefined;
 }
 
+function findCatalogItem(itemId: string, itemCode: string, items: Item[]) {
+  return items.find(
+    (item) =>
+      (itemId !== "" && (item.recordId === itemId || item.id === itemId)) ||
+      (itemCode !== "" && (item.id === itemCode || item.recordId === itemCode)),
+  );
+}
+
+function inferSourcePer(label?: string | null): "Unit" | "Case" | undefined {
+  const normalized = label?.trim().toLowerCase() ?? "";
+  if (!normalized) return undefined;
+  if (normalized === "unit" || normalized === "lb" || normalized === "lbs") {
+    return "Unit";
+  }
+  if (normalized.includes("case")) return "Case";
+  return undefined;
+}
+
 function resolveUnit(
   itemId: string,
   itemCode: string,
@@ -214,13 +232,7 @@ function resolveUnit(
   apiUnit?: string,
 ) {
   if (apiUnit?.trim()) return apiUnit.trim();
-  const match = items.find(
-    (item) =>
-      item.recordId === itemId ||
-      item.id === itemId ||
-      item.id === itemCode ||
-      item.recordId === itemCode,
-  );
+  const match = findCatalogItem(itemId, itemCode, items);
   if (!match) return "";
   const single = match.singleItemUnit.trim();
   if (single) return single;
@@ -262,6 +274,19 @@ export function mapAggregateDemand(input: {
           const itemId = item.itemId?.trim() || "";
           const itemCode = item.itemCode?.trim() || "";
           const itemName = item.itemName?.trim() || "Item";
+          const catalogItem = findCatalogItem(itemId, itemCode, input.items);
+          const sourcePer =
+            catalogItem?.sourcePer ??
+            inferSourcePer(
+              item.buyingUnit || item.singleItemUnit || item.unit,
+            );
+          const piecesPerCase =
+            sourcePer === "Case"
+              ? Math.max(
+                  0,
+                  catalogItem?.contents || readNumber(item.qtyPerUnit),
+                )
+              : undefined;
           const custOrderTotal = readNumber(item.customerOrderTotal);
           const inStock = readOptionalNumber(item.inStock);
           const qtyNeeded = readOptionalNumber(item.qtyNeeded);
@@ -333,6 +358,8 @@ export function mapAggregateDemand(input: {
                   item.singleItemUnit || item.buyingUnit || item.unit,
                 ),
                 qtyPerUnit: Math.max(0, readNumber(item.qtyPerUnit)),
+                sourcePer,
+                piecesPerCase,
               },
             ],
           };
@@ -500,14 +527,20 @@ export function applyAggregateDemandSnapshot(
 }
 
 export function previewRowsForOrder(order: DemandOrder): PreviewRow[] {
-  return order.lines.map((line) => ({
-    id: line.id,
-    itemName: line.itemName,
-    custOrderTotal: line.custOrderTotal,
-    inStock: line.inStock,
-    qtyReceiving: line.qtyReceiving,
-    dateReceivingBy: line.dateReceivingBy,
-  }));
+  return order.lines.map((line) => {
+    const option = line.options[0];
+    const sourcedByCase = option?.sourcePer === "Case";
+    return {
+      id: line.id,
+      itemName: line.itemName,
+      custOrderTotal: line.custOrderTotal,
+      inStock: line.inStock,
+      qtyReceiving: line.qtyReceiving,
+      dateReceivingBy: line.dateReceivingBy,
+      casePrice: sourcedByCase ? option.price : undefined,
+      piecesPerCase: sourcedByCase ? option.piecesPerCase : undefined,
+    };
+  });
 }
 
 /** Stable id for one source order inside a customer batch. */

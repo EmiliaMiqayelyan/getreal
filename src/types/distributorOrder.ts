@@ -6,6 +6,10 @@ export type SupplierOption = {
   price: number;
   unit: string;
   qtyPerUnit: number;
+  /** Catalog sourcing. Case lines show case price and pieces beside stock. */
+  sourcePer?: "Unit" | "Case";
+  /** Pieces in one case when `sourcePer` is Case. */
+  piecesPerCase?: number;
 };
 
 export type OrderListItem = {
@@ -109,6 +113,10 @@ export type PreviewRow = {
   inStock: number | null;
   qtyReceiving: number;
   dateReceivingBy: string;
+  /** Case price in dollars when this line is sourced by the case. */
+  casePrice?: number;
+  /** Pieces in one case when this line is sourced by the case. */
+  piecesPerCase?: number;
 };
 
 export type ManualCatalogItem = {
@@ -120,6 +128,9 @@ export type ManualCatalogItem = {
   inStock: number;
   price: number;
   unit: string;
+  sourcePer: "Unit" | "Case";
+  /** Pieces in one case. Meaningful when `sourcePer` is Case. */
+  piecesPerCase: number;
 };
 
 export type ManualLine = ManualCatalogItem & {

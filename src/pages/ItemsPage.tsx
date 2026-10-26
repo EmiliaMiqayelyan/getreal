@@ -328,6 +328,7 @@ export default function ItemsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Item | null>(null);
   const itemSaveLock = useRef(false);
+  const editRequestRef = useRef(0);
 
   const salePriceByItemRef = useMemo(() => {
     const map = new Map<string, number>();
@@ -431,6 +432,7 @@ export default function ItemsPage() {
   }
 
   function openEdit(item: Item) {
+    const requestId = ++editRequestRef.current;
     const latest = rows.find((row) => row.id === item.id) ?? item;
     setEditing(latest);
     setModalOpen(true);
@@ -440,6 +442,7 @@ export default function ItemsPage() {
     void itemsApi
       .getById(pathId)
       .then((remote) => {
+        if (requestId !== editRequestRef.current) return;
         const mapped = mapApiItemToItem(remote, 0, {
           categoriesById: new Map(
             categories
@@ -473,11 +476,13 @@ export default function ItemsPage() {
         );
       })
       .catch((error) => {
+        if (requestId !== editRequestRef.current) return;
         notifyApiError(error, "Failed to load item details.");
       });
   }
 
   function closeModal() {
+    editRequestRef.current += 1;
     setModalOpen(false);
     setEditing(null);
   }
@@ -848,6 +853,7 @@ export default function ItemsPage() {
         canEditPricing={!editing || canEditPricing}
         canSave={!editing || canEdit || canEditPricing}
         onSave={async (item) => {
+          editRequestRef.current += 1;
           if (itemSaveLock.current) return;
           itemSaveLock.current = true;
           try {
@@ -907,44 +913,18 @@ export default function ItemsPage() {
                   const mapped = mapApiItemToItem(updated, 0, mapOpts);
                   savedItem = {
                     ...item,
-                    ...mapped,
                     id: editing.id,
                     recordId: mapped.recordId ?? editing.recordId,
-                    merchandisingName:
-                      item.merchandisingName || mapped.merchandisingName,
-                    preorderInfo: item.preorderInfo,
-                    caseBy: item.caseBy || mapped.caseBy,
-                    caseWeightLbs: item.caseWeightLbs,
-                    pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
-                    merchandiseWeight:
-                      mapped.merchandiseWeight || item.merchandiseWeight,
-                    sourcePer: item.sourcePer || mapped.sourcePer,
-                    source: item.source || mapped.source,
-                    sellingPrice: item.sellingPrice,
-                    category: item.category.trim() || mapped.category,
-                    subcategory: item.subcategory.trim() || mapped.subcategory,
-                    subcategoryId: item.subcategoryId || mapped.subcategoryId,
+                    photos: mapped.photos.length > 0 ? mapped.photos : item.photos,
                   };
                 } else {
                   const created = await itemsApi.create(payload);
                   const mapped = mapApiItemToItem(created, 0, mapOpts);
                   savedItem = {
                     ...item,
-                    ...mapped,
-                    merchandisingName:
-                      item.merchandisingName || mapped.merchandisingName,
-                    preorderInfo: item.preorderInfo,
-                    caseBy: item.caseBy || mapped.caseBy,
-                    caseWeightLbs: item.caseWeightLbs,
-                    pieceWeightOz: item.pieceWeightOz || mapped.pieceWeightOz,
-                    merchandiseWeight:
-                      mapped.merchandiseWeight || item.merchandiseWeight,
-                    sourcePer: item.sourcePer || mapped.sourcePer,
-                    source: item.source || mapped.source,
-                    sellingPrice: item.sellingPrice,
-                    category: item.category.trim() || mapped.category,
-                    subcategory: item.subcategory.trim() || mapped.subcategory,
-                    subcategoryId: item.subcategoryId || mapped.subcategoryId,
+                    id: mapped.id || item.id,
+                    recordId: mapped.recordId,
+                    photos: mapped.photos.length > 0 ? mapped.photos : item.photos,
                   };
                 }
 

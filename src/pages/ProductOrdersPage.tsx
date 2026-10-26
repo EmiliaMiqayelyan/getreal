@@ -91,6 +91,7 @@ import {
   type DeliveredFilterCriteria,
   filterDeliveredOrders,
   filterOrderDemandRows,
+  formatCaseBesideStock,
   formatOrderTimestamp,
   getDeliveredEmptyMessage,
   getOrderDemandEmptyMessage,
@@ -123,11 +124,11 @@ const REVIEW_LINE_GRID =
   "grid grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_4.5rem_6rem_7rem] items-center gap-x-8";
 /** Shared prep-table tracks so QTY Needed steppers stay column-aligned across rows. */
 const ORDER_PREP_COLS =
-  "grid-cols-[minmax(0,1.3fr)_minmax(0,1.5fr)_minmax(0,0.85fr)_minmax(0,0.85fr)_minmax(0,0.95fr)_minmax(0,0.7fr)_120px]";
+  "grid-cols-[minmax(0,1.3fr)_minmax(0,1.4fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.85fr)_minmax(180px,1.35fr)_120px]";
 const PLACED_ORDER_COLUMNS =
   "grid grid-cols-[28px_112px_minmax(140px,1.35fr)_minmax(120px,0.95fr)_minmax(210px,1.25fr)_minmax(88px,0.7fr)_minmax(16px,0.4fr)_100px] items-center gap-x-4 px-4";
 const PREVIEW_COLUMNS =
-  "grid grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1.3fr)] items-center gap-x-4 px-4";
+  "grid grid-cols-[minmax(0,1.6fr)_minmax(0,0.9fr)_minmax(180px,1.45fr)_minmax(0,1fr)_minmax(0,1.1fr)] items-center gap-x-4 px-4";
 
 type View = "list" | "orderList" | "review" | "manual";
 type Tab = "Orders" | "Delivered";
@@ -135,6 +136,16 @@ type Tab = "Orders" | "Delivered";
 function money(value: number) {
   if (Number.isInteger(value)) return `$${value}`;
   return `$${value.toFixed(2).replace(/0$/, "").replace(/\.$/, "")}`;
+}
+
+function stockWithCase(
+  inStock: number | null | undefined,
+  casePrice?: number,
+  piecesPerCase?: number,
+) {
+  const stock = inStock ?? "—";
+  if (casePrice == null || piecesPerCase == null) return String(stock);
+  return `${stock} · ${formatCaseBesideStock(casePrice, piecesPerCase, money)}`;
 }
 
 /**
@@ -1584,7 +1595,7 @@ export default function ProductOrdersPage() {
                         </Button>
                       ) : null}
                     </div>
-                    <ScrollTable minWidth={960}>
+                    <ScrollTable minWidth={1120}>
                       <div
                         className={cn(
                           PREVIEW_COLUMNS,
@@ -1620,7 +1631,13 @@ export default function ProductOrdersPage() {
                           >
                             <span>{row.itemName}</span>
                             <span>{row.custOrderTotal}</span>
-                            <span>{row.inStock ?? "—"}</span>
+                            <span className="whitespace-nowrap">
+                              {stockWithCase(
+                                row.inStock,
+                                row.casePrice,
+                                row.piecesPerCase,
+                              )}
+                            </span>
                             <span>{row.qtyReceiving}</span>
                             <span>{row.dateReceivingBy}</span>
                           </div>
@@ -1777,7 +1794,7 @@ export default function ProductOrdersPage() {
                     Calculate QTY
                   </button>
                 </div>
-                <ScrollTable minWidth={980}>
+                <ScrollTable minWidth={1120}>
                   <div
                     className={cn(
                       "grid items-center gap-x-4 border-b border-[#00000014] px-4",
@@ -1826,8 +1843,16 @@ export default function ProductOrdersPage() {
                         <span className="text-[13px] text-[#111118]">
                           {row.custOrderTotal}
                         </span>
-                        <span className="text-[13px] text-[#111118]">
-                          {row.inStock ?? "—"}
+                        <span className="whitespace-nowrap text-[13px] text-[#111118]">
+                          {stockWithCase(
+                            row.inStock,
+                            option?.sourcePer === "Case"
+                              ? option.price
+                              : undefined,
+                            option?.sourcePer === "Case"
+                              ? option.piecesPerCase
+                              : undefined,
+                          )}
                         </span>
                         <div className="flex w-[120px] justify-center">
                           <QtyStepper

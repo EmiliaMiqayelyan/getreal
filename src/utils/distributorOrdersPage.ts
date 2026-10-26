@@ -32,6 +32,18 @@ export function nextDeliveryId(existing: PlacedOrder[]) {
   return String(max + 1).padStart(4, "0");
 }
 
+/** Case price and pieces per case, shown beside an in-stock figure. */
+export function formatCaseBesideStock(
+  price: number,
+  piecesPerCase: number,
+  formatMoney: (value: number) => string,
+) {
+  const pieces = Number.isFinite(piecesPerCase)
+    ? Math.max(0, Math.round(piecesPerCase))
+    : 0;
+  return `${formatMoney(price)}/case · ${pieces} pcs`;
+}
+
 export function formatOrderTimestamp(date = new Date()) {
   return date.toLocaleString("en-US", {
     month: "short",

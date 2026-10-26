@@ -36,6 +36,8 @@ export function toManualCatalogItem(
     inStock: 0,
     price: item.buyingPrice,
     unit: getItemUnitLabel(item) || "Each",
+    sourcePer: item.sourcePer,
+    piecesPerCase: item.sourcePer === "Case" ? Math.max(0, item.contents) : 0,
   };
 }
 

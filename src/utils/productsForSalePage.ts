@@ -13,6 +13,7 @@ export type ProductTableDisplay = {
   source: string;
   salesPrice: number;
   unitOfSales: string;
+  photos: ItemPhoto[];
 };
 
 export type ProductDetailsDisplay = {
@@ -41,6 +42,7 @@ export function resolveProductTableDisplay(
       source: product.source || "—",
       salesPrice: product.salesPrice,
       unitOfSales: product.unitOfSales || "—",
+      photos: product.photos,
     };
   }
 
@@ -49,6 +51,7 @@ export function resolveProductTableDisplay(
     source: item.source || "—",
     salesPrice: item.sellingPrice,
     unitOfSales: getItemSaleUnit(item),
+    photos: item.photos,
   };
 }
 

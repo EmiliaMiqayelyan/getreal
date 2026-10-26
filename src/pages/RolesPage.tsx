@@ -162,6 +162,8 @@ export default function RolesPage() {
     sessionPermissions,
   } = useRolesUsers();
   const [loadingUsers, setLoadingUsers] = useState(() => isApiConfigured());
+  const directoryLoadRef = useRef(0);
+  const editRequestRef = useRef(0);
   const { notifyApiError, showSuccess } = useApiFeedback();
   const [draftPermissions, setDraftPermissions] = useState<
     Record<string, RolePermissions>
@@ -238,7 +240,9 @@ export default function RolesPage() {
   }
 
   const refreshDirectory = useCallback(async () => {
+    const loadId = ++directoryLoadRef.current;
     const next = await loadRolesDirectory();
+    if (loadId !== directoryLoadRef.current) return;
     setUsers(next.users);
     setManagedRoles(next.roles);
   }, [setManagedRoles, setUsers]);
@@ -367,8 +371,8 @@ export default function RolesPage() {
         const role = findManagedRoleForUser(user, managedRolesRef.current);
         const roleId = role ? serverRoleId(role) : undefined;
         const [remote, remoteRole] = await Promise.all([
-          usersApi.getById(pathId, { fresh: true }),
-          roleId ? rolesApi.getById(roleId, { fresh: true }) : null,
+          usersApi.getById(pathId),
+          roleId ? rolesApi.getById(roleId) : null,
         ]);
         const personal = apiPermissionNames(remote.personalPermissions);
         const freshRole =
@@ -446,6 +450,7 @@ export default function RolesPage() {
       setModalOpen(true);
       return;
     }
+    const requestId = ++editRequestRef.current;
     setDraft(toDraft(user));
     setFormErrors({});
     setModalOpen(true);
@@ -459,6 +464,7 @@ export default function RolesPage() {
     void usersApi
       .getById(pathId)
       .then((remote) => {
+        if (requestId !== editRequestRef.current) return;
         setDraft((current) =>
           current.id === user.id
             ? {
@@ -476,6 +482,7 @@ export default function RolesPage() {
         );
       })
       .catch((error) => {
+        if (requestId !== editRequestRef.current) return;
         notifyApiError(error, "Failed to load user details.");
       });
   }
@@ -506,6 +513,7 @@ export default function RolesPage() {
 
   function closeModal() {
     if (pending) return;
+    editRequestRef.current += 1;
     setModalOpen(false);
     setCopied(false);
     setFormErrors({});
@@ -530,6 +538,7 @@ export default function RolesPage() {
   }
 
   async function saveUser() {
+    editRequestRef.current += 1;
     if (pending) return;
     const errors = validateUserForm({
       name: draft.name,

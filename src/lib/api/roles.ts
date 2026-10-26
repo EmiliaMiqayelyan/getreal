@@ -1,7 +1,7 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { apiRequest } from "./client";
-import { CATALOG_LIST_CACHE_MS } from "./requestDedupe";
+import { CATALOG_LIST_CACHE_MS, FRESH_READ } from "./requestDedupe";
 import type { ApiRole } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
@@ -45,12 +45,9 @@ export const rolesApi = {
     );
   },
 
-  /** `fresh` skips request sharing and the browser cache. */
-  getById(id: string, options: { fresh?: boolean } = {}) {
-    return apiRequest<unknown>(
-      `/roles/${id}`,
-      options.fresh ? { dedupe: false, cache: "no-store" } : {},
-    ).then(
+  /** Always reads from the server so an open editor cannot show a pre-save copy. */
+  getById(id: string) {
+    return apiRequest<unknown>(`/roles/${id}`, FRESH_READ).then(
       (payload) =>
         pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
     );

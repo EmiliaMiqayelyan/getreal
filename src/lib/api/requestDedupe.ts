@@ -18,6 +18,13 @@ export function catalogListCacheOptions(fresh?: boolean): {
   return { cacheTtlMs: CATALOG_LIST_CACHE_MS };
 }
 
+/** Detail reads after an edit must not reuse a response that started earlier. */
+export const FRESH_READ = {
+  cacheTtlMs: 0,
+  dedupe: false as const,
+  cache: "no-store" as const,
+};
+
 export type RequestIdentity = {
   method: string;
   url: string;
@@ -170,36 +177,45 @@ export function runDedupedRequest<T>(
   return tracked as Promise<T>;
 }
 
-/** Drop cached GET responses whose URL matches or is under this path. */
-export function invalidateCacheForUrl(url: string): void {
-  if (responseCache.size === 0) return;
-
-  let path: string;
+function requestPath(url: string): string {
   try {
-    path = url.startsWith("http") ? new URL(url).pathname : url.split("?")[0];
+    return url.startsWith("http") ? new URL(url).pathname : url.split("?")[0];
   } catch {
-    path = url.split("?")[0];
+    return url.split("?")[0];
   }
+}
 
+function pathsOverlap(left: string, right: string): boolean {
+  return (
+    left === right ||
+    left.startsWith(`${right}/`) ||
+    right.startsWith(`${left}/`)
+  );
+}
+
+function requestKeyMatchesPath(key: string, path: string): boolean {
+  // key format: METHOD\0url\0auth...
+  const parts = key.split("\0");
+  const method = parts[0] ?? "";
+  if (method !== "GET" && method !== "HEAD") return false;
+  return pathsOverlap(requestPath(parts[1] ?? ""), path);
+}
+
+/**
+ * Drop cached and in-flight GETs for this path.
+ * A list request that started before a save must not be reused afterward.
+ * The original caller can still receive that older response; callers decide
+ * whether it is still safe to apply.
+ */
+export function invalidateCacheForUrl(url: string): void {
+  if (responseCache.size === 0 && inflight.size === 0) return;
+
+  const path = requestPath(url);
   for (const key of responseCache.keys()) {
-    // key format: METHOD\0url\0auth...
-    const parts = key.split("\0");
-    const cachedUrl = parts[1] ?? "";
-    let cachedPath = cachedUrl;
-    try {
-      cachedPath = cachedUrl.startsWith("http")
-        ? new URL(cachedUrl).pathname
-        : cachedUrl.split("?")[0];
-    } catch {
-      cachedPath = cachedUrl.split("?")[0];
-    }
-    if (
-      cachedPath === path ||
-      cachedPath.startsWith(`${path}/`) ||
-      path.startsWith(`${cachedPath}/`)
-    ) {
-      responseCache.delete(key);
-    }
+    if (requestKeyMatchesPath(key, path)) responseCache.delete(key);
+  }
+  for (const key of inflight.keys()) {
+    if (requestKeyMatchesPath(key, path)) inflight.delete(key);
   }
 }
 

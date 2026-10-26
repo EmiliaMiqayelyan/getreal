@@ -34,7 +34,7 @@ export function getItemSaleUnit(item: Item) {
   );
 }
 
-export function getItemPrimaryPhoto(item: Item) {
+export function getItemPrimaryPhoto(item: { photos: ItemPhoto[] }) {
   const primary =
     item.photos.find((photo) => photo.isPrimary) ?? item.photos[0];
   return primary?.url || ITEM_PHOTO_PLACEHOLDER;

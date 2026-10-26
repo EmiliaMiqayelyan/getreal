@@ -1,6 +1,7 @@
 import { isUuid } from "@/utils/entityIds";
 
 import { apiRequest } from "./client";
+import { FRESH_READ } from "./requestDedupe";
 import type { ApiInventory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -441,7 +442,7 @@ export const inventoryApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/inventory/${id}`).then((payload) =>
+    return apiRequest<unknown>(`/inventory/${id}`, FRESH_READ).then((payload) =>
       unwrapInventory(payload),
     );
   },

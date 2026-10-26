@@ -957,11 +957,13 @@ function validateChecks(
       continue;
     }
     if (!state.itemId.trim()) {
-      errors.push(`${item.name}: item / order ID required`);
+      errors.push(`${item.name}: item ID required`);
     }
-    if (state.status === "accepted" && !state.expiration) {
-      errors.push(`${item.name}: expiration date required`);
-    } else if (state.status === "accepted" && !isAfterToday(state.expiration)) {
+    if (
+      state.status === "accepted" &&
+      state.expiration &&
+      !isAfterToday(state.expiration)
+    ) {
       errors.push(`${item.name}: expiration date must be after today`);
     }
     if (state.status === "rejected" && !state.reason) {
@@ -1098,9 +1100,10 @@ function CheckOrderView({
     }
   }
 
-  // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right
+  // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right.
+  // Qty and unit are fixed so "QTY" and "Units / case" stay on one line.
   const col =
-    "grid grid-cols-[minmax(0,1.4fr)_40px_52px_148px_minmax(180px,auto)_minmax(0,1fr)_auto] items-center gap-x-4 px-4";
+    "grid grid-cols-[minmax(240px,1.4fr)_56px_100px_148px_minmax(180px,auto)_minmax(0,1fr)_auto] items-center gap-x-4 px-4";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -1142,24 +1145,21 @@ function CheckOrderView({
               <h2 className="mb-3 text-[16px] font-semibold text-[#111118]">
                 {category}
               </h2>
-              <ScrollTable minWidth={900} className="rounded-[12px]">
+              <ScrollTable minWidth={1000} className="rounded-[12px]">
                 <div
                   className={cn(
                     PINNED_HEADER,
                     TABLE_HEADER,
-                    "h-10 border-b border-[#00000014]",
+                    "h-10 whitespace-nowrap border-b border-[#00000014]",
                     col,
                   )}
                 >
                   <span>Item Name</span>
                   <span>Qty</span>
                   <span>Unit</span>
+                  <span>Expiration Date</span>
                   <span>
-                    Expiration Date
-                    <span className="text-danger"> *</span>
-                  </span>
-                  <span>
-                    {category === "Fruits" ? "Item ID" : "Order ID"}
+                    Item ID
                     <span className="text-danger"> *</span>
                   </span>
                   <span aria-hidden />
@@ -1189,10 +1189,10 @@ function CheckOrderView({
                       <span className="min-w-0 truncate text-[13px] text-[#111118]">
                         {item.name}
                       </span>
-                      <span className="text-[13px] font-semibold text-[#111118]">
+                      <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
                         {item.quantity}
                       </span>
-                      <span className="text-[13px] font-bold text-[#111118]">
+                      <span className="whitespace-nowrap text-[13px] font-bold text-[#111118]">
                         {item.unit || "—"}
                       </span>
                       <div className="min-w-0">
@@ -1709,13 +1709,6 @@ export default function DistributorDeliveriesPage() {
             status === "accepted"
               ? expirationTimestamp(result?.expiration)
               : undefined;
-          if (status === "accepted" && !expirationDate) {
-            notifyApiError(
-              new Error("Missing expiration date"),
-              `${item.name} needs an expiration date before it can be validated.`,
-            );
-            return;
-          }
           payload.push({
             productId: item.productId,
             status,

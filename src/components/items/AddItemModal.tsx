@@ -128,6 +128,7 @@ export function AddItemModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [manageSubcategoriesOpen, setManageSubcategoriesOpen] = useState(false);
+  const formDirtyRef = useRef(false);
 
   const distributorOptions = useMemo(
     () => distributors.map((entry) => entry.name).sort(),
@@ -186,7 +187,23 @@ export function AddItemModal({
   });
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formDirtyRef.current = false;
+      return;
+    }
+    const markDirty = () => {
+      formDirtyRef.current = true;
+    };
+    document.addEventListener("pointerdown", markDirty, true);
+    document.addEventListener("keydown", markDirty, true);
+    return () => {
+      document.removeEventListener("pointerdown", markDirty, true);
+      document.removeEventListener("keydown", markDirty, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || formDirtyRef.current) return;
 
     setErrors({});
     setSaving(false);

@@ -1,10 +1,12 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
+import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiItem, ApiItemPhoto } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export type CreateItemPayload = {
   name: string;
+  /** Customer-facing name. Null clears a stored value. */
+  merchandisingName?: string | null;
   /** Category name, e.g. Fruits or Vegetables. */
   category: string;
   subcategoryId?: string;
@@ -47,7 +49,7 @@ export const itemsApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/items/${id}`).then(
+    return apiRequest<unknown>(`/items/${id}`, FRESH_READ).then(
       (payload) =>
         pickNamedEntity<ApiItem>(payload, "item") ?? (payload as ApiItem),
     );

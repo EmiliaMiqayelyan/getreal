@@ -289,6 +289,7 @@ export function toCreateItemPayload(
 
   return {
     name: item.name.trim() || item.merchandisingName.trim(),
+    merchandisingName: item.merchandisingName.trim() || null,
     category,
     ...(subcategoryId ? { subcategoryId } : {}),
     distributorId,

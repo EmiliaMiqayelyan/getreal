@@ -42,12 +42,13 @@ import {
   subcategoriesApi,
 } from "@/lib/api";
 import { toCreateProductPayload } from "@/lib/api/payloads";
-import { type Item } from "@/types/item";
+import { type Item, type ItemPhoto } from "@/types/item";
 import type { Source } from "@/types/source";
 import { type ProductForSale } from "@/types/productForSale";
 import { categoryNamesFromCatalog } from "@/utils/categories";
 import { cn } from "@/utils/cn";
 import { findByEntityRef, recordRef } from "@/utils/entityIds";
+import { getItemPrimaryPhoto } from "@/utils/items";
 import { validateAddProductForSale } from "@/utils/productForSaleForm";
 import {
   filterProductsForSale,
@@ -72,7 +73,37 @@ const BODY = "text-[13px] font-medium leading-none text-[#111118]";
 
 /** One track list for the header and every body row. Not a subgrid item — sticky grid items overlap the first row. */
 const PRODUCT_COLUMNS =
-  "grid grid-cols-[40px_112px_64px_minmax(176px,1fr)_minmax(120px,180px)_96px_minmax(120px,140px)_132px] items-center gap-x-4 px-4";
+  "grid grid-cols-[40px_112px_64px_64px_minmax(176px,1fr)_minmax(120px,180px)_96px_minmax(120px,140px)_132px] items-center gap-x-4 px-4";
+const PRODUCT_MOBILE_COLUMNS =
+  "grid grid-cols-[32px_minmax(0,1fr)_52px_64px] items-center gap-x-3";
+
+function ProductPhotoThumb({
+  name,
+  photos,
+}: {
+  name: string;
+  photos: ItemPhoto[];
+}) {
+  const hasUploadedPhoto = photos.length > 0;
+
+  return (
+    <div className="relative h-[51px] w-[53px] overflow-hidden rounded-[8px] bg-[#F3F3F1]">
+      <img
+        src={getItemPrimaryPhoto({ photos })}
+        alt={hasUploadedPhoto ? `${name} photo` : ""}
+        className={cn(
+          "size-full",
+          hasUploadedPhoto ? "object-cover" : "object-contain p-1",
+        )}
+      />
+      {photos.length > 1 ? (
+        <span className="absolute right-0.5 bottom-0.5 rounded bg-black/65 px-1 text-[9px] font-semibold text-white">
+          {photos.length}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function DragHandle() {
   return (
@@ -261,7 +292,7 @@ function ProductCells({
   if (layout === "mobile") {
     return (
       <>
-        <div className="grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3">
+        <div className={PRODUCT_MOBILE_COLUMNS}>
           {handle}
           <div className={cn(BODY, "min-w-0 truncate font-semibold")}>
             {display.merchandisingName}
@@ -274,6 +305,10 @@ function ProductCells({
               onCheckedChange={(live) => onToggleLive(row.id, live)}
             />
           </div>
+          <ProductPhotoThumb
+            name={display.merchandisingName}
+            photos={display.photos}
+          />
         </div>
         <div className="mt-2 pl-[44px]">
           <IdPill>{row.id}</IdPill>
@@ -314,6 +349,12 @@ function ProductCells({
           disabled={!access.canToggleLive}
           label={`${row.live ? "Disable" : "Enable"} live for ${display.merchandisingName}`}
           onCheckedChange={(live) => onToggleLive(row.id, live)}
+        />
+      </div>
+      <div className="flex items-center">
+        <ProductPhotoThumb
+          name={display.merchandisingName}
+          photos={display.photos}
         />
       </div>
       <div
@@ -754,7 +795,8 @@ function SubcategoryTable({
         <div
           className={cn(
             TABLE_HEADER,
-            "grid grid-cols-[32px_minmax(0,1fr)_52px] items-center gap-x-3 px-4 py-2",
+            PRODUCT_MOBILE_COLUMNS,
+            "px-4 py-2",
           )}
         >
           <span className="whitespace-nowrap">ID</span>
@@ -762,6 +804,7 @@ function SubcategoryTable({
             Merchandising Name
           </span>
           <span className="text-right whitespace-nowrap">Live</span>
+          <span className="whitespace-nowrap">Photo</span>
         </div>
         <div
           ref={(node) => {
@@ -771,7 +814,7 @@ function SubcategoryTable({
         />
         {rows.map((row, index) => renderRow(row, index, "mobile"))}
       </div>
-      <ScrollTable minWidth={1140} className="hidden md:block">
+      <ScrollTable minWidth={1220} className="hidden md:block">
         {renderHeading()}
         <div>
           <div
@@ -785,6 +828,7 @@ function SubcategoryTable({
             <span aria-hidden />
             <span>ID</span>
             <span>Live</span>
+            <span>Photo</span>
             <span>Merchandising Name</span>
             <span>Source</span>
             <span>Sales Price</span>

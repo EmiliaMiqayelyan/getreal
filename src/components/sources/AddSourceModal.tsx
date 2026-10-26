@@ -64,6 +64,7 @@ export function AddSourceModal({
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [saving, setSaving] = useState(false);
   const logoFileRef = useRef<File | null>(null);
+  const formDirtyRef = useRef(false);
 
   const distributorOptions = useMemo(
     () => distributors.map((entry) => entry.name).sort(),
@@ -71,7 +72,23 @@ export function AddSourceModal({
   );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      formDirtyRef.current = false;
+      return;
+    }
+    const markDirty = () => {
+      formDirtyRef.current = true;
+    };
+    document.addEventListener("pointerdown", markDirty, true);
+    document.addEventListener("keydown", markDirty, true);
+    return () => {
+      document.removeEventListener("pointerdown", markDirty, true);
+      document.removeEventListener("keydown", markDirty, true);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || formDirtyRef.current) return;
 
     setErrors({});
     setImageError("");
