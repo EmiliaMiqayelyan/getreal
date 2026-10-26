@@ -108,25 +108,25 @@ export function calcCostPerUnit(buyingPrice: number, contents: number) {
 }
 
 /**
- * 40% margin suggested price is cost per piece times the remaining share:
- * cost × (1 - 40/100) = cost × 0.6.
+ * 40% margin suggested price leaves that margin on the selling price:
+ * cost per piece / (1 - 40/100) = cost / 0.6.
  */
 export function calcSuggestedPrice(costPerPiece: number, marginPercent = 40) {
-  if (costPerPiece <= 0 || marginPercent < 0 || marginPercent > 100) return 0;
-  return costPerPiece * (1 - marginPercent / 100);
+  if (costPerPiece <= 0 || marginPercent < 0 || marginPercent >= 100) return 0;
+  return costPerPiece / (1 - marginPercent / 100);
 }
 
 /**
- * Final margin in the Figma prototype is markup % on cost:
- * ((sell − cost) ÷ cost) × 100.
+ * Final margin is profit as a share of the selling price:
+ * ((sell − cost) / sell) × 100.
  */
 export function calcFinalMarginPercent(
   sellingPrice: number,
   costPerPiece: number,
 ) {
-  if (costPerPiece <= 0) return 0;
   if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) return 0;
-  return ((sellingPrice - costPerPiece) / costPerPiece) * 100;
+  if (!Number.isFinite(costPerPiece)) return 0;
+  return ((sellingPrice - costPerPiece) / sellingPrice) * 100;
 }
 
 export function formatFinalMarginPercent(value: number) {
@@ -146,7 +146,7 @@ function formulaAmount(value: number, forceDecimals = false) {
 
 function suggestedPriceFormula(costPerPiece: number) {
   const suggestedPrice = calcSuggestedPrice(costPerPiece);
-  return `40% Margin Suggested Price = Cost per piece × 0.6 (${formulaAmount(costPerPiece, true)} × 0.6 = ${formulaAmount(suggestedPrice, true)} )`;
+  return `40% Margin Suggested Price = Cost per piece ÷ 0.6 (${formulaAmount(costPerPiece, true)} ÷ 0.6 = ${formulaAmount(suggestedPrice, true)} )`;
 }
 
 /** Live formula captions from the pricing prototype. */

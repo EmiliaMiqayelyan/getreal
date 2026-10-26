@@ -419,8 +419,7 @@ export function mapApiItemToItem(
     id: preferModelId(item, ["itemCode"], recordId ?? `API-ITEM-${index + 1}`),
     recordId,
     name: item.name?.trim() || "N/A",
-    merchandisingName:
-      item.merchandisingName?.trim() || item.name?.trim() || "N/A",
+    merchandisingName: item.merchandisingName?.trim() || "",
     description: item.description ?? "",
     preorderInfo: (item.preOrderInformation ?? item.preorderInfo ?? "").trim(),
     category: categoryName,

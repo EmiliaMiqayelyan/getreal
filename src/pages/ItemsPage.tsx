@@ -147,8 +147,7 @@ async function upsertItemSaleProduct(
 
   const body = {
     itemId: itemRecordId,
-    merchandisingName:
-      item.merchandisingName.trim() || item.name.trim() || "Item",
+    merchandisingName: item.merchandisingName.trim(),
     sellingPrice: dollarsToCents(item.sellingPrice),
     description: item.description.trim() || undefined,
     marginSugPrice: dollarsToCents(pricing.suggestedPrice),

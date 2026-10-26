@@ -5,7 +5,7 @@ import {
 } from "@/types/item";
 import type { ProductForSale } from "@/types/productForSale";
 import { findByEntityRef } from "@/utils/entityIds";
-import { getItemDisplayName, getItemSaleUnit } from "@/utils/items";
+import { getItemSaleUnit } from "@/utils/items";
 import type { SubcategoryMap } from "@/utils/subcategories";
 
 export type ProductTableDisplay = {
@@ -47,7 +47,8 @@ export function resolveProductTableDisplay(
   }
 
   return {
-    merchandisingName: getItemDisplayName(item),
+    merchandisingName:
+      item.merchandisingName.trim() || product.merchandisingName,
     source: item.source || "—",
     salesPrice: item.sellingPrice,
     unitOfSales: getItemSaleUnit(item),
@@ -74,7 +75,8 @@ export function resolveProductDetails(
 
   return {
     id: product.id,
-    merchandisingName: getItemDisplayName(item),
+    merchandisingName:
+      item.merchandisingName.trim() || product.merchandisingName,
     source: item.source || "—",
     salesPrice: item.sellingPrice,
     unitOfSales: getItemSaleUnit(item),
@@ -143,7 +145,8 @@ export function resolveProductInheritedFields(
     subcategory: asLabel(item.subcategory),
     distributor: item.distributor,
     source: item.source,
-    merchandisingName: getItemDisplayName(item),
+    merchandisingName:
+      item.merchandisingName.trim() || product.merchandisingName,
     itemName: item.name,
   };
 }
