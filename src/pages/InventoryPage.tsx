@@ -1927,39 +1927,6 @@ export default function InventoryPage() {
                             </div>
 
                             <div>
-                              <div
-                                className={cn(
-                                  GRID,
-                                  PINNED_HEADER,
-                                  "h-10 border-b border-[#00000014]",
-                                  TABLE_HEADER,
-                                )}
-                              >
-                                <div className="min-w-0 whitespace-nowrap">
-                                  Order ID
-                                </div>
-                                <div aria-hidden />
-                                <div className="whitespace-nowrap">
-                                  Distributor
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  {section.sourceLabel}
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Delivery Date
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Purchased
-                                </div>
-                                <div className="whitespace-nowrap">
-                                  Qty Portion
-                                </div>
-                                <div className="whitespace-nowrap">Unit</div>
-                                <div className="whitespace-nowrap">
-                                  Location
-                                </div>
-                              </div>
-
                               {section.products.map((product, index) => {
                                 const open = expanded.has(product.id);
                                 const total = stockTotal(product);
@@ -2007,6 +1974,41 @@ export default function InventoryPage() {
 
                                     {open ? (
                                       <div className="contents">
+                                        <div
+                                          className={cn(
+                                            GRID,
+                                            PINNED_HEADER,
+                                            "h-10 border-b border-[#00000014]",
+                                            TABLE_HEADER,
+                                          )}
+                                        >
+                                          <div className="min-w-0 whitespace-nowrap">
+                                            Order ID
+                                          </div>
+                                          <div aria-hidden />
+                                          <div className="whitespace-nowrap">
+                                            Distributor
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            {section.sourceLabel}
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            Delivery Date
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            Purchased
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            Qty Portion
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            Unit
+                                          </div>
+                                          <div className="whitespace-nowrap">
+                                            Location
+                                          </div>
+                                        </div>
+
                                         {product.lots.length > 0 ? (
                                           product.lots.map((lot, lotIndex) => (
                                             <div
