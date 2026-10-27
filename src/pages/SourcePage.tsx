@@ -8,14 +8,16 @@ import { SourceFilters } from "@/components/sources/SourceFilters";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { ScrollTable } from "@/components/ui/ScrollTable";
+import { ThumbImage } from "@/components/ui/ThumbImage";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import { useAppCatalog, useCatalogSlice } from "@/context/AppCatalogContext";
 import { useRolesUsers } from "@/context/RolesUsersContext";
-import { useLazyWindow } from "@/hooks/useLazyWindow";
-import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
+import { useLazyWindow } from "@/hooks/useLazyWindow";
+import { useIsMdUp } from "@/hooks/useMediaQuery";
 import { isApiConfigured, mapApiSourceToSource, sourcesApi } from "@/lib/api";
 import { toCreateSourcePayload } from "@/lib/api/payloads";
 import type { ExportRequest } from "@/types/export";
@@ -40,6 +42,10 @@ const BODY = "text-[13px] leading-[18px] font-medium text-[#111118]";
 const GRID =
   "grid grid-cols-[112px_67px_minmax(0,1.5fr)_minmax(0,1.25fr)_minmax(0,1.2fr)_136px_48px] items-center gap-x-3";
 
+/** Skip paint/layout for offscreen rows while scrolling long source lists. */
+const ROW_SCROLL_HINT =
+  "[content-visibility:auto] [contain-intrinsic-size:auto_78px]";
+
 function SourcePhoto({
   logoUrl,
   name,
@@ -59,7 +65,13 @@ function SourcePhoto({
       )}
     >
       {logoUrl ? (
-        <img src={logoUrl} alt={name} className="size-full object-contain" />
+        <ThumbImage
+          src={logoUrl}
+          alt={name}
+          width={compact ? 56 : 67}
+          height={compact ? 56 : 46}
+          className="object-contain"
+        />
       ) : compact ? (
         <svg
           width="18"
@@ -97,6 +109,7 @@ export default function SourcePage() {
   const canCreate = sessionPermissions.sourceCreate;
   const canEdit = sessionPermissions.sourceEdit;
   const canRemove = sessionPermissions.sourceRemove;
+  const isMdUp = useIsMdUp();
 
   const {
     sources: rows,
@@ -229,146 +242,148 @@ export default function SourcePage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA] px-4 py-5 md:px-7 md:py-5">
         {!catalogReady ? (
           <AppLoader variant="table" label="Loading sources" />
-        ) : (
-          <>
-            <div className="min-h-0 flex-1 space-y-2 overflow-auto md:hidden">
-              {filtered.length === 0 ? (
+        ) : isMdUp ? (
+          <ScrollTable fill minWidth={910}>
+            <div
+              className={cn(
+                GRID,
+                TABLE_HEADER,
+                PINNED_HEADER,
+                "h-10 border-b border-[#00000014] px-4",
+              )}
+            >
+              <div>Source ID</div>
+              <div>Photo</div>
+              <div className="pl-3">Name</div>
+              <div>Location</div>
+              <div>Distributor</div>
+              <div>Description</div>
+              <div aria-hidden />
+            </div>
+
+            {filtered.length === 0 ? (
+              <div className="col-span-full">
                 <EmptyStateBox
                   variant="solid"
-                  className="rounded-[12px] px-4 py-10 text-[13px]"
+                  className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
                 >
                   No sources found
                 </EmptyStateBox>
-              ) : null}
-              {listWindow.visible.map((row) => (
+              </div>
+            ) : null}
+
+            {listWindow.visible.map((row, index) => {
+              const isLast = index === listWindow.visible.length - 1;
+
+              return (
                 <div
                   key={row.id}
-                  className="rounded-[12px] border border-[#00000014] bg-white p-3.5"
+                  className={cn(
+                    GRID,
+                    ROW_SCROLL_HINT,
+                    "h-[78px] px-4",
+                    !isLast && "border-b border-[#00000014]",
+                  )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-3">
-                      <SourcePhoto
-                        compact
-                        logoUrl={row.logoUrl}
-                        name={row.name}
-                      />
-                      <div className="min-w-0">
-                        <IdPill>{row.id}</IdPill>
-                        <div className={cn(BODY, "mt-2 truncate")}>
-                          {row.name}
-                        </div>
-                        <LocationHover
-                          className={cn(BODY, "mt-1")}
-                          fullAddress={getSourceFullAddress(row)}
-                        >
-                          {getSourceLocation(row)}
-                        </LocationHover>
-                        <div className={cn(BODY, "mt-0.5 truncate")}>
-                          {getSourceDistributorDisplay(row)}
-                        </div>
-                      </div>
-                    </div>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className={EDIT_LINK}
-                      >
-                        Edit
-                      </button>
-                    ) : null}
+                  <IdPill>{row.id}</IdPill>
+
+                  <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
+
+                  <div className={cn(BODY, "min-w-0 truncate pl-3")}>
+                    {row.name}
                   </div>
+                  <LocationHover
+                    className={BODY}
+                    fullAddress={getSourceFullAddress(row)}
+                  >
+                    {getSourceLocation(row)}
+                  </LocationHover>
+                  <div className={cn(BODY, "min-w-0 truncate")}>
+                    {getSourceDistributorDisplay(row)}
+                  </div>
+                  <DescriptionHover description={row.description} />
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={cn(EDIT_LINK, "justify-self-end")}
+                      aria-label={`Edit ${row.name}`}
+                    >
+                      Edit
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                 </div>
-              ))}
+              );
+            })}
+            <div className="col-span-full">
               <InfiniteScrollSentinel
                 hasMore={listWindow.hasMore}
                 loadedCount={listWindow.loadedCount}
                 onLoadMore={listWindow.loadMore}
               />
             </div>
-
-            <ScrollTable fill minWidth={910} className="hidden md:block">
+          </ScrollTable>
+        ) : (
+          <div className="min-h-0 flex-1 space-y-2 overflow-auto">
+            {filtered.length === 0 ? (
+              <EmptyStateBox
+                variant="solid"
+                className="rounded-[12px] px-4 py-10 text-[13px]"
+              >
+                No sources found
+              </EmptyStateBox>
+            ) : null}
+            {listWindow.visible.map((row) => (
               <div
+                key={row.id}
                 className={cn(
-                  GRID,
-                  TABLE_HEADER,
-                  PINNED_HEADER,
-                  "h-10 border-b border-[#00000014] px-4",
+                  ROW_SCROLL_HINT,
+                  "rounded-[12px] border border-[#00000014] bg-white p-3.5",
                 )}
               >
-                <div>Source ID</div>
-                <div>Photo</div>
-                <div className="pl-3">Name</div>
-                <div>Location</div>
-                <div>Distributor</div>
-                <div>Description</div>
-                <div aria-hidden />
-              </div>
-
-              {filtered.length === 0 ? (
-                <div className="col-span-full">
-                  <EmptyStateBox
-                    variant="solid"
-                    className="min-h-0 rounded-none border-0 px-4 py-10 text-[13px]"
-                  >
-                    No sources found
-                  </EmptyStateBox>
-                </div>
-              ) : null}
-
-              {listWindow.visible.map((row, index) => {
-                const isLast = index === listWindow.visible.length - 1;
-
-                return (
-                  <div
-                    key={row.id}
-                    className={cn(
-                      GRID,
-                      "h-[78px] px-4",
-                      !isLast && "border-b border-[#00000014]",
-                    )}
-                  >
-                    <IdPill>{row.id}</IdPill>
-
-                    <SourcePhoto logoUrl={row.logoUrl} name={row.name} />
-
-                    <div className={cn(BODY, "min-w-0 truncate pl-3")}>
-                      {row.name}
-                    </div>
-                    <LocationHover
-                      className={BODY}
-                      fullAddress={getSourceFullAddress(row)}
-                    >
-                      {getSourceLocation(row)}
-                    </LocationHover>
-                    <div className={cn(BODY, "min-w-0 truncate")}>
-                      {getSourceDistributorDisplay(row)}
-                    </div>
-                    <DescriptionHover description={row.description} />
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        onClick={() => openEdit(row)}
-                        className={cn(EDIT_LINK, "justify-self-end")}
-                        aria-label={`Edit ${row.name}`}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <SourcePhoto
+                      compact
+                      logoUrl={row.logoUrl}
+                      name={row.name}
+                    />
+                    <div className="min-w-0">
+                      <IdPill>{row.id}</IdPill>
+                      <div className={cn(BODY, "mt-2 truncate")}>
+                        {row.name}
+                      </div>
+                      <LocationHover
+                        className={cn(BODY, "mt-1")}
+                        fullAddress={getSourceFullAddress(row)}
                       >
-                        Edit
-                      </button>
-                    ) : (
-                      <span />
-                    )}
+                        {getSourceLocation(row)}
+                      </LocationHover>
+                      <div className={cn(BODY, "mt-0.5 truncate")}>
+                        {getSourceDistributorDisplay(row)}
+                      </div>
+                    </div>
                   </div>
-                );
-              })}
-              <div className="col-span-full">
-                <InfiniteScrollSentinel
-                  hasMore={listWindow.hasMore}
-                  loadedCount={listWindow.loadedCount}
-                  onLoadMore={listWindow.loadMore}
-                />
+                  {canEdit ? (
+                    <button
+                      type="button"
+                      onClick={() => openEdit(row)}
+                      className={EDIT_LINK}
+                    >
+                      Edit
+                    </button>
+                  ) : null}
+                </div>
               </div>
-            </ScrollTable>
-          </>
+            ))}
+            <InfiniteScrollSentinel
+              hasMore={listWindow.hasMore}
+              loadedCount={listWindow.loadedCount}
+              onLoadMore={listWindow.loadMore}
+            />
+          </div>
         )}
       </div>
 

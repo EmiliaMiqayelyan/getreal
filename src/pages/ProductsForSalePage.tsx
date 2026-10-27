@@ -18,11 +18,13 @@ import { AppLoader } from "@/components/ui/AppLoader";
 import { Button } from "@/components/ui/Button";
 import { EmptyStateBox } from "@/components/ui/EmptyStateBox";
 import { IconButton } from "@/components/ui/IconButton";
+import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
 import { ScrollTable } from "@/components/ui/ScrollTable";
 import { SearchField } from "@/components/ui/SearchField";
 import { Select } from "@/components/ui/Select";
 import { Switch } from "@/components/ui/Switch";
 import { Tabs } from "@/components/ui/Tabs";
+import { ThumbImage } from "@/components/ui/ThumbImage";
 import { PINNED_HEADER, TABLE_HEADER } from "@/constants/table";
 import {
   nextProductId,
@@ -34,7 +36,7 @@ import { useRolesUsers } from "@/context/RolesUsersContext";
 import { useApiFeedback } from "@/hooks/useApiFeedback";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
-import { InfiniteScrollSentinel } from "@/components/ui/InfiniteScrollSentinel";
+import { useIsMdUp } from "@/hooks/useMediaQuery";
 import {
   isApiConfigured,
   mapApiProductToProductForSale,
@@ -77,6 +79,10 @@ const PRODUCT_COLUMNS =
 const PRODUCT_MOBILE_COLUMNS =
   "grid grid-cols-[32px_minmax(0,1fr)_52px_64px] items-center gap-x-3";
 
+/** Skip paint/layout for offscreen product rows while scrolling. */
+const ROW_SCROLL_HINT =
+  "[content-visibility:auto] [contain-intrinsic-size:auto_76px]";
+
 function ProductPhotoThumb({
   name,
   photos,
@@ -88,13 +94,12 @@ function ProductPhotoThumb({
 
   return (
     <div className="relative h-[51px] w-[53px] overflow-hidden rounded-[8px] bg-[#F3F3F1]">
-      <img
+      <ThumbImage
         src={getItemPrimaryPhoto({ photos })}
         alt={hasUploadedPhoto ? `${name} photo` : ""}
-        className={cn(
-          "size-full",
-          hasUploadedPhoto ? "object-cover" : "object-contain p-1",
-        )}
+        width={53}
+        height={51}
+        className={hasUploadedPhoto ? "object-cover" : "object-contain p-1"}
       />
       {photos.length > 1 ? (
         <span className="absolute right-0.5 bottom-0.5 rounded bg-black/65 px-1 text-[9px] font-semibold text-white">
@@ -444,11 +449,14 @@ function ProductDetailDrawer({
 
         <div className="mt-4 flex items-center gap-2.5">
           {logo ? (
-            <img
-              src={logo}
-              alt=""
-              className="h-10 w-14 shrink-0 rounded-[8px] object-cover"
-            />
+            <div className="h-10 w-14 shrink-0 overflow-hidden rounded-[8px]">
+              <ThumbImage
+                src={logo}
+                width={56}
+                height={40}
+                className="object-cover"
+              />
+            </div>
           ) : (
             <div className="flex h-10 w-14 shrink-0 items-center justify-center rounded-[8px] bg-[#2F6B4F] text-[11px] font-bold text-white">
               {details.source.slice(0, 2).toUpperCase()}
@@ -479,10 +487,11 @@ function ProductDetailDrawer({
                 key={photo.id}
                 className="h-[100px] w-[160px] shrink-0 overflow-hidden rounded-[10px] bg-[#F3F3F1]"
               >
-                <img
+                <ThumbImage
                   src={photo.url}
-                  alt=""
-                  className="size-full object-cover"
+                  width={160}
+                  height={100}
+                  className="object-cover"
                 />
               </div>
             ))}
@@ -521,10 +530,12 @@ function SubcategoryTable({
   onHeadingPointerDown?: (event: ReactPointerEvent<HTMLButtonElement>) => void;
 }) {
   const access = useContext(ProductAccessContext);
+  const isMdUp = useIsMdUp();
+  const layout: DragLayout = isMdUp ? "desktop" : "mobile";
   const [session, setSession] = useState<DragSession | null>(null);
   const [previewIds, setPreviewIds] = useState<string[] | null>(null);
   const rowRefs = useRef(new Map<string, HTMLDivElement>());
-  const listMarkers = useRef(new Map<DragLayout, HTMLDivElement>());
+  const listMarkerRef = useRef<HTMLDivElement | null>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<DragSession | null>(null);
   const previewRef = useRef<string[] | null>(null);
@@ -560,7 +571,7 @@ function SubcategoryTable({
     const node = ghostRef.current;
     const pointer = pointerRef.current;
     if (!current || !node || !pointer) return;
-    const row = rowRefs.current.get(`${current.layout}:${current.id}`);
+    const row = rowRefs.current.get(current.id);
     const left = row?.getBoundingClientRect().left ?? 0;
     const top = pointer.y - current.offsetY - 6;
     node.style.width = `${row?.offsetWidth ?? current.width}px`;
@@ -585,8 +596,7 @@ function SubcategoryTable({
     }
 
     const visualIds = previewRef.current ?? sourceIdsRef.current;
-    const listTop =
-      listMarkers.current.get(current.layout)?.getBoundingClientRect().top ?? 0;
+    const listTop = listMarkerRef.current?.getBoundingClientRect().top ?? 0;
     const index = dropIndexForPointer(
       clientY,
       visualIds,
@@ -634,21 +644,21 @@ function SubcategoryTable({
     };
   }, []);
 
-  function startDrag(
-    event: ReactPointerEvent<HTMLButtonElement>,
-    id: string,
-    layout: DragLayout,
-  ) {
+  // Drop an in-progress row drag if the viewport crosses the md breakpoint.
+  useEffect(() => {
+    finishDragRef.current(false);
+  }, [layout]);
+
+  function startDrag(event: ReactPointerEvent<HTMLButtonElement>, id: string) {
     if (event.button !== 0 || !access.canChangePlacement) return;
     event.preventDefault();
-    const rowEl = rowRefs.current.get(`${layout}:${id}`);
+    const rowEl = rowRefs.current.get(id);
     if (!rowEl) return;
 
     const rect = rowEl.getBoundingClientRect();
     const heights: Record<string, number> = {};
     for (const row of rows) {
-      heights[row.id] =
-        rowRefs.current.get(`${layout}:${row.id}`)?.offsetHeight ?? 0;
+      heights[row.id] = rowRefs.current.get(row.id)?.offsetHeight ?? 0;
     }
 
     const nextSession: DragSession = {
@@ -716,21 +726,22 @@ function SubcategoryTable({
     setSession(nextSession);
   }
 
-  function renderRow(row: ProductForSale, index: number, layout: DragLayout) {
-    const isDragging = session?.id === row.id && session.layout === layout;
-    const active = session?.layout === layout;
+  function renderRow(row: ProductForSale, index: number) {
+    const isDragging = session?.id === row.id;
+    const active = Boolean(session);
     const isLast = index === rows.length - 1;
 
     return (
       <div
         key={row.id}
         ref={(node) => {
-          const key = `${layout}:${row.id}`;
-          if (node) rowRefs.current.set(key, node);
-          else rowRefs.current.delete(key);
+          if (node) rowRefs.current.set(row.id, node);
+          else rowRefs.current.delete(row.id);
         }}
         className={cn(
           "relative bg-white",
+          // Skip while dragging — content-visibility can skew measured row heights.
+          !session && ROW_SCROLL_HINT,
           !isLast && "border-b border-[#00000014]",
           active &&
             "z-[1] transition-transform duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform motion-reduce:transition-none",
@@ -759,7 +770,7 @@ function SubcategoryTable({
             onToggleLive={onToggleLive}
             onView={onView}
             interactive
-            onHandlePointerDown={(event) => startDrag(event, row.id, layout)}
+            onHandlePointerDown={(event) => startDrag(event, row.id)}
           />
         </div>
       </div>
@@ -788,62 +799,57 @@ function SubcategoryTable({
     );
   }
 
+  const listMarker = <div ref={listMarkerRef} />;
+
   return (
     <>
-      <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white md:hidden">
-        {renderHeading()}
-        <div
-          className={cn(
-            TABLE_HEADER,
-            PRODUCT_MOBILE_COLUMNS,
-            "px-4 py-2",
-          )}
-        >
-          <span className="whitespace-nowrap">ID</span>
-          <span className="min-w-0 truncate whitespace-nowrap">
-            Merchandising Name
-          </span>
-          <span className="text-right whitespace-nowrap">Live</span>
-          <span className="whitespace-nowrap">Photo</span>
-        </div>
-        <div
-          ref={(node) => {
-            if (node) listMarkers.current.set("mobile", node);
-            else listMarkers.current.delete("mobile");
-          }}
-        />
-        {rows.map((row, index) => renderRow(row, index, "mobile"))}
-      </div>
-      <ScrollTable minWidth={1220} className="hidden md:block">
-        {renderHeading()}
-        <div>
+      {layout === "mobile" ? (
+        <div className="overflow-hidden rounded-[12px] border border-[#00000014] bg-white">
+          {renderHeading()}
           <div
             className={cn(
-              PRODUCT_COLUMNS,
               TABLE_HEADER,
-              PINNED_HEADER,
-              "min-h-10 py-2 whitespace-nowrap shadow-[inset_0_-1px_0_#00000014]",
+              PRODUCT_MOBILE_COLUMNS,
+              "px-4 py-2",
             )}
           >
-            <span aria-hidden />
-            <span>ID</span>
-            <span>Live</span>
-            <span>Photo</span>
-            <span>Merchandising Name</span>
-            <span>Source</span>
-            <span>Sales Price</span>
-            <span>Unit of Sales</span>
-            <span />
+            <span className="whitespace-nowrap">ID</span>
+            <span className="min-w-0 truncate whitespace-nowrap">
+              Merchandising Name
+            </span>
+            <span className="text-right whitespace-nowrap">Live</span>
+            <span className="whitespace-nowrap">Photo</span>
           </div>
-          <div
-            ref={(node) => {
-              if (node) listMarkers.current.set("desktop", node);
-              else listMarkers.current.delete("desktop");
-            }}
-          />
-          {rows.map((row, index) => renderRow(row, index, "desktop"))}
+          {listMarker}
+          {rows.map((row, index) => renderRow(row, index))}
         </div>
-      </ScrollTable>
+      ) : (
+        <ScrollTable minWidth={1220}>
+          {renderHeading()}
+          <div>
+            <div
+              className={cn(
+                PRODUCT_COLUMNS,
+                TABLE_HEADER,
+                PINNED_HEADER,
+                "min-h-10 py-2 whitespace-nowrap shadow-[inset_0_-1px_0_#00000014]",
+              )}
+            >
+              <span aria-hidden />
+              <span>ID</span>
+              <span>Live</span>
+              <span>Photo</span>
+              <span>Merchandising Name</span>
+              <span>Source</span>
+              <span>Sales Price</span>
+              <span>Unit of Sales</span>
+              <span />
+            </div>
+            {listMarker}
+            {rows.map((row, index) => renderRow(row, index))}
+          </div>
+        </ScrollTable>
+      )}
       {session && draggedRow
         ? createPortal(
             <div
@@ -855,14 +861,14 @@ function SubcategoryTable({
               aria-hidden
               className={cn(
                 "pointer-events-none fixed top-0 left-0 z-30 bg-white shadow-[0_18px_42px_rgba(17,17,24,0.22),0_0_0_1px_rgba(17,17,24,0.08)]",
-                session.layout === "desktop"
+                layout === "desktop"
                   ? cn(PRODUCT_COLUMNS, "rounded-[10px] py-3")
                   : "rounded-[10px] px-4 py-3",
               )}
               style={{ width: session.width }}
             >
               <ProductCells
-                layout={session.layout}
+                layout={layout}
                 row={draggedRow}
                 catalog={catalog}
                 onToggleLive={onToggleLive}
