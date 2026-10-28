@@ -85,6 +85,9 @@ export type AggregateDemandItem = {
   categoryName?: string;
   customerOrderTotal?: number;
   inStock?: number | null;
+  /** Live API docs field. */
+  qtyReceiving?: number;
+  /** Older payloads used this name. */
   quantityReceiving?: number;
   qtyPerUnit?: number;
   /** Integer cents. */
@@ -96,9 +99,11 @@ export type AggregateDemandItem = {
   /** Integer cents. */
   lineSubtotal?: number;
   unit?: string;
+  /** Customer / demand delivery day for this line (ISO or `YYYY-MM-DD`). */
+  deliveryDate?: string | null;
   /** `YYYY-MM-DD` of an open distributor shipment. */
   dateReceivingBy?: string | null;
-  /** `YYYY-MM-DD` of the customer orders behind this line. */
+  /** Older name for the customer order day behind this line. */
   orderDeliveryDate?: string | null;
   distributorId?: string;
   distributorName?: string;
@@ -123,6 +128,8 @@ export type AggregateDemandSource = {
 export type AggregateDemandDistributor = {
   id?: string;
   name?: string;
+  /** Demand delivery day for this distributor bucket (ISO or `YYYY-MM-DD`). */
+  deliveryDate?: string | null;
   /** Integer cents. */
   subtotal?: number;
   sources?: AggregateDemandSource[];

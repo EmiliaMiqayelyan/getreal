@@ -295,11 +295,18 @@ export function mapAggregateDemand(input: {
           if (qtyNeeded != null && qtyNeeded <= 0) continue;
           const suggestedQty =
             qtyNeeded ?? Math.max(0, custOrderTotal - (inStock ?? 0));
-          const qtyReceiving = readNumber(item.quantityReceiving);
+          // Live docs use qtyReceiving; older payloads used quantityReceiving.
+          const qtyReceiving = readNumber(
+            item.qtyReceiving ?? item.quantityReceiving,
+          );
           // The chip is the Wednesday of the delivery week. The column must
           // stay on the order's own day, even when that day is not Wednesday.
+          // Prefer item.deliveryDate (current API), then older orderDeliveryDate,
+          // then the distributor bucket date, then the requested query day.
           const exactOrderDateId =
+            calendarDayId(item.deliveryDate?.trim() || "") ||
             calendarDayId(item.orderDeliveryDate?.trim() || "") ||
+            calendarDayId(distributor.deliveryDate?.trim() || "") ||
             calendarDayId(input.orderDateId?.trim() || "");
           const incomingDateId =
             qtyReceiving > 0
@@ -312,21 +319,21 @@ export function mapAggregateDemand(input: {
                 announcedDateIds[0] ||
                 toDeliveryDateId(upcomingWednesday(today)),
             ) || toDeliveryDateId(upcomingWednesday(today));
-          const receivingDateId = incomingDateId || exactOrderDateId;
+          const receivingDateId =
+            category: item.categoryName?.trim()  incomingDateId || exactOrderDateId;
           const receivingDate = receivingDateId
-            ? parseDeliveryDateId(receivingDateId)
-            : null;
+              ? parseDeliveryDateId(receivingDateId)
+              : null;
           const row: WorkingOrderRow = {
-            id: [
-              distributor.id || distributorName,
-              source.id || sourceName,
-              itemId || itemCode || itemName,
-              exactOrderDateId,
-            ].join("::"),
-            sku: itemCode || itemId,
-            catalogItemId: itemId || undefined,
-            itemName,
-            category: item.categoryName?.trim() || categoryName,
+                id: [
+                  distributor.id || distributorName,
+                  source.id || sourceName,
+                  itemId || itemCode || itemName,
+                  exactOrderDateId,
+                ].join("::"),
+                sku: itemCode || itemId,
+                catalogItemId: itemId || undefined,
+                itemName,|| categoryName,
             custOrderTotal,
             inStock,
             qtyReceiving,
