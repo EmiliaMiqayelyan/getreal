@@ -319,21 +319,21 @@ export function mapAggregateDemand(input: {
                 announcedDateIds[0] ||
                 toDeliveryDateId(upcomingWednesday(today)),
             ) || toDeliveryDateId(upcomingWednesday(today));
-          const receivingDateId =
-            category: item.categoryName?.trim()  incomingDateId || exactOrderDateId;
+          const receivingDateId = incomingDateId || exactOrderDateId;
           const receivingDate = receivingDateId
-              ? parseDeliveryDateId(receivingDateId)
-              : null;
+            ? parseDeliveryDateId(receivingDateId)
+            : null;
           const row: WorkingOrderRow = {
-                id: [
-                  distributor.id || distributorName,
-                  source.id || sourceName,
-                  itemId || itemCode || itemName,
-                  exactOrderDateId,
-                ].join("::"),
-                sku: itemCode || itemId,
-                catalogItemId: itemId || undefined,
-                itemName,|| categoryName,
+            id: [
+              distributor.id || distributorName,
+              source.id || sourceName,
+              itemId || itemCode || itemName,
+              exactOrderDateId,
+            ].join("::"),
+            sku: itemCode || itemId,
+            catalogItemId: itemId || undefined,
+            itemName,
+            category: item.categoryName?.trim() || categoryName,
             custOrderTotal,
             inStock,
             qtyReceiving,
