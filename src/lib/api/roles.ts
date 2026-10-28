@@ -1,14 +1,13 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { apiRequest } from "./client";
-import { CATALOG_LIST_CACHE_MS, FRESH_READ } from "./requestDedupe";
 import type { ApiRole } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
 export type RolesListParams = {
   page?: number;
   limit?: number;
-  /** Bypass the short list cache after a create, update, or delete. */
+  /** Kept for call-site compatibility; every list read hits the server. */
   fresh?: boolean;
 };
 
@@ -33,8 +32,6 @@ export const rolesApi = {
     search.set("page", String(page));
     search.set("limit", String(limit));
     return apiRequest<unknown>(`/roles?${search.toString()}`, {
-      cacheTtlMs: params.fresh ? 0 : CATALOG_LIST_CACHE_MS,
-      dedupe: params.fresh ? false : undefined,
       preserveEnvelope: true,
     }).then((payload) =>
       normalizePaginatedList<ApiRole>(
@@ -45,9 +42,8 @@ export const rolesApi = {
     );
   },
 
-  /** Always reads from the server so an open editor cannot show a pre-save copy. */
   getById(id: string) {
-    return apiRequest<unknown>(`/roles/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/roles/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiRole>(payload, "role") ?? (payload as ApiRole),
     );

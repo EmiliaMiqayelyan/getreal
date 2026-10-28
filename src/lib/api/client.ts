@@ -1,10 +1,5 @@
 import { env } from "@/lib/env";
 
-import {
-  invalidateCacheForUrl,
-  isIdempotentMethod,
-  runDedupedRequest,
-} from "./requestDedupe";
 import type { ApiEnvelope } from "./types";
 
 export const AUTH_TOKEN_KEY = "getreal.authToken";
@@ -75,50 +70,15 @@ function clearLocalSession() {
 export type ApiRequestOptions = RequestInit & {
   auth?: boolean;
   /**
-   * Reuse a completed identical GET for this many ms.
-   * Default 0 (in-flight dedupe only). Catalog lists may use a short TTL.
-   */
-  cacheTtlMs?: number;
-  /** Skip in-flight / response-cache sharing for this call. */
-  dedupe?: boolean;
-  /**
    * Keep the raw JSON body. List endpoints put `total` next to `data`,
    * and the default unwrap drops that pagination field.
    */
   preserveEnvelope?: boolean;
 };
 
-function withCallerSignal<T>(
-  promise: Promise<T>,
-  signal: AbortSignal | undefined,
-): Promise<T> {
-  if (!signal) return promise;
-  if (signal.aborted) {
-    return Promise.reject(new DOMException("Aborted", "AbortError"));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => {
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (error) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(error);
-      },
-    );
-  });
-}
-
 async function executeFetch<T>(
   url: string,
   options: ApiRequestOptions,
-  /** When false, omit AbortSignal so shared in-flight work is not cancelled by one consumer. */
-  attachSignal = true,
 ): Promise<T> {
   const headers = new Headers(options.headers);
   const isFormData =
@@ -143,25 +103,22 @@ async function executeFetch<T>(
 
   const {
     auth: _auth,
-    cacheTtlMs: _cacheTtlMs,
-    dedupe: _dedupe,
     preserveEnvelope,
-    signal,
+    cache: cacheMode,
     ...fetchOptions
   } = options;
   void _auth;
-  void _cacheTtlMs;
-  void _dedupe;
 
   let response: Response;
   try {
     response = await fetch(url, {
       ...fetchOptions,
-      ...(attachSignal && signal ? { signal } : {}),
+      // Always bypass the browser HTTP cache for API reads/writes.
+      cache: cacheMode ?? "no-store",
       headers,
     });
   } catch (error) {
-    if (attachSignal && signal?.aborted) {
+    if (options.signal?.aborted) {
       throw error instanceof Error
         ? error
         : new DOMException("Aborted", "AbortError");
@@ -230,38 +187,7 @@ export async function apiRequest<T>(
     throw new ApiError("API URL is not configured", 0, null);
   }
 
-  const url = buildUrl(path);
-  const method = (options.method ?? "GET").toUpperCase();
-  const useAuth = options.auth !== false;
-  const allowDedupe = options.dedupe !== false && isIdempotentMethod(method);
-
-  if (!allowDedupe) {
-    if (!isIdempotentMethod(method)) {
-      invalidateCacheForUrl(url);
-    }
-    return executeFetch<T>(url, options, true);
-  }
-
-  const body =
-    typeof options.body === "string"
-      ? options.body
-      : options.body != null
-        ? String(options.body)
-        : null;
-
-  // Shared in-flight fetch must not be aborted by a single consumer (e.g. StrictMode remount).
-  const shared = runDedupedRequest<T>(
-    {
-      method,
-      url,
-      body,
-      auth: useAuth,
-    },
-    () => executeFetch<T>(url, options, false),
-    { cacheTtlMs: options.cacheTtlMs ?? 0 },
-  );
-
-  return withCallerSignal(shared, options.signal ?? undefined);
+  return executeFetch<T>(buildUrl(path), options);
 }
 
 function filenameFromContentDisposition(header: string | null): string | null {
@@ -318,6 +244,7 @@ export async function apiDownload(
   try {
     response = await fetch(buildUrl(path), {
       ...fetchOptions,
+      cache: "no-store",
       headers,
     });
   } catch {

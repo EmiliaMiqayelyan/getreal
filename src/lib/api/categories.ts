@@ -1,14 +1,10 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiCategory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
 export const categoriesApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>(
-      "/categories",
-      catalogListCacheOptions(options?.fresh),
-    ).then((payload) =>
+  list(_options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/categories").then((payload) =>
       normalizeNamedList<ApiCategory>(payload, [
         "categories",
         "data",

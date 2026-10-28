@@ -1,5 +1,4 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiProduct } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -35,10 +34,7 @@ export const productsApi = {
     if (params.distributorId) search.set("distributorId", params.distributorId);
     if (params.sourceId) search.set("sourceId", params.sourceId);
     const qs = search.toString();
-    return apiRequest<unknown>(
-      `/products${qs ? `?${qs}` : ""}`,
-      catalogListCacheOptions(params.fresh),
-    ).then((payload) =>
+    return apiRequest<unknown>(`/products${qs ? `?${qs}` : ""}`).then((payload) =>
       normalizeNamedList<ApiProduct>(payload, [
         "products",
         "items",

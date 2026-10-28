@@ -1,7 +1,6 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { ApiError, apiDownload, apiRequest } from "./client";
-import { FRESH_READ } from "./requestDedupe";
 import { collectPaginated } from "./collectPages";
 import type { ApiOrder } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
@@ -70,7 +69,7 @@ export type OrdersListParams = {
    * Backend `getOrdersQuerySchema.active`.
    */
   active?: boolean;
-  /** Skip in-flight dedupe so a refresh is not the response from before a create. */
+  /** Kept for call-site compatibility; every list read hits the server. */
   fresh?: boolean;
 };
 
@@ -205,7 +204,6 @@ export const ordersApi = {
     const qs = search.toString();
     return apiRequest<unknown>(`/orders?${qs}`, {
       preserveEnvelope: true,
-      ...(params.fresh ? { dedupe: false, cache: "no-store" as const } : {}),
     }).then((payload) =>
       normalizePaginatedList<ApiOrder>(
         payload,
@@ -216,7 +214,7 @@ export const ordersApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/orders/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/orders/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiOrder>(payload, "order") ?? (payload as ApiOrder),
     );
@@ -369,16 +367,13 @@ export const ordersApi = {
 
   /**
    * Open distributor demand, grouped distributor → source → category → item.
-   * `fresh` skips in-flight sharing so a reload after POST /orders is not an
-   * earlier response.
    */
-  aggregateDemand(deliveryDate?: string, options?: { fresh?: boolean }) {
+  aggregateDemand(deliveryDate?: string, _options?: { fresh?: boolean }) {
     const search = new URLSearchParams();
     if (deliveryDate) search.set("deliveryDate", deliveryDate);
     const qs = search.toString();
     return apiRequest<unknown>(
       `/orders/distributor/aggregate-demand${qs ? `?${qs}` : ""}`,
-      options?.fresh ? { dedupe: false, cache: "no-store" } : {},
     ).then(normalizeAggregateDemand);
   },
 

@@ -2,7 +2,6 @@ import { isUuid } from "@/utils/entityIds";
 
 import { ApiError, apiRequest } from "./client";
 import { itemsApi } from "./items";
-import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import { sourcesApi } from "./sources";
 import type { ApiDistributor } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
@@ -95,11 +94,8 @@ async function clearDistributorLinks(distributorRef: string) {
 }
 
 export const distributorsApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>(
-      "/distributors",
-      catalogListCacheOptions(options?.fresh),
-    ).then((payload) =>
+  list(_options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/distributors").then((payload) =>
       normalizeNamedList<ApiDistributor>(payload, [
         "distributors",
         "data",
@@ -109,7 +105,7 @@ export const distributorsApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/distributors/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/distributors/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiDistributor>(payload, "distributor") ??
         (payload as ApiDistributor),

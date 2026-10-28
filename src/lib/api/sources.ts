@@ -1,5 +1,4 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiSource } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -22,17 +21,14 @@ export type UpdateSourcePayload = Partial<
 };
 
 export const sourcesApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>(
-      "/sources",
-      catalogListCacheOptions(options?.fresh),
-    ).then((payload) =>
+  list(_options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/sources").then((payload) =>
       normalizeNamedList<ApiSource>(payload, ["sources", "data", "results"]),
     );
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/sources/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/sources/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiSource>(payload, "source") ??
         (payload as ApiSource),

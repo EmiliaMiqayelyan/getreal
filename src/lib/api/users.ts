@@ -1,7 +1,6 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
 import { apiRequest } from "./client";
-import { FRESH_READ } from "./requestDedupe";
 import type { ApiUser } from "./types";
 import { normalizePaginatedList, pickNamedEntity } from "./normalize";
 
@@ -95,9 +94,8 @@ export const usersApi = {
     );
   },
 
-  /** Always reads from the server so an open editor cannot show a pre-save copy. */
   getById(id: string) {
-    return apiRequest<unknown>(`/users/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/users/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiUser>(payload, "user") ?? (payload as ApiUser),
     );

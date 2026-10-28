@@ -1,7 +1,6 @@
 import { isUuid } from "@/utils/entityIds";
 
 import { apiRequest } from "./client";
-import { FRESH_READ } from "./requestDedupe";
 import type { ApiInventory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -424,25 +423,21 @@ export const inventoryApi = {
       search.set("distributorOrderId", options.distributorOrderId);
     }
     const qs = search.toString();
-    return apiRequest<unknown>(`/inventory${qs ? `?${qs}` : ""}`, {
-      // Inventory changes as soon as stock is stored. A cached GET would keep
-      // the page on the pre-store list until a full browser refresh.
-      cache: "no-store",
-      ...(options?.fresh ? { dedupe: false } : {}),
-    }).then((payload) =>
-      expandInventoryGroups(
-        normalizeNamedList<ApiInventory>(payload, [
-          "inventory",
-          "items",
-          "data",
-          "results",
-        ]),
-      ).map((row) => flattenInventory(row)),
+    return apiRequest<unknown>(`/inventory${qs ? `?${qs}` : ""}`).then(
+      (payload) =>
+        expandInventoryGroups(
+          normalizeNamedList<ApiInventory>(payload, [
+            "inventory",
+            "items",
+            "data",
+            "results",
+          ]),
+        ).map((row) => flattenInventory(row)),
     );
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/inventory/${id}`, FRESH_READ).then((payload) =>
+    return apiRequest<unknown>(`/inventory/${id}`).then((payload) =>
       unwrapInventory(payload),
     );
   },
