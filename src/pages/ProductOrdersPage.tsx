@@ -255,11 +255,13 @@ function ExpandableOrders({
   orders,
   expandedId,
   onToggle,
+  onDownloadInvoice,
   loadingId = null,
 }: {
   orders: PlacedOrder[];
   expandedId: string | null;
   onToggle: (id: string) => void;
+  onDownloadInvoice: (order: PlacedOrder) => void;
   loadingId?: string | null;
 }) {
   return (
@@ -328,7 +330,7 @@ function ExpandableOrders({
                   type="button"
                   className={LINK}
                   aria-label={`Download invoice for ${order.distributor}`}
-                  onClick={() => openOrderInvoice(order)}
+                  onClick={() => onDownloadInvoice(order)}
                 >
                   Download
                 </button>
@@ -1264,12 +1266,18 @@ export default function ProductOrdersPage() {
       });
   }
 
+  function downloadInvoice(order: PlacedOrder) {
+    void openOrderInvoice(order).catch((error) => {
+      notifyApiError(error, "Failed to download invoice.");
+    });
+  }
+
   function invoiceForDistributor(key: string) {
     const group =
       activeDemand?.sentGroups.find((entry) => reviewGroupKey(entry) === key) ??
       reviewGroups.find((entry) => reviewGroupKey(entry) === key);
     if (!group) return;
-    openOrderInvoice(
+    downloadInvoice(
       createPlacedOrderFromReviewGroup(
         group,
         activeDemand?.id ?? nextDeliveryId(inProgress),
@@ -1575,6 +1583,7 @@ export default function ProductOrdersPage() {
                         expandedId={expandedId}
                         loadingId={detailLoadingId}
                         onToggle={(id) => togglePlacedOrder(id)}
+                        onDownloadInvoice={downloadInvoice}
                       />
                     </section>
                   ) : null}
@@ -1673,6 +1682,7 @@ export default function ProductOrdersPage() {
                           expandedId={expandedDeliveredId}
                           loadingId={detailLoadingId}
                           onToggle={(id) => togglePlacedOrder(id, true)}
+                          onDownloadInvoice={downloadInvoice}
                         />
                       </div>
                     ))}

@@ -1,6 +1,6 @@
 import { DEFAULT_PAGE_LIMIT } from "@/constants/pagination";
 
-import { ApiError, apiRequest } from "./client";
+import { ApiError, apiDownload, apiRequest } from "./client";
 import { FRESH_READ } from "./requestDedupe";
 import { collectPaginated } from "./collectPages";
 import type { ApiOrder } from "./types";
@@ -373,5 +373,14 @@ export const ordersApi = {
       `/orders/distributor/aggregate-demand${qs ? `?${qs}` : ""}`,
       options?.fresh ? { dedupe: false, cache: "no-store" } : {},
     ).then(normalizeAggregateDemand);
+  },
+
+  /**
+   * GET /orders/:id/invoice-pdf — QuickBooks invoice / purchase order PDF.
+   */
+  downloadInvoicePdf(id: string, filename?: string) {
+    return apiDownload(`/orders/${id}/invoice-pdf`, {
+      filename: filename ?? `Invoice_${id}.pdf`,
+    });
   },
 };

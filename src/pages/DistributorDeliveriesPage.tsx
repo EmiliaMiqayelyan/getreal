@@ -1101,9 +1101,10 @@ function CheckOrderView({
   }
 
   // Figma: name + qty/unit/exp/id+Print packed left; flexible gap; Actions right.
-  // Qty and unit are fixed so "QTY" and "Units / case" stay on one line.
+  // Fixed tracks for qty/unit/exp/id/actions so separate header + body grids stay aligned
+  // (auto/minmax(..., auto) sized differently per row from Print + Accept/Reject content).
   const col =
-    "grid grid-cols-[minmax(240px,1.4fr)_56px_100px_148px_minmax(180px,auto)_minmax(0,1fr)_auto] items-center gap-x-4 px-4";
+    "grid grid-cols-[minmax(0,1.4fr)_56px_100px_148px_220px_minmax(0,1fr)_120px] items-center gap-x-4 px-4";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#FAFAFA]">
@@ -1150,7 +1151,7 @@ function CheckOrderView({
                   className={cn(
                     PINNED_HEADER,
                     TABLE_HEADER,
-                    "h-10 whitespace-nowrap border-b border-[#00000014]",
+                    "h-10 whitespace-nowrap border-b border-b-[#00000014] border-l-[3px] border-l-transparent",
                     col,
                   )}
                 >
@@ -1178,12 +1179,10 @@ function CheckOrderView({
                     <div
                       key={item.id}
                       className={cn(
-                        "relative border-b border-[#00000014] bg-white py-3.5 last:border-b-0",
+                        "relative border-b border-b-[#00000014] border-l-[3px] border-l-transparent bg-white py-3.5 last:border-b-0",
                         col,
-                        state.status === "accepted" &&
-                          "border-l-[3px] border-l-[#2F8F4E]",
-                        state.status === "rejected" &&
-                          "border-l-[3px] border-l-[#F57850]",
+                        state.status === "accepted" && "border-l-[#2F8F4E]",
+                        state.status === "rejected" && "border-l-[#F57850]",
                       )}
                     >
                       <span className="min-w-0 truncate text-[13px] text-[#111118]">
@@ -1192,7 +1191,7 @@ function CheckOrderView({
                       <span className="whitespace-nowrap text-[13px] font-semibold text-[#111118]">
                         {item.quantity}
                       </span>
-                      <span className="whitespace-nowrap text-[13px] font-bold text-[#111118]">
+                      <span className="min-w-0 truncate whitespace-nowrap text-[13px] font-bold text-[#111118]">
                         {item.unit || "—"}
                       </span>
                       <div className="min-w-0">
@@ -1204,7 +1203,7 @@ function CheckOrderView({
                           }
                         />
                       </div>
-                      <div className="flex w-max items-center gap-x-3">
+                      <div className="flex min-w-0 items-center gap-x-3">
                         {readOnly ? (
                           <span className="inline-flex h-10 w-[132px] shrink-0 items-center rounded-[8px] border border-[#00000014] bg-[#F9FAFB] px-3 font-mono text-[13px] text-[#111118]">
                             {state.itemId}

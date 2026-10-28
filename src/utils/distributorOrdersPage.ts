@@ -3,6 +3,7 @@ import {
   ORDER_ITEM_CATEGORIES,
   ORDER_LIST_ITEMS,
 } from "@/constants/distributorOrders";
+import { ordersApi } from "@/lib/api/orders";
 import type { ApiInventory } from "@/lib/api/types";
 import type {
   DeliveredOrder,
@@ -18,6 +19,7 @@ import {
   deliveryDateIdFromValue,
   deliveryWeekId,
 } from "@/utils/deliveryCalendar";
+import { isUuid } from "@/utils/entityIds";
 
 export type OrderDemandFilterCriteria = {
   query: string;
@@ -60,8 +62,10 @@ export function createPlacedOrderFromReviewGroup(
   deliveryDateId = "",
   orderDate = formatOrderTimestamp(),
 ): PlacedOrder {
+  const apiOrderId = group.orderId?.trim();
   return {
-    id: `placed-${group.distributor}-${group.source}-${Date.now()}`,
+    id: apiOrderId || `placed-${group.distributor}-${group.source}-${Date.now()}`,
+    recordId: apiOrderId,
     deliveryId,
     distributor: group.distributor,
     orderDate,
@@ -204,60 +208,32 @@ export function mergePlacedOrdersForDisplay(
   });
 }
 
-function moneyLabel(value: number) {
-  if (Number.isInteger(value)) return `$${value}`;
-  return `$${value.toFixed(2)}`;
-}
-
-function invoiceText(order: PlacedOrder) {
-  const deliveryIds = order.deliveryIds?.length
-    ? order.deliveryIds
-    : [order.deliveryId];
-  return [
-    `Invoice - Delivery ${deliveryIds.join(", ")}`,
-    `Distributor: ${order.distributor}`,
-    `Order Date: ${order.orderDate}`,
-    `Delivery Date: ${order.deliveryDate}`,
-    "",
-    "Items",
-    "----",
-    ...order.items.map(
-      (item) =>
-        `${item.sku} | ${item.itemName} | ${item.source} | Qty ${item.quantity} | ${moneyLabel(item.price)}/${item.unit} | ${moneyLabel(item.price * item.quantity)}`,
-    ),
-    "",
-    `Total: ${moneyLabel(order.totalPrice)}`,
-  ].join("\n");
+/** Prefer the API UUID used by GET /orders/:id/invoice-pdf. */
+export function resolveInvoiceOrderId(order: PlacedOrder): string | null {
+  if (order.recordId && isUuid(order.recordId)) return order.recordId.trim();
+  if (isUuid(order.id)) return order.id.trim();
+  const member = order.memberIds?.find((id) => isUuid(id));
+  return member?.trim() || null;
 }
 
 /**
- * Opens the order invoice in a new tab.
- *
- * INTEGRATION: The button label is "Download order" and the spec text calls
- * the file an invoice. Confirm with product whether this opens, downloads, or
- * both, and whether the server returns a PDF invoice or a purchase order.
- * Replace this local text file with that document URL. Do not invent a PDF here.
+ * Downloads the order invoice / purchase order PDF via
+ * GET /api/v1/orders/:id/invoice-pdf.
  */
-export function openOrderInvoice(order: PlacedOrder) {
-  const blob = new Blob([invoiceText(order)], {
-    type: "text/plain;charset=utf-8",
-  });
-  const url = URL.createObjectURL(blob);
-  const opened = window.open(url, "_blank", "noopener,noreferrer");
-  if (!opened) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `invoice-${order.deliveryId}.txt`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+export async function openOrderInvoice(order: PlacedOrder) {
+  const orderId = resolveInvoiceOrderId(order);
+  if (!orderId) {
+    throw new Error("Order invoice is not available yet.");
   }
-  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  await ordersApi.downloadInvoicePdf(
+    orderId,
+    `Invoice_${order.deliveryId || orderId}.pdf`,
+  );
 }
 
 /** @deprecated Use openOrderInvoice. Kept so older call sites keep working. */
 export function downloadOrderInvoice(order: PlacedOrder) {
-  openOrderInvoice(order);
+  return openOrderInvoice(order);
 }
 
 export function getOrderDemandForDate(dateId: string): PreviewRow[] {
