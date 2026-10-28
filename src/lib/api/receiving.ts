@@ -48,6 +48,8 @@ export type ApiDelivery = {
   distributorName?: string;
   distributor?: { id?: string; name?: string; zipCode?: string } | string;
   deliveryDate?: string;
+  /** Distributor shipment day. Prefer this over `deliveryDate` for Delivery Date. */
+  distributorDeliveryDate?: string | null;
   status?: string;
   validatedAt?: string | null;
   receivedAt?: string | null;

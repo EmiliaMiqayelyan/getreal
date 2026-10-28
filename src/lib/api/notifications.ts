@@ -1,5 +1,4 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions } from "./requestDedupe";
 import type { ApiNotificationRule } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -110,11 +109,8 @@ function pickRule(payload: unknown): ApiNotificationRule {
 }
 
 export const notificationRulesApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>(
-      "/notification-rules",
-      catalogListCacheOptions(options?.fresh),
-    ).then((payload) =>
+  list(_options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/notification-rules").then((payload) =>
       normalizeNamedList<ApiNotificationRule>(payload, [
         "notificationRules",
         "rules",
@@ -152,11 +148,7 @@ export const notificationRulesApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/notification-rules/${id}`, {
-      cache: "no-store",
-      cacheTtlMs: 0,
-      dedupe: false,
-    }).then(pickRule);
+    return apiRequest<unknown>(`/notification-rules/${id}`).then(pickRule);
   },
 
   create(body: NotificationRulePayload) {

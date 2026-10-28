@@ -8,12 +8,6 @@ export {
   setAuthToken,
 } from "./client";
 export type { ApiRequestOptions } from "./client";
-export {
-  buildRequestKey,
-  CATALOG_LIST_CACHE_MS,
-  clearRequestDedupeState,
-  invalidateCacheForUrl,
-} from "./requestDedupe";
 export { downloadListExport } from "./exportDownload";
 export { collectPaginated } from "./collectPages";
 export { authApi } from "./auth";

@@ -6,7 +6,7 @@ React admin panel for Rachel's Habit. UI implemented from Figma designs.
 ## Stack
  
 - React 19 + TypeScript
-- Vite
+- Vite 
 - React Router
 - Tailwind CSS v4
 - ESLint + Prettier

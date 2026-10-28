@@ -1,5 +1,4 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiSubcategory } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -18,10 +17,7 @@ export const subcategoriesApi = {
     const query = new URLSearchParams();
     if (params?.categoryId) query.set("categoryId", params.categoryId);
     const suffix = query.toString() ? `?${query.toString()}` : "";
-    return apiRequest<unknown>(
-      `/subcategories${suffix}`,
-      catalogListCacheOptions(params?.fresh),
-    ).then((payload) =>
+    return apiRequest<unknown>(`/subcategories${suffix}`).then((payload) =>
       normalizeNamedList<ApiSubcategory>(payload, [
         "subcategories",
         "data",
@@ -31,7 +27,7 @@ export const subcategoriesApi = {
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/subcategories/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/subcategories/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiSubcategory>(payload, "subcategory") ??
         (payload as ApiSubcategory),

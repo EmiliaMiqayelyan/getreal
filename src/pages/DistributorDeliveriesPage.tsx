@@ -667,7 +667,12 @@ function mapDelivery(delivery: ApiDelivery, index: number): DeliveryOrder {
     delivery.code?.trim() ||
     delivery.id?.trim() ||
     `DLV-${index + 1}`;
-  const parsedDateId = deliveryDateIdFromValue(delivery.deliveryDate);
+  // Delivery Date column: distributor shipment day, not customer deliveryDate.
+  const deliveryWhen =
+    delivery.distributorDeliveryDate?.trim() ||
+    delivery.deliveryDate?.trim() ||
+    "";
+  const parsedDateId = deliveryDateIdFromValue(deliveryWhen);
   const deliveryDateId = deliveryWeekId(parsedDateId);
   const deliveryDate = deliveryDateId
     ? parseDeliveryDateId(deliveryDateId)

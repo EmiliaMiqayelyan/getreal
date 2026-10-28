@@ -2,8 +2,7 @@ import { useEffect, useRef, type DependencyList } from "react";
 
 /**
  * Like useEffect, but provides an AbortSignal that aborts on cleanup.
- * Pair with `apiRequest(path, { signal })`. Aborting one consumer does not
- * cancel a shared in-flight GET (see api client dedupe).
+ * Pair with `apiRequest(path, { signal })`.
  */
 export function useAbortableEffect(
   effect: (signal: AbortSignal) => void | Promise<void>,

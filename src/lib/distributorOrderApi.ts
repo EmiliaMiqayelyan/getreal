@@ -171,13 +171,8 @@ export function mapApiDistributorOrder(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
-  const rawDelivery: unknown = order.deliveryDate;
-  const when =
-    typeof rawDelivery === "string"
-      ? rawDelivery.trim()
-      : rawDelivery instanceof Date
-        ? rawDelivery.toISOString()
-        : readString(rawDelivery);
+  // Delivery Date column: distributor shipment day, not customer deliveryDate.
+  const when = distributorDeliveryWhen(order);
   const deliveryDate = when ? parseOrderDate(when) : null;
   const createdDate = readTimestamp(
     (order as ApiOrder & { createdAt?: unknown }).createdAt,
@@ -200,6 +195,14 @@ export function mapApiDistributorOrder(
       order.totalPrice == null ? computed : centsToDollars(order.totalPrice),
     items,
   };
+}
+
+/** Prefer distributorDeliveryDate; fall back to deliveryDate when absent. */
+function distributorDeliveryWhen(order: ApiOrder): string {
+  const raw: unknown = order.distributorDeliveryDate ?? order.deliveryDate;
+  if (typeof raw === "string") return raw.trim();
+  if (raw instanceof Date) return raw.toISOString();
+  return readString(raw);
 }
 
 function weekAndDay(value: string) {
@@ -240,7 +243,7 @@ export function mapApiDistributorDelivered(
     catalogItems,
   );
   const stamp =
-    order.deliveryDate?.trim() ||
+    distributorDeliveryWhen(order) ||
     order.receivedAt?.trim() ||
     order.updatedAt?.trim() ||
     order.createdAt?.trim() ||

@@ -1,5 +1,4 @@
 import { apiRequest } from "./client";
-import { catalogListCacheOptions, FRESH_READ } from "./requestDedupe";
 import type { ApiItem, ApiItemPhoto } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
 
@@ -39,17 +38,14 @@ export type UpdateItemPayload = Partial<
 const inflightCreates = new Map<string, Promise<ApiItem>>();
 
 export const itemsApi = {
-  list(options?: { fresh?: boolean }) {
-    return apiRequest<unknown>(
-      "/items",
-      catalogListCacheOptions(options?.fresh),
-    ).then((payload) =>
+  list(_options?: { fresh?: boolean }) {
+    return apiRequest<unknown>("/items").then((payload) =>
       normalizeNamedList<ApiItem>(payload, ["items", "data", "results"]),
     );
   },
 
   getById(id: string) {
-    return apiRequest<unknown>(`/items/${id}`, FRESH_READ).then(
+    return apiRequest<unknown>(`/items/${id}`).then(
       (payload) =>
         pickNamedEntity<ApiItem>(payload, "item") ?? (payload as ApiItem),
     );

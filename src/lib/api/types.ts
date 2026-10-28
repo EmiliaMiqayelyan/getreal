@@ -273,6 +273,8 @@ export type ApiOrder = {
   } | null;
   communicationChannel?: string;
   deliveryDate?: string;
+  /** Distributor shipment day. Prefer this over `deliveryDate` for Delivery Date. */
+  distributorDeliveryDate?: string | null;
   items?: ApiOrderItem[];
   /** Order total in integer cents. */
   totalPrice?: number;
