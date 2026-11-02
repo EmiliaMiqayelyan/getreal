@@ -41,6 +41,7 @@ import { useLazyWindow } from "@/hooks/useLazyWindow";
 import { useWeekChipWindow } from "@/hooks/useWeekChipWindow";
 import {
   collectPaginated,
+  downloadListExport,
   isApiConfigured,
   orderRecordId,
   ordersApi,
@@ -544,7 +545,18 @@ function stepExportValue(step: TimelineStep | undefined) {
 const ACTIVE_ORDER_EXPORT_HEADERS = [
   "Customer",
   "Order ID",
+  "Status",
+  "Address",
+  "Apt",
+  "City",
+  "State",
+  "Zip",
+  "Order Date",
+  "Delivery Date",
+  "Payment",
   "Items",
+  "Item Count",
+  "Total",
   ...STEPS_META.map((step) => step.header),
 ] as const;
 
@@ -558,8 +570,20 @@ const COMPLETED_ORDER_EXPORT_HEADERS = [
   "Order Date",
   "Delivered",
   "Items",
+  "Item Count",
   "Total",
 ] as const;
+
+function formatOrderItems(items: OrderDetailItem[]) {
+  if (!items.length) return "—";
+  return items
+    .map((item) => {
+      const qty = item.qty > 0 ? `${item.qty}x ` : "";
+      const unit = item.unit?.trim() ? ` (${item.unit})` : "";
+      return `${qty}${item.name || "Item"}${unit}`;
+    })
+    .join("; ");
+}
 
 function downloadActiveOrdersCsv(orders: CustomerOrderRow[], filename: string) {
   downloadCsvFile(filename, [
@@ -567,7 +591,18 @@ function downloadActiveOrdersCsv(orders: CustomerOrderRow[], filename: string) {
     ...orders.map((order) => [
       order.customerName || "N/A",
       order.id,
+      order.status || "N/A",
+      order.address || "N/A",
+      order.apt || "N/A",
+      order.city || "N/A",
+      order.state || "N/A",
+      order.zip || "N/A",
+      order.orderDate || "N/A",
+      order.deliveryDate || order.deliveryLabel || "N/A",
+      order.paymentStatus || "N/A",
+      formatOrderItems(order.items),
       String(order.itemCount),
+      currency(order.total),
       ...STEPS_META.map((step) =>
         stepExportValue(order.steps.find((entry) => entry.key === step.key)),
       ),
@@ -590,6 +625,7 @@ function downloadCompletedOrdersCsv(
       order.zip || "N/A",
       order.orderDate || "N/A",
       order.delivered || "N/A",
+      formatOrderItems(order.detail.items),
       String(order.items),
       currency(order.total),
     ]),
@@ -1800,9 +1836,47 @@ export default function CustomerOrdersPage() {
                 recordCount={exportCount}
                 filtersActive={exportFiltersActive}
                 onExport={async (request: ExportRequest) => {
+                  const isCompleted = activeTab === "Completed";
+                  const filename = exportFilename(
+                    request.scope === "all"
+                      ? isCompleted
+                        ? "completed-orders-all"
+                        : "customer-orders-all"
+                      : isCompleted
+                        ? "completed-orders"
+                        : "customer-orders",
+                  );
+
+                  // Zip / timeline status filters are applied in the UI only.
+                  const needsClientFilter =
+                    request.scope === "filtered" &&
+                    ((isCompleted && Boolean(zipFilter)) ||
+                      (!isCompleted && Boolean(statusFilter)));
+
+                  if (apiConfigured && !needsClientFilter) {
+                    await downloadListExport(
+                      "/orders",
+                      {
+                        type: "standard",
+                        ...(isCompleted ? { active: false } : {}),
+                        ...(request.scope === "filtered" && search.trim()
+                          ? { search: search.trim() }
+                          : {}),
+                        ...(request.scope === "filtered" &&
+                        !isCompleted &&
+                        appliedDateId
+                          ? { deliveryDate: appliedDateId }
+                          : {}),
+                      },
+                      request.format,
+                      filename,
+                    );
+                    return;
+                  }
+
                   let activeRows = ordersWithPacking;
                   let completedRows = completedOrders;
-                  if (apiConfigured && activeTab === "Completed") {
+                  if (apiConfigured && isCompleted) {
                     const finished = await loadCompletedStandardOrders();
                     completedRows = finished.map((order, index) => ({
                       ...mapApiOrderToCompleted(order, index),
@@ -1825,7 +1899,7 @@ export default function CustomerOrdersPage() {
                     });
                   }
 
-                  if (activeTab === "Completed") {
+                  if (isCompleted) {
                     const dataset = completedDataset(
                       completedRows,
                       apiConfigured,
@@ -1839,14 +1913,7 @@ export default function CustomerOrdersPage() {
                             zipFilter,
                             sortBy,
                           );
-                    downloadCompletedOrdersCsv(
-                      rows,
-                      exportFilename(
-                        request.scope === "all"
-                          ? "completed-orders-all"
-                          : "completed-orders",
-                      ),
-                    );
+                    downloadCompletedOrdersCsv(rows, filename);
                     return;
                   }
 
@@ -1859,14 +1926,7 @@ export default function CustomerOrdersPage() {
                           statusFilter,
                           appliedDateId,
                         );
-                  downloadActiveOrdersCsv(
-                    rows,
-                    exportFilename(
-                      request.scope === "all"
-                        ? "customer-orders-all"
-                        : "customer-orders",
-                    ),
-                  );
+                  downloadActiveOrdersCsv(rows, filename);
                 }}
                 className="w-full sm:w-auto"
               />
