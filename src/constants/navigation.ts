@@ -19,7 +19,8 @@ export type NavItem = {
     | "items"
     | "phone"
     | "package"
-    | "bell";
+    | "bell"
+    | "zip";
   badge?: number;
 };
 
@@ -88,6 +89,7 @@ export const SUPERADMIN_NAV_SECTIONS: NavSection[] = [
         href: ROUTES.notifications,
         icon: "bell",
       },
+      { label: "Zip code", href: ROUTES.zipCodes, icon: "zip" },
     ],
   },
 ];

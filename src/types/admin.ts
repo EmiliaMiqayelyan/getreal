@@ -163,6 +163,10 @@ export type RolePermissions = {
   notificationsCreate: boolean;
   notificationsEdit: boolean;
   notificationsDelete: boolean;
+
+  accessZipCodes: boolean;
+  zipCodesCreate: boolean;
+  zipCodesDelete: boolean;
 };
 
 export type RoleUser = {

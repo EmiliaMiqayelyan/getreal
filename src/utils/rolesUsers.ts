@@ -5,6 +5,7 @@ import {
   ADMIN_ROLE_PERMISSIONS,
   MANAGER_ROLE_PERMISSIONS,
   WAREHOUSE_ROLE_PERMISSIONS,
+  grantsAnyApiPermission,
   grantsApiPermissions,
   normalizePermissions,
 } from "@/utils/rolePermissions";
@@ -171,11 +172,13 @@ export const ROUTE_PERMISSION_KEY: Record<string, keyof RolePermissions> = {
   "/packer-manager": "accessPackerManager",
   "/roles": "accessRoles",
   "/notifications": "accessNotifications",
+  "/zip-codes": "accessZipCodes",
 };
 
 /**
  * Permissions required to load the page. A shared string such as `read:orders`
  * is not enough when the page calls a stricter endpoint.
+ * Values are AND'd unless the route is listed in PAGE_ANY_OF_PERMISSIONS.
  */
 const PAGE_REQUIRED_PERMISSIONS: Record<string, string[]> = {
   "/dashboard": ["view:dashboard"],
@@ -192,6 +195,22 @@ const PAGE_REQUIRED_PERMISSIONS: Record<string, string[]> = {
   "/packer-manager": ["read:users", "read:orders"],
   "/roles": ["read:roles"],
   "/notifications": ["manage:notifications"],
+  "/zip-codes": ["manage:zip_codes"],
+};
+
+/**
+ * Routes that accept any one of these permissions.
+ * Zip codes: backend accepts manage:zip_codes|orders|users for writes; also
+ * allow Settings peers so existing admin JWTs (pre-zip permission) still see the page.
+ */
+const PAGE_ANY_OF_PERMISSIONS: Record<string, string[]> = {
+  "/zip-codes": [
+    "manage:zip_codes",
+    "manage:orders",
+    "manage:users",
+    "manage:notifications",
+    "read:roles",
+  ],
 };
 
 /**
@@ -246,9 +265,15 @@ export function canAccessPath(
   if (!permissions) return false;
   const route = matchedAppRoute(pathname);
   if (!route) return false;
-  const required = PAGE_REQUIRED_PERMISSIONS[route];
-  if (!required || !grantsApiPermissions(getSessionPermissionNames(), required)) {
-    return false;
+  const held = getSessionPermissionNames();
+  const anyOf = PAGE_ANY_OF_PERMISSIONS[route];
+  if (anyOf) {
+    if (!grantsAnyApiPermission(held, anyOf)) return false;
+  } else {
+    const required = PAGE_REQUIRED_PERMISSIONS[route];
+    if (!required || !grantsApiPermissions(held, required)) {
+      return false;
+    }
   }
   return roleAllowsPage(route);
 }
