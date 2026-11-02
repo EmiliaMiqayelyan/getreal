@@ -20,6 +20,7 @@ import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { useLazyWindow } from "@/hooks/useLazyWindow";
 import {
   collectPaginated,
+  downloadListExport,
   isApiConfigured,
   mapApiUserToAdminCustomer,
   orderModelId,
@@ -324,6 +325,11 @@ const CUSTOMER_EXPORT_HEADERS = [
   "Email",
   "Phone",
   "Address",
+  "Street",
+  "Apt",
+  "City",
+  "State",
+  "Zip",
   "Orders",
   "Total",
   "Last Order",
@@ -333,17 +339,25 @@ const CUSTOMER_EXPORT_HEADERS = [
 function downloadCustomersCsv(customers: AdminCustomer[], filename: string) {
   downloadCsvFile(filename, [
     [...CUSTOMER_EXPORT_HEADERS],
-    ...customers.map((customer) => [
-      customer.id,
-      `${customer.firstName} ${customer.lastName}`.trim() || "—",
-      customer.email.trim() || "—",
-      customer.phone.trim() || "—",
-      customer.shortLocation.trim() || "—",
-      String(customer.orderQuantity),
-      currency(customer.lifetimeTotal),
-      formatShortDate(customer.lastOrderedDate),
-      dayAbbrev(customer.deliveryDay),
-    ]),
+    ...customers.map((customer) => {
+      const address = parseAddress(customer.fullAddress);
+      return [
+        customer.id,
+        `${customer.firstName} ${customer.lastName}`.trim() || "—",
+        customer.email.trim() || "—",
+        customer.phone.trim() || "—",
+        customer.fullAddress.trim() || customer.shortLocation.trim() || "—",
+        address.street || "—",
+        address.apt || "—",
+        address.city || "—",
+        address.state || "—",
+        address.zip || customer.zip || "—",
+        String(customer.orderQuantity),
+        currency(customer.lifetimeTotal),
+        formatShortDate(customer.lastOrderedDate),
+        dayAbbrev(customer.deliveryDay),
+      ];
+    }),
   ]);
 }
 
@@ -844,12 +858,9 @@ function CustomerTable({
         })}
       </div>
 
-      {/* Desktop table */}
+      {/* Desktop table — grow with rows so the page scroll hits the sentinel */}
       <div className="hidden md:block">
-        <ScrollTable
-          minWidth="100%"
-          className="max-h-[min(640px,calc(100dvh-18rem))]"
-        >
+        <ScrollTable minWidth="100%">
           <div>
             <div
               className={cn(
@@ -1001,6 +1012,7 @@ export default function CustomersPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [listExhausted, setListExhausted] = useState(false);
   const loadLock = useRef(false);
+  const listFetchGen = useRef(0);
   const loadedOrderIds = useRef(new Set<string>());
   const loadedCustomerOrders = useRef(new Set<string>());
   const customersRef = useRef(customers);
@@ -1021,7 +1033,7 @@ export default function CustomersPage() {
   useEffect(() => {
     if (!apiConfigured) return;
     standardOrdersPromise = null;
-    let cancelled = false;
+    const fetchGen = ++listFetchGen.current;
     const append = page > 1;
     loadLock.current = true;
     if (append) setLoadingMore(true);
@@ -1035,7 +1047,7 @@ export default function CustomersPage() {
         ...(debouncedQuery ? { search: debouncedQuery } : {}),
       })
       .then((result) => {
-        if (cancelled) return;
+        if (fetchGen !== listFetchGen.current) return;
         const mapped = result.items.map(mapApiUserToAdminCustomer);
         setCustomers((current) => {
           const previousOrders = new Map(
@@ -1051,32 +1063,26 @@ export default function CustomersPage() {
           return extra.length === 0 ? current : [...current, ...extra];
         });
         setTotal(result.total);
-        if (
+        const reachedEnd =
           mapped.length < DEFAULT_PAGE_LIMIT ||
           (append &&
             mapped.every((customer) =>
               customersRef.current.some(
                 (existing) => existing.id === customer.id,
               ),
-            ))
-        ) {
-          setListExhausted(true);
-        }
+            ));
+        if (reachedEnd) setListExhausted(true);
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (fetchGen !== listFetchGen.current) return;
         notifyApiError(error, "Failed to load customers.");
       })
       .finally(() => {
-        if (cancelled) return;
+        if (fetchGen !== listFetchGen.current) return;
         loadLock.current = false;
         setLoading(false);
         setLoadingMore(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
   }, [apiConfigured, debouncedQuery, notifyApiError, page]);
 
   useEffect(() => {
@@ -1242,6 +1248,31 @@ export default function CustomersPage() {
                 query.trim() || zipFilter || orderCountFilter,
               )}
               onExport={async (request: ExportRequest) => {
+                const filename = exportFilename(
+                  request.scope === "all" ? "customers-all" : "customers",
+                );
+                // Order-count ranges are client-only; use the server CSV otherwise.
+                const needsClientOrderCountFilter =
+                  request.scope === "filtered" && Boolean(orderCountFilter);
+
+                if (apiConfigured && !needsClientOrderCountFilter) {
+                  await downloadListExport(
+                    "/users",
+                    {
+                      role: "customer",
+                      ...(request.scope === "filtered" && debouncedQuery
+                        ? { search: debouncedQuery }
+                        : {}),
+                      ...(request.scope === "filtered" && zipFilter
+                        ? { location: zipFilter }
+                        : {}),
+                    },
+                    request.format,
+                    filename,
+                  );
+                  return;
+                }
+
                 let source = customers;
                 if (apiConfigured) {
                   const users = await collectPaginated((page, limit) =>
@@ -1269,12 +1300,7 @@ export default function CustomersPage() {
                           orderCountFilter,
                         }),
                       );
-                downloadCustomersCsv(
-                  rows,
-                  exportFilename(
-                    request.scope === "all" ? "customers-all" : "customers",
-                  ),
-                );
+                downloadCustomersCsv(rows, filename);
               }}
               className="w-full sm:ml-auto sm:w-auto"
             />

@@ -85,7 +85,10 @@ export const usersApi = {
     if (params.roleId) search.set("roleId", params.roleId);
     if (params.search) search.set("search", params.search);
     const qs = search.toString();
-    return apiRequest<unknown>(`/users?${qs}`).then((payload) =>
+    // Keep the raw envelope so sibling `total` is not stripped by unwrapData.
+    return apiRequest<unknown>(`/users?${qs}`, {
+      preserveEnvelope: true,
+    }).then((payload) =>
       normalizePaginatedList<ApiUser>(
         payload,
         ["users", "items", "data", "results"],
