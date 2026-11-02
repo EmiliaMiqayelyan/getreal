@@ -24,6 +24,13 @@ export { sourcesApi } from "./sources";
 export { inventoryApi } from "./inventory";
 export { receivingApi } from "./receiving";
 export { coolersApi } from "./coolers";
+export { zipCodesApi } from "./zipCodes";
+export type {
+  ApiZipCode,
+  CreateZipCodePayload,
+  CreateZipCodeResult,
+  ListZipCodesParams,
+} from "./zipCodes";
 export { notificationRulesApi } from "./notifications";
 export type {
   NotificationRulePayload,

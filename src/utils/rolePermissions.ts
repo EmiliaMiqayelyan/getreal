@@ -153,6 +153,15 @@ export const ROLE_PERMISSION_GROUPS: RolePermissionGroup[] = [
       { key: "notificationsDelete", label: "Can Delete" },
     ],
   },
+  {
+    label: "Zip code",
+    accessKey: "accessZipCodes",
+    accessLabel: "Access Zip code page",
+    actions: [
+      { key: "zipCodesCreate", label: "Can Create" },
+      { key: "zipCodesDelete", label: "Can Delete" },
+    ],
+  },
 ];
 
 /** Blank / deferred defaults (Warehouse Worker until platform-ready). */
@@ -219,6 +228,10 @@ export const DEFAULT_ROLE_PERMISSIONS: RolePermissions = {
   notificationsCreate: false,
   notificationsEdit: false,
   notificationsDelete: false,
+
+  accessZipCodes: false,
+  zipCodesCreate: false,
+  zipCodesDelete: false,
 };
 
 /** Super Admin: every checkbox enabled. */
@@ -325,6 +338,10 @@ export const API_PERMISSION_FOR: Record<keyof RolePermissions, string> = {
   notificationsCreate: "manage:notifications",
   notificationsEdit: "manage:notifications",
   notificationsDelete: "manage:notifications",
+
+  accessZipCodes: "read:zip_codes",
+  zipCodesCreate: "manage:zip_codes",
+  zipCodesDelete: "manage:zip_codes",
 };
 
 /** Backend strings that also grant other strings (`manage:x` includes `read:x`). */
@@ -337,6 +354,7 @@ const API_PERMISSION_IMPLIES: Record<string, string[]> = {
   "manage:receiving": ["read:receiving"],
   "manage:coolers": ["read:coolers"],
   "manage:notifications": ["read:notifications"],
+  "manage:zip_codes": ["read:zip_codes"],
   "manage:orders": [
     "read:orders",
     "create:orders",
@@ -358,6 +376,16 @@ export function grantsApiPermissions(
   if (!required.length) return false;
   const granted = expandApiPermissions(held);
   return required.every((name) => granted.has(name));
+}
+
+/** True when at least one of the listed API permissions is granted. */
+export function grantsAnyApiPermission(
+  held: string[],
+  candidates: string[],
+): boolean {
+  if (!candidates.length) return false;
+  const granted = expandApiPermissions(held);
+  return candidates.some((name) => granted.has(name));
 }
 
 function expandApiPermissions(keys: Iterable<string>): Set<string> {

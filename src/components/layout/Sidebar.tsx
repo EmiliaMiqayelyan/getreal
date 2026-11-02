@@ -30,6 +30,7 @@ const SIDEBAR_ICONS: Record<string, string> = {
   [ROUTES.packerManager]: "/icons/sidebar-icons/packermanager.png",
   [ROUTES.roles]: "/icons/sidebar-icons/roles.png",
   [ROUTES.notifications]: "/icons/sidebar-icons/notifications.png",
+  [ROUTES.zipCodes]: "/icons/sidebar-icons/customers.png",
 };
 
 function SidebarItem({

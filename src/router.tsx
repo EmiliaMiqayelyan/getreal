@@ -27,6 +27,7 @@ const RolesPage = lazyPage(() => import("@/pages/RolesPage"));
 const PushNotificationsPage = lazyPage(
   () => import("@/pages/PushNotificationsPage"),
 );
+const ZipCodesPage = lazyPage(() => import("@/pages/ZipCodesPage"));
 
 function HomeRedirect() {
   if (!isAuthenticated()) {
@@ -102,6 +103,10 @@ export const router = createBrowserRouter([
       {
         path: ROUTES.notifications,
         element: <PushNotificationsPage />,
+      },
+      {
+        path: ROUTES.zipCodes,
+        element: <ZipCodesPage />,
       },
     ],
   },
