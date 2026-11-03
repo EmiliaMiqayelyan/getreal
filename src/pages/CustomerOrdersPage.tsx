@@ -544,7 +544,7 @@ function stepExportValue(step: TimelineStep | undefined) {
 
 const ACTIVE_ORDER_EXPORT_HEADERS = [
   "Customer",
-  "Order ID",
+  "Customer Order ID",
   "Status",
   "Address",
   "Apt",
@@ -563,7 +563,7 @@ const ACTIVE_ORDER_EXPORT_HEADERS = [
 const COMPLETED_ORDER_EXPORT_HEADERS = [
   "Week",
   "Day",
-  "Order ID",
+  "Customer Order ID",
   "Customer",
   "Address",
   "Zip Code",
@@ -2044,7 +2044,7 @@ export default function CustomerOrdersPage() {
                       "h-10 border-b border-[#00000014]",
                     )}
                   >
-                    <div>Order ID</div>
+                    <div>Customer Order ID</div>
                     {STEPS_META.map((step) => (
                       <div key={step.key} className="text-center">
                         {step.header}
@@ -2183,7 +2183,7 @@ export default function CustomerOrdersPage() {
                               "h-10 border-b border-[#00000014]",
                             )}
                           >
-                            <div>Order ID</div>
+                            <div>Customer Order ID</div>
                             <div>Customer</div>
                             <div>Address</div>
                             <div>Zip Code</div>

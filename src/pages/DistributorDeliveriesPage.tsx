@@ -881,7 +881,7 @@ function currency(value: number) {
 }
 
 const DELIVERY_EXPORT_HEADERS = [
-  "Delivery ID",
+  "Distr. Order ID",
   "Distributor",
   "Order Date",
   "Expected Delivery",
@@ -1988,7 +1988,7 @@ export default function DistributorDeliveriesPage() {
               )}
             >
               <div />
-              <div className="-ml-3">Delivery ID</div>
+              <div className="-ml-3">Distr. Order ID</div>
               <div>Distributor</div>
               <div>Order Date</div>
               <div>Expected Delivery</div>
