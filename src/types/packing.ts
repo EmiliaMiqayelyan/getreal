@@ -90,7 +90,8 @@ export type PackingCoolerOption = {
  */
 export type PackingHandoffUpdate = {
   orderCode: string;
-  packerId?: string;
+  /** Null clears a previous Packer Manager assignment. */
+  packerId?: string | null;
   packerName: string;
   /** Set when packer starts packing (Cooler Packing Start Packing). */
   packingStartedAt?: string;

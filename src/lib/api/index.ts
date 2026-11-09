@@ -34,6 +34,8 @@ export type {
 export { notificationRulesApi } from "./notifications";
 export type {
   NotificationRulePayload,
+  OneTimeNotificationPayload,
+  RecurringNotificationPayload,
   UpdateNotificationRulePayload,
 } from "./notifications";
 export { getQuickBooksAuthUrl, getQuickBooksCallbackUrl } from "./quickbooks";

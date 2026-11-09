@@ -14,7 +14,8 @@ import type { PackingHandoffUpdate } from "@/types/packing";
 const HANDOFF_STORAGE_KEY = "getreal.packingHandoff.v2";
 
 type AssignPackerInput = {
-  packerId: string;
+  /** Null clears the packer assignment. */
+  packerId: string | null;
   packerName: string;
 };
 
@@ -92,8 +93,14 @@ export function PackingHandoffProvider({ children }: { children: ReactNode }) {
           packingStartedAt:
             update.packingStartedAt ?? previous?.packingStartedAt,
           loadedAt: update.loadedAt ?? previous?.loadedAt,
-          packerId: update.packerId ?? previous?.packerId,
-          packerName: update.packerName || previous?.packerName || "",
+          packerId:
+            update.packerId !== undefined
+              ? update.packerId
+              : previous?.packerId,
+          packerName:
+            update.packerId === null
+              ? ""
+              : update.packerName || previous?.packerName || "",
         },
       };
     });

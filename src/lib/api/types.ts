@@ -398,7 +398,9 @@ export type ApiNotificationRule = {
   httpMethod?: string;
   triggerMethod?: string;
   title?: string;
+  header?: string;
   subtext?: string;
+  description?: string;
   /** `before` or `after` the triggering event. */
   timing?: string | null;
   scheduleDelay?: number | string;
@@ -406,6 +408,16 @@ export type ApiNotificationRule = {
   iconUrl?: string | null;
   targetStatus?: string | null;
   category?: string | null;
+  /** False for one-time date/time broadcasts. */
+  isRepeatable?: boolean;
+  mode?: string | null;
+  /** 0–6 Sunday–Saturday for weekly schedules. */
+  weekday?: number | string | null;
+  dayOfWeek?: number | string | null;
+  /** ISO datetime when the one-time broadcast should send. */
+  scheduledFor?: string | null;
+  isSent?: boolean;
+  scheduledNotificationId?: string | null;
   createdAt?: string;
   updatedAt?: string;
 };

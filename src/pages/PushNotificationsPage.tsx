@@ -6,6 +6,7 @@ import { Box, ChevronDown, Plus } from "lucide-react";
 
 import { Header } from "@/components/layout/AdminHeader";
 import { Button, ButtonSpinner } from "@/components/ui/Button";
+import { DatePicker } from "@/components/ui/DatePicker";
 import { Input } from "@/components/ui/Input";
 import { IdPill } from "@/components/ui/Badge";
 import { AppLoader } from "@/components/ui/AppLoader";
@@ -30,6 +31,9 @@ import type {
   ApiNotificationTrigger,
   NotificationRulePayload,
   NotificationScheduleUnit,
+  OneTimeNotificationPayload,
+  RecurringNotificationPayload,
+  UpdateNotificationRulePayload,
 } from "@/lib/api/notifications";
 import type { ApiNotificationRule } from "@/lib/api/types";
 import type { PushNotification } from "@/types/notification";
@@ -40,7 +44,7 @@ import { floatingMenuStyle } from "@/utils/floatingMenu";
 const LINK_BLUE = "#3B82F6";
 
 const NOTIFICATION_COLUMNS =
-  "grid grid-cols-[132px_minmax(160px,0.95fr)_120px_minmax(180px,1.15fr)_minmax(240px,1.7fr)_48px] items-center gap-x-4";
+  "grid grid-cols-[132px_minmax(140px,0.45fr)_140px_minmax(160px,1fr)_minmax(240px,2fr)_48px] items-center gap-x-4";
 
 const PERIOD_UNIT: Record<string, string> = {
   second: "sec",
@@ -60,12 +64,37 @@ const MINUTES_PER_DAY = 24 * MINUTES_PER_HOUR;
 
 const FIELD_LABEL = "mb-2 block text-[13px] font-medium text-[#111118]";
 const FIELD_HINT = "mt-1 text-right text-[12px] text-[#8A8A8A]";
+const NY_TZ = "America/New_York";
+
+const WEEKDAY_OPTIONS: SelectOption[] = [
+  { value: "0", label: "Sunday" },
+  { value: "1", label: "Monday" },
+  { value: "2", label: "Tuesday" },
+  { value: "3", label: "Wednesday" },
+  { value: "4", label: "Thursday" },
+  { value: "5", label: "Friday" },
+  { value: "6", label: "Saturday" },
+];
+
+const SOURCE_OPTIONS: SelectOption[] = [
+  { value: "trigger", label: "Action (Trigger)" },
+  { value: "schedule", label: "Schedule" },
+];
+
+const SCHEDULE_KIND_OPTIONS: SelectOption[] = [
+  { value: "recurring", label: "Recurring" },
+  { value: "one_time", label: "One Time" },
+];
 
 type DraftPeriod = "" | "before" | "after";
+type SourceKind = "trigger" | "schedule";
+type ScheduleKind = "recurring" | "one_time";
 
 type Draft = {
   id?: string;
   recordId?: string;
+  sourceKind: SourceKind;
+  scheduleKind: ScheduleKind;
   triggerKey: string;
   period: DraftPeriod;
   days: string;
@@ -76,10 +105,16 @@ type Draft = {
   iconUrl: string;
   action: string;
   httpMethod: string;
+  date: string;
+  time: string;
+  weekday: string;
+  isSent: boolean;
 };
 
 function emptyDraft(): Draft {
   return {
+    sourceKind: "trigger",
+    scheduleKind: "one_time",
     triggerKey: "",
     period: "",
     days: "",
@@ -90,13 +125,79 @@ function emptyDraft(): Draft {
     iconUrl: "",
     action: "",
     httpMethod: "",
+    date: "",
+    time: "09:00",
+    weekday: "",
+    isSent: false,
   };
 }
 
+function weekdayLabel(weekday: number | null): string {
+  if (weekday === null || weekday < 0 || weekday > 6) return "Weekly";
+  return WEEKDAY_OPTIONS[weekday]?.label ?? "Weekly";
+}
+
+function formatWeeklySchedule(
+  weekday: number | null,
+  scheduledFor: string | null,
+): string {
+  const day = weekdayLabel(weekday);
+  if (!scheduledFor?.trim()) return `${day}s`;
+  const parsed = new Date(scheduledFor);
+  if (Number.isNaN(parsed.getTime())) return `${day}s`;
+  const time = parsed.toLocaleTimeString("en-US", {
+    timeZone: NY_TZ,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+  return `${day}s at ${time} ET`;
+}
+
 function dataTriggerLabel(item: PushNotification): string {
+  if (item.isWeekly) return "Schedule · Recurring";
+  if (item.isOneTime) return "Schedule · One Time";
   const named = item.trigger.trim();
   if (named) return named;
   return [item.httpMethod, item.action].filter(Boolean).join(" ");
+}
+
+/** Split an ISO datetime into Eastern date (YYYY-MM-DD) + 24h time (HH:mm). */
+function partsFromScheduledFor(value: string | null | undefined): {
+  date: string;
+  time: string;
+} {
+  if (!value?.trim()) return { date: "", time: "09:00" };
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return { date: "", time: "09:00" };
+  const date = new Intl.DateTimeFormat("en-CA", {
+    timeZone: NY_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(parsed);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    timeZone: NY_TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(parsed);
+  return { date, time };
+}
+
+function formatScheduledFor(value: string | null | undefined): string {
+  if (!value?.trim()) return "One-time";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "One-time";
+  return `${parsed.toLocaleString("en-US", {
+    timeZone: NY_TZ,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  })} ET`;
 }
 
 function formatDuration(delay: number, unit: string): string {
@@ -212,9 +313,13 @@ function draftFromNotification(
 ): Draft {
   const parts = splitSchedule(item.scheduleDelay, item.scheduleUnit);
   const match = matchTrigger(triggers, item.trigger);
+  const scheduled = partsFromScheduledFor(item.scheduledFor);
+  const isSchedule = item.isWeekly || item.isOneTime;
   return {
     id: item.id,
     recordId: item.recordId,
+    sourceKind: isSchedule ? "schedule" : "trigger",
+    scheduleKind: item.isWeekly ? "recurring" : "one_time",
     triggerKey: match?.key || item.trigger,
     period: selectedPeriod(item.timing, item.scheduleDelay),
     days: parts.days,
@@ -225,6 +330,10 @@ function draftFromNotification(
     iconUrl: item.iconUrl,
     action: item.action,
     httpMethod: item.httpMethod,
+    date: scheduled.date,
+    time: scheduled.time,
+    weekday: item.weekday !== null ? String(item.weekday) : "",
+    isSent: item.isSent,
   };
 }
 
@@ -251,6 +360,7 @@ function toPayload(
   triggers: ApiNotificationTrigger[],
   icons: ApiNotificationIcon[],
 ): NotificationRulePayload | null {
+  if (draft.sourceKind !== "trigger") return null;
   const title = draft.header.trim();
   const subtext = draft.description.trim();
   const match = matchTrigger(triggers, draft.triggerKey);
@@ -269,6 +379,59 @@ function toPayload(
     ...(!match && draft.action
       ? { action: draft.action, httpMethod: draft.httpMethod || "POST" }
       : {}),
+  };
+}
+
+function toOneTimePayload(
+  draft: Draft,
+  icons: ApiNotificationIcon[],
+): OneTimeNotificationPayload | null {
+  if (draft.sourceKind !== "schedule" || draft.scheduleKind !== "one_time") {
+    return null;
+  }
+  const header = draft.header.trim();
+  const description = draft.description.trim();
+  const date = draft.date.trim();
+  const time = draft.time.trim();
+  if (!header || !description || !date || !time) return null;
+  return {
+    header,
+    description,
+    date,
+    time,
+    iconUrl: resolveIconUrl(draft.iconUrl, icons),
+  };
+}
+
+function toRecurringPayload(
+  draft: Draft,
+  icons: ApiNotificationIcon[],
+): RecurringNotificationPayload | null {
+  if (draft.sourceKind !== "schedule" || draft.scheduleKind !== "recurring") {
+    return null;
+  }
+  const header = draft.header.trim();
+  const description = draft.description.trim();
+  const time = draft.time.trim();
+  const weekday = Number(draft.weekday);
+  if (
+    !header ||
+    !description ||
+    !time ||
+    !Number.isInteger(weekday) ||
+    weekday < 0 ||
+    weekday > 6
+  ) {
+    return null;
+  }
+  return {
+    header,
+    description,
+    weekday,
+    time,
+    iconUrl: resolveIconUrl(draft.iconUrl, icons),
+    mode: "weekly",
+    isRepeatable: true,
   };
 }
 
@@ -584,7 +747,20 @@ export default function PushNotificationsPage() {
     () => toPayload(draft, triggerCatalog, iconCatalog),
     [draft, triggerCatalog, iconCatalog],
   );
-  const canSave = Boolean(payload);
+  const oneTimePayload = useMemo(
+    () => toOneTimePayload(draft, iconCatalog),
+    [draft, iconCatalog],
+  );
+  const recurringPayload = useMemo(
+    () => toRecurringPayload(draft, iconCatalog),
+    [draft, iconCatalog],
+  );
+  const canSave =
+    draft.sourceKind === "schedule"
+      ? draft.scheduleKind === "recurring"
+        ? Boolean(recurringPayload)
+        : Boolean(oneTimePayload)
+      : Boolean(payload);
 
   function storeSavedRule(
     saved: ApiNotificationRule,
@@ -648,23 +824,87 @@ export default function PushNotificationsPage() {
 
   async function save() {
     editRequestRef.current += 1;
-    if (!payload || !canSave || pending) return;
+    if (!canSave || pending) return;
+
+    const savingSchedule = draft.sourceKind === "schedule";
+    const savingRecurring = savingSchedule && draft.scheduleKind === "recurring";
+    const savingOneTime = savingSchedule && draft.scheduleKind === "one_time";
+    const nextRecurring = recurringPayload;
+    const nextOneTime = oneTimePayload;
+    const nextTrigger = payload;
+
+    if (savingRecurring && !nextRecurring) return;
+    if (savingOneTime && !nextOneTime) return;
+    if (!savingSchedule && !nextTrigger) return;
+
     setPending("save");
     try {
-      let saved;
-      if (draft.id) {
-        const pathId = recordRef({
-          id: draft.id,
-          recordId: draft.recordId,
-        });
-        if (!pathId) {
-          throw new Error(
-            "This notification is not linked to a server record.",
-          );
+      let saved: ApiNotificationRule;
+      if (savingRecurring && nextRecurring) {
+        if (draft.id) {
+          const pathId = recordRef({
+            id: draft.id,
+            recordId: draft.recordId,
+          });
+          if (!pathId) {
+            throw new Error(
+              "This notification is not linked to a server record.",
+            );
+          }
+          const updateBody: UpdateNotificationRulePayload = {
+            header: nextRecurring.header,
+            description: nextRecurring.description,
+            weekday: nextRecurring.weekday,
+            time: nextRecurring.time,
+            iconUrl: nextRecurring.iconUrl,
+            isRepeatable: true,
+            mode: "weekly",
+          };
+          saved = await notificationRulesApi.update(pathId, updateBody);
+        } else {
+          saved = await notificationRulesApi.createRecurring(nextRecurring);
         }
-        saved = await notificationRulesApi.update(pathId, payload);
+      } else if (savingOneTime && nextOneTime) {
+        if (draft.id) {
+          const pathId = recordRef({
+            id: draft.id,
+            recordId: draft.recordId,
+          });
+          if (!pathId) {
+            throw new Error(
+              "This notification is not linked to a server record.",
+            );
+          }
+          const updateBody: UpdateNotificationRulePayload = {
+            header: nextOneTime.header,
+            description: nextOneTime.description,
+            date: nextOneTime.date,
+            time: nextOneTime.time,
+            iconUrl: nextOneTime.iconUrl,
+            isRepeatable: false,
+            mode: "one_time",
+          };
+          saved = await notificationRulesApi.update(pathId, updateBody);
+        } else {
+          saved = await notificationRulesApi.createOneTime(nextOneTime);
+        }
+      } else if (nextTrigger) {
+        if (draft.id) {
+          const pathId = recordRef({
+            id: draft.id,
+            recordId: draft.recordId,
+          });
+          if (!pathId) {
+            throw new Error(
+              "This notification is not linked to a server record.",
+            );
+          }
+          saved = await notificationRulesApi.update(pathId, nextTrigger);
+        } else {
+          saved = await notificationRulesApi.create(nextTrigger);
+        }
       } else {
-        saved = await notificationRulesApi.create(payload);
+        throw new Error("Notification form is incomplete.");
       }
       storeSavedRule(saved, { id: draft.id, recordId: draft.recordId });
       showSuccess(draft.id ? "Notification updated." : "Notification created.");
@@ -721,10 +961,21 @@ export default function PushNotificationsPage() {
   ];
   const triggerOptions: SelectOption[] = [
     { value: "", label: "Select", disabled: true },
-    ...triggerCatalog.map((trigger) => ({
-      value: trigger.key,
-      label: trigger.name,
-    })),
+    ...triggerCatalog
+      .filter((trigger) => {
+        const key = trigger.key.toLowerCase();
+        const name = trigger.name.toLowerCase();
+        // Schedule types are configured under Type → Schedule, not as triggers.
+        return (
+          !key.includes("one_time") &&
+          !name.includes("one-time") &&
+          !name.includes("weekly scheduled")
+        );
+      })
+      .map((trigger) => ({
+        value: trigger.key,
+        label: trigger.name,
+      })),
     ...(draft.triggerKey &&
     !triggerCatalog.some((trigger) => trigger.key === draft.triggerKey)
       ? [{ value: draft.triggerKey, label: draft.triggerKey }]
@@ -809,11 +1060,17 @@ export default function PushNotificationsPage() {
                     {dataTriggerLabel(item)}
                   </div>
                   <div className="min-w-0 truncate text-[13px] text-[#111118]">
-                    {formatPeriod(
-                      item.timing,
-                      item.scheduleDelay,
-                      item.scheduleUnit,
-                    )}
+                    {item.isWeekly
+                      ? formatWeeklySchedule(item.weekday, item.scheduledFor)
+                      : item.isOneTime
+                        ? `${formatScheduledFor(item.scheduledFor)}${
+                            item.isSent ? " · Sent" : ""
+                          }`
+                        : formatPeriod(
+                            item.timing,
+                            item.scheduleDelay,
+                            item.scheduleUnit,
+                          )}
                   </div>
                   <div className="min-w-0 truncate text-[13px] text-[#111118]">
                     {item.title}
@@ -897,80 +1154,215 @@ export default function PushNotificationsPage() {
       >
         <div className="space-y-5">
           <div>
-            <p className={FIELD_LABEL}>Select Action (Trigger)</p>
+            <p className={FIELD_LABEL}>Type</p>
             <Select
-              value={draft.triggerKey}
-              onChange={applyTrigger}
-              placeholder="Select"
-              aria-label="Select Action (Trigger)"
-              options={triggerOptions}
+              value={draft.sourceKind}
+              onChange={(value) => {
+                if (draft.id) return;
+                setDraft((current) => ({
+                  ...current,
+                  sourceKind: value === "schedule" ? "schedule" : "trigger",
+                }));
+              }}
+              aria-label="Type"
+              options={SOURCE_OPTIONS}
               size="md"
+              disabled={Boolean(draft.id)}
             />
           </div>
 
-          <div>
-            <div className="grid grid-cols-4 gap-3">
+          {draft.sourceKind === "trigger" ? (
+            <>
               <div>
-                <label className={FIELD_LABEL}>Period</label>
+                <p className={FIELD_LABEL}>Select Action (Trigger)</p>
                 <Select
-                  value={draft.period}
-                  onChange={(value) =>
+                  value={draft.triggerKey}
+                  onChange={applyTrigger}
+                  placeholder="Select"
+                  aria-label="Select Action (Trigger)"
+                  options={triggerOptions}
+                  size="md"
+                />
+              </div>
+
+              <div>
+                <div className="grid grid-cols-4 gap-3">
+                  <div>
+                    <label className={FIELD_LABEL}>Period</label>
+                    <Select
+                      value={draft.period}
+                      onChange={(value) =>
+                        setDraft((current) => ({
+                          ...current,
+                          period:
+                            value === "before" || value === "after"
+                              ? value
+                              : "",
+                        }))
+                      }
+                      placeholder="Select"
+                      aria-label="Period"
+                      options={periodOptions}
+                      size="md"
+                    />
+                  </div>
+                  <div>
+                    <label className={FIELD_LABEL}>Day</label>
+                    <Select
+                      value={draft.days}
+                      onChange={(value) =>
+                        setDraft((current) => ({ ...current, days: value }))
+                      }
+                      placeholder="Select"
+                      aria-label="Day"
+                      options={countOptions(30, draft.days)}
+                      size="md"
+                    />
+                  </div>
+                  <div>
+                    <label className={FIELD_LABEL}>Hours</label>
+                    <Select
+                      value={draft.hours}
+                      onChange={(value) =>
+                        setDraft((current) => ({ ...current, hours: value }))
+                      }
+                      placeholder="Select"
+                      aria-label="Hours"
+                      options={countOptions(23, draft.hours)}
+                      size="md"
+                    />
+                  </div>
+                  <div>
+                    <label className={FIELD_LABEL}>Min</label>
+                    <Select
+                      value={draft.minutes}
+                      onChange={(value) =>
+                        setDraft((current) => ({ ...current, minutes: value }))
+                      }
+                      placeholder="Select"
+                      aria-label="Min"
+                      options={countOptions(59, draft.minutes)}
+                      size="md"
+                    />
+                  </div>
+                </div>
+                <p className="mt-3 text-[13px] leading-5 text-[#6B7180]">
+                  If time period not selected then notification will be when
+                  action happens.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <p className={FIELD_LABEL}>Schedule</p>
+                <Select
+                  value={draft.scheduleKind}
+                  onChange={(value) => {
+                    if (draft.id) return;
                     setDraft((current) => ({
                       ...current,
-                      period: value === "before" || value === "after" ? value : "",
-                    }))
-                  }
-                  placeholder="Select"
-                  aria-label="Period"
-                  options={periodOptions}
+                      scheduleKind:
+                        value === "recurring" ? "recurring" : "one_time",
+                    }));
+                  }}
+                  aria-label="Schedule"
+                  options={SCHEDULE_KIND_OPTIONS}
                   size="md"
+                  disabled={Boolean(draft.id)}
                 />
               </div>
-              <div>
-                <label className={FIELD_LABEL}>Day</label>
-                <Select
-                  value={draft.days}
-                  onChange={(value) =>
-                    setDraft((current) => ({ ...current, days: value }))
-                  }
-                  placeholder="Select"
-                  aria-label="Day"
-                  options={countOptions(30, draft.days)}
-                  size="md"
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL}>Hours</label>
-                <Select
-                  value={draft.hours}
-                  onChange={(value) =>
-                    setDraft((current) => ({ ...current, hours: value }))
-                  }
-                  placeholder="Select"
-                  aria-label="Hours"
-                  options={countOptions(23, draft.hours)}
-                  size="md"
-                />
-              </div>
-              <div>
-                <label className={FIELD_LABEL}>Min</label>
-                <Select
-                  value={draft.minutes}
-                  onChange={(value) =>
-                    setDraft((current) => ({ ...current, minutes: value }))
-                  }
-                  placeholder="Select"
-                  aria-label="Min"
-                  options={countOptions(59, draft.minutes)}
-                  size="md"
-                />
-              </div>
-            </div>
-            <p className="mt-3 text-[13px] leading-5 text-[#6B7180]">
-              If time period not selected then notification will be when action
-              happens.
-            </p>
-          </div>
+
+              {draft.scheduleKind === "recurring" ? (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={FIELD_LABEL}>Day</label>
+                      <Select
+                        value={draft.weekday}
+                        onChange={(weekday) =>
+                          setDraft((current) => ({ ...current, weekday }))
+                        }
+                        placeholder="Select"
+                        aria-label="Weekday"
+                        options={[
+                          { value: "", label: "Select", disabled: true },
+                          ...WEEKDAY_OPTIONS,
+                        ]}
+                        size="md"
+                      />
+                    </div>
+                    <div>
+                      <label className={FIELD_LABEL} htmlFor="notification-time">
+                        Time (ET)
+                      </label>
+                      <Input
+                        id="notification-time"
+                        type="time"
+                        value={draft.time}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            time: event.target.value,
+                          }))
+                        }
+                        aria-label="Time (ET)"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-[13px] leading-5 text-[#6B7180]">
+                    Sends every week on this day and Eastern time to all active
+                    customers.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={FIELD_LABEL}>Date</label>
+                      <DatePicker
+                        value={draft.date}
+                        onChange={(date) =>
+                          setDraft((current) => ({ ...current, date }))
+                        }
+                        aria-label="Date"
+                        placeholder="Select date"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        className={FIELD_LABEL}
+                        htmlFor="notification-one-time"
+                      >
+                        Time (ET)
+                      </label>
+                      <Input
+                        id="notification-one-time"
+                        type="time"
+                        value={draft.time}
+                        onChange={(event) =>
+                          setDraft((current) => ({
+                            ...current,
+                            time: event.target.value,
+                          }))
+                        }
+                        aria-label="Time (ET)"
+                        className="w-full"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-[13px] leading-5 text-[#6B7180]">
+                    Sends once at this Eastern date and time, then never
+                    repeats.
+                    {draft.isSent
+                      ? " This notification has already been sent."
+                      : ""}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
 
           <div>
             <label className={FIELD_LABEL} htmlFor="notification-header">
