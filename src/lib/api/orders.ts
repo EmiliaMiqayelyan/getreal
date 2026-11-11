@@ -240,7 +240,7 @@ export const ordersApi = {
     );
   },
 
-  assignPacker(id: string, packerId: string) {
+  assignPacker(id: string, packerId: string | null) {
     return apiRequest<unknown>(`/orders/${id}/packer`, {
       method: "PATCH",
       body: JSON.stringify({ packerId }),

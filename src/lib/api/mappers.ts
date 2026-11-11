@@ -882,11 +882,95 @@ function readTiming(rule: ApiNotificationRule): NotificationTiming {
   return "";
 }
 
+function readScheduledFor(rule: ApiNotificationRule): string | null {
+  const value = rule.scheduledFor;
+  if (typeof value === "string" && value.trim()) return value.trim();
+  return null;
+}
+
+function readCategory(rule: ApiNotificationRule): PushNotification["category"] {
+  const value = ruleText(rule, "category");
+  switch (value) {
+    case "orderUpdates":
+    case "deliveryReminders":
+    case "subscriptionAlerts":
+    case "promotions":
+    case "system":
+      return value;
+    default:
+      return "";
+  }
+}
+
+function readWeekday(rule: ApiNotificationRule): number | null {
+  const raw = rule.weekday ?? rule.dayOfWeek;
+  if (typeof raw === "number" && Number.isInteger(raw) && raw >= 0 && raw <= 6) {
+    return raw;
+  }
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const asNum = Number(raw);
+    if (Number.isInteger(asNum) && asNum >= 0 && asNum <= 6) return asNum;
+    const names = [
+      "sunday",
+      "monday",
+      "tuesday",
+      "wednesday",
+      "thursday",
+      "friday",
+      "saturday",
+    ];
+    const idx = names.indexOf(raw.trim().toLowerCase());
+    if (idx >= 0) return idx;
+  }
+  return null;
+}
+
+function isWeeklyRule(rule: ApiNotificationRule): boolean {
+  const mode = ruleText(rule, "mode").toLowerCase();
+  if (mode === "weekly") return true;
+  if (
+    mode === "one_time" ||
+    mode === "scheduled" ||
+    mode === "datetime" ||
+    mode === "repeatable" ||
+    mode === "trigger"
+  ) {
+    return false;
+  }
+  if (ruleText(rule, "trigger").toLowerCase().includes("weekly scheduled")) {
+    return true;
+  }
+  const action = (rule.action ?? rule.actionEndpoint ?? "").toLowerCase();
+  // Weekly schedules are repeatable scheduled broadcasts with a weekday.
+  if (
+    rule.isRepeatable === true &&
+    action.includes("scheduled-notifications") &&
+    readWeekday(rule) !== null
+  ) {
+    return true;
+  }
+  return readWeekday(rule) !== null && action.includes("scheduled-notifications");
+}
+
+function isOneTimeRule(rule: ApiNotificationRule): boolean {
+  if (isWeeklyRule(rule)) return false;
+  if (rule.isRepeatable === false) return true;
+  const mode = ruleText(rule, "mode").toLowerCase();
+  if (mode === "one_time" || mode === "scheduled" || mode === "datetime") {
+    return true;
+  }
+  if (readScheduledFor(rule)) return true;
+  const action = (rule.action ?? rule.actionEndpoint ?? "").toLowerCase();
+  if (action.includes("scheduled-notifications")) return true;
+  return ruleText(rule, "trigger").toLowerCase().includes("one-time");
+}
+
 export function mapApiNotificationRule(
   rule: ApiNotificationRule,
   index: number,
 ): PushNotification {
   const recordId = rule.id;
+  const weekly = isWeeklyRule(rule);
   return {
     id: preferModelId(
       rule,
@@ -898,12 +982,18 @@ export function mapApiNotificationRule(
     action: rule.action?.trim() || rule.actionEndpoint?.trim() || "",
     httpMethod:
       (rule.httpMethod ?? rule.triggerMethod)?.trim().toUpperCase() || "",
-    title: rule.title?.trim() || "",
-    body: rule.subtext?.trim() || "",
+    title: rule.title?.trim() || ruleText(rule, "header") || "",
+    body: rule.subtext?.trim() || ruleText(rule, "description") || "",
     timing: readTiming(rule),
     scheduleDelay: readScheduleDelay(rule.scheduleDelay),
     scheduleUnit: rule.scheduleUnit?.trim().toLowerCase() || "minutes",
     iconUrl: ruleText(rule, "iconUrl"),
+    isOneTime: !weekly && isOneTimeRule(rule),
+    isWeekly: weekly,
+    weekday: readWeekday(rule),
+    scheduledFor: readScheduledFor(rule),
+    isSent: rule.isSent === true,
+    category: readCategory(rule),
   };
 }
 

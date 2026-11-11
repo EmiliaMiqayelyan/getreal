@@ -1,6 +1,7 @@
 import { apiRequest } from "./client";
 import type { ApiNotificationRule } from "./types";
 import { normalizeNamedList, pickNamedEntity } from "./normalize";
+import type { NotificationCategory } from "@/types/notification";
 
 export type NotificationScheduleUnit =
   | "seconds"
@@ -21,7 +22,39 @@ export type NotificationRulePayload = {
   httpMethod?: string;
 };
 
-export type UpdateNotificationRulePayload = Partial<NotificationRulePayload>;
+/** POST /notification-rules/one-time — date + time are America/New_York. */
+export type OneTimeNotificationPayload = {
+  header: string;
+  description: string;
+  date: string;
+  time: string;
+  iconUrl?: string | null;
+  category?: NotificationCategory | null;
+};
+
+/** Weekly recurring schedule — weekday 0=Sunday … 6=Saturday, time in America/New_York. */
+export type RecurringNotificationPayload = {
+  header: string;
+  description: string;
+  weekday: number;
+  time: string;
+  iconUrl?: string | null;
+  category?: NotificationCategory | null;
+  mode: "weekly";
+  isRepeatable: true;
+};
+
+export type UpdateNotificationRulePayload = Partial<NotificationRulePayload> & {
+  header?: string;
+  description?: string;
+  date?: string;
+  time?: string;
+  weekday?: number | null;
+  scheduledFor?: string | null;
+  isRepeatable?: boolean;
+  mode?: "repeatable" | "trigger" | "weekly" | "one_time" | "scheduled" | "datetime";
+  category?: NotificationCategory | null;
+};
 
 export type ApiNotificationTrigger = {
   key: string;
@@ -152,6 +185,20 @@ export const notificationRulesApi = {
   },
 
   create(body: NotificationRulePayload) {
+    return apiRequest<unknown>("/notification-rules", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then(pickRule);
+  },
+
+  createOneTime(body: OneTimeNotificationPayload) {
+    return apiRequest<unknown>("/notification-rules/one-time", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }).then(pickRule);
+  },
+
+  createRecurring(body: RecurringNotificationPayload) {
     return apiRequest<unknown>("/notification-rules", {
       method: "POST",
       body: JSON.stringify(body),

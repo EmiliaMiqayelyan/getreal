@@ -103,12 +103,14 @@ function itemLabel(count: number) {
 function AssignPackerMenu({
   anchor,
   packers,
+  selectedPackerId,
   onChoose,
   onClose,
 }: {
   anchor: HTMLElement;
   packers: (EligiblePacker & { orderCount: number })[];
-  onChoose: (packer: EligiblePacker) => void;
+  selectedPackerId?: string;
+  onChoose: (packer: EligiblePacker | null) => void;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -165,25 +167,44 @@ function AssignPackerMenu({
           />
         </div>
       </div>
-      {filtered.map((packer) => (
+      {selectedPackerId ? (
         <button
-          key={packer.id}
           type="button"
           role="option"
-          onClick={() => onChoose(packer)}
-          className="grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#00000014] px-3 py-2.5 text-left last:border-b-0 hover:bg-[#FAFAF8]"
+          aria-selected={false}
+          onClick={() => onChoose(null)}
+          className="grid w-full grid-cols-[1fr_auto] items-center gap-3 border-b border-[#00000014] px-3 py-2.5 text-left hover:bg-[#FAFAF8]"
         >
-          <span className="text-[13px] font-medium text-[#111118]">
-            {packer.name}
-          </span>
-          <span className="text-[12px] text-[#8A8A8A]">
-            {packer.orderCount === 0
-              ? "No orders"
-              : `${packer.orderCount} order${packer.orderCount === 1 ? "" : "s"}`}
-          </span>
-          {packer.code ? <IdPill>{packer.code}</IdPill> : null}
+          <span className="text-[13px] font-medium text-[#111118]">None</span>
+          <span className="text-[12px] text-[#8A8A8A]">Unassign packer</span>
         </button>
-      ))}
+      ) : null}
+      {filtered.map((packer) => {
+        const isSelected = packer.id === selectedPackerId;
+        return (
+          <button
+            key={packer.id}
+            type="button"
+            role="option"
+            aria-selected={isSelected}
+            onClick={() => onChoose(isSelected ? null : packer)}
+            className={cn(
+              "grid w-full grid-cols-[1fr_auto_auto] items-center gap-3 border-b border-[#00000014] px-3 py-2.5 text-left last:border-b-0 hover:bg-[#FAFAF8]",
+              isSelected && "bg-[#F3F6F3]",
+            )}
+          >
+            <span className="text-[13px] font-medium text-[#111118]">
+              {packer.name}
+            </span>
+            <span className="text-[12px] text-[#8A8A8A]">
+              {packer.orderCount === 0
+                ? "No orders"
+                : `${packer.orderCount} order${packer.orderCount === 1 ? "" : "s"}`}
+            </span>
+            {packer.code ? <IdPill>{packer.code}</IdPill> : null}
+          </button>
+        );
+      })}
       {!filtered.length ? (
         <div className="px-3 py-4 text-center text-[12px] text-[#8A8A8A]">
           No packers found
@@ -257,10 +278,11 @@ function withLiveAssignment(
   handoff: PackingHandoffUpdate | undefined,
 ): PackerManagerOrder {
   if (!handoff) return order;
+  const cleared = handoff.packerId === null;
   return {
     ...order,
-    packerId: handoff.packerId ?? order.packerId,
-    packerName: handoff.packerName || order.packerName,
+    packerId: cleared ? undefined : (handoff.packerId ?? order.packerId),
+    packerName: cleared ? undefined : (handoff.packerName || order.packerName),
     packingStartedAt: handoff.packingStartedAt ?? order.packingStartedAt,
     coolerReadyAt:
       handoff.coolerReadyAt ?? handoff.packedAt ?? order.coolerReadyAt,
@@ -483,11 +505,15 @@ export default function PackerManagerPage() {
     setActiveDateId((current) => shiftCurrentWeekId(current, delta));
   }
 
-  async function handleAssign(orderCode: string, packer: EligiblePacker) {
+  async function handleAssign(
+    orderCode: string,
+    packer: EligiblePacker | null,
+  ) {
     if (!canAssign || savingCode) return;
     const order = orders.find((entry) => entry.code === orderCode);
     setAssignMenu(null);
-    if (order?.packerId === packer.id) return;
+    if (!packer && !order?.packerId) return;
+    if (packer && order?.packerId === packer.id) return;
     const live = liveCatalog.find((entry) => entry.code === orderCode);
     if (live?.packingStartedAt) {
       showError("The packer can't be changed after packing has started.");
@@ -495,7 +521,7 @@ export default function PackerManagerPage() {
     }
 
     if (apiLive) {
-      if (!order?.recordId || !isUuid(packer.id)) {
+      if (!order?.recordId || (packer && !isUuid(packer.id))) {
         notifyApiError(
           new Error("This order or packer is missing a server id."),
           "This order or packer is missing a server id.",
@@ -504,15 +530,24 @@ export default function PackerManagerPage() {
       }
       setSavingCode(orderCode);
       try {
-        const updated = await ordersApi.assignPacker(order.recordId, packer.id);
+        const updated = await ordersApi.assignPacker(
+          order.recordId,
+          packer?.id ?? null,
+        );
         const mapped = mapManagerOrder(updated, 0);
+        const nextPackerId = packer
+          ? (mapped.packerId ?? packer.id)
+          : undefined;
+        const nextPackerName = packer
+          ? mapped.packerName || packer.name
+          : undefined;
         setOrders((current) =>
           current.map((entry) =>
             entry.code === orderCode
               ? {
                   ...entry,
-                  packerId: mapped.packerId ?? packer.id,
-                  packerName: mapped.packerName || packer.name,
+                  packerId: nextPackerId,
+                  packerName: nextPackerName,
                   packingStartedAt:
                     mapped.packingStartedAt ?? entry.packingStartedAt,
                   coolerReadyAt: mapped.coolerReadyAt ?? entry.coolerReadyAt,
@@ -522,11 +557,14 @@ export default function PackerManagerPage() {
           ),
         );
         assignPackerHandoff(orderCode, {
-          packerId: mapped.packerId ?? packer.id,
-          packerName: mapped.packerName || packer.name,
+          packerId: nextPackerId ?? null,
+          packerName: nextPackerName ?? "",
         });
       } catch (error) {
-        notifyApiError(error, "Failed to assign packer.");
+        notifyApiError(
+          error,
+          packer ? "Failed to assign packer." : "Failed to unassign packer.",
+        );
       } finally {
         setSavingCode(null);
       }
@@ -534,13 +572,17 @@ export default function PackerManagerPage() {
     }
 
     assignPackerHandoff(orderCode, {
-      packerId: packer.id,
-      packerName: packer.name,
+      packerId: packer?.id ?? null,
+      packerName: packer?.name ?? "",
     });
     setOrders((current) =>
       current.map((entry) =>
         entry.code === orderCode
-          ? { ...entry, packerId: packer.id, packerName: packer.name }
+          ? {
+              ...entry,
+              packerId: packer?.id,
+              packerName: packer?.name,
+            }
           : entry,
       ),
     );
@@ -736,6 +778,7 @@ export default function PackerManagerPage() {
                     <AssignPackerMenu
                       anchor={assignMenu.anchor}
                       packers={packersWithWorkload}
+                      selectedPackerId={order.packerId}
                       onClose={() => setAssignMenu(null)}
                       onChoose={(packer) => handleAssign(order.code, packer)}
                     />

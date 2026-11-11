@@ -294,8 +294,14 @@ function applyHandoff(
     packedAt: handoff.coolerReadyAt ?? handoff.packedAt ?? order.packedAt,
     loadedAt: handoff.loadedAt ?? order.loadedAt,
     coolerIds,
-    packerId: handoff.packerId ?? order.packerId,
-    packerName: handoff.packerName || order.packerName,
+    packerId:
+      handoff.packerId === null
+        ? undefined
+        : (handoff.packerId ?? order.packerId),
+    packerName:
+      handoff.packerId === null
+        ? undefined
+        : handoff.packerName || order.packerName,
   };
 }
 function collectCoolerIds(items: PackingLine[]): string[] {

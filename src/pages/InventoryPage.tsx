@@ -790,7 +790,7 @@ function StockItemsView({
                     <div key={section.id}>
                       <ScrollTable minWidth="100%" className="rounded-[12px]">
                         <div>
-                          {/* Meta: category | IN STOCK over unpack+exp | DATE RECEIVING BY over print */}
+                          {/* Meta: category title only */}
                           <div
                             className={cn(
                               STOCK_GRID,
@@ -802,24 +802,10 @@ function StockItemsView({
                             </span>
                             <span aria-hidden className="min-w-0" />
                             <span aria-hidden className="min-w-0" />
-                            <span
-                              className={cn(
-                                "col-span-2 min-w-0 text-center",
-                                TABLE_HEADER,
-                              )}
-                            >
-                              In Stock
-                            </span>
+                            <span aria-hidden className="col-span-2 min-w-0" />
                             <span aria-hidden className="min-w-0" />
                             <span aria-hidden className="min-w-0" />
-                            <span
-                              className={cn(
-                                "col-span-2 min-w-0 text-start whitespace-nowrap",
-                                TABLE_HEADER,
-                              )}
-                            >
-                              Date Receiving By
-                            </span>
+                            <span aria-hidden className="col-span-2 min-w-0" />
                           </div>
 
                           <div
