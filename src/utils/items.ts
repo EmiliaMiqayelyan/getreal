@@ -7,6 +7,7 @@ export const ITEM_PHOTO_PLACEHOLDER = `data:image/svg+xml;charset=utf-8,${encode
   PLACEHOLDER_SVG,
 )}`;
 
+/** Customer-facing label (Products for Sale / pickers). Items page uses `item.name`. */
 export function getItemDisplayName(item: Item) {
   return item.merchandisingName.trim() || item.name;
 }
@@ -95,7 +96,7 @@ export function downloadItemsCsv(
     ...items.map((item) => [
       item.id,
       itemPhotoExportValue(getItemPrimaryPhoto(item)),
-      `${getItemDisplayName(item)}\n${item.description.trim() || "—"}`,
+      `${item.name.trim() || getItemDisplayName(item)}\n${item.description.trim() || "—"}`,
       item.category || "—",
       item.subcategory?.trim() || "—",
       `${salePrice(item)}\n${getItemSaleUnit(item)}`,

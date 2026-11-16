@@ -201,6 +201,8 @@ type MultiSelectProps = {
   "aria-label"?: string;
   disabled?: boolean;
   variant?: "default" | "flat";
+  /** Show an in-menu search field when the option list is long (default: 12+). */
+  searchableWhen?: number;
 };
 
 /** Flat or bordered list that stays open so more than one option can be chosen. */
@@ -214,25 +216,38 @@ export function MultiSelect({
   disabled = false,
   variant = "default",
   "aria-label": ariaLabel,
+  searchableWhen = 12,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const menuBox = useFloatingMenu(open, buttonRef, listRef, {
     minWidth: 240,
-    maxHeight: 240,
+    maxHeight: 280,
   });
 
   const cleanOptions = options.filter((option) => option.label.trim().length > 0);
+  const searchable = cleanOptions.length >= searchableWhen;
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleOptions =
+    searchable && normalizedQuery
+      ? cleanOptions.filter((option) =>
+          option.label.toLowerCase().includes(normalizedQuery),
+        )
+      : cleanOptions;
   const selectedLabels = values
     .map((value) => cleanOptions.find((option) => option.value === value)?.label)
     .filter((label): label is string => Boolean(label));
   const displayLabel = selectedLabels.join(", ") || placeholder || "";
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setQuery("");
+      return;
+    }
 
     function onPointerDown(event: MouseEvent) {
       const target = event.target as Node;
@@ -316,63 +331,95 @@ export function MultiSelect({
 
       {open
         ? createPortal(
-            <ul
+            <div
               ref={listRef}
               id={listId}
-              role="listbox"
-              aria-multiselectable="true"
-              aria-label={ariaLabel ?? displayLabel}
               data-scroll-lock-allow
               className={cn(
-                "ui-select-menu fixed z-[80] overflow-x-hidden overflow-y-auto overscroll-contain",
-                "flex flex-col gap-0 rounded-[8px] border border-[#00000014] bg-white p-0",
+                "ui-select-menu fixed z-[80] overflow-hidden overscroll-contain",
+                "flex flex-col rounded-[8px] border border-[#00000014] bg-white p-0",
                 "shadow-[0_8px_24px_rgba(0,0,0,0.12)]",
               )}
               style={floatingMenuStyle(menuBox)}
             >
-              {cleanOptions.map((option, index) => {
-                const isSelected = values.includes(option.value);
-                const label = option.label.trim() || "\u00A0";
-
-                return (
-                  <li
-                    key={`${option.value}::${option.label}::${index}`}
-                    role="presentation"
-                    className="m-0 block h-9 max-h-9 min-h-9 shrink-0 list-none overflow-hidden p-0"
-                    style={{ height: ROW_H, maxHeight: ROW_H, minHeight: ROW_H }}
-                  >
-                    <button
-                      type="button"
-                      role="option"
-                      title={option.label}
-                      aria-selected={isSelected}
-                      disabled={option.disabled}
-                      onClick={() => {
-                        if (option.disabled) return;
-                        toggle(option.value);
-                      }}
-                      className={cn(
-                        "flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden px-3 text-left text-[13px] leading-5 whitespace-nowrap transition-colors",
-                        "disabled:cursor-not-allowed disabled:opacity-40",
-                        isSelected
-                          ? "bg-[#28402B] font-medium text-white hover:bg-[#28402B]"
-                          : "bg-white text-[#111118] hover:bg-[#F5F5F3]",
-                      )}
-                      style={{ height: ROW_H }}
-                    >
-                      <span className="block min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap">
-                        {label}
-                      </span>
-                      {isSelected ? (
-                        <Check size={14} strokeWidth={2.5} className="shrink-0" />
-                      ) : (
-                        <span className="size-3.5 shrink-0" aria-hidden />
-                      )}
-                    </button>
+              {searchable ? (
+                <div className="shrink-0 border-b border-[#00000014] p-2">
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search coolers"
+                    aria-label="Search options"
+                    className="h-8 w-full rounded-[6px] border border-[#00000014] px-2.5 text-[13px] text-[#111118] outline-none placeholder:text-[#8A8A8A] focus:border-black/20"
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => event.stopPropagation()}
+                  />
+                </div>
+              ) : null}
+              <ul
+                role="listbox"
+                aria-multiselectable="true"
+                aria-label={ariaLabel ?? displayLabel}
+                className="m-0 flex max-h-[240px] list-none flex-col gap-0 overflow-x-hidden overflow-y-auto overscroll-contain p-0"
+              >
+                {visibleOptions.length === 0 ? (
+                  <li className="px-3 py-2 text-[13px] text-[#8A8A8A]">
+                    No matches
                   </li>
-                );
-              })}
-            </ul>,
+                ) : (
+                  visibleOptions.map((option, index) => {
+                    const isSelected = values.includes(option.value);
+                    const label = option.label.trim() || "\u00A0";
+
+                    return (
+                      <li
+                        key={`${option.value}::${option.label}::${index}`}
+                        role="presentation"
+                        className="m-0 block h-9 max-h-9 min-h-9 shrink-0 list-none overflow-hidden p-0"
+                        style={{
+                          height: ROW_H,
+                          maxHeight: ROW_H,
+                          minHeight: ROW_H,
+                        }}
+                      >
+                        <button
+                          type="button"
+                          role="option"
+                          title={option.label}
+                          aria-selected={isSelected}
+                          disabled={option.disabled}
+                          onClick={() => {
+                            if (option.disabled) return;
+                            toggle(option.value);
+                          }}
+                          className={cn(
+                            "flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden px-3 text-left text-[13px] leading-5 whitespace-nowrap transition-colors",
+                            "disabled:cursor-not-allowed disabled:opacity-40",
+                            isSelected
+                              ? "bg-[#28402B] font-medium text-white hover:bg-[#28402B]"
+                              : "bg-white text-[#111118] hover:bg-[#F5F5F3]",
+                          )}
+                          style={{ height: ROW_H }}
+                        >
+                          <span className="block min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap">
+                            {label}
+                          </span>
+                          {isSelected ? (
+                            <Check
+                              size={14}
+                              strokeWidth={2.5}
+                              className="shrink-0"
+                            />
+                          ) : (
+                            <span className="size-3.5 shrink-0" aria-hidden />
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })
+                )}
+              </ul>
+            </div>,
             document.body,
           )
         : null}

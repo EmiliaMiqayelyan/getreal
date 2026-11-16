@@ -47,7 +47,6 @@ import {
 } from "@/utils/itemPricing";
 import {
   downloadItemsCsv,
-  getItemDisplayName,
   getItemPrimaryPhoto,
   getItemSaleUnit,
   nextItemId,
@@ -270,7 +269,7 @@ function PhotoThumb({ item }: { item: Item }) {
     <div className="relative h-[51px] w-[53px] overflow-hidden rounded-[8px] bg-[#F3F3F1]">
       <img
         src={src}
-        alt={getItemDisplayName(item)}
+        alt={item.name}
         className={cn(
           "size-full",
           hasUploadedPhoto ? "object-cover" : "object-contain p-1",
@@ -384,11 +383,10 @@ export default function ItemsPage() {
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return rows.filter((row) => {
-      const displayName = getItemDisplayName(row).toLowerCase();
       const matchesQuery =
         !normalized ||
         row.name.toLowerCase().includes(normalized) ||
-        displayName.includes(normalized);
+        row.merchandisingName.toLowerCase().includes(normalized);
       const matchesCategory = tab === "All" || row.category === tab;
       const matchesSubcategory =
         !subcategoryFilter || row.subcategory === subcategoryFilter;
@@ -704,7 +702,7 @@ export default function ItemsPage() {
                       <div className="min-w-0">
                         <IdPill>{row.id}</IdPill>
                         <div className={cn(BODY, "mt-2 font-semibold")}>
-                          {getItemDisplayName(row)}
+                          {row.name}
                         </div>
                         <div className="mt-1 text-[12px] text-[#6B6B6B]">
                           {row.category}
@@ -788,7 +786,7 @@ export default function ItemsPage() {
                     <PhotoThumb item={row} />
                     <div className="min-w-0">
                       <div className={cn(BODY, "truncate font-semibold")}>
-                        {getItemDisplayName(row)}
+                        {row.name}
                       </div>
                       <div className="mt-0.5">
                         <DescriptionHover description={row.description} />
@@ -821,7 +819,7 @@ export default function ItemsPage() {
                         type="button"
                         onClick={() => openEdit(row)}
                         className={cn(EDIT_LINK, "justify-self-end")}
-                        aria-label={`Edit ${getItemDisplayName(row)}`}
+                        aria-label={`Edit ${row.name}`}
                       >
                         Edit
                       </button>

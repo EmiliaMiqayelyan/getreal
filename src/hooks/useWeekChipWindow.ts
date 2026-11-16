@@ -25,14 +25,17 @@ function nextStart(start: string, activeDateId: string, capacity: number) {
 
 /**
  * Weekly date chips that fill the row they render in, up to the nav buttons.
- * Dates before today are left out, and the row fills forward from the current week.
+ * By default dates before today are left out and the row fills forward from the
+ * current week. Pass `allowPast` to keep past weeks reachable (Customer Orders).
  * Attach `chipRowRef` to the chip scroll container. The window holds still while the
  * active week is visible, slides one week when it steps past an edge, and recenters on jumps.
  */
 export function useWeekChipWindow(
   activeDateId: string,
   counts: ReadonlyMap<string, number>,
+  options?: { allowPast?: boolean },
 ) {
+  const allowPast = options?.allowPast === true;
   const [row, setRow] = useState<HTMLElement | null>(null);
   const [capacity, setCapacity] = useState(INITIAL_CAPACITY);
   const [range, setRange] = useState(() => ({
@@ -56,12 +59,13 @@ export function useWeekChipWindow(
     return () => observer.disconnect();
   }, [row]);
 
-  const floor = earliestCurrentChipId(activeDateId);
+  const floor = allowPast ? null : earliestCurrentChipId(activeDateId);
   const unclamped =
     range.capacity === capacity
       ? nextStart(range.start, activeDateId, capacity)
       : centeredStart(activeDateId, capacity);
-  const start = unclamped < floor ? floor : unclamped;
+  const start =
+    floor != null && unclamped < floor ? floor : unclamped;
   if (start !== range.start || capacity !== range.capacity) {
     setRange({ start, capacity });
   }
