@@ -46,7 +46,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="bg-background flex min-h-dvh">
+    <div className="bg-background flex h-full min-h-0 overflow-auto">
       <div className="bg-sidebar relative hidden w-[42%] shrink-0 flex-col justify-between overflow-hidden px-12 py-14 lg:flex">
         <div
           aria-hidden
