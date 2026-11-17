@@ -88,6 +88,10 @@ export type ApiItem = {
   merchandiseWeight?: string | null;
   /** Snake-case alias some item payloads use for merchandiseWeight. */
   merchandise_weight?: string | null;
+  /** Total case weight in lbs when buying by lbs/case. */
+  totalCaseWeight?: number | string | null;
+  /** Snake-case alias some item payloads use for totalCaseWeight. */
+  total_case_weight?: number | string | null;
   /** Up to 3 photos. The primary photo is the one with isPrimary. */
   photos?: ApiItemPhoto[] | null;
   merchandisingName?: string;

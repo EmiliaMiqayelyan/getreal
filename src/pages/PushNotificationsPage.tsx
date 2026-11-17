@@ -1158,7 +1158,6 @@ export default function PushNotificationsPage() {
             <Select
               value={draft.sourceKind}
               onChange={(value) => {
-                if (draft.id) return;
                 setDraft((current) => ({
                   ...current,
                   sourceKind: value === "schedule" ? "schedule" : "trigger",
@@ -1167,7 +1166,6 @@ export default function PushNotificationsPage() {
               aria-label="Type"
               options={SOURCE_OPTIONS}
               size="md"
-              disabled={Boolean(draft.id)}
             />
           </div>
 
@@ -1259,7 +1257,6 @@ export default function PushNotificationsPage() {
                 <Select
                   value={draft.scheduleKind}
                   onChange={(value) => {
-                    if (draft.id) return;
                     setDraft((current) => ({
                       ...current,
                       scheduleKind:
@@ -1269,7 +1266,6 @@ export default function PushNotificationsPage() {
                   aria-label="Schedule"
                   options={SCHEDULE_KIND_OPTIONS}
                   size="md"
-                  disabled={Boolean(draft.id)}
                 />
               </div>
 

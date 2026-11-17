@@ -468,6 +468,7 @@ export default function ItemsPage() {
                 preorderInfo: mapped.preorderInfo || current.preorderInfo,
                 merchandiseWeight:
                   mapped.merchandiseWeight || current.merchandiseWeight,
+                caseWeightLbs: mapped.caseWeightLbs || current.caseWeightLbs,
               }
             : current,
         );
