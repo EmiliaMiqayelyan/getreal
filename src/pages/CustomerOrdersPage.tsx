@@ -57,8 +57,7 @@ import {
   isWednesdayDateId,
   parseDeliveryDateId,
   deliveryWeekId,
-  earliestCurrentChipId,
-  shiftCurrentWeekId,
+  shiftDateId,
   toDeliveryDateId,
   upcomingWednesday,
   WEDNESDAY_WEEKDAYS,
@@ -1490,6 +1489,7 @@ export default function CustomerOrdersPage() {
   const { chipRowRef, chips: deliveryChips } = useWeekChipWindow(
     chipAnchorDateId,
     deliveryCounts,
+    { allowPast: true },
   );
 
   const filteredActive = useMemo(
@@ -1675,7 +1675,7 @@ export default function CustomerOrdersPage() {
   }
 
   function shiftDeliveryDate(delta: number) {
-    commitDeliveryDate(shiftCurrentWeekId(chipAnchorDateId, delta));
+    commitDeliveryDate(shiftDateId(chipAnchorDateId, delta * 7));
   }
 
   function loadMoreActive() {
@@ -1992,9 +1992,6 @@ export default function CustomerOrdersPage() {
                 >
                   <DateNavButton
                     aria-label="Previous dates"
-                    disabled={
-                      chipAnchorDateId <= earliestCurrentChipId(chipAnchorDateId)
-                    }
                     onClick={() => shiftDeliveryDate(-1)}
                   >
                     <ChevronLeft size={14} />
@@ -2015,7 +2012,6 @@ export default function CustomerOrdersPage() {
 
                   {calendarOpen ? (
                     <DeliveryDateCalendar
-                      disablePast
                       deliveryWeekdays={WEDNESDAY_WEEKDAYS}
                       dateCounts={deliveryCounts}
                       selectedDateId={appliedDateId}

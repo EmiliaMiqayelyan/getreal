@@ -414,6 +414,17 @@ export function mapApiItemToItem(
   const merchandiseWeight = merchandiseWeightRaw;
   const contents = Math.max(1, item.contents ?? 1);
   const buyingPrice = centsToDollars(item.buyingPrice);
+  const caseWeightRaw = item.totalCaseWeight ?? item.total_case_weight;
+  const caseWeightParsed =
+    typeof caseWeightRaw === "number"
+      ? caseWeightRaw
+      : typeof caseWeightRaw === "string" && caseWeightRaw.trim()
+        ? Number(caseWeightRaw)
+        : 0;
+  const caseWeightLbs =
+    Number.isFinite(caseWeightParsed) && caseWeightParsed > 0
+      ? caseWeightParsed
+      : 0;
 
   return {
     id: preferModelId(item, ["itemCode"], recordId ?? `API-ITEM-${index + 1}`),
@@ -433,7 +444,7 @@ export function mapApiItemToItem(
     caseBy,
     pieceWeightOz,
     merchandiseWeight,
-    caseWeightLbs: 0,
+    caseWeightLbs,
     buyingPrice,
     contents: sourcePer === "Unit" ? 1 : contents,
     singleItemUnit,

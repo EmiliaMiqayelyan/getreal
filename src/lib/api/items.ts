@@ -21,6 +21,11 @@ export type CreateItemPayload = {
    * Null clears a stored value.
    */
   merchandiseWeight?: string | null;
+  /**
+   * Total case weight in lbs when Case by is Lbs / case.
+   * Null clears a stored value.
+   */
+  totalCaseWeight?: number | null;
   description?: string;
   /** Stored as items.pre_order_information. */
   preOrderInformation?: string | null;

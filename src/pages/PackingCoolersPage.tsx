@@ -589,6 +589,8 @@ async function loadStandardOrders() {
   for (let page = 1; page < 50; page += 1) {
     const result = await ordersApi.list({
       type: "standard",
+      // Skip delivered / return / archived so Cooler Packing does not pull the full history.
+      active: true,
       page,
       limit: 100,
       fresh: true,
@@ -696,17 +698,24 @@ function PackingDetail({
   locked,
   onClose,
   onReady,
+  onPackLine,
+  onUnpackLine,
 }: {
   order: PackOrder;
   coolerOptions: PackingCoolerOption[];
   locked: boolean;
   onClose: () => void;
   onReady: (order: PackOrder) => boolean | Promise<boolean>;
+  /** Persist picks and deduct inventory when Item Packed is clicked. */
+  onPackLine?: (item: PackingLine) => Promise<boolean>;
+  /** Restore inventory when a packed line’s fridge split is cleared. */
+  onUnpackLine?: (item: PackingLine) => Promise<boolean>;
 }) {
   const [draft, setDraft] = useState(order);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [leaveConfirmOpen, setLeaveConfirmOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [packingItemId, setPackingItemId] = useState<string | null>(null);
   const [openMenu, setOpenMenu] = useState<{
     id: string;
     anchor: HTMLElement;
@@ -778,8 +787,8 @@ function PackingDetail({
     if (!completed) setSaving(false);
   }
 
-  function markPacked(item: PackingLine) {
-    if (locked) return;
+  async function markPacked(item: PackingLine) {
+    if (locked || packingItemId || saving) return;
     const picks = lineAllocation(item);
     const allocated = pickTotal(picks) === item.qty && picks.length > 0;
     if (!allocated || !chosenCoolers(item.coolerIds).length) {
@@ -794,7 +803,32 @@ function PackingDetail({
       );
       return;
     }
-    updateItem(item.id, { packed: true });
+    if (onPackLine) {
+      setPackingItemId(item.id);
+      try {
+        const ok = await onPackLine({ ...item, picks, packed: true });
+        if (!ok) return;
+      } finally {
+        setPackingItemId(null);
+      }
+    }
+    updateItem(item.id, { picks, packed: true });
+  }
+
+  async function clearPackedAllocation(
+    item: PackingLine,
+    patch: Partial<PackingLine>,
+  ) {
+    if (item.packed && onUnpackLine) {
+      setPackingItemId(item.id);
+      try {
+        const ok = await onUnpackLine(item);
+        if (!ok) return;
+      } finally {
+        setPackingItemId(null);
+      }
+    }
+    updateItem(item.id, patch);
   }
 
   const cell = "min-w-0 text-[13px] text-[#111118]";
@@ -929,12 +963,11 @@ function PackingDetail({
                                     option.inventoryRecordId ===
                                     picks[0]?.inventoryRecordId,
                                 );
-                                updateItem(item.id, {
+                                void clearPackedAllocation(item, {
                                   picks,
                                   selected: primary,
                                   packed: false,
-                                });
-                                setOpenMenu(null);
+                                }).then(() => setOpenMenu(null));
                               }}
                             />
                           ) : null}
@@ -962,12 +995,19 @@ function PackingDetail({
                             values={chosenCoolers(item.coolerIds)}
                               disabled={locked}
                               placeholder={COOLER_PLACEHOLDER}
-                            onChange={(values) =>
+                            onChange={(values) => {
+                              if (!values.length && item.packed) {
+                                void clearPackedAllocation(item, {
+                                  coolerIds: values,
+                                  packed: false,
+                                });
+                                return;
+                              }
                               updateItem(item.id, {
                                 coolerIds: values,
                                 packed: values.length ? item.packed : false,
-                                })
-                              }
+                              });
+                            }}
                               aria-label="Cooler ID"
                               variant="flat"
                               className="w-full"
@@ -995,11 +1035,14 @@ function PackingDetail({
                           ) : (
                             <button
                               type="button"
-                              onClick={() => markPacked(item)}
-                              className="text-[13px] font-medium"
+                              disabled={packingItemId === item.id || saving}
+                              onClick={() => void markPacked(item)}
+                              className="text-[13px] font-medium disabled:opacity-50"
                               style={{ color: LINK_BLUE }}
                             >
-                              Item Packed
+                              {packingItemId === item.id
+                                ? "Packing…"
+                                : "Item Packed"}
                             </button>
                           )}
                         </div>
@@ -1183,14 +1226,19 @@ export default function PackingCoolersPage() {
         ]) => {
           if (cancelled) return;
           const labels = new Map<string, string>();
-          const options = coolers.flatMap((cooler) => {
-            const id = cooler.id?.trim() ?? "";
-            if (!id) return [];
-            const label = cooler.coolerCode?.trim() || id;
-            labels.set(id, label);
-            labels.set(label, label);
-            return [{ id, label }];
-          });
+          const seen = new Set<string>();
+          const options = coolers
+            .flatMap((cooler) => {
+              const id = cooler.id?.trim() ?? "";
+              const label = cooler.coolerCode?.trim() || "";
+              // Packing only needs coded warehouse coolers, not bare UUID rows.
+              if (!id || !label || seen.has(id)) return [];
+              seen.add(id);
+              labels.set(id, label);
+              labels.set(label, label);
+              return [{ id, label }];
+            })
+            .sort((a, b) => a.label.localeCompare(b.label));
           coolerLabelsRef.current = labels;
           if (options.length) setCoolerOptions(options);
           catalogRef.current = buildPackingCatalog(
@@ -1311,6 +1359,71 @@ export default function PackingCoolersPage() {
         coolerOptions={coolerOptions}
         locked={Boolean(activeOrder.loadedAt)}
         onClose={() => setActiveOrderId(null)}
+        onPackLine={async (item) => {
+          if (!apiLive || !activeOrder.recordId) return true;
+          const productId = item.catalogItemId.trim();
+          const picks = lineAllocation(item);
+          const coolerId = coolerUuid(
+            chosenCoolers(item.coolerIds)[0] ?? "",
+            coolerOptions,
+          );
+          if (!isUuid(productId) || !coolerId || !picks.length) {
+            showError(`"${item.name}" is missing cooler or inventory picks.`);
+            return false;
+          }
+          try {
+            const single = picks.length === 1 ? picks[0] : undefined;
+            const remote = await ordersApi.packItem(
+              activeOrder.recordId,
+              productId,
+              {
+                coolerId,
+                packed: true,
+                picks,
+                ...(single
+                  ? { inventoryRecordId: single.inventoryRecordId }
+                  : {}),
+              },
+            );
+            if (remote?.id || remote?.orderCode || remote?.status) {
+              setOrders((current) =>
+                current.map((row) =>
+                  row.id === activeOrder.id
+                    ? applyRemoteOrder(row, remote)
+                    : row,
+                ),
+              );
+            }
+            return true;
+          } catch (error) {
+            notifyApiError(error, "Failed to pack item and update inventory.");
+            return false;
+          }
+        }}
+        onUnpackLine={async (item) => {
+          if (!apiLive || !activeOrder.recordId) return true;
+          const productId = item.catalogItemId.trim();
+          if (!isUuid(productId)) return true;
+          try {
+            const remote = await ordersApi.unpackItem(
+              activeOrder.recordId,
+              productId,
+            );
+            if (remote?.id || remote?.orderCode || remote?.status) {
+              setOrders((current) =>
+                current.map((row) =>
+                  row.id === activeOrder.id
+                    ? applyRemoteOrder(row, remote)
+                    : row,
+                ),
+              );
+            }
+            return true;
+          } catch (error) {
+            notifyApiError(error, "Failed to unpack item and restore inventory.");
+            return false;
+          }
+        }}
         onReady={async (updated) => {
           let saved = updated;
           if (apiLive && updated.recordId) {
@@ -1332,9 +1445,11 @@ export default function PackingCoolersPage() {
                 remote = await ordersApi.packItem(orderId, write.productId, {
                   coolerId: write.coolerId,
                   packed: true,
+                  // Always send picks + quantities so stock is deducted even for a single fridge.
+                  picks: write.picks,
                   ...(single
                     ? { inventoryRecordId: single.inventoryRecordId }
-                    : { picks: write.picks }),
+                    : {}),
                 });
               }
               const assignment = coolerAssignments(

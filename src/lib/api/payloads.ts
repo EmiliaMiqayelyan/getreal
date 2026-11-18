@@ -303,6 +303,13 @@ export function toCreateItemPayload(
     singleItemUnit:
       item.sourcePer === "Case" ? "" : item.singleItemUnit || undefined,
     merchandiseWeight: item.merchandiseWeight || null,
+    totalCaseWeight:
+      item.sourcePer === "Case" &&
+      item.caseBy === "Lbs / case" &&
+      Number.isFinite(item.caseWeightLbs) &&
+      item.caseWeightLbs > 0
+        ? item.caseWeightLbs
+        : null,
     description: item.description.trim() || undefined,
     preOrderInformation: item.preorderInfo.trim() || null,
     photos: itemPhotosPayload(photoUrls),

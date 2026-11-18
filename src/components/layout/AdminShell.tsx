@@ -51,6 +51,31 @@ export function AdminShell({ children }: AdminShellProps) {
     setNavOpen(false);
   }, [pathname]);
 
+  // Keep the admin chrome glued to the viewport. Without this, flex min-content
+  // can grow past 100dvh and the document scrolls into empty body white space.
+  useEffect(() => {
+    const html = document.documentElement;
+    const { body } = document;
+    const previous = {
+      htmlOverflow: html.style.overflow,
+      htmlOverscroll: html.style.overscrollBehavior,
+      bodyOverflow: body.style.overflow,
+      bodyOverscroll: body.style.overscrollBehavior,
+    };
+
+    html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+
+    return () => {
+      html.style.overflow = previous.htmlOverflow;
+      html.style.overscrollBehavior = previous.htmlOverscroll;
+      body.style.overflow = previous.bodyOverflow;
+      body.style.overscrollBehavior = previous.bodyOverscroll;
+    };
+  }, []);
+
   useEffect(() => {
     if (!navOpen) return;
 
@@ -59,12 +84,8 @@ export function AdminShell({ children }: AdminShellProps) {
     }
 
     document.addEventListener("keydown", onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
     return () => {
       document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = previousOverflow;
     };
   }, [navOpen]);
 
@@ -78,7 +99,7 @@ export function AdminShell({ children }: AdminShellProps) {
   }
 
   return (
-    <div className="bg-background flex h-dvh overflow-hidden">
+    <div className="bg-background flex h-full max-h-full min-h-0 overflow-hidden">
       {navOpen ? (
         <button
           type="button"

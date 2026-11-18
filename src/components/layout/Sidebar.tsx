@@ -86,7 +86,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "flex h-full w-sidebar shrink-0 flex-col self-stretch bg-sidebar",
+        "flex h-full min-h-0 w-sidebar shrink-0 flex-col self-stretch overflow-hidden bg-sidebar",
         "fixed inset-y-0 left-0 z-50 transition-transform duration-200 ease-out lg:static lg:translate-x-0",
         open ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
       )}
